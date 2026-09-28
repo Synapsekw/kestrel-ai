@@ -1,10 +1,12 @@
 import { useEffect, useState, type RefObject } from "react";
 import { useApi } from "@/api/client";
 import { listCloudMeasurements, type CloudMeasurement } from "@/api/cloudMeasurements";
+import { messageOf } from "@/api/errors";
+import { pushLog } from "@/app/diagnostics";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import { KIND_LABEL } from "@/clouds/measure";
 import { useChangesStore } from "@/store/changes";
-import { Button, Skeleton } from "@/ui";
+import { Alert, Button, Skeleton } from "@/ui";
 import { FLY_TO_DISTANCE_M } from "./flyTo";
 
 export interface MeasureSlotProps {
@@ -12,6 +14,13 @@ export interface MeasureSlotProps {
   cloudId: string;
   findingId: string;
   viewer: RefObject<CloudViewerHandle | null>;
+}
+
+interface Loaded {
+  key: string;
+  items: CloudMeasurement[];
+  /** Set instead of `items` when the read failed, so a real failure never reads as "none linked". */
+  error: string | null;
 }
 
 function middle(m: CloudMeasurement): { x: number; y: number; z: number } {
@@ -25,15 +34,18 @@ export function MeasureSlot({ projectId, cloudId, findingId, viewer }: MeasureSl
   const api = useApi();
   const revision = useChangesStore((s) => s.pointcloudsRevision);
   const key = `${cloudId}|${findingId}`;
-  const [rows, setRows] = useState<{ key: string; items: CloudMeasurement[] } | null>(null);
+  const [rows, setRows] = useState<Loaded | null>(null);
   useEffect(() => {
     let cancelled = false;
     listCloudMeasurements(api, projectId, cloudId)
       .then((all) => {
-        if (!cancelled) setRows({ key, items: all.filter((m) => m.finding_id === findingId) });
+        if (!cancelled) setRows({ key, items: all.filter((m) => m.finding_id === findingId), error: null });
       })
-      .catch(() => {
-        if (!cancelled) setRows({ key, items: [] });
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const message = messageOf(e, "could not load the linked measurements");
+        pushLog(`cloud measurements failed: ${message}`);
+        setRows({ key, items: [], error: message });
       });
     return () => {
       cancelled = true;
@@ -41,6 +53,7 @@ export function MeasureSlot({ projectId, cloudId, findingId, viewer }: MeasureSl
   }, [api, projectId, cloudId, findingId, key, revision]);
 
   if (!rows || rows.key !== key) return <Skeleton className="h-4 w-full" />;
+  if (rows.error) return <Alert tone="danger">{rows.error}</Alert>;
   if (rows.items.length === 0)
     return (
       <p className="text-xs text-muted">No linked measurements. Link one from its row in Measurements.</p>

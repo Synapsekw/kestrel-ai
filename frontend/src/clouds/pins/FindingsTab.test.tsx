@@ -7,7 +7,7 @@ import type { CloudViewOut, GeoMap } from "@contract/client";
 import type { CloudMeasurement } from "@/api/cloudMeasurements";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "@/clouds/workspace/seams";
-import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
+import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { baseRoutes, exampleFindingDetail, projectTypes, TYPE_SPALLING } from "@/test/findingFixtures";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { TestApiProvider } from "@/test/render";
@@ -210,6 +210,22 @@ describe("FindingsTab", () => {
     expect(screen.queryByText("Distance m-2")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Go to Distance m-1" }));
     expect(viewer.current.lookAt).toHaveBeenCalledWith({ x: 243505, y: 3178000, z: 50 }, FLY_TO_DISTANCE_M);
+  });
+
+  it("shows the error when the measurements fail to load, not the empty state", async () => {
+    mount(state([pinA]), {
+      selectedId: "f-a",
+      routes: [
+        {
+          method: "GET",
+          path: /\/pointclouds\/[^/]+\/measurements$/,
+          status: 500,
+          body: errorBody("server_error", "measurements are unavailable"),
+        },
+      ],
+    });
+    expect(await screen.findByText("measurements are unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/No linked measurements/)).toBeNull();
   });
 
   it("shows no map button without a linked map", async () => {
