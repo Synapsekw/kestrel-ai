@@ -1,10 +1,22 @@
-import { Color, SRGBColorSpace } from "three";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  Line,
+  LineBasicMaterial,
+  LineSegments,
+  Points,
+  PointsMaterial,
+  SRGBColorSpace,
+} from "three";
 import type { Vec3 } from "./camera";
 
 export type OverlayTone = "accent" | "ok" | "warn";
 export type OverlayShape =
   | { kind: "line"; points: Vec3[]; closed?: boolean; tone: OverlayTone }
-  | { kind: "points"; points: Vec3[]; tone: OverlayTone };
+  | { kind: "points"; points: Vec3[]; tone: OverlayTone; size?: number }
+  /** Pairs of points, one segment each, in one draw call (C-L1's camera frustums). */
+  | { kind: "segments"; points: Vec3[]; tone: OverlayTone; opacity?: number };
 
 /** float32 holds ~7 digits: a UTM northing loses its millimetres, so overlay geometry is stored
  * relative to a local origin and the group is placed at that origin in float64. */
@@ -34,4 +46,26 @@ export function tokenRgb(name: string, el: Element = document.documentElement): 
  */
 export function tokenColor(rgb: [number, number, number]): Color {
   return new Color().setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, SRGBColorSpace);
+}
+
+/**
+ * The three.js object for one overlay shape, positioned relative to `origin` (the caller places the
+ * overlay group at `origin` in float64). Lines and points are built as S1 built them; segments are
+ * one `LineSegments` (C-L1). All draw over the cloud (`depthTest: false`) at render order 10.
+ */
+export function overlayObject(s: OverlayShape, origin: Vec3, color: Color): Line | LineSegments | Points {
+  const geom = new BufferGeometry();
+  const closed = s.kind === "line" && !!s.closed;
+  geom.setAttribute("position", new BufferAttribute(localPositions(s.points, origin, closed), 3));
+  const obj =
+    s.kind === "points"
+      ? new Points(geom, new PointsMaterial({ color, size: s.size ?? 8, sizeAttenuation: false, depthTest: false }))
+      : s.kind === "segments"
+        ? new LineSegments(
+            geom,
+            new LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: s.opacity ?? 1 }),
+          )
+        : new Line(geom, new LineBasicMaterial({ color, depthTest: false, transparent: true }));
+  obj.renderOrder = 10;
+  return obj;
 }
