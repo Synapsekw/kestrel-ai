@@ -11,6 +11,7 @@ import {
   pinTexture,
   rawColor,
   spriteScale,
+  MIN_STEP_MS,
   waitForNodes,
 } from "./capture";
 import { tokenColor } from "./overlay";
@@ -101,6 +102,40 @@ describe("waitForNodes", () => {
     }, 0);
     const step = () => ({ busy: !loaded, loads: loads() as Promise<unknown>[] });
     await expect(waitForNodes(step, 300)).resolves.toBe(true);
+  });
+
+  // C-G final review m8: loads that are settled at once made every wait a 0 ms timer, so the frozen
+  // capture ran hundreds of updatePointClouds a second; a step now takes at least MIN_STEP_MS.
+  it("steps at most once per MIN_STEP_MS when the loads settle at once", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"], loopLimit: 1_000 });
+    try {
+      let steps = 0;
+      const step = () => {
+        steps++;
+        return { busy: true, loads: [undefined] as unknown as Promise<unknown>[] };
+      };
+      const done = waitForNodes(step, 80);
+      await vi.advanceTimersByTimeAsync(100);
+      await expect(done).resolves.toBe(false);
+      expect(MIN_STEP_MS).toBeGreaterThanOrEqual(4);
+      expect(steps).toBeLessThanOrEqual(80 / MIN_STEP_MS + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the WAIT_STEP_MS timer that lost the race to the loads", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      let n = 0;
+      const step = () => ({ busy: ++n < 4, loads: [Promise.resolve()] });
+      const done = waitForNodes(step, 10_000);
+      await vi.advanceTimersByTimeAsync(3 * MIN_STEP_MS + 1);
+      await expect(done).resolves.toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
