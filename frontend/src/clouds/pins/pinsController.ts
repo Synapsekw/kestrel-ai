@@ -57,17 +57,23 @@ export class PinsLayerController {
     private readonly onSelect: (id: string) => void,
   ) {}
 
-  /** Adds, updates and removes pin elements; returns the ids added (they play the drop once). */
+  /**
+   * Adds, updates and removes pin elements. Returns the ids that need an occlusion pass before the
+   * next settle: newly added pins (they also play the drop once) and pins whose position changed
+   * (a move; `update()` clears that pin's stale `occluded` flag) — review fix: a moved pin used to
+   * report as neither added nor changed, so it kept a stale occluded flag until the next camera move.
+   */
   setPins(views: readonly PinView[]): string[] {
     const seen = new Set<string>();
-    const added: string[] = [];
+    const changed: string[] = [];
     for (const v of views) {
       seen.add(v.id);
       const cur = this.pins.get(v.id);
-      if (cur) this.update(cur, v, false);
-      else {
+      if (cur) {
+        if (this.update(cur, v, false)) changed.push(v.id);
+      } else {
         this.pins.set(v.id, this.create(v));
-        added.push(v.id);
+        changed.push(v.id);
       }
     }
     for (const [id, pin] of this.pins) {
@@ -76,7 +82,7 @@ export class PinsLayerController {
       this.pins.delete(id);
     }
     this.redraw();
-    return added;
+    return changed;
   }
 
   /** The selected pin gets the ring and three pulse cycles (§9.2 Motion). */
@@ -288,13 +294,24 @@ export class PinsLayerController {
     return pin;
   }
 
-  private update(pin: PinEl, v: PinView, force: boolean): void {
+  /** Returns whether `v.p` moved from `pin`'s previous position (value compare: `toCloudPin`
+   * builds a fresh `Vec3` literal on every load, so a reference compare would report every
+   * refetched pin as moved). A move clears the pin's stale `occluded` flag (it is re-targeted for
+   * occlusion by `setPins`'s caller before the flag is ever read again). */
+  private update(pin: PinEl, v: PinView, force: boolean): boolean {
     const prev = pin.view;
     pin.view = v;
     if (force || prev.colour !== v.colour) pin.el.style.setProperty("--c", v.colour);
     if (force || prev.label !== v.label) pin.label.textContent = v.label;
     if (force || prev.ariaLabel !== v.ariaLabel) pin.head.setAttribute("aria-label", v.ariaLabel);
     if (force || prev.draft !== v.draft) pin.el.toggleAttribute("data-draft", v.draft);
-    if (prev.p !== v.p || prev.normal !== v.normal) this.dirty = true;
+    const moved = !samePoint(prev.p, v.p);
+    if (moved || prev.normal !== v.normal) this.dirty = true;
+    if (moved) pin.occluded = false;
+    return moved;
   }
+}
+
+function samePoint(a: Vec3, b: Vec3): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }

@@ -149,6 +149,19 @@ describe("PinsLayerController", () => {
     expect(el(host, "a").querySelector(".kp-pin-label")!.textContent).toBe("Minor · Spalling");
   });
 
+  it("reports a moved pin from setPins and clears its stale occluded flag", () => {
+    ctl.setPins([view("a", 0, 0, 0), view("b", 1, 0, 0)]);
+    ctl.frame(south);
+    ctl.applyOcclusion(["a", "b"], [true, true]);
+    expect(el(host, "a").dataset.state).toBe("back");
+    const changed = ctl.setPins([view("a", 5, 0, 0), view("b", 1, 0, 0)]);
+    expect(changed).toEqual(["a"]);
+    // "a" moved: its occluded flag was cleared, so it redraws visible without a fresh occlusion
+    // pass or camera move. "b" did not move and keeps its stale occluded flag.
+    expect(el(host, "a").dataset.state).toBe("visible");
+    expect(el(host, "b").dataset.state).toBe("back");
+  });
+
   it("places the callout beside the selected pin and hides it with the pin", () => {
     const card = document.createElement("div");
     ctl.attachCallout(card);

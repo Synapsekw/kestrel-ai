@@ -123,9 +123,10 @@ export function PinsLayer({
   useEffect(() => {
     const ctl = ctlRef.current;
     if (!ctl) return;
-    const added = ctl.setPins(views);
-    // Pins that arrive while the view is settled get their occlusion now: no settle is coming.
-    if (added.length > 0 && viewer.current) runOcclusion(viewer.current, ctl);
+    const changed = ctl.setPins(views);
+    // Pins that arrived or moved (Move pin → refetch) while the view is settled get their
+    // occlusion now: no settle is coming for them otherwise (review fix round 1).
+    if (changed.length > 0 && viewer.current) runOcclusion(viewer.current, ctl);
   }, [views, viewer]);
 
   useEffect(() => ctlRef.current?.setClip(toPinClip(clipBox)), [clipBox]);

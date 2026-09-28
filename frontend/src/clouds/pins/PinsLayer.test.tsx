@@ -118,6 +118,16 @@ describe("PinsLayer", () => {
     expect(pinEl("b").dataset.state).toBe("back");
   });
 
+  it("runs occlusion again for a pin moved while settled, at its new position", () => {
+    const v = fakeViewer();
+    const { update } = mount(v, [pin("a", at(0, 0, 0))]);
+    v.emit(south);
+    v.occlusion.mockClear();
+    update({ pins: [pin("a", at(5, 0, 0))] });
+    expect(v.occlusion).toHaveBeenCalledTimes(1);
+    expect(v.occlusion.mock.calls[0][0]).toEqual([at(5, 0, 0)]);
+  });
+
   it("keeps the flags when occlusion answers null (the loop is running)", () => {
     const v = fakeViewer();
     v.occlusion.mockImplementation(() => null);
