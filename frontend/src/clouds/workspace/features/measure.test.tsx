@@ -33,6 +33,44 @@ vi.mock("@/clouds/measuring/ProfilePanel", async (importOriginal) => {
   };
 });
 
+// The promises the feature awaits, recorded so a test can wait for an answer to have been handled
+// (its handler was attached first, so it has run by the time an await on the same promise resumes)
+// instead of sleeping a fixed time.
+const seen = vi.hoisted(() => ({
+  previews: [] as Promise<unknown>[],
+  profiles: new Map<string, Promise<unknown>>(),
+}));
+vi.mock("@/clouds/measuring/slab", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/clouds/measuring/slab")>();
+  return {
+    ...real,
+    previewSlab: (...args: Parameters<typeof real.previewSlab>) => {
+      const p = real.previewSlab(...args);
+      seen.previews.push(p);
+      return p;
+    },
+  };
+});
+vi.mock("@/api/cloudMeasurements", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/api/cloudMeasurements")>();
+  return {
+    ...real,
+    getCloudProfile: (...args: Parameters<typeof real.getCloudProfile>) => {
+      const p = real.getCloudProfile(...args);
+      seen.profiles.set(args[3], p);
+      return p;
+    },
+  };
+});
+/** Resolves once the feature has handled `p`'s answer (or rejection) and React has re-rendered. */
+const handled = (p: Promise<unknown> | undefined) =>
+  act(async () => {
+    await p?.then(
+      () => undefined,
+      () => undefined,
+    );
+  });
+
 const base = {
   point_cloud_id: CLOUD_ID,
   note: null,
@@ -159,6 +197,8 @@ beforeEach(() => {
   useChangesStore.setState({ pointcloudsRevision: 0 });
   useToastStore.getState().clear();
   panelProps.last = null;
+  seen.previews.length = 0;
+  seen.profiles.clear();
 });
 
 describe("the measure feature (C-M1 in C-W1's slot)", () => {
@@ -249,7 +289,8 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
       m.tool().onCommit!();
     });
     await waitFor(() => expect(posts(m.requests)).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 20));
+    // The save has settled (its row is listed): a second POST could only have been sent before it.
+    await screen.findByRole("button", { name: /Distance 1/ });
     expect(posts(m.requests)).toHaveLength(1);
   });
 
@@ -341,7 +382,7 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     await act(async () => waiting[1]());
     await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
     await act(async () => waiting[0]());
-    await new Promise((r) => setTimeout(r, 20));
+    await handled(seen.previews[0]);
     expect(panelProps.last?.data?.count).toBe(3);
     expect(panelProps.last?.line.a.y).toBe(N + 30);
     // A new line C while its sample is pending: B's preview is not C's section (the key gate).
@@ -504,7 +545,7 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
       expect(screen.getByTestId("profile-caption")).toHaveTextContent("Full resolution · 2 points"),
     );
     release();
-    await new Promise((r) => setTimeout(r, 20));
+    await handled(seen.profiles.get("r1"));
     expect(screen.getByTestId("profile-caption")).toHaveTextContent("Full resolution · 2 points");
   });
 
@@ -662,7 +703,10 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     m.tap([pick(E, N, 5), pick(E + 12, N, 5)]);
     await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
     await userEvent.click(screen.getByRole("button", { name: /Section c1/ }));
-    await new Promise((r) => setTimeout(r, 20));
+    // Choosing samples synchronously, if at all: once the row shows chosen, the call would be in.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Section c1/ })).toHaveAttribute("aria-pressed", "true"),
+    );
     expect(m.viewer.h.sampleSlab).toHaveBeenCalledTimes(1);
     expect(panelProps.last?.line.a.y).toBe(N);
     expect(panelProps.last?.data?.count).toBe(3);
