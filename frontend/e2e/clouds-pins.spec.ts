@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, redGreenGrid, routeOctree, type FixturePoint } from "./fixtures/potreeOctree";
+import { engineIdle } from "./fixtures/cloudWorkspace";
 import { SWIFTSHADER_ARGS, viewerSettled } from "./fixtures/viewer";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -263,6 +264,8 @@ test("idle: 0 animation frames and no running animation 1 s after settle with 50
   const pastHintFade = 2_400 + 500 - (Date.now() - navStart);
   if (pastHintFade > 0) await page.waitForTimeout(pastHintFade);
   await page.waitForTimeout(1_200);
+  // and the loop has stopped (C-G final review C1: a fixed wait can open on the loop's own tail)
+  await engineIdle(page);
   const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
   const before = await frames();
   await page.waitForTimeout(1_000);

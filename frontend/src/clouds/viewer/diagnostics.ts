@@ -13,6 +13,11 @@ export interface ViewerStats {
   contextLost: boolean;
   /** Metres from the camera to the orbit target (plan decision 7). */
   cameraDistance: number;
+  /** No frame is scheduled: the render loop has stopped (spec §8 "Loop"). An idle-frames check opens
+   * its window on this, since any requestRender keeps the loop alive for IDLE_AFTER_MS. */
+  idle: boolean;
+  /** A capture holds the loop (captureRun.ts): it is setting up or waiting on the pose's nodes. */
+  frozen: boolean;
 }
 
 export interface ColourSample {

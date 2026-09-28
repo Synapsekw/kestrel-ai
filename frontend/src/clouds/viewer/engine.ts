@@ -213,6 +213,8 @@ export function emptyStats(): ViewerStats {
     errors: [],
     contextLost: false,
     cameraDistance: 0,
+    idle: true,
+    frozen: false,
   };
 }
 
@@ -945,7 +947,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       requestRender();
     },
     overlayKeys: () => [...new Set(overlay.children.map((c) => String(c.userData.key)))],
-    stats: () => ({ ...stats, errors: [...stats.errors] }),
+    stats: () => ({ ...stats, errors: [...stats.errors], idle: raf === 0, frozen }),
     sampleColours(): ColourSample {
       drawFrame();
       const gl = renderer.getContext();

@@ -9,6 +9,7 @@ import {
   diagnosticsOn,
   runningAnimations,
   viewerSettled,
+  viewerStats,
   ws,
 } from "./fixtures/cloudWorkspace";
 import { serveCloudWorld } from "./fixtures/cloudWorld";
@@ -110,12 +111,21 @@ test("the workspace draws the cloud full-bleed, picks it, and stops rendering on
   // included. S1 waited a fixed 1.2 s here and flaked once under batch load: a workspace fetch that
   // answers late wakes the loop for IDLE_AFTER_MS (1 s) — a cameras answer held back into that window
   // put 44 frames in it. So the window opens on a real condition instead: nothing in flight and no
-  // request sent or answered for IDLE_AFTER_MS plus a margin, so every wake-up has run its course.
+  // request sent or answered for IDLE_AFTER_MS plus a margin, so every wake-up has run its course —
+  // and the loop itself has stopped. The network alone was not enough (C-G final review C1): setEdl
+  // above also asks for a frame, which keeps the loop IDLE_AFTER_MS; when the network had gone quiet
+  // before it, the window opened on the loop's own tail (20-47 frames, every stack engine.ts `tick`).
   await expect
-    .poll(() => net.open.size === 0 && Date.now() - net.lastChange >= 1_200, {
-      message: "the network is quiet for IDLE_AFTER_MS + 200 ms",
-      timeout: 20_000,
-    })
+    .poll(
+      async () =>
+        net.open.size === 0 &&
+        Date.now() - net.lastChange >= 1_200 &&
+        (await viewerStats(page))?.idle === true,
+      {
+        message: "the network is quiet for IDLE_AFTER_MS + 200 ms and the render loop has stopped",
+        timeout: 20_000,
+      },
+    )
     .toBe(true);
   const before = await frames();
   await page.waitForTimeout(1_000);

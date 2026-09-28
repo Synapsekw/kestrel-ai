@@ -87,6 +87,8 @@ export const FakeCloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(
           errors: [],
           contextLost: false,
           cameraDistance: 120,
+          idle: true,
+          frozen: false,
         }),
         setNavMode: (...args: unknown[]) => {
           fake.calls.push({ name: "setNavMode", args });

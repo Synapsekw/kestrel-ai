@@ -139,6 +139,25 @@ export async function viewerSettled(page: Page): Promise<void> {
   await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
 }
 
+/**
+ * The render loop has stopped: no frame is scheduled and no capture holds it (`stats().idle`). Any
+ * requestRender (setEdl, a pick, an overlay) keeps the loop for IDLE_AFTER_MS (1 s) — on a loaded
+ * machine the rest of a test can take less than that, and an idle-frames window opened then counted
+ * the loop's own tail (C-G final review C1: 20-47 frames, every one from engine.ts `tick`). An idle
+ * window opens on this, not on a fixed wait.
+ */
+export async function engineIdle(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const s = await viewerStats(page);
+        return s !== null && s.idle && !s.frozen;
+      },
+      { message: "the render loop has stopped", timeout: 20_000 },
+    )
+    .toBe(true);
+}
+
 /** A click on the canvas, `dx`/`dy` px from its centre. */
 export async function clickCanvas(page: Page, dx = 0, dy = 0): Promise<void> {
   const box = (await page.getByTestId("cloud-canvas").boundingBox())!;
