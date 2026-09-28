@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { THUMB_MAX_IN_FLIGHT, ThumbLoader, useThumb } from "./thumbs";
+import { installThumbDiagnostics, THUMB_MAX_IN_FLIGHT, ThumbLoader, useThumb } from "./thumbs";
 
 function deferredFetch() {
   const started: { url: string; signal: AbortSignal; resolve: () => void; reject: (e: unknown) => void }[] =
@@ -65,6 +65,26 @@ describe("ThumbLoader", () => {
     expect(loader.inFlight).toBe(0);
   });
 
+  it("tracks the peak in-flight count until resetPeak, for e2e diagnostics", async () => {
+    const { loader, started } = deferredFetch();
+    const ac = new AbortController();
+    const all = Array.from({ length: 8 }, (_, i) => quiet(loader.load(`p${i}`, ac.signal)));
+    expect(loader.peak).toBe(8);
+    await act(async () => {
+      started[0].resolve();
+      started[1].resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(loader.inFlight).toBe(6);
+    expect(loader.peak).toBe(8); // the peak survives even once things have settled down
+    loader.resetPeak();
+    expect(loader.peak).toBe(loader.inFlight);
+    void quiet(loader.load("p8", ac.signal));
+    expect(loader.peak).toBe(7);
+    ac.abort();
+    await Promise.all(all);
+  });
+
   it("serves a loaded url from the cache and revokes evicted urls", async () => {
     const { loader, started, fetchBlob, revokeUrl } = deferredFetch();
     const ac = new AbortController();
@@ -119,6 +139,29 @@ describe("ThumbLoader: one fetch per url", () => {
     expect(fetchBlob).toHaveBeenCalledTimes(2);
     started[1].resolve();
     await expect(again).resolves.toBe("blob:1");
+  });
+});
+
+describe("installThumbDiagnostics", () => {
+  afterEach(() => {
+    delete window.__kestrelThumbs;
+  });
+
+  it("exposes the loader's own inFlight/peak/resetPeak on window.__kestrelThumbs", async () => {
+    const { loader } = deferredFetch();
+    installThumbDiagnostics(loader);
+    const diag = window.__kestrelThumbs!;
+    expect(diag.inFlight()).toBe(0);
+    const ac = new AbortController();
+    const all = Array.from({ length: 8 }, (_, i) => quiet(loader.load(`d${i}`, ac.signal)));
+    expect(diag.inFlight()).toBe(8);
+    expect(diag.peak()).toBe(8);
+    diag.resetPeak();
+    expect(diag.peak()).toBe(8); // resetPeak starts from the current inFlight, still 8
+    ac.abort();
+    await Promise.all(all);
+    await new Promise((r) => setTimeout(r, 0)); // the slot frees in `finally`, a tick later
+    expect(diag.inFlight()).toBe(0);
   });
 });
 

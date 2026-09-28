@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_TABS, RAIL_ENTRIES, RAIL_SETTINGS, layoutOf, routeInfo } from "./routeModel";
+import {
+  PROJECT_TABS,
+  RAIL_ENTRIES,
+  RAIL_SETTINGS,
+  SECONDARY_PAGES,
+  layoutOf,
+  routeInfo,
+  secondaryHref,
+} from "./routeModel";
 
 describe("routeInfo", () => {
   it.each([
@@ -33,13 +41,20 @@ describe("routeInfo", () => {
     expect(info.page).toBe(page);
   });
 
+  it("a secondary page's href: Review opens the runs picker, the rest are bare (I-FW I3)", () => {
+    const page = (id: string) => SECONDARY_PAGES.find((p) => p.id === id)!;
+    expect(secondaryHref("abc", page("review"))).toBe("/p/abc/review?view=runs");
+    expect(secondaryHref("abc", page("analytics"))).toBe("/p/abc/analytics");
+    expect(routeInfo("/p/abc/review").page).toBe("Review");
+  });
+
   it("reads the project id only inside a project", () => {
     expect(routeInfo("/p/abc/images").projectId).toBe("abc");
     expect(routeInfo("/models/library").projectId).toBeNull();
   });
 
   it("frames pages: the images workspace keeps the tabs, the map workspace is full-bleed at its list and its maps", () => {
-    expect(routeInfo("/p/a/images").layout).toBe("page");
+    expect(routeInfo("/p/a/images").layout).toBe("workspace");
     expect(routeInfo("/p/a/images/i1").layout).toBe("workspace");
     expect(routeInfo("/p/a/maps").layout).toBe("fullbleed");
     expect(routeInfo("/p/a/maps/m1").layout).toBe("fullbleed");

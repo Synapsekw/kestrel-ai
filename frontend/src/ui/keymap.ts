@@ -37,6 +37,11 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable === true;
 }
 
+/** Keys never act behind an open modal dialog (F's `Dialog` and `CommandPalette` mark `aria-modal="true"`). */
+function insideModal(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[aria-modal="true"]') !== null;
+}
+
 const NAMED: Record<string, string> = { " ": "Space", Spacebar: "Space", Esc: "Escape", Del: "Delete" };
 
 /**
@@ -299,7 +304,7 @@ export function useToolShortcuts(tools: readonly ToolShortcut[], enabled = true)
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.repeat || isTypingTarget(e.target)) return;
+      if (e.defaultPrevented || e.repeat || isTypingTarget(e.target) || insideModal(e.target)) return;
       const chord = chordOf(e);
       const tool = latest.current.find(
         (t) => !t.disabled && t.shortcut !== undefined && !refused(t) && normaliseChord(t.shortcut) === chord,

@@ -7,6 +7,7 @@ export const legacyProjectRedirects: RouteObject[] = [
   { path: "data", element: <Redirect to={(p) => `/p/${p.projectId}/images`} /> },
   { path: "edit/:imageId", element: <Redirect to={(p) => `/p/${p.projectId}/images/${p.imageId}`} /> },
   { path: "label", element: <Redirect to={(p) => `/p/${p.projectId}/images?filter=unlabeled`} /> },
+  { path: "query", element: <Redirect to={(p) => `/p/${p.projectId}/images?batch=1`} /> },
   { path: "past", element: <Redirect to={(p) => `/p/${p.projectId}/overview`} /> },
   { path: "past/maps/:mapId", element: <MapRedirect /> },
   { path: "maps/:mapId", element: <MapRedirect /> },

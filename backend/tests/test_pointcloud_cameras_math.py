@@ -1,7 +1,7 @@
 """Cameras payload math (spec 2026-09-26-point-cloud-workspace section 10.1 steps 2-4, section 4.2).
 
-The yaw-rule cases are I-BK's (plan 2026-09-27-images-bk, test_yaw_sanity_rule) so the two copies
-of I's rule agree (C-B3 Ruling 4).
+The yaw-rule cases live in I-BK's `tests/test_imagery_footprint.py`; `cameras.py` imports
+`effective_yaw` from `app.imagery.footprint` instead of keeping its own copy (C-L1 hand-off).
 """
 
 import math
@@ -11,7 +11,7 @@ import pytest
 from pyproj import CRS, Transformer
 
 from app.pointclouds import cameras
-from app.pointclouds.cameras import Pose, effective_yaw, fov_deg, grid_yaw, search_box
+from app.pointclouds.cameras import Pose, fov_deg, grid_yaw, search_box
 
 UTM39 = CRS.from_epsg(32639)
 
@@ -95,18 +95,6 @@ def test_zero_or_negative_lens_values_fall_through_to_the_assumed_fov():
 
 
 # ------------------------------------------------------------------------------ yaw rule and pose
-
-
-def test_yaw_sanity_rule():
-    assert effective_yaw(-89.0, 170.0, 10.0) == 10.0  # near nadir, 160 deg apart: body-relative gimbal yaw
-    assert effective_yaw(-45.0, 170.0, 10.0) == 170.0  # oblique: trust the gimbal
-    assert effective_yaw(-89.0, 170.0, None) == 170.0
-    assert effective_yaw(None, None, 33.0) == 33.0
-    assert effective_yaw(-89.0, None, None) is None
-
-
-def test_yaw_sanity_uses_the_short_way_round():
-    assert effective_yaw(-89.0, -170.0, 175.0) == -170.0  # 15 deg apart across the wrap, not 345
 
 
 def test_pose_columns_reads_i_columns_and_applies_the_yaw_rule():

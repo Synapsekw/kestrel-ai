@@ -72,6 +72,23 @@ describe("useImageData", () => {
     ]);
     const { result } = renderHook(() => useImageData(PROJECT_ID, IMAGE_ID), { wrapper });
     await waitFor(() => expect(result.current.error).toBe("Image not found"));
+    expect(result.current.notFound).toBe(true); // I-FW I1: the frame guard's "confirmed gone"
+  });
+
+  it("a load that fails for another reason is not a missing frame", async () => {
+    const { wrapper } = wrap([
+      {
+        method: "GET",
+        path: new RegExp(`/images/${IMAGE_ID}$`),
+        status: 500,
+        body: errorBody("internal", "Boom"),
+      },
+      { method: "GET", path: /\/boxes$/, body: { items: [] } },
+      { method: "GET", path: /\/measurements$/, body: { items: [] } },
+    ]);
+    const { result } = renderHook(() => useImageData(PROJECT_ID, IMAGE_ID), { wrapper });
+    await waitFor(() => expect(result.current.error).toBe("Boom"));
+    expect(result.current.notFound).toBe(false);
   });
 
   it("reloads the shapes when a job changes them", async () => {

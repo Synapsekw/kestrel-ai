@@ -112,10 +112,12 @@ def test_list_images_takes_the_browser_filters(spec):
     assert "worst_severity" in sort["schema"]["enum"]
 
 
-def test_preannotate_is_deprecated_until_its_last_caller_goes(spec):
-    op = _operations(spec)["preannotateImage"][2]
-    assert op["deprecated"] is True
-    assert op["x-retire-with"] == "I-FW"
+def test_preannotate_is_retired(spec):
+    """I-FW: preannotateImage had no caller once FW landed; the operation and its request/result
+    schemas are gone from the contract."""
+    assert "preannotateImage" not in _operations(spec)
+    assert "PreannotateRequest" not in _schemas(spec)
+    assert "PreannotateResult" not in _schemas(spec)
 
 
 def test_no_request_property_of_ours_carries_a_default(spec):

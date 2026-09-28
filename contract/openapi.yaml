@@ -510,37 +510,6 @@ paths:
             image/jpeg:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/images/{imageId}/preannotate:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-      - $ref: "#/components/parameters/imageId"
-    post:
-      tags: [images]
-      operationId: preannotateImage
-      deprecated: true
-      x-retire-with: I-FW
-      summary: |
-        Replaced by `detectImage` (image inspection spec §11.2). Run the project's pre-annotation model (or `model_id`) on one image synchronously and
-        write proposal boxes with `local_model` provenance. Skipped (`skipped: true`) when the
-        image already has boxes from that model. Runs at `imgsz` 2560 by default.
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PreannotateRequest" }
-      responses:
-        "200":
-          description: proposals now on the image (all boxes from that model, new or existing)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/PreannotateResult" }
-        "409":
-          description: "the chosen library model's weights file is missing (`code` is `model_unavailable`)"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "503": { $ref: "#/components/responses/LibraryUnavailable" }
-        default: { $ref: "#/components/responses/Error" }
 
   # -------------------------------------------------------------------- boxes
   /api/v1/projects/{projectId}/images/{imageId}/boxes:
@@ -1247,7 +1216,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
         "404":
-          description: "`path` is not absolute or does not exist (`code` is `not_found`)"
+          description: "`path` is not absolute, is not a `.pt` file, or does not exist (`code` is `not_found`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -6500,45 +6469,6 @@ components:
           camera_model: "M3E"
         footprint: { type: Polygon, coordinates: [[[47.7649, 29.49455], [47.76536, 29.49455], [47.76536, 29.49483], [47.7649, 29.49483], [47.7649, 29.49455]]] }
         footprint_kind: trapezoid
-    PreannotateRequest:
-      type: object
-      properties:
-        model_id: { type: string, description: "a library model id; defaults to the project's pre-annotation model" }
-        imgsz: { type: integer, minimum: 320, maximum: 6400, default: 2560 }
-        conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
-      example: { imgsz: 2560, conf: 0.25 }
-    PreannotateResult:
-      type: object
-      required: [skipped, model_id, items]
-      properties:
-        skipped: { type: boolean, description: true when the image already had boxes from this model }
-        model_id: { type: string }
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/Box" }
-      example:
-        skipped: false
-        model_id: "m0000000-2222-4000-8000-000000000001"
-        items:
-          - id: "b0000000-6666-4000-8000-000000000002"
-            image_id: "10000000-5555-4000-8000-000000000001"
-            class_id: "c1a2b3c4-0000-4000-8000-000000000004"
-            x: 1210.5
-            y: 802.0
-            w: 96.0
-            h: 61.0
-            angle: 0.0
-            confidence: 0.81
-            provenance: { kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", provider: null, model_name: "yolo11m-coco", query_run_id: null }
-            review_state: unreviewed
-            reviewed_at: null
-            created_at: "2026-09-17T11:00:00Z"
-            shape: box
-            points: null
-            assist: null
-            area_px: 5856.0
-            updated_at: "2026-09-17T11:00:00Z"
-
     ProvenanceKind:
       type: string
       enum: [person, local_model, cloud_provider]
@@ -6736,7 +6666,7 @@ components:
       properties:
         updated: { type: integer }
         finding_ids_created: { type: array, items: { type: string }, description: findings the accepts created (defect types) }
-        finding_ids_deleted: { type: array, items: { type: string }, description: untouched findings the unreviews deleted }
+        finding_ids_deleted: { type: array, items: { type: string }, description: "findings this request deleted: a rejected box's finding (rejects are reported here too), or an untouched finding an unreview removed" }
       example: { updated: 1, finding_ids_created: ["f0000000-1212-4000-8000-000000000231"], finding_ids_deleted: [] }
     BoxWriteResult:
       description: the written annotation, plus what the write did (image inspection spec §8.3)
@@ -6745,7 +6675,7 @@ components:
         - type: object
           required: [repaired, finding_id]
           properties:
-            repaired: { type: boolean, description: "the server changed the geometry (made valid, clipped to the image, re-oriented or rounded); the UI says so" }
+            repaired: { type: boolean, description: "a polygon's geometry changed beyond plain rounding to keep it valid: a self-intersecting or otherwise invalid ring was made valid, clipped to the image bounds, or snapped to merge two vertices too close to survive rounding; the UI says so. Never set for a box, rotated box or point, and re-orientation alone never counts." }
             finding_id: { type: [string, "null"], description: "the annotation's finding (a person's annotation on a defect type creates one); null when it has none" }
       example:
         id: "b0000000-6666-4000-8000-000000000001"
@@ -6996,7 +6926,7 @@ components:
         description: { type: string }
         size_mb: { type: number, minimum: 0 }
         sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
-        state: { type: string, enum: [missing, ready, invalid, unavailable], description: "`invalid`: the file failed its sha256 check; `unavailable`: the SAM modules failed to import in this build (spec §16), so the tool is off whatever the file" }
+        state: { type: string, enum: [missing, ready, invalid, unavailable], description: "`invalid`: the file failed its sha256 check; `unavailable`: the SAM modules failed to import in this build (spec §16), or the model failed to load or run even after falling back to the CPU, so the tool is off whatever the file" }
         reason: { type: [string, "null"], description: "why the state is not `ready`, in words the UI shows; null when ready" }
         job_id: { type: [string, "null"], description: the queued or running `assist_acquire` job }
       example:

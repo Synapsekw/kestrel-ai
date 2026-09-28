@@ -10,6 +10,7 @@ import {
   RAIL_SETTINGS,
   SECONDARY_PAGES,
   railHref,
+  secondaryHref,
   type RouteInfo,
 } from "./routeModel";
 
@@ -27,7 +28,8 @@ export function goToCommands(
     run: () => go(railHref(e, info.projectId)),
   }));
   if (info.projectId) {
-    const base = `/p/${info.projectId}`;
+    const projectId = info.projectId;
+    const base = `/p/${projectId}`;
     for (const t of PROJECT_TABS)
       out.push({
         id: `go:tab:${t.id}`,
@@ -42,7 +44,7 @@ export function goToCommands(
         title: p.label,
         icon: p.icon,
         hint: "Page",
-        run: () => go(`${base}/${p.id}`),
+        run: () => go(secondaryHref(projectId, p)),
       });
   }
   for (const r of recent) {

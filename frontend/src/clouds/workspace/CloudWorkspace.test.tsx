@@ -157,7 +157,7 @@ describe("CloudWorkspace (spec §6)", () => {
       ["Area", true],
       ["Cross-section", true],
       ["Pin a finding", true], // C-P1 Task 10: the pins feature now registers its tool
-      ["Photo link", false],
+      ["Photo link", true],
     ] as const)
       expect(toolbar().querySelector(`[aria-label="${name}"]`)!.hasAttribute("disabled"), name).toBe(
         !enabled,

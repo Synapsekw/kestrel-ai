@@ -31,9 +31,10 @@ test("a project opens on Overview with counts in the tabs", async ({ page }) => 
   await expect(page.getByRole("banner")).toContainText("Overview");
 });
 
-test("Label next opens the first unlabeled image with the list as its walk", async ({ page }) => {
+test("Label next in the top bar opens an image in the workspace", async ({ page }) => {
   await page.goto(`/p/${P}/images`);
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/images/[^/?]+$`));
   await page.getByRole("button", { name: "Label next" }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
-  await expect(page.getByTestId("position")).toHaveText("1 / 2");
+  await expect(page.getByTestId("images-status-bar")).toContainText(/Image\s+\d+\s*\/\s*\d+/);
 });

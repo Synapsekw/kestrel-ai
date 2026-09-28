@@ -12,6 +12,8 @@ import type { NavMode } from "./viewer/types";
 interface FakeEngine {
   options: EngineOptions;
   calls: [string, unknown][];
+  /** The engine's onLeavePose listeners: call them to play "the camera left the photo pose". */
+  leavePose: Set<() => void>;
 }
 const engines: FakeEngine[] = [];
 
@@ -20,7 +22,7 @@ vi.mock("./viewer/engine", async (importOriginal) => {
   return {
     ...actual,
     createEngine: (options: EngineOptions) => {
-      const fake: FakeEngine = { options, calls: [] };
+      const fake: FakeEngine = { options, calls: [], leavePose: new Set() };
       engines.push(fake);
       let nav: NavMode = "orbit";
       const record =
@@ -45,6 +47,10 @@ vi.mock("./viewer/engine", async (importOriginal) => {
         },
         onFrame: () => () => {},
         onSettle: () => () => {},
+        onLeavePose: (cb: () => void) => {
+          fake.leavePose.add(cb);
+          return () => fake.leavePose.delete(cb);
+        },
         onCaptureState: () => () => {},
         dispose: record("dispose"),
       };
@@ -137,6 +143,22 @@ describe("CloudViewer shell state across an engine rebuild", () => {
     ref.current!.setClipBox(null);
     rerender(<CloudViewer ref={ref} {...base} octreeUrl="http://127.0.0.1:1/third/" />);
     expect(engines[2].calls.some(([n]) => n === "setClipBox")).toBe(false);
+  });
+
+  it("relays the engine's leave-pose to the handle's listeners, across a rebuild (C-L1)", () => {
+    const ref = createRef<CloudViewerHandle>();
+    const { rerender } = render(<CloudViewer ref={ref} {...base} />);
+    const cb = vi.fn();
+    const off = ref.current!.onLeavePose(cb);
+    for (const l of engines[0].leavePose) l();
+    expect(cb).toHaveBeenCalledOnce();
+    rerender(<CloudViewer ref={ref} {...base} octreeUrl="http://127.0.0.1:1/other/" />);
+    expect(engines[0].leavePose.size).toBe(0); // the old engine's subscription is dropped
+    for (const l of engines[1].leavePose) l();
+    expect(cb).toHaveBeenCalledTimes(2);
+    off();
+    for (const l of engines[1].leavePose) l();
+    expect(cb).toHaveBeenCalledTimes(2);
   });
 
   it("answers the shell's navigation mode when no engine exists", () => {

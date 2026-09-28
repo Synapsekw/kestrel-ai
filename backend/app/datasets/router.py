@@ -1,4 +1,4 @@
-"""Sources, images and boxes (spec sections 5 and 6); datasets live in `app.library.datasets`."""
+"""Sources and images (spec sections 5 and 6); datasets live in `app.library.datasets`."""
 
 from datetime import datetime
 from pathlib import Path

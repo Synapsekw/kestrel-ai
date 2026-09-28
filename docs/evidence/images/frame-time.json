@@ -1,0 +1,67 @@
+{
+  "runs": [
+    {
+      "at": "2026-09-28T09:59:36.469Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "hardwareConcurrency": 24,
+      "viewport": "1600x900@1",
+      "annotations": 500,
+      "frames": 562,
+      "p50": 16.7,
+      "p95": 16.7,
+      "max": 16.8,
+      "annotationDraws": 176,
+      "maxAnnotationDrawsPerFrame": 1,
+      "hitDrawsDuringInput": 0,
+      "sceneMsP95": 2.5,
+      "layersFound": [
+        "image",
+        "annotations",
+        "suggestions",
+        "interaction"
+      ]
+    },
+    {
+      "at": "2026-09-28T10:00:02.544Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "hardwareConcurrency": 24,
+      "viewport": "1600x900@1",
+      "annotations": 500,
+      "frames": 555,
+      "p50": 16.7,
+      "p95": 16.7,
+      "max": 16.8,
+      "annotationDraws": 176,
+      "maxAnnotationDrawsPerFrame": 1,
+      "hitDrawsDuringInput": 0,
+      "sceneMsP95": 2.5,
+      "layersFound": [
+        "image",
+        "annotations",
+        "suggestions",
+        "interaction"
+      ]
+    },
+    {
+      "at": "2026-09-28T10:00:29.924Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "hardwareConcurrency": 24,
+      "viewport": "1600x900@1",
+      "annotations": 500,
+      "frames": 573,
+      "p50": 16.7,
+      "p95": 16.7,
+      "max": 33.3,
+      "annotationDraws": 176,
+      "maxAnnotationDrawsPerFrame": 1,
+      "hitDrawsDuringInput": 0,
+      "sceneMsP95": 3.3,
+      "layersFound": [
+        "image",
+        "annotations",
+        "suggestions",
+        "interaction"
+      ]
+    }
+  ]
+}

@@ -107,9 +107,7 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
-    # The route is gone (I-BP); the deprecated path stays until I-FW deletes it with its last
-    # frontend helper, so the operation only has to answer < 500 (a 404) until then.
-    "preannotateImage": "I-FW",
+    # preannotateImage (I-FW): deleted from openapi.yaml, so no longer pending here.
 }
 
 
@@ -117,10 +115,8 @@ BACKEND_PENDING: dict[str, str] = {
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
 # §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path
 # from openapi.yaml deletes the entry.
-RETIRING: dict[str, str] = {
-    # Images: replaced by detectImage; the old editor calls it until I-FW deletes editor/*.
-    "preannotateImage": "I-FW",
-}
+# preannotateImage (I-FW): deleted from openapi.yaml; nothing left to retire.
+RETIRING: dict[str, str] = {}
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
 # the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an

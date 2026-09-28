@@ -29,16 +29,28 @@ export const PROJECT_TABS: readonly NavEntry<ProjectTabId>[] = [
   { id: "reports", label: "Reports", icon: "report" },
 ];
 
+/** A project page without a tab; `search` is appended to its link (e.g. `?view=runs`). */
+export interface PageEntry extends NavEntry {
+  search?: string;
+}
+
 /** Project pages without a tab (section 5.3): the tab strip's More menu and the palette reach them. */
-export const SECONDARY_PAGES: readonly NavEntry[] = [
+export const SECONDARY_PAGES: readonly PageEntry[] = [
   { id: "runs", label: "Runs", icon: "detect" },
-  { id: "review", label: "Review", icon: "review" },
+  // I-FW I3: the suggestions review is the Images tab (`?filter=suggestions`); this entry is the
+  // detection runs picker, which `/review` renders only at `?view=runs`.
+  { id: "review", label: "Review", icon: "review", search: "?view=runs" },
   { id: "query", label: "Detect", icon: "detect" },
   { id: "analytics", label: "Analytics", icon: "trend" },
   { id: "site-areas", label: "Site areas", icon: "map" },
   { id: "export", label: "Export", icon: "download" },
   { id: "settings", label: "Project settings", icon: "settings" },
 ];
+
+/** Where the More menu and the palette send a secondary page. */
+export function secondaryHref(projectId: string, page: PageEntry): string {
+  return `/p/${projectId}/${page.id}${page.search ?? ""}`;
+}
 
 export const RAIL_ENTRIES: readonly RailEntry[] = [
   { id: "projects", label: "Projects", icon: "folder", to: "/projects" },
@@ -92,7 +104,7 @@ export interface RouteInfo {
 export function layoutOf(tab: string, detail: boolean): Layout {
   if (tab === "maps") return "fullbleed";
   if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
-  if (tab === "images" && detail) return "workspace";
+  if (tab === "images") return "workspace";
   return "page";
 }
 

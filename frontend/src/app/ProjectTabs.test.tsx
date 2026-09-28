@@ -6,7 +6,8 @@ import { renderWithProviders } from "@/test/render";
 import { ProjectTabs } from "./ProjectTabs";
 
 function Where() {
-  return <p data-testid="where">{useLocation().pathname}</p>;
+  const { pathname, search } = useLocation();
+  return <p data-testid="where">{`${pathname}${search}`}</p>;
 }
 
 function renderTabs(path: string, overviewStatus = 200) {
@@ -81,5 +82,12 @@ describe("ProjectTabs", () => {
     ).toEqual(["Runs", "Review", "Detect", "Analytics", "Site areas", "Export", "Project settings"]);
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Analytics" }));
     expect(screen.getByTestId("where")).toHaveTextContent(`/p/${PROJECT_ID}/analytics`);
+  });
+
+  it("More → Review reaches the detection runs picker (I-FW I3)", async () => {
+    renderTabs(`/p/${PROJECT_ID}/overview`);
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", { name: "Review" }));
+    expect(screen.getByTestId("where")).toHaveTextContent(`/p/${PROJECT_ID}/review?view=runs`);
   });
 });

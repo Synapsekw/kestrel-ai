@@ -37,6 +37,8 @@ const CASES: [string, string][] = [
   [`/p/${P}/edit/${I}`, `/p/${P}/images/${I}`],
   [`/p/${P}/edit/${I}?finding=f1`, `/p/${P}/images/${I}?finding=f1`],
   [`/p/${P}/label`, `/p/${P}/images?filter=unlabeled`],
+  [`/p/${P}/query`, `/p/${P}/images?batch=1`],
+  [`/p/${P}/query?source=s1`, `/p/${P}/images?source=s1&batch=1`],
   [`/p/${P}/past`, `/p/${P}/overview`],
   [`/p/${P}/past/maps/m1`, `/p/${P}/maps?map=m1`],
   // The retired pixel viewer's address opens the workspace on that map (spec M §5, §11).
@@ -154,4 +156,11 @@ describe("routes", () => {
       expect(matchRoutes(routeTree, path)!.at(-1)!.route.path).toBe("*");
     },
   );
+
+  it("serves the tab and every image from one route entry, so the workspace never remounts", () => {
+    const tab = matchRoutes(routeTree, `/p/${P}/images`)!.at(-1)!.route;
+    const image = matchRoutes(routeTree, `/p/${P}/images/${I}`)!.at(-1)!.route;
+    expect(tab).toBe(image);
+    expect(tab.path).toBe("images/:imageId?");
+  });
 });

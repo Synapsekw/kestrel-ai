@@ -1,6 +1,6 @@
-import { Color } from "three";
+import { Color, Line, LineBasicMaterial, LineSegments, Mesh, Points, PointsMaterial } from "three";
 import { describe, expect, it } from "vitest";
-import { localPositions, polygonMesh, polygonTriangles } from "./overlay";
+import { localPositions, overlayObject, polygonMesh, polygonTriangles } from "./overlay";
 
 describe("overlay geometry", () => {
   it("stores UTM points relative to a local origin so float32 keeps millimetres", () => {
@@ -43,6 +43,50 @@ describe("token colours in WebGL", () => {
     // output then shows (81, 92, 88), the grey the acceptance saw and sampleColours never matched
     expect(tokenColor([21, 27, 25]).getHexString(THREE.SRGBColorSpace)).toBe("151b19");
     expect(tokenColor([229, 175, 100]).getHexString(THREE.SRGBColorSpace)).toBe("e5af64");
+  });
+});
+
+describe("overlay objects", () => {
+  const origin = { x: 243000, y: 3178000, z: 0 };
+  const pts = [
+    { x: 243001, y: 3178001, z: 1 },
+    { x: 243002, y: 3178002, z: 2 },
+  ];
+  const red = new Color(1, 0, 0);
+
+  it("builds a line exactly as before: no depth test, transparent", () => {
+    const o = overlayObject({ kind: "line", points: pts, tone: "accent", closed: true }, origin, red);
+    expect(o).toBeInstanceOf(Line);
+    expect(o).not.toBeInstanceOf(LineSegments);
+    const m = o.material as LineBasicMaterial;
+    expect([m.depthTest, m.transparent]).toEqual([false, true]);
+    expect(o.geometry.getAttribute("position").count).toBe(3); // closed repeats the first point
+  });
+
+  it("builds points at 8 px by default, or the given size", () => {
+    const a = overlayObject({ kind: "points", points: pts, tone: "ok" }, origin, red);
+    const b = overlayObject({ kind: "points", points: pts, tone: "ok", size: 7 }, origin, red);
+    expect(a).toBeInstanceOf(Points);
+    expect((a.material as PointsMaterial).size).toBe(8);
+    expect((a.material as PointsMaterial).sizeAttenuation).toBe(false);
+    expect((b.material as PointsMaterial).size).toBe(7);
+  });
+
+  it("builds segments as one LineSegments draw call with the given opacity", () => {
+    const o = overlayObject({ kind: "segments", points: pts, tone: "accent", opacity: 0.65 }, origin, red);
+    expect(o).toBeInstanceOf(LineSegments);
+    const m = o.material as LineBasicMaterial;
+    expect([m.opacity, m.transparent, m.depthTest]).toEqual([0.65, true, false]);
+    expect(o.geometry.getAttribute("position").count).toBe(2);
+    expect(o.renderOrder).toBe(10);
+  });
+
+  it("builds a polygon as M1's translucent mesh under its outline (render order 9)", () => {
+    const tri = [...pts, { x: 243001, y: 3178002, z: 1 }];
+    const o = overlayObject({ kind: "polygon", points: tri, tone: "warn" }, origin, red);
+    expect(o).toBeInstanceOf(Mesh);
+    expect(o.renderOrder).toBe(9);
+    expect(o.geometry.getIndex()?.count).toBe(3);
   });
 });
 

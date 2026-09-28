@@ -3,16 +3,13 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { Source } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { REVIEW_QUEUE_QUERY } from "@/api/images";
 import { chosenRun, listSourceRuns, reviewProgressText, type RunSummary } from "@/api/review";
 import { fetchAllSources } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { AddDataButton } from "@/data/AddDataButton";
-import { useImageList } from "@/data/useImageList";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
-import { Alert, Button, EmptyState, Field, Kbd, Pill, Progress, Select, Skeleton } from "@/ui";
+import { Alert, Button, buttonClass, EmptyState, Field, Kbd, Pill, Progress, Select, Skeleton } from "@/ui";
 import { AcceptAbove } from "./AcceptAbove";
-import { ImageReviewQueue } from "./ImageReviewQueue";
 
 const linkClass = "font-medium text-accent hover:underline";
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -216,41 +213,33 @@ function SourceReview({
     );
   }
 
-  return <PhotoReview projectId={projectId} source={source} run={run} facts={facts} onDone={reload} />;
+  return <PhotoReview projectId={projectId} run={run} facts={facts} onDone={reload} />;
 }
 
 function PhotoReview({
   projectId,
-  source,
   run,
   facts,
   onDone,
 }: {
   projectId: string;
-  source: Source;
   run: RunSummary;
   facts: ReactNode;
   onDone: () => void;
 }) {
-  // The run covers this source's images, so its suggestions are the source's pending ones: a
-  // source filter keeps the request small where a list of every image id would not.
-  const query = useMemo(() => ({ ...REVIEW_QUEUE_QUERY, source_id: source.id }), [source.id]);
-  const list = useImageList(projectId, query);
-  const reload = list.reload;
-  useOnJobsFinished("accept_above", reload);
   return (
     <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
       <div className="flex min-h-0 flex-col gap-4">
         {facts}
-        <ImageReviewQueue
-          projectId={projectId}
-          list={list}
-          empty={
-            <EmptyState icon="review" title="Every photo is reviewed">
-              No detections from this run are waiting.
-            </EmptyState>
-          }
-        />
+        <p className="max-w-prose text-sm text-muted">
+          Go through this run&apos;s suggestions in the Images workspace: <Kbd>A</Kbd> accepts, <Kbd>X</Kbd>{" "}
+          rejects and <Kbd>Tab</Kbd> moves to the next one.
+        </p>
+        <div>
+          <Link to={`/p/${projectId}/images?filter=suggestions`} className={buttonClass("primary", "md")}>
+            Review in Images
+          </Link>
+        </div>
       </div>
       <aside className="flex flex-col gap-3 lg:border-l lg:border-line lg:pl-6">
         <h2 className="text-sm font-semibold text-ink">Accept in bulk</h2>

@@ -1,23 +1,13 @@
 import { describe, it, expect } from "vitest";
-import {
-  exampleImage,
-  exampleImagePage,
-  fakeClient,
-  PROJECT_ID,
-  IMAGE_ID,
-  proposalBox,
-  errorBody,
-} from "@/test/fixtures";
+import { exampleImage, exampleImagePage, fakeClient, PROJECT_ID, IMAGE_ID } from "@/test/fixtures";
 import {
   bulkDeleteImages,
   bulkMarkEmpty,
   fetchImage,
   fetchImagePage,
-  preannotateImage,
   REVIEW_QUEUE_QUERY,
   setMarkedEmpty,
 } from "./images";
-import { ApiFailure } from "./errors";
 
 describe("images api", () => {
   it("lists with filters and sort in the query string", async () => {
@@ -58,26 +48,5 @@ describe("images api", () => {
       method: "POST",
       body: { image_ids: ["a", "b", "c"], marked_empty: true },
     });
-  });
-
-  it("pre-annotates with no body and surfaces 501 as ApiFailure", async () => {
-    const { api, requests } = fakeClient([
-      {
-        method: "POST",
-        path: /\/preannotate$/,
-        body: { skipped: false, model_id: "m", items: [proposalBox] },
-      },
-    ]);
-    const r = await preannotateImage(api, PROJECT_ID, IMAGE_ID);
-    expect(r.items).toHaveLength(1);
-    expect(requests[0].body).toBeNull();
-    const stub = fakeClient([
-      { method: "POST", path: /\/preannotate$/, status: 501, body: errorBody("not_implemented", "S4 later") },
-    ]);
-    await expect(preannotateImage(stub.api, PROJECT_ID, IMAGE_ID)).rejects.toMatchObject({
-      code: "not_implemented",
-      status: 501,
-    });
-    await expect(preannotateImage(stub.api, PROJECT_ID, IMAGE_ID)).rejects.toBeInstanceOf(ApiFailure);
   });
 });
