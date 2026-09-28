@@ -3,6 +3,7 @@ import { messageOf } from "@/api/errors";
 import { fetchFinding, patchFinding } from "@/api/findings";
 import { formatFindingNumber } from "@/findings/format";
 import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { toast } from "@/ui";
 import { useAiStore, visibilityNow } from "./aiStore";
 import type { ReviewResult } from "./api";
@@ -105,8 +106,9 @@ export async function setFindingSeverity(
   level: number,
 ): Promise<void> {
   try {
-    await patchFinding(api, projectId, findingId, { severity: level });
-    useChangesStore.getState().bumpFindings();
+    // Own-write echo dedupe (rulings R8): the server's `findings.changed` echo of this same write
+    // must not re-read the inspector and the findings list a second time.
+    await ownFindingsWrite([findingId], () => patchFinding(api, projectId, findingId, { severity: level }));
   } catch (e) {
     toast("danger", `Could not set the severity: ${messageOf(e, "unknown error")}`);
   }
