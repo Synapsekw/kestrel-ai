@@ -41,7 +41,7 @@ def _settle(client, project_id: str, timeout: float = 10.0) -> dict:
     raise AssertionError(f"the turn never left running: {client.get(f'{BASE}/{project_id}/agent').json()}")
 
 
-def test_label_the_first_five_images_end_to_end(client, app, project_id, image_ids, monkeypatch):
+def test_label_the_first_five_images_end_to_end(client, app, project_id, image_ids, monkeypatch, wait_job):
     """Add a class, prepare a cloud labeling run, approve it over HTTP, and check every surface an
     operator would look at: the approval card's cost, the created query run's image selection, the
     background job, the final assistant text and the tool items' statuses and summaries."""
@@ -94,8 +94,11 @@ def test_label_the_first_five_images_end_to_end(client, app, project_id, image_i
     assert runs[0]["kind"] == "cloud_provider"
     job_id = runs[0]["job_id"]
     assert job_id
-    job = client.get(f"{BASE}/{project_id}/jobs/{job_id}")
-    assert job.status_code == 200, job.text
+    # Wait for the labeling job to settle before scanning the project folder below: while it still
+    # commits, SQLite holds an exclusive byte-range lock on `project.db-shm`, and on Windows reading
+    # a locked range fails with PermissionError (the old CI flake).
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "succeeded", job
 
     tool_items = [i for i in body["items"] if i["kind"] == "tool"]
     assert [i["tool_name"] for i in tool_items] == ["update_classes", "label_images"]
