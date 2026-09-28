@@ -101,7 +101,9 @@ async function world(page: Page) {
   await page.route(`${api}/pointclouds`, (r) => r.fulfill(jsonReply({ items: [] })));
 }
 
-test("the Images tab lands on its first image; /review and /query land in the workspace", async ({ page }) => {
+test("the Images tab lands on its first image; /review and /query land in the workspace", async ({
+  page,
+}) => {
   await world(page);
   await page.goto(`/p/${P}/images`);
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
