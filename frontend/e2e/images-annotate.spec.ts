@@ -9,7 +9,9 @@ const posts = (world: World, tail: string) =>
 
 async function chooseCrack(page: Page) {
   await page.keyboard.press("t");
-  await expect(ws(page).typePicker).toBeVisible();
+  // The hotkey picks only a type the picker lists: under load the project's types can land after
+  // T, and "c" then goes into the empty filter.
+  await expect(ws(page).typePicker.getByRole("option", { name: new RegExp(CRACK.name) })).toBeVisible();
   await page.keyboard.press(CRACK.hotkey as string); // "c"
   await expect(ws(page).typePicker).toBeHidden();
 }
