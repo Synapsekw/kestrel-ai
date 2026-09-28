@@ -50,11 +50,18 @@ link pending operator (automated: 10 of 10 wall picks list photos; round trip 3 
 500, render p95 17.0 ms; table in the README; Full and Reduced) · 10 views 14/14 at 1600 × 1000, all
 complete, capture ≤ 874 ms; the R report part deferred to R (G8) · 11 gate below.
 
-**Gate on `task/c-g`:** contract `<GATE: result>`; ruff `<GATE: result>`; pytest
-`<GATE: n passed, k skipped>`; lint `<GATE: result>`; vitest `<GATE: n passed (f files)>`; build
-`<GATE: result>`; e2e `<GATE: n passed (ports a/b)>`; cargo test `<GATE: skipped (no frozen sidecar)>`.
-Changes since the cut: `<GATE: pytest +n, vitest +n in f files, e2e +n>` (sources in the README's
-"Gate" section).
+**Gate on `task/c-g`:** contract clean; ruff clean (check + format); pytest 3935 passed, 16 skipped,
+15 deselected; lint clean (0 errors, 22 pre-existing warnings); vitest 3541 passed (529 files); build
+ok; e2e 134 passed (ports 5600/5601), 0 failed, 0 flaky; cargo test skipped (no frozen sidecar in this
+worktree). `main` (`95441bbd`) is not an ancestor of `HEAD` — two later merges landed after the cut;
+not rebased, per the coordinator-merges instruction.
+Changes since the cut: pytest +14 (`test_pointcloud_scripts.py` 6 → 18, Task 10; +1 each in
+`test_pointcloud_profile_api.py` and `test_pointcloud_measurements_api.py`, Task 13); vitest +37 tests
+(net) in 15 files, 1 new (`cloudPerfLib.test.ts`, Task 7); e2e +13 (121 → 134): 3 new files
+(`clouds-journey.spec.ts`, `clouds-frame-time.spec.ts`, `clouds-gaps.spec.ts`), 3 rewritten
+(`clouds.spec.ts`, `clouds-no-webgl.spec.ts`, `pointcloud-foundation.spec.ts`), plus new cases in
+`cloud-report-views.spec.ts`, `clouds-cameras.spec.ts`, `clouds-engine.spec.ts` and
+`clouds-pins.spec.ts` (sources in the README's "Gate" section).
 
 **Open items:** criterion 2's re-pick misses (C-P1 / C-L1 follow-up); criterion 4's azimuth, where
 plan G7's noise and spec §16.4's ± 0.5° conflict (coordinator); the operator's checks (criteria 4
