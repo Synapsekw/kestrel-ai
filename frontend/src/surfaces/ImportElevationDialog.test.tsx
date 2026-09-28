@@ -22,7 +22,7 @@ describe("ImportElevationDialog", () => {
     expect(await screen.findByRole("dialog", { name: "Import design surface" })).toBeInTheDocument();
   });
 
-  it("links a cloud-built DSM to the Measurements tab", () => {
+  it("links a cloud-built DSM to the volume view", () => {
     const onClose = vi.fn();
     const { api } = fakeClient([]);
     renderWithProviders(
@@ -30,7 +30,7 @@ describe("ImportElevationDialog", () => {
       { api },
     );
     const link = screen.getByRole("link", { name: /Build from a point cloud/ });
-    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/measurements`);
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/measurements/volumes`);
     fireEvent.click(link);
     expect(onClose).toHaveBeenCalled();
   });

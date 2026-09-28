@@ -8,6 +8,7 @@ import { callsTo, emitViewState, resetFake } from "@/test/fakeCloudViewer";
 import { exampleGeoMap, fakeClient, fakeFetch, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useToastStore } from "@/ui";
+import { useViewStore } from "@/clouds/views/viewStore";
 import { clipKey } from "./clip";
 import { CloudWorkspace } from "./CloudWorkspace";
 
@@ -18,7 +19,7 @@ vi.mock("@/clouds/CloudViewer", async () => ({
 const routes = (items: object[]) => [
   { method: "GET", path: /\/pointclouds$/, body: { items } },
   { method: "GET", path: /\/maps$/, body: { items: [] } },
-  { method: "GET", path: /\/measurements$/, body: { items: [] } }, // S1's MeasurePanel in the Measurements tab
+  { method: "GET", path: /\/measurements$/, body: { items: [] } }, // the Measurements tab's saved list
   {
     method: "GET",
     path: /\/views$/,
@@ -152,9 +153,9 @@ describe("CloudWorkspace (spec §6)", () => {
       ["Fly", true],
       ["Distance", true],
       ["Clipping box", true],
-      ["Area", false],
-      ["Cross-section", false],
-      ["Pin a finding", false],
+      ["Area", true],
+      ["Cross-section", true],
+      ["Pin a finding", true], // C-P1 Task 10: the pins feature now registers its tool
       ["Photo link", false],
     ] as const)
       expect(toolbar().querySelector(`[aria-label="${name}"]`)!.hasAttribute("disabled"), name).toBe(
@@ -583,4 +584,13 @@ describe("CloudWorkspace (spec §6)", () => {
       { timeout: 5000 },
     );
   }, 10_000);
+
+  it("shows R1's Capture missing views item and the Saving views progress (C-R1)", async () => {
+    open([exampleCloud]);
+    await userEvent.click(await screen.findByRole("tab", { name: /Findings/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Findings actions" }));
+    expect(await screen.findByRole("menuitem", { name: "Capture missing views" })).toBeInTheDocument();
+    act(() => useViewStore.getState().setBulk({ done: 1, total: 3 }));
+    expect(await screen.findByText("Saving views 1 / 3")).toBeInTheDocument();
+  });
 });

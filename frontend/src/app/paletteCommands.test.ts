@@ -103,7 +103,7 @@ describe("palette commands", () => {
     expect(dataHref("p", { id: "m1", type: "map" })).toBe("/p/p/maps/m1");
     expect(dataHref("p", { id: "c1", type: "point_cloud" })).toBe("/p/p/clouds/c1");
     expect(dataHref("p", { id: "s1", type: "image_set" })).toBe("/p/p/images");
-    expect(dataHref("p", { id: "e1", type: "elevation" })).toBe("/p/p/measurements");
+    expect(dataHref("p", { id: "e1", type: "elevation" })).toBe("/p/p/measurements/volumes");
     expect(dataHref("p", { id: "d1", type: "drawing" })).toBe("/p/p/maps");
   });
 

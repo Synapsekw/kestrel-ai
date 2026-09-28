@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { CloudViewPose } from "@contract/client";
 import { nearFar, siteDiagonal, type Bounds6, type Vec3 as XYZ } from "./camera";
-import { localPositions, type OverlayShape } from "./overlay";
+import { localPositions, polygonMesh, type OverlayShape } from "./overlay";
 import type { Vec3 } from "./types";
 
 export const CAPTURE_WIDTH = 1600;
@@ -147,6 +147,7 @@ export async function encodeView(
 /** One overlay shape as a three object relative to `origin` (float32-safe), drawn over the points:
  * the same object `setOverlay` builds, with the colour given. */
 export function shapeObject(shape: OverlayShape, origin: XYZ, color: THREE.Color): THREE.Object3D {
+  if (shape.kind === "polygon") return polygonMesh(shape.points, origin, color);
   const geom = new THREE.BufferGeometry();
   const closed = shape.kind === "line" && !!shape.closed;
   geom.setAttribute("position", new THREE.BufferAttribute(localPositions(shape.points, origin, closed), 3));

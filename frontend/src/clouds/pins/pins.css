@@ -1,0 +1,156 @@
+/* The pins layer (spec C §9.2, C5). Positions come only from the frame hook's translate3d writes.
+   Motion uses F's tokens: the drop plays once, the ring pulses three cycles on the selected or new
+   pin, and nothing animates under reduced motion (the OS setting or Settings → Reduce motion).
+   Transform and opacity only, fill `backwards`, so nothing lasts after the end (ADR "lasting
+   opacity animation disables glass blur"). */
+.kp-pins {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+.kp-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+.kp-pin[data-state="hidden"] {
+  visibility: hidden;
+}
+.kp-pin[data-state="back"] {
+  opacity: 0.38;
+}
+.kp-pin-head {
+  position: absolute;
+  left: -11px;
+  top: -32px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid rgb(var(--ink) / 0.9);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--c);
+  box-shadow: var(--elev-1);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.kp-pin-head:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+}
+.kp-pin[data-draft] .kp-pin-head {
+  border-style: dashed;
+}
+.kp-pin-drop {
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 5px;
+  border-radius: 50%;
+  background: rgb(var(--bg));
+}
+.kp-pin-shadow {
+  position: absolute;
+  left: -6px;
+  top: -2px;
+  width: 12px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(var(--bg) / 0.55);
+}
+.kp-pin-ring {
+  position: absolute;
+  left: -10px;
+  top: -10px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  opacity: 0;
+}
+.kp-pin[data-selected] .kp-pin-ring {
+  opacity: 0.9;
+}
+.kp-pin-label {
+  position: absolute;
+  left: 16px;
+  top: -32px;
+  padding: 2px 8px;
+  border-radius: var(--r-chip);
+  background: rgb(var(--glass-solid));
+  color: rgb(var(--ink));
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.kp-pin-head:hover + .kp-pin-label,
+.kp-pin-head:focus-visible + .kp-pin-label {
+  opacity: 1;
+}
+.kp-pin[data-enter] .kp-pin-head {
+  animation: kp-drop var(--dur-slow) var(--ease-spring) backwards;
+}
+@keyframes kp-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) rotate(-45deg);
+  }
+}
+.kp-pin[data-pulse] .kp-pin-ring {
+  animation: kp-ring var(--dur-count) var(--ease-out) 3;
+}
+@keyframes kp-ring {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+/* The callout (§9.3): positioned by the same frame pass; its arrow points at the pin. Its host
+   (the floating layer, z-index 12) is `pointer-events: none`, so the card opts back in here
+   (ruling T4-6) to take clicks on its own contents (Close, Delete, the comment form, …). */
+.kp-callout {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 12;
+  width: 290px;
+  pointer-events: auto;
+}
+.kp-callout[data-state="hidden"] {
+  visibility: hidden;
+}
+.kp-callout-arrow {
+  position: absolute;
+  top: var(--arrow-y, 24px);
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%) rotate(45deg);
+  background: rgb(var(--glass-solid));
+}
+.kp-callout[data-side="right"] .kp-callout-arrow {
+  left: -5px;
+}
+.kp-callout[data-side="left"] .kp-callout-arrow {
+  right: -5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kp-pin[data-enter] .kp-pin-head,
+  .kp-pin[data-pulse] .kp-pin-ring {
+    animation: none;
+  }
+}
+:root[data-motion="reduced"] .kp-pin[data-enter] .kp-pin-head,
+:root[data-motion="reduced"] .kp-pin[data-pulse] .kp-pin-ring {
+  animation: none;
+}

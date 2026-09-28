@@ -6,6 +6,8 @@ import {
   installHook,
   MAX_ERRORS,
   pushErrorOnce,
+  readPins,
+  setPinsProbe,
   type CloudViewerDiagnostics,
 } from "./diagnostics";
 
@@ -36,6 +38,7 @@ function hook(): CloudViewerDiagnostics {
     occlusion: () => ({ result: null, ms: 0 }),
     captureSample: () => Promise.reject(new Error("unused")),
     pickCenterWithNormal: () => null,
+    pins: () => [],
   };
 }
 
@@ -100,5 +103,17 @@ describe("diagnostics", () => {
       green: 1,
       white: 1,
     });
+  });
+});
+
+describe("pins probe", () => {
+  it("reads the registered pins layer, and nothing once it unregisters", () => {
+    expect(readPins()).toEqual([]);
+    setPinsProbe(() => [{ id: "a", x: 1, y: 2, state: "back", occluded: true, normal: null, passMs: 0.1 }]);
+    expect(readPins()).toEqual([
+      { id: "a", x: 1, y: 2, state: "back", occluded: true, normal: null, passMs: 0.1 },
+    ]);
+    setPinsProbe(null);
+    expect(readPins()).toEqual([]);
   });
 });

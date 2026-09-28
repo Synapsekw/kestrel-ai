@@ -97,7 +97,7 @@ test("old addresses land on the new tabs", async ({ page }) => {
   const rail = await page.getByRole("navigation", { name: "Main navigation" }).boundingBox();
   expect(rail?.height).toBe(page.viewportSize()?.height);
   await page.goto(`/p/${P}/volumes`);
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/measurements$`));
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/measurements/volumes$`));
   await page.goto("/library?model=m1");
   await expect(page).toHaveURL(/\/models\/library\?model=m1$/);
   await page.goto("/no/such/page");

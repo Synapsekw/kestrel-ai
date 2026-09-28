@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { volumeViewPath } from "@/measurements/links";
 import { Dialog, Icon, cx, focusRing, pressable, transition } from "@/ui";
 import { DemImportStep } from "./DemImportStep";
 import { ImportDesignDialog } from "./ImportDesignDialog";
@@ -64,12 +65,12 @@ export function ImportElevationDialog({
             </span>
           </span>
         </button>
-        <Link to={`/p/${projectId}/measurements`} onClick={onClose} className={OPTION}>
+        <Link to={volumeViewPath(projectId)} onClick={onClose} className={OPTION}>
           <Icon name="cloud" size={18} className="mt-0.5 text-accent-ink" />
           <span>
             <span className="block text-sm font-semibold text-ink">Build from a point cloud</span>
             <span className="block text-xs text-muted">
-              Opens Measurements, where Build surface turns an imported cloud into a DSM.
+              Opens Surfaces and volumes, where Build surface turns an imported cloud into a DSM.
             </span>
           </span>
         </Link>
