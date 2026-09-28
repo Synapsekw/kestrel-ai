@@ -84,18 +84,19 @@ def default_cuda_available() -> bool:
         return False
 
 
-def read_crop(image_path: Path, crop: Crop) -> np.ndarray:
+def read_crop(image_path: Path, crop: Crop, image_id: str) -> np.ndarray:
     """The crop of the stored frame as RGB uint8, resized so its long side is 1024 (spec I-D6).
 
     A frame that cannot be opened (missing, truncated, not an image) answers 404 `not_found`
     (ruling F15), not a 500 — the file went missing or was corrupted after the image was indexed.
+    The error carries the image id, never the local file path.
     """
     try:
         with PILImage.open(image_path) as im:
             region = im.convert("RGB").crop((crop.x, crop.y, crop.x + crop.w, crop.y + crop.h))
             pixels = np.asarray(region.resize(crop.model_size(), PILImage.BILINEAR))
     except (OSError, UnidentifiedImageError) as e:
-        raise not_found("image file", str(image_path)) from e
+        raise not_found("image", image_id) from e
     return pixels
 
 
@@ -229,7 +230,7 @@ class SegmentService:
             self._cache.move_to_end(full)
             return self._cache[full], 0, True
         started = time.perf_counter()
-        embedding = backend.encode(read_crop(image_path, crop), device)
+        embedding = backend.encode(read_crop(image_path, crop, key[1]), device)
         encode_ms = _ms(started)
         self._cache[full] = embedding
         while len(self._cache) > EMBEDDINGS:

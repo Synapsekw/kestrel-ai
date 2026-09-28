@@ -133,7 +133,10 @@ def test_cancellation_between_formats_leaves_the_job_cancelled(
     monkeypatch.setattr("app.exports.job.csv_out.write", slow_write)
     r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "yolo"]})
     job_id = r.json()["job"]["id"]
-    assert started.wait(2), "the csv writer never started"
+    # 20s, not 2s (I-E task 11a item C3): under load the background job runner can take longer than
+    # 2s to dequeue and start the job; other tests waiting on a job's start signal already use 20-30s
+    # (test_pointcloud_api.py, test_design_build.py).
+    assert started.wait(20), "the csv writer never started"
     client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
     job = wait_job(project_id, job_id)
     assert job["state"] == "cancelled", job
@@ -160,7 +163,10 @@ def test_a_cancelled_export_leaves_no_partial_and_no_final_folder(
     monkeypatch.setattr("app.exports.job.csv_out.write", slow_write)
     r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "yolo"]})
     job_id = r.json()["job"]["id"]
-    assert started.wait(2), "the csv writer never started"
+    # 20s, not 2s (I-E task 11a item C3, the known flake): under load the background job runner can
+    # take longer than 2s to dequeue and start the job; other tests waiting on a job's start signal
+    # already use 20-30s (test_pointcloud_api.py, test_design_build.py).
+    assert started.wait(20), "the csv writer never started"
     client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
     job = wait_job(project_id, job_id)
     assert job["state"] == "cancelled", job
@@ -342,7 +348,8 @@ def test_cancellation_inside_the_html_cards_leaves_the_job_cancelled(
     monkeypatch.setattr("app.exports.html_out.draw_thumbnail", slow_draw)
     r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["html"]})
     job_id = r.json()["job"]["id"]
-    assert started.wait(2), "the first thumbnail was never drawn"
+    # 20s, not 2s (I-E task 11a item C3): same brittle pattern as the csv-writer waits above.
+    assert started.wait(20), "the first thumbnail was never drawn"
     client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
     job = wait_job(project_id, job_id)
     assert job["state"] == "cancelled", job

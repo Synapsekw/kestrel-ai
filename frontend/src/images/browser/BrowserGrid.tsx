@@ -57,6 +57,7 @@ function Tile(p: TileProps) {
     <div role="listitem" data-ordinal={p.ordinal} style={{ height: p.height }}>
       <button
         type="button"
+        data-testid="image-thumb"
         aria-current={p.current ? "true" : undefined}
         aria-pressed={p.selected}
         aria-label={p.count > 0 ? `${name}, ${plural(p.count, "finding")}` : name}

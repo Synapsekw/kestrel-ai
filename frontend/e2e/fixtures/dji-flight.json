@@ -1,0 +1,160 @@
+{
+  "frames": [
+    {
+      "id": "10000000-5555-4000-8000-000000000001",
+      "file_name": "DJI_0001.jpg",
+      "width": 800,
+      "height": 600,
+      "lat": 25.26412,
+      "lon": 55.292179999999995,
+      "capture_time": null,
+      "camera": {
+        "rel_alt": 38.4,
+        "gimbal_pitch": -89.9,
+        "gimbal_yaw": -12.3,
+        "focal_mm": 12.29,
+        "focal_px": 3666.666504,
+        "sensor_w_mm": 17.30000068806821,
+        "lrf_distance_m": null,
+        "subject_distance_m": null,
+        "distance_m": 38.40005848661883,
+        "distance_sigma_m": 1.0,
+        "distance_source": "rel_alt",
+        "gsd_mm": 69.12010834233325,
+        "camera_model": "M3E"
+      },
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              55.29187442528818,
+              25.264246713619926
+            ],
+            [
+              55.29239951209317,
+              25.264350250334065
+            ],
+            [
+              55.292484729361526,
+              25.263994694801124
+            ],
+            [
+              55.2919606082204,
+              25.263891348496767
+            ],
+            [
+              55.29187442528818,
+              25.264246713619926
+            ]
+          ]
+        ]
+      },
+      "footprint_kind": "trapezoid"
+    },
+    {
+      "id": "10000000-5555-4000-8000-000000000002",
+      "file_name": "DJI_0002.jpg",
+      "width": 800,
+      "height": 600,
+      "lat": 25.2643,
+      "lon": 55.292179999999995,
+      "capture_time": null,
+      "camera": {
+        "rel_alt": 38.4,
+        "gimbal_pitch": -89.9,
+        "gimbal_yaw": -12.3,
+        "focal_mm": 12.29,
+        "focal_px": 3666.666504,
+        "sensor_w_mm": 17.30000068806821,
+        "lrf_distance_m": null,
+        "subject_distance_m": null,
+        "distance_m": 38.40005848661883,
+        "distance_sigma_m": 1.0,
+        "distance_source": "rel_alt",
+        "gsd_mm": 69.12010834233325,
+        "camera_model": "M3E"
+      },
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              55.29187442483512,
+              25.264426713619926
+            ],
+            [
+              55.29239951241862,
+              25.264530250334065
+            ],
+            [
+              55.292484729813324,
+              25.264174694801124
+            ],
+            [
+              55.29196060789513,
+              25.264071348496767
+            ],
+            [
+              55.29187442483512,
+              25.264426713619926
+            ]
+          ]
+        ]
+      },
+      "footprint_kind": "trapezoid"
+    },
+    {
+      "id": "10000000-5555-4000-8000-000000000003",
+      "file_name": "DJI_0003.jpg",
+      "width": 800,
+      "height": 600,
+      "lat": 25.26448,
+      "lon": 55.292179999999995,
+      "capture_time": null,
+      "camera": {
+        "rel_alt": 38.4,
+        "gimbal_pitch": -89.9,
+        "gimbal_yaw": -12.3,
+        "focal_mm": 12.29,
+        "focal_px": 3666.666504,
+        "sensor_w_mm": 17.30000068806821,
+        "lrf_distance_m": null,
+        "subject_distance_m": null,
+        "distance_m": 38.40005848661883,
+        "distance_sigma_m": 1.0,
+        "distance_source": "rel_alt",
+        "gsd_mm": 69.12010834233325,
+        "camera_model": "M3E"
+      },
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              55.291874424382065,
+              25.264606713619926
+            ],
+            [
+              55.292399512744076,
+              25.264710250334065
+            ],
+            [
+              55.29248473026512,
+              25.264354694801124
+            ],
+            [
+              55.29196060756985,
+              25.264251348496767
+            ],
+            [
+              55.291874424382065,
+              25.264606713619926
+            ]
+          ]
+        ]
+      },
+      "footprint_kind": "trapezoid"
+    }
+  ]
+}

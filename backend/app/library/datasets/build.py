@@ -49,8 +49,8 @@ def all_skipped(skipped: int, task: str, boxes_as_polygons: bool) -> str:
     if task == "segment" and not boxes_as_polygons:
         return (
             f"Nothing to train on: {skipped} matching images were skipped because they hold boxes "
-            "or point markers of the chosen types, which a polygon dataset cannot use. Tick “Boxes as "
-            "polygons” to use boxes as 4-point outlines, or choose types drawn as polygons."
+            'or point markers of the chosen types, which a polygon dataset cannot use. Tick "Boxes as '
+            'polygons" to use boxes as 4-point outlines, or choose types drawn as polygons.'
         )
     return (
         f"Nothing to train on: {skipped} matching images were skipped because they hold point "

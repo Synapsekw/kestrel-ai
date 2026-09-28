@@ -206,3 +206,5 @@ def test_an_unreadable_frame_gives_a_404_not_a_500(tmp_path, weights):
         svc.prepare(KEY, bad, quantise_crop(0, 0, 600, 600, 2000, 1500), weights)
     assert excinfo.value.code == "not_found"
     assert excinfo.value.status == 404
+    assert KEY[1] in excinfo.value.message
+    assert str(bad) not in excinfo.value.message

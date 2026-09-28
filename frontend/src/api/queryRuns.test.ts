@@ -9,18 +9,10 @@ import {
   RUN_ID,
   runningJob,
 } from "@/test/fixtures";
-import {
-  createQueryRun,
-  DEFAULT_TILING,
-  estimateQueryRun,
-  fetchQueryRun,
-  fetchQueryRuns,
-  promoteQueryRun,
-  resumeQueryRun,
-} from "./queryRuns";
+import { createQueryRun, DEFAULT_TILING, estimateQueryRun, resumeQueryRun } from "./queryRuns";
 
 describe("query runs api", () => {
-  it("estimates, creates, lists, gets and promotes", async () => {
+  it("estimates and creates", async () => {
     const { api, requests } = fakeClient([
       { method: "POST", path: /\/query-runs\/estimate$/, body: exampleEstimate },
       {
@@ -29,13 +21,6 @@ describe("query runs api", () => {
         status: 202,
         body: { query_run: exampleQueryRun, job: runningJob },
       },
-      { method: "GET", path: /\/query-runs$/, body: { items: [exampleQueryRun], next_cursor: null } },
-      {
-        method: "POST",
-        path: /\/promote$/,
-        body: { query_run: { ...exampleQueryRun, promoted_at: "2026-09-17T13:30:00Z" }, accepted: 6 },
-      },
-      { method: "GET", path: /\/query-runs\/[^/]+$/, body: exampleQueryRun },
     ]);
     const body = {
       kind: "cloud_provider" as const,
@@ -51,15 +36,6 @@ describe("query runs api", () => {
     expect(created.query_run.id).toBe(RUN_ID);
     expect(created.job.id).toBe(runningJob.id);
     expect(requests[1].body).toEqual(body);
-    expect((await fetchQueryRuns(api, PROJECT_ID)).map((r) => r.id)).toEqual([RUN_ID]);
-    expect((await fetchQueryRun(api, PROJECT_ID, RUN_ID)).query).toBe("dump trucks");
-    const promoted = await promoteQueryRun(api, PROJECT_ID, RUN_ID, 0.5);
-    expect(promoted.accepted).toBe(6);
-    expect(requests[4]).toMatchObject({
-      method: "POST",
-      url: `/api/v1/projects/${PROJECT_ID}/query-runs/${RUN_ID}/promote`,
-      body: { min_confidence: 0.5 },
-    });
   });
 
   it("resumes an interrupted run and surfaces the 409 conflict", async () => {

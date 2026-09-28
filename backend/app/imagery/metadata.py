@@ -11,6 +11,8 @@ METADATA_VERSION = 1
 
 
 def camera_columns(meta: CameraMeta, lat: float | None, lon: float | None) -> dict:
+    """The `image` column values derived from camera metadata: the raw camera fields plus the
+    computed ground footprint and the metadata version they were read at."""
     cols = {name: getattr(meta, name) for name in CAMERA_FIELDS}
     fp = footprint.compute(
         footprint.FootprintInput(

@@ -9,6 +9,49 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Images lands — 2026-09-28 (`task/i-e`, unit I-E evidence)
+
+Sub-project I (spec `docs/superpowers/specs/2026-09-26-image-inspection-design.md`, plans
+`docs/superpowers/plans/2026-09-27-images-*.md`) is built, gated and evidenced end to end. Units:
+C0 (contract, migration 0011, seams), BA (annotations, shapes, review extras, lengths), BK (XMP,
+thumbnails at import, camera/GSD, footprints, backfill), BX (summary, columnar index, filters), BS
+(SAM 2.1 tiny assist), BP (shapes from detection, interactive and batch detect), BT (label writers,
+segment datasets, seg training), FC (canvas, tools, keymap), FB (browser, map), FA (AI UX), FW
+(workspace assembly, redirects, old screens deleted), E (this entry).
+
+**Evidence** (`docs/evidence/images/README.md`): e2e flows 1–7 (`frontend/e2e/images-*.spec.ts`)
+against a stateful route-faked backend whose DJI fixture is written by the real backend
+(`backend/tests/test_images_e2e_fixture.py`); the same flows 1–5 on the real API with the offline
+SAM and YOLO seams (`backend/tests/test_images_journey.py`); frame budget with 500 annotations
+(`pnpm -C frontend e2e:perf`): p95 16.7 ms in all three runs (headless Chromium), annotation scene
+draw p95 2.5–3.3 ms, at most one annotation draw per frame and no hit-graph rebuild while panning
+(the CI proxy); 20,000 images: index to caption 78 ms, backend index median 56 ms, at most
+32 thumbs in the DOM (grid 24 + filmstrip 8) and 8 fetches in flight (ThumbLoader peak; network
+storm guard saw 16 ≤ 24), #15,000 opens. Capture map ready at 20k points 276–378 ms, at 100k
+1360–1407 ms; its pan phase is skipped on headless Chromium's software GL (SwiftShader), so IMC-X
+pans a 20k-point map on the installed build.
+
+**Fixed in I-E:** flow 7 found `BrowserPane.tsx`'s grid wrapper was not a flex column, so the grid
+was unbounded and virtualisation rendered all 20,000 tiles (`0a4b10f`, I-FW's file). Plus seven
+cheap deferred minors of other I units (Task 11b).
+
+**Retired by operator decision 2026-09-28:** resuming an interrupted detection run and bulk-undo of
+accepted labels (unpromote) — no UI successor. The unused client helpers `fetchQueryRun`,
+`fetchQueryRuns`, `promoteQueryRun`, `unpromoteQueryRun` are deleted; the backend routes stay;
+`resumeQueryRun` stays (the Setup agent's "Resume first labeling" calls it).
+
+**Gate on `task/i-e`:** contract clean; ruff clean; pytest 3927 passed, 16
+skipped, 16 deselected; frontend lint clean; vitest 3505 tests passed
+(528 files); build ok; e2e 133 passed (ports 5590/5591) — `images-perf.spec.ts:105` ("500
+annotations: at most one annotation draw per frame and no hit-graph rebuild while panning") failed
+once in the full run (`hitDrawsDuringInput` 1000 instead of 0), then passed alone twice: a load
+flake under full-suite worker contention, not a real regression; cargo test skipped
+(no frozen sidecar).
+
+**Not done here (R9):** no installer. IMC-X runs the full gate, freezes the sidecar, runs
+`smoke_frozen.ps1` (including the segment call, spec §21 risk 2), builds one installer and runs
+the walkthrough in `docs/evidence/images/README.md` on it.
+
 ## Foundation lands — 2026-09-27 (`task/f-x`, unit X evidence)
 
 Sub-project F (spec `docs/superpowers/specs/2026-09-26-foundation-design.md`, index plan
