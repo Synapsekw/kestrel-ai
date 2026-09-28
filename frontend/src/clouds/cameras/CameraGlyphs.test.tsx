@@ -151,6 +151,27 @@ describe("CameraGlyphs", () => {
     expect(screen.getByRole("button", { name: "Look through" })).toBeDisabled();
   });
 
+  it("the note names what is missing: the angles, or only the altitude", async () => {
+    act(() =>
+      useCamerasStore.getState().receive(
+        CLOUD_ID,
+        cameraSet([
+          { id: "img-plain", x: E, y: N, z: 30 },
+          { id: "img-no-alt", x: E + 50, y: N, z: null, yaw: 0, pitch: -90 },
+        ]),
+      ),
+    );
+    mount();
+    click(400, 300);
+    expect(await screen.findByText(/· camera angles unknown/)).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Drone photo" })).toBeNull());
+    click(450, 300);
+    expect(await screen.findByText(/· altitude unknown/)).toBeInTheDocument();
+    expect(screen.queryByText(/camera angles unknown/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Look through" })).toBeDisabled();
+  });
+
   it("Look through takes the drone's pose, draws the photo frame, and Esc goes back", async () => {
     const { v, restore } = mount();
     click(400, 300);

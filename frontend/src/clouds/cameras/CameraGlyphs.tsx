@@ -78,6 +78,8 @@ function GlyphCard({
   }, [api, projectId, imageId]);
   const shownRow = row?.imageId === imageId ? row : null;
   const posed = isPosed(set, index);
+  // not posed: the angles are missing, or only the altitude is (review RF1's case)
+  const hasAngles = set.yaw[index] !== null && set.pitch[index] !== null;
   return (
     <div className="flex w-64 flex-col gap-2 p-3">
       <img
@@ -89,7 +91,7 @@ function GlyphCard({
         <p className="truncate text-sm text-ink">{shownRow?.name ?? "Drone photo"}</p>
         <p className="text-xs text-muted">
           {when(shownRow?.time ?? null)}
-          {posed ? "" : " · camera angles unknown"}
+          {posed ? "" : hasAngles ? " · altitude unknown" : " · camera angles unknown"}
         </p>
       </div>
       <div className="flex gap-2">
