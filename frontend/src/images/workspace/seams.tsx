@@ -36,6 +36,9 @@ export { ZoomCluster } from "@/images/tools/ZoomCluster";
 export { useImageData } from "@/images/canvas/useImageData";
 export { useCommandContext, type CommandContext } from "@/images/canvas/commands";
 export { useCanvasKeyHandlers } from "@/images/canvas/useCanvasKeys";
+/** FC's AABB of an oriented box (clockwise about its centre, degrees) and of a point list; panTo.ts's
+ * `shapeBounds` uses these for box/rbox/polygon and keeps only the point pad local. */
+export { aabbOf, envelopeOf, orientedRectOf, toPoints } from "@/images/canvas/geometry";
 export { statusHintsFor, useHeldKeys, useImagesKeymap, type KeyHandlers } from "@/images/workspace/keymap";
 export {
   lengthLabel,
