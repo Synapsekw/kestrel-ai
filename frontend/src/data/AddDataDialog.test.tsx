@@ -26,6 +26,9 @@ vi.mock("./ImportImagesDialog", () => ({ ImportImagesDialog: stub("Import images
 vi.mock("@/maps/ImportMapDialog", () => ({ ImportMapDialog: stub("Import map") }));
 vi.mock("@/clouds/ImportCloudDialog", () => ({ ImportCloudDialog: stub("Import cloud") }));
 vi.mock("@/surfaces/ImportElevationDialog", () => ({ ImportElevationDialog: stub("Add elevation") }));
+vi.mock("@/mapws/drawings/ImportDrawingDialog", () => ({
+  ImportDrawingDialog: stub("Import drawing"),
+}));
 
 describe("AddDataDialog", () => {
   beforeEach(() => {
@@ -34,15 +37,13 @@ describe("AddDataDialog", () => {
     useAddData.setState({ open: false, tile: null, projectId: null });
   });
 
-  it("offers five tiles, with Drawing disabled until the Maps workspace", () => {
+  it("offers five tiles, all enabled", () => {
     const { api } = fakeClient([]);
     renderWithProviders(<AddDataDialog project={exampleProject} onClose={() => {}} />, { api });
-    const dialog = screen.getByRole("dialog", { name: "Add data" });
-    for (const name of [/Photos/, /Orthomosaic/, /Elevation/, /Point cloud/]) {
+    for (const name of [/Photos/, /Orthomosaic/, /Elevation/, /Point cloud/, /Drawing/]) {
       expect(screen.getByRole("button", { name })).toBeEnabled();
+      expect(screen.getByRole("button", { name })).not.toHaveAttribute("aria-disabled");
     }
-    expect(screen.getByRole("button", { name: /Drawing/ })).toHaveAttribute("aria-disabled", "true");
-    expect(dialog).toHaveTextContent("Arrives with the Maps workspace");
   });
 
   it("closes when the photo import is queued, and says it runs in the background", () => {
@@ -60,6 +61,7 @@ describe("AddDataDialog", () => {
     [/Orthomosaic/, "Start Import map"],
     [/Elevation/, "Start Add elevation"],
     [/Point cloud/, "Start Import cloud"],
+    [/Drawing/, "Start Import drawing"],
   ])("routes %s to its importer", (tile, start) => {
     const onClose = vi.fn();
     const { api } = fakeClient([]);

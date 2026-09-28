@@ -63,6 +63,7 @@ const IMPORTERS: { tile: AddDataTile; title: string }[] = [
   { tile: "orthomosaic", title: "Add an orthomosaic" },
   { tile: "elevation", title: "Add an elevation model" },
   { tile: "point_cloud", title: "Add a point cloud" },
+  { tile: "drawing", title: "Add a drawing" },
 ];
 
 /** The Actions group: the route's enabled actions, each importer, New project, reduced effects. */
