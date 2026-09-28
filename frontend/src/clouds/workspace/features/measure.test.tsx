@@ -730,6 +730,49 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("profile file missing");
   });
 
+  it("a ready row's fallback preview never takes over a draft line's preview (m5)", async () => {
+    const m = mount("section", [
+      listRoute(() => [savedProfile("r3", "ready", N + 20)]),
+      {
+        method: "GET",
+        path: /\/measurements\/r3\/profile$/,
+        status: 500,
+        body: errorBody("internal", "profile file missing"),
+      },
+    ]);
+    await screen.findByTestId("measure-hint");
+    let releaseDraft: () => void = () => undefined;
+    m.viewer.h.sampleSlab.mockImplementation(
+      (a: number[], b: number[], thicknessM: number) =>
+        new Promise((resolve) => {
+          const count = m.viewer.h.sampleSlab.mock.calls.length === 1 ? 7 : 3;
+          const answer = () =>
+            resolve({
+              s: new Float64Array(count),
+              z: new Float64Array(count),
+              rgb: null,
+              count,
+              total: count,
+              a,
+              b,
+              thicknessM,
+            });
+          if (count === 7) releaseDraft = answer;
+          else answer();
+        }),
+    );
+    m.tap([pick(E, N, 5), pick(E + 12, N, 5)]); // the draft line: its answer is held back
+    await userEvent.click(await screen.findByRole("button", { name: /Section r3/ }));
+    // r3's stored profile fails: the fallback samples r3's line and answers first.
+    await waitFor(() => expect(seen.previews).toHaveLength(2));
+    await handled(seen.previews[1]);
+    expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("profile file missing");
+    releaseDraft();
+    await handled(seen.previews[0]);
+    expect(panelProps.last?.line.a.y).toBe(N);
+    expect(panelProps.last?.data?.count).toBe(7);
+  });
+
   it("Enter on an open bow-tie refuses without closing it, so the next click corrects it", async () => {
     const m = mount("area", [listRoute(() => [])]);
     await screen.findByTestId("measure-hint");
