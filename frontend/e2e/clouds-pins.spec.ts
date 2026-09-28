@@ -3,6 +3,7 @@ import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, redGreenGrid, routeOctree, type FixturePoint } from "./fixtures/potreeOctree";
 import { engineIdle } from "./fixtures/cloudWorkspace";
 import { SWIFTSHADER_ARGS, viewerSettled } from "./fixtures/viewer";
+import { fromMock, jsonReply } from "./mock";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const TYPE = "t0000000-1111-4000-8000-00000000c0a1";
@@ -14,33 +15,44 @@ test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("kestrel.diagnostics", "1"));
 });
-
 const pinsDiag = (page: Page) => page.evaluate(() => window.__kestrelCloudViewer?.pins() ?? []);
 
-/** The mock's project, plus one defect type the pin tool can use. */
-async function routeProjectWithType(page: Page) {
+/** The mock's project, plus one defect type the pin tool can use, read once up front and answered
+ * from memory: a proxied `route.fetch` per GET met a keep-alive socket the mock had just closed on a
+ * loaded CI runner (ECONNRESET, run 36462199829) and could still be waiting when a test ended.
+ * Returns how many of its GETs are unanswered: each consumer fetches the project itself. */
+async function routeProjectWithType(page: Page): Promise<() => number> {
+  const project = await fromMock<{ classes?: unknown[] }>(page, `/api/v1/projects/${P}`);
+  const body = {
+    ...project,
+    classes: [
+      ...(project.classes ?? []),
+      {
+        id: TYPE,
+        name: "Spalling",
+        colour: "#ff9c3a",
+        hotkey: null,
+        order: 99,
+        kind: "defect",
+        default_severity: 3,
+        group: "Concrete defects",
+      },
+    ],
+  };
+  let inFlight = 0;
   await page.route(
     (u) => u.pathname === `/api/v1/projects/${P}`,
     async (route) => {
       if (route.request().method() !== "GET") return route.fallback();
-      const res = await route.fetch();
-      const body = (await res.json()) as { classes?: unknown[] };
-      body.classes = [
-        ...(body.classes ?? []),
-        {
-          id: TYPE,
-          name: "Spalling",
-          colour: "#ff9c3a",
-          hotkey: null,
-          order: 99,
-          kind: "defect",
-          default_severity: 3,
-          group: "Concrete defects",
-        },
-      ];
-      await route.fulfill({ response: res, json: body });
+      inFlight += 1;
+      try {
+        await route.fulfill(jsonReply(body));
+      } finally {
+        inFlight -= 1;
+      }
     },
   );
+  return () => inFlight;
 }
 
 function finding(id: string, number: number, anchor: { x: number; y: number; z: number }) {
@@ -117,12 +129,16 @@ async function routeCloud(page: Page, points: FixturePoint[], bounds: number[]) 
 test("pin flow: M, pick, choose a type, Enter creates with F's cloud anchor, the pin stays after reload", async ({
   page,
 }) => {
-  await routeProjectWithType(page);
+  const projectGetsInFlight = await routeProjectWithType(page);
   const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 });
   await routeCloud(page, grid, [243500, 3178000, 0, 243600, 3178100, 2]);
   const posts = await routeFindings(page, []);
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
+  // The types must be in before the pick: a draft opened while the pins feature's project GET is
+  // still out gets the first type seeded when it lands (T6-4), and Create is then enabled. On a
+  // loaded run that GET (then proxied to the mock) answered only after the pick.
+  await expect.poll(projectGetsInFlight).toBe(0);
 
   await page.keyboard.press("m");
   const toolbar = page.getByRole("toolbar", { name: "Point cloud tools" });

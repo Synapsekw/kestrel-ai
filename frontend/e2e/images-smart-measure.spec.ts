@@ -8,7 +8,11 @@ test("S warms the embedding, a click segments, Enter creates a polygon drawn by 
   const world = await serveImages(page, { frames });
   await openImage(page, P, frames[0].id, "800x600");
   await page.keyboard.press("t");
+  // The hotkey picks only a type the picker lists: under load the project's types can land after
+  // T, and "c" (then "s") went into the empty filter instead.
+  await expect(ws(page).typePicker.getByRole("option", { name: new RegExp(CRACK.name) })).toBeVisible();
   await page.keyboard.press(CRACK.hotkey as string);
+  await expect(ws(page).typePicker).toBeHidden();
 
   // A click is ignored until `/segment/prepare` has answered and Enter needs the `/segment` answer
   // (ruling: wait on the responses, not on the world's logged request counts, which log before
