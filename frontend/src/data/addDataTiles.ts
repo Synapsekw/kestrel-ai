@@ -24,8 +24,7 @@ export const ADD_DATA_TILES: AddDataTileInfo[] = [
   {
     tile: "drawing",
     title: "Drawing",
-    // Slice B (Task 13) restores "DXF, LandXML, or a PDF/PNG plan".
-    hint: "A PDF page or a PNG, JPG or TIF plan",
+    hint: "DXF, LandXML, or a PDF/PNG plan",
     icon: "drawing",
   },
 ];

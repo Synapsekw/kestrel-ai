@@ -12,6 +12,7 @@ import { messageOf } from "@/api/errors";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Dialog, Field, Input, Progress } from "@/ui";
+import { DrawingLayerPicker } from "./DrawingLayerPicker";
 import { DrawingPlacementFields } from "./DrawingPlacementFields";
 import {
   defaultDrawingName,
@@ -125,8 +126,6 @@ export function ImportDrawingDialog({
 
   const ready = inspection?.state === "ready" && form ? inspection : null;
   const family = ready ? familyOf(ready.format) : null;
-  // Slice A: Task 13 deletes this line and the vector Alert below.
-  const supported = family !== null && family !== "vector";
   const name = ready && form ? (form.name ?? defaultDrawingName(ready, form.page)) : "";
 
   return (
@@ -142,13 +141,7 @@ export function ImportDrawingDialog({
           <Button onClick={onClose} disabled={busy === "import"}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            icon="import"
-            loading={busy === "import"}
-            disabled={!supported}
-          >
+          <Button type="submit" variant="primary" icon="import" loading={busy === "import"} disabled={!ready}>
             Start import
           </Button>
         </>
@@ -222,13 +215,22 @@ export function ImportDrawingDialog({
             </p>
           </Section>
         )}
-        {ready && family === "vector" && (
-          <Alert tone="info">
-            DXF and LandXML linework import arrives with the vector drawing layers. For now, import a PDF page
-            or a PNG, JPG or TIF plan.
-          </Alert>
+        {ready && form && family === "vector" && (
+          <Section title="Layers">
+            <DrawingLayerPicker
+              layers={ready.layers}
+              selected={form.layers}
+              onChange={(layers) => setForm({ ...form, layers })}
+            />
+            {ready.format === "landxml" && (
+              <p className="text-sm text-muted">
+                LandXML linework only: breaklines, alignments and surface boundaries. Import its surfaces
+                under Add elevation → Design surface.
+              </p>
+            )}
+          </Section>
         )}
-        {ready && form && supported && (
+        {ready && form && (
           <Section title="Placement">
             <DrawingPlacementFields inspection={ready} form={form} onChange={setForm} />
             <Field label="Name" htmlFor="drawing-name">

@@ -9,6 +9,7 @@ import {
   BUILD_JOB,
   bigPdfInspection,
   drawingJob,
+  dxfInspection,
   INSPECT_JOB,
   INSPECTION_ID,
   pdfDrawing,
@@ -177,6 +178,43 @@ describe("ImportDrawingDialog", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Read file" }));
     expect(await screen.findByText(/DWG files can't be read/)).toBeInTheDocument();
+  });
+
+  it("imports a DXF: its layers (empty ones unavailable), units and hinted CRS", async () => {
+    const { api, requests } = fakeClient(routes(dxfInspection));
+    renderWithProviders(
+      <ImportDrawingDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await read("D:\\plans\\site-plan.dxf");
+    expect(screen.getByRole("checkbox", { name: /WALLS/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /DEFPOINTS/ })).toBeDisabled();
+    expect(screen.getByLabelText("EPSG code")).toHaveValue("32638");
+    expect(
+      screen.getByText(/File says WGS 84 \/ UTM zone 38N \(EPSG:32638\) · unverified/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Drawing units")).toHaveValue("millimetre");
+    fireEvent.click(screen.getByRole("checkbox", { name: /TEXT/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(posts(requests)).toHaveLength(2));
+    expect(posts(requests).at(-1)?.body).toEqual({
+      inspection_id: INSPECTION_ID,
+      name: "site-plan",
+      layers: ["WALLS"],
+      placement: { method: "crs", crs: "EPSG:32638", units: "millimetre" },
+    });
+  });
+
+  it("refuses a DXF with no layer chosen", async () => {
+    const { api } = fakeClient(routes(dxfInspection));
+    renderWithProviders(
+      <ImportDrawingDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await read("D:\\plans\\site-plan.dxf");
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(await screen.findByText("Choose at least one layer to import.")).toBeInTheDocument();
   });
 
   it("starts from the Re-import path", () => {

@@ -22,6 +22,7 @@ import { fitSummary, formatMetres, georefErrorText, savedFitSummary, WARNING_TEX
 import { ALIGN_TOOL_ID } from "./AlignOverlay";
 import { reimportDrawing, toggleKnockout } from "./drawingActions";
 import { familyOf, type DrawingFamily } from "./drawingImport";
+import { DrawingLayerToggles } from "./DrawingLayerToggles";
 import { useDrawing, useDrawingsStore } from "./drawingsStore";
 import { saveAlignment } from "./saveAlignment";
 
@@ -253,6 +254,12 @@ export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
           )}
         </div>
       </InspectorSection>
+
+      {family === "vector" && d.status === "ready" && (
+        <InspectorSection title="Layers">
+          <DrawingLayerToggles projectId={projectId} drawing={d} />
+        </InspectorSection>
+      )}
 
       {family !== "vector" && d.status === "ready" && (
         <InspectorSection title="Display">

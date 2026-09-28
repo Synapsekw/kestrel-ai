@@ -12,7 +12,7 @@ import { applyAffine, type Vec2 } from "../georef/fit";
 import { REFUSAL_TEXT } from "../georef/messages";
 import { DrawingInspector } from "./DrawingInspector";
 import { useDrawingsStore } from "./drawingsStore";
-import { DRAWING_ID, pdfDrawing, placedPdfDrawing, SITE_FRAME } from "./testFixtures";
+import { DRAWING_ID, dxfDrawing, pdfDrawing, placedPdfDrawing, SITE_FRAME } from "./testFixtures";
 
 const activate = vi.fn();
 vi.mock("@/mapws/context", () => ({
@@ -210,6 +210,28 @@ describe("DrawingInspector (spec §5.3)", () => {
     show(fakeClient([]).api);
     expect(screen.getByText("This PDF has no pages.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Re-import" })).toBeInTheDocument();
+  });
+
+  it("toggles a DXF layer through layer_state.hidden_layers", async () => {
+    useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, [dxfDrawing]);
+    const { api, requests } = fakeClient([
+      {
+        method: "PATCH",
+        path: new RegExp(`/drawings/${dxfDrawing.id}$`),
+        body: {
+          ...dxfDrawing,
+          layer_state: { hidden_layers: [], knockout_white: false },
+        },
+      },
+    ]);
+    show(api, dxfDrawing.id);
+    const text = screen.getByRole("checkbox", { name: /TEXT/ });
+    expect(text).not.toBeChecked();
+    fireEvent.click(text);
+    await waitFor(() => expect(requests.some((r) => r.method === "PATCH")).toBe(true));
+    expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({
+      layer_state: { hidden_layers: [], knockout_white: false },
+    });
   });
 
   it("discards an unsaved session when the drawing is deselected (unmount)", () => {
