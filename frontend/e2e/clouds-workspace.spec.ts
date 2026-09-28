@@ -169,6 +169,19 @@ test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orb
   await expect.poll(async () => shape(await pose())).toEqual({ above: false, level: true, south: true });
 });
 
+// C-G final review m6: the clip box's pick must not leave focus where tool keys stop working.
+test("after C and a canvas click places the clip box, P still arms Point", async ({ page }) => {
+  await openSettled(page);
+  const toolbar = page.getByRole("toolbar", { name: "Point cloud tools" });
+  await page.keyboard.press("c");
+  await expect(toolbar.getByRole("button", { name: "Clipping box" })).toHaveAttribute("aria-pressed", "true");
+  const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
+  await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  await expect(page.getByLabel("Box yaw (°)")).toBeVisible(); // the clip hint's fields are up
+  await page.keyboard.press("p");
+  await expect(toolbar.getByRole("button", { name: "Point" })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("at 1280 x 720 a lost context's Reload view sits clear of every panel and takes the click", async ({
   page,
 }) => {
