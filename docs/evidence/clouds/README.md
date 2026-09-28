@@ -161,3 +161,35 @@ coordinate origin (`[243500, 3178000, 0]`, S1's fixture grid) and Prism's exampl
 (a different site, `[553012.4, 2847210.9, -52.3, …]`) does not matter here since the test never
 asserts on visual framing or drawn content, only that the workspace shell (palette, tool state)
 renders.
+
+## Task 8: `cloud-ui.mjs` and `check:webview` (drivers only; IMC-X runs it — G11)
+
+- `typeCombo` is not a `role="combobox"` named `"Type"` (the brief's draft): `PinCallout.tsx`'s
+  `Combobox` trigger is a plain `<button>` with `aria-label="Type: <selected label or 'none'>"` —
+  `role="combobox"` only exists on the popover's filter `<input>`, which isn't in the DOM until the
+  trigger is clicked (`frontend/src/ui/Combobox.tsx`). `cloud-ui.mjs`'s `ui(page).typeCombo` is
+  `callout.getByRole("button", { name: /^Type:/ })`, matching the real accessible name
+  (`frontend/src/clouds/pins/PinCallout.test.tsx:186`).
+- `palette` uses the real toolbar name `"Point cloud tools"` (already the fixture's name, see
+  "Deviations" above) and `hint`/`hintCancel` use the real test id `cloud-hintbar`, not the brief's
+  `cloud-hint-bar`/`"Tools"`.
+- `hintCancel` targets `SavingViewsHint.tsx`'s progress-row `Cancel` button (plain text, no
+  `KeyChord`), which is what's on screen while `w.captureMissing()`'s bulk capture runs
+  (`frontend/src/clouds/views/SavingViewsHint.tsx:22-24`); scoped with `exact: true` since a
+  tool's own `Cancel <KeyChord/>` in the hint bar (`HintBar.tsx:55-57`) would otherwise also match
+  a loose `/Cancel/` regex if a tool happened to be active at the same time.
+- Per the brief's instruction for spec §7 ("when EDL cannot render to a target … record
+  `edl: false`"): C-V1 Ruling 3 / C-V2 Ruling 5 record `EDL_RENDERS_TO_TARGET = false` as a fixed
+  potree-core 2.0.15 limitation (`frontend/src/clouds/viewer/edl.ts`), not a maybe — every capture's
+  `render.edl` is `false` regardless of the on-screen EDL switch. `check-packaged-webview.mjs`
+  therefore logs a `webview WARN` line instead of failing when `v.render.edl !== true`; it still
+  fails on capture size, sha256 mismatch, and a blank/near-blank decode (≥ 2 distinct colours,
+  non-background share > 1 %).
+- `check-packaged-webview.ps1`'s project setup was already stale against the merged contract
+  (`ProjectCreate` no longer has `classes`/`kind` — see `type_ids`, `contract/openapi.yaml`); Task 8
+  replaces it with a `POST /catalogue/types` "Crack" defect type (idempotent: falls back to
+  `GET /catalogue/types` on a 409) and `POST /projects` with `type_ids`, so the driver can create
+  defect findings.
+- Static checks only (`node --check` on both `.mjs`, a PowerShell `Parser.ParseFile` pass on the
+  `.ps1`, a `node -e import()` smoke test) — G never runs `pnpm check:webview` or
+  `build-installer.ps1` (ruling G11); IMC-X runs it against the packaged exe.

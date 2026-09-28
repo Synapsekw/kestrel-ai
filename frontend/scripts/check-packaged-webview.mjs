@@ -1,6 +1,9 @@
 // The packaged-webview check's driver (spec §13 step 6-7). Run by check-packaged-webview.ps1, which
 // sets KESTREL_* in the environment. Imports chromium from @playwright/test (a direct dependency).
 import { chromium } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { colourSpread, pinGrid, pngSize } from "./cloud-perf-lib.mjs";
+import { pageColours, ui } from "./cloud-ui.mjs";
 
 const env = process.env;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -93,5 +96,67 @@ if (
 ) {
   fail(`pickCenter ${JSON.stringify(pick)} is not inside the cloud ${JSON.stringify(b)}`);
 }
-console.log(`webview ok points=${stats.numVisiblePoints} red=${red.toFixed(3)} green=${green.toFixed(3)}`);
+// C-G (spec section 15 "Packaged"): EDL on, 50 pins, and one report-view capture.
+const base = `${env.KESTREL_BACKEND_URL}/api/v1/projects/${env.KESTREL_PROJECT_ID}`;
+const headers = { Authorization: `Bearer ${env.KESTREL_TOKEN}`, "Content-Type": "application/json" };
+const w = ui(page);
+if ((await w.edl.getAttribute("aria-checked")) !== "true") await w.edl.click();
+for (const [i, [x, y]] of pinGrid(b, 50).entries()) {
+  const hit = await page.evaluate(([px, py]) => window.__kestrelCloudViewer.pickDown(px, py, 2), [x, y]);
+  const anchor = {
+    kind: "cloud",
+    cloud_id: env.KESTREL_CLOUD_ID,
+    x,
+    y,
+    z: hit ? hit.z : (b[2] + b[5]) / 2,
+    uncertainty_m: hit ? hit.uncertainty_m : 0.1,
+  };
+  const r = await fetch(`${base}/findings`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ type_id: env.KESTREL_CRACK_TYPE, severity: (i % 4) + 1, anchor }),
+  });
+  if (r.status !== 201) fail(`createFinding ${r.status} ${await r.text()}`);
+}
+let pins = [];
+for (const until = Date.now() + 30_000; Date.now() < until; await sleep(250)) {
+  pins = await page.evaluate(() => window.__kestrelCloudViewer.pins?.() ?? []);
+  if (pins.length === 50) break;
+}
+if (pins.length !== 50) fail(`pins: ${pins.length} of 50 drawn after findings.changed`);
+const edlColours = await page.evaluate(() => window.__kestrelCloudViewer.sampleColours());
+if (edlColours.red / edlColours.total < 0.01 || edlColours.green / edlColours.total < 0.01)
+  fail(`colours with EDL and pins: ${JSON.stringify(edlColours)}`);
+
+await w.captureMissing();
+let views = [];
+for (const until = Date.now() + 30_000; Date.now() < until; await sleep(250)) {
+  views = (await (await fetch(`${base}/pointclouds/${env.KESTREL_CLOUD_ID}/views`, { headers })).json())
+    .items;
+  if (views.length >= 1) break;
+}
+await w.hintCancel.click().catch(() => {}); // stop after the first; the check needs one capture
+if (views.length < 1) fail("no report view was captured within 30 s of Capture missing views");
+const v = views[0];
+const img = new Uint8Array(
+  await (await fetch(`${base}/findings/${v.subject_id}/view3d`, { headers })).arrayBuffer(),
+);
+const size = pngSize(img);
+if (!size || size.width !== 1600 || size.height !== 1000) fail(`capture size ${JSON.stringify(size)}`);
+if (createHash("sha256").update(img).digest("hex") !== v.sha256)
+  fail("capture bytes do not match listCloudViews' sha256");
+// C-V1 Ruling 3 / C-V2 Ruling 5: potree-core 2.0.15's EDLPass cannot render into a render target
+// (EDL_RENDERS_TO_TARGET = false), so every capture records render.edl=false regardless of the
+// on-screen EDL switch (docs/evidence/clouds/README.md "Deviations"). A warning, not a failure.
+if (v.render.edl !== true)
+  console.log(
+    `webview WARN capture render.edl=${v.render.edl} (EDL cannot render to a target: known engine limit)`,
+  );
+const spread = colourSpread(await pageColours(page, img));
+if (spread.distinct < 2 || spread.nonBackground <= 0.01)
+  fail(`capture looks blank: ${JSON.stringify(spread)}`);
+
+console.log(
+  `webview ok points=${stats.numVisiblePoints} red=${red.toFixed(3)} green=${green.toFixed(3)} edl=on pins=50 capture=${size.width}x${size.height} colours=${spread.distinct}`,
+);
 process.exit(0);
