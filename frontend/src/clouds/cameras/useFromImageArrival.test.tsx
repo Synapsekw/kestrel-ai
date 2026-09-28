@@ -159,12 +159,44 @@ describe("useFromImageArrival", () => {
       </MemoryRouter>,
     );
     tick(4);
-    expect(pickAtClient.mock.calls.length).toBeGreaterThanOrEqual(2);
-    const [firstRound, secondRound] = pickAtClient.mock.calls;
-    // Each round's coordinates come from a distinct `toCanvas`, which only happens when a fresh
-    // `lookThrough` handle is requested for that round rather than one cached across the wait.
-    expect(firstRound).not.toEqual(secondRound);
-    expect(lookThrough.mock.calls.length).toBeGreaterThanOrEqual(pickAtClient.mock.calls.length);
+    // One call to pose (its toCanvas is never used), then one fresh call per settled pick round:
+    // a miss at n=2, a hit at n=3. A cached handle would call `toCanvas` only through call #1 or
+    // #2 and every round would report the same coordinates.
+    expect(lookThrough).toHaveBeenCalledTimes(3);
+    expect(pickAtClient).toHaveBeenCalledTimes(2);
+    expect(pickAtClient).toHaveBeenNthCalledWith(1, 2, 2);
+    expect(pickAtClient).toHaveBeenNthCalledWith(2, 3, 3);
+  });
+
+  it("retries when lookThrough answers null (no running engine yet), without crashing", () => {
+    let calls = 0;
+    const lookThrough = vi.fn(() => {
+      calls += 1;
+      if (calls < 3) return null; // the engine is not mounted on the first two polls
+      return {
+        toCanvas: (u: number, w: number) => ({ x: u / 2, y: w / 2 }),
+        frame: () => ({ left: 0, top: 0, width: 1024, height: 768 }),
+        restore: vi.fn(),
+      };
+    });
+    const v = {
+      stats: vi.fn(() => ({ numVisiblePoints: 1000, nodesLoading: 0 })),
+      lookThrough,
+      pickAtClient: vi.fn(() => HIT),
+      setOverlay: vi.fn(),
+      lookAt: vi.fn(),
+    };
+    const ref = createRef<CloudViewerHandle | null>() as { current: CloudViewerHandle | null };
+    ref.current = v as unknown as CloudViewerHandle;
+    expect(() =>
+      render(
+        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/clouds/${CLOUD_ID}?from_image=img-posed&px=1024,768`]}>
+          <Harness v={ref} />
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
+    expect(() => tick(10)).not.toThrow();
+    expect(v.pickAtClient).toHaveBeenCalled();
   });
 
   it("ignores URLs without a from_image arrival", () => {

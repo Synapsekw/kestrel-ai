@@ -66,6 +66,7 @@ export function useFromImageArrival(
       return;
     }
 
+    let posed = false;
     let ticks = 0;
     let idle = 0;
     let rounds = 0;
@@ -82,14 +83,25 @@ export function useFromImageArrival(
       if (!v) return;
       const s = v.stats();
       if (s.numVisiblePoints === 0) return; // the cloud is not loaded yet
-      // C-L1 Ruling 7 / controller adaptation 2: never keep a `LookThrough` handle across time — it
-      // goes stale after an engine rebuild and the FOV is not refitted after a resize. Re-ask for a
-      // fresh handle every tick instead (the engine keeps the pre-photo snapshot, so repeated calls
-      // with the same pose are safe), rather than caching the one from the readiness tick.
-      const look = v.lookThrough(pose);
-      if (!look) return; // not ready yet (no running engine): retry next tick
+      if (!posed) {
+        // Pose exactly once, on the tick the cloud first has points. `lookThrough` is not a no-op:
+        // it moves the camera, forces orbit and drops any tween, so it must not run again on every
+        // waiting tick (that would fight a drag the operator starts and keep the render loop from
+        // ever idling). `stats()` above was read before this pose, so it is not used for `idle` —
+        // idle is counted only from ticks that follow the pose.
+        if (!v.lookThrough(pose)) return; // no running engine yet: retry next tick, do not count as posed
+        posed = true;
+        return;
+      }
       idle = s.nodesLoading > 0 ? 0 : idle + 1;
       if (idle < SETTLED_TICKS) return;
+      // C-L1 Ruling 7 / controller adaptation 2: a `LookThrough` handle is never kept across time —
+      // it goes stale after an engine rebuild and the FOV is not refitted after a resize. Re-ask for
+      // one fresh handle right here, immediately before this pick round's `toCanvas` call (the same
+      // pose re-frames the same pre-photo snapshot, so this is the one call per round, not a repose
+      // on every poll tick).
+      const look = v.lookThrough(pose);
+      if (!look) return; // not ready yet (no running engine): retry next tick
       const c = look.toCanvas(arrival.u, arrival.v);
       const hit = v.pickAtClient(c.x, c.y);
       if (!hit) {
