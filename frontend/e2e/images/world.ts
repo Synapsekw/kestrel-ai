@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { Page, Route } from "@playwright/test";
+import type { Page, Request, Route } from "@playwright/test";
 import { CATALOGUE_PAGE, SEVERITY } from "../fixtures/appSections";
 import { fromMock, jsonReply } from "../mock";
 
@@ -223,6 +223,43 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
   const nextId = (prefix: string) => `${prefix}0000000-7777-4000-8000-${String(++seq).padStart(12, "0")}`;
   const frames = () => (world.imported ? world.frames : []);
   const typeOf = (id: unknown) => TYPES.find((t) => t.id === id);
+
+  // `world.thumbsInFlight` counts the loader's real concurrency (spec §15: at most 8 thumbnail
+  // fetches in flight), not raw HTTP dispatches, for two reasons verified against `thumbs.ts`'s
+  // `ThumbLoader` (flow 7, 20k images):
+  //  1. React StrictMode (dev only, `main.tsx`) double-invokes every effect mount, so each new
+  //     batch of visible tiles asks for the *same* thumbnail URL twice a few ms apart; the first
+  //     copy's fetch is aborted client-side almost immediately as the second starts. The loader
+  //     itself dedupes same-URL asks (`ThumbLoader.pending`), so this is one logical fetch, not
+  //     two — we key in-flight tracking by URL, not by request, so a StrictMode duplicate doesn't
+  //     double-count.
+  //  2. A scrolled-out tile aborts its fetch: the browser rejects it immediately, well before our
+  //     simulated `thumbDelayMs` elapses. Without an early signal, a request we already counted
+  //     stays counted for the rest of its delay even though the app gave up on it, so a fast
+  //     repeated scroll can make the peak read higher than the loader's real 8-slot cap (`pump()`
+  //     never starts a fetch once `active === maxInFlight`, so the app itself cannot exceed 8). We
+  //     settle a URL as soon as the page reports the request failed (aborted), not only when our
+  //     own handler's delay finishes.
+  // Both are world/measurement artefacts of testing against `vite dev` + Playwright's CDP timing,
+  // not production bugs — a packaged build never double-invokes effects, and the loader's own
+  // admission control is a hard, structural bound.
+  const thumbFlight = new Map<string, number>(); // url -> outstanding mock-side requests
+  const settled = new WeakSet<Request>();
+  const bumpThumb = (url: string, delta: 1 | -1) => {
+    const next = (thumbFlight.get(url) ?? 0) + delta;
+    if (next <= 0) thumbFlight.delete(url);
+    else thumbFlight.set(url, next);
+    world.thumbsInFlight = thumbFlight.size;
+    world.maxThumbsInFlight = Math.max(world.maxThumbsInFlight, world.thumbsInFlight);
+  };
+  const settleThumb = (req: Request) => {
+    if (settled.has(req)) return;
+    settled.add(req);
+    bumpThumb(req.url(), -1);
+  };
+  page.on("requestfailed", (req) => {
+    if (req.url().includes("/thumbnail")) settleThumb(req);
+  });
 
   // --- derived image state (C0 rulings 4, 5)
   const openFindings = (imageId: string) =>
@@ -524,10 +561,9 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
         return reply({ error: { code: "not_found", message: "no such image" } }, 404);
       const tail = img[2] ?? "";
       if (tail === "/thumbnail") {
-        world.thumbsInFlight++;
-        world.maxThumbsInFlight = Math.max(world.maxThumbsInFlight, world.thumbsInFlight);
+        const thumbReq = route.request();
+        bumpThumb(thumbReq.url(), 1);
         if (opts.thumbDelayMs) await new Promise((r) => setTimeout(r, opts.thumbDelayMs));
-        world.thumbsInFlight--;
         return route
           .fulfill({
             status: 200,
@@ -535,7 +571,8 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
             headers: { "Access-Control-Allow-Origin": "*" },
             body: PNG,
           })
-          .catch(() => undefined); // the page aborted the fetch (a row scrolled out)
+          .catch(() => undefined) // the page aborted the fetch (a row scrolled out)
+          .finally(() => settleThumb(thumbReq));
       }
       if (tail === "/file")
         return route.fulfill({
