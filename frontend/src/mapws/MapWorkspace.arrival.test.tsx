@@ -156,6 +156,26 @@ describe("sel and tool survive a ?map= arrival (R-P1)", () => {
     expect(loc).toContain("r=2026-04-15");
   });
 
+  it("applies neither sel nor tool when the map is gone", async () => {
+    arrive(
+      [
+        ...workspaceRoutes({ layers: LAYERS }),
+        {
+          method: "GET",
+          path: /\/maps\/[^/]+$/,
+          status: 404,
+          body: { error: { code: "not_found", message: "no such map" } },
+        },
+      ],
+      `map=gone&sel=run:r1&tool=zone`,
+    );
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    await waitFor(() => expect(screen.getByTestId("location")).not.toHaveTextContent("map="));
+    expect(screen.getByTestId("location")).not.toHaveTextContent("sel=");
+    expect(screen.queryByTestId("map-inspector")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Zone/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("arms ?tool=zone after the map arrival settles", async () => {
     arrive(base(onMap), `map=${MAP_ID}&tool=zone`);
     await waitFor(() => expect(screen.getByTestId("location")).not.toHaveTextContent("map="));

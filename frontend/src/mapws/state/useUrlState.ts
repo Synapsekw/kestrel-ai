@@ -99,7 +99,7 @@ export function useUrlState(ready: boolean, onUncentredArrival?: () => void): vo
       // Single, so fixDates cannot move r off the map's date to keep l < r (M2).
       if (out.r) st.hydrate({ mode: "single", r: out.r });
       if (out.selection) st.select(out.selection);
-      if (req.kind === "map") {
+      if (req.kind === "map" && !out.error) {
         // R-P1: a map arrival keeps the link's `sel` and arms its `tool` (maps?map=m1&sel=run:r1).
         const sel = parseViewParams(params).sel;
         if (!out.selection && sel) st.select(sel);
