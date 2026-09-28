@@ -1,8 +1,9 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, redGreenGrid, routeOctree, type FixturePoint } from "./fixtures/potreeOctree";
 import { engineIdle } from "./fixtures/cloudWorkspace";
 import { SWIFTSHADER_ARGS, viewerSettled } from "./fixtures/viewer";
+import { fromMock, jsonReply } from "./mock";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const TYPE = "t0000000-1111-4000-8000-00000000c0a1";
@@ -14,17 +15,30 @@ test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("kestrel.diagnostics", "1"));
 });
-// A test can pass while a project GET is still being proxied to the mock (a loaded run, where the
-// mock answers slowly); its route.fetch then fails with "Test ended" and fails the passed test.
-test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: "ignoreErrors" });
-});
-
 const pinsDiag = (page: Page) => page.evaluate(() => window.__kestrelCloudViewer?.pins() ?? []);
 
-/** The mock's project, plus one defect type the pin tool can use. Returns how many of its GETs are
- * still unanswered: each consumer fetches the project itself, the pins feature on mount. */
+/** The mock's project, plus one defect type the pin tool can use, read once up front and answered
+ * from memory: a proxied `route.fetch` per GET met a keep-alive socket the mock had just closed on a
+ * loaded CI runner (ECONNRESET, run 36462199829) and could still be waiting when a test ended.
+ * Returns how many of its GETs are unanswered: each consumer fetches the project itself. */
 async function routeProjectWithType(page: Page): Promise<() => number> {
+  const project = await fromMock<{ classes?: unknown[] }>(page, `/api/v1/projects/${P}`);
+  const body = {
+    ...project,
+    classes: [
+      ...(project.classes ?? []),
+      {
+        id: TYPE,
+        name: "Spalling",
+        colour: "#ff9c3a",
+        hotkey: null,
+        order: 99,
+        kind: "defect",
+        default_severity: 3,
+        group: "Concrete defects",
+      },
+    ],
+  };
   let inFlight = 0;
   await page.route(
     (u) => u.pathname === `/api/v1/projects/${P}`,
@@ -32,32 +46,13 @@ async function routeProjectWithType(page: Page): Promise<() => number> {
       if (route.request().method() !== "GET") return route.fallback();
       inFlight += 1;
       try {
-        await fulfilWithType(route);
+        await route.fulfill(jsonReply(body));
       } finally {
         inFlight -= 1;
       }
     },
   );
   return () => inFlight;
-}
-
-async function fulfilWithType(route: Route) {
-  const res = await route.fetch();
-  const body = (await res.json()) as { classes?: unknown[] };
-  body.classes = [
-    ...(body.classes ?? []),
-    {
-      id: TYPE,
-      name: "Spalling",
-      colour: "#ff9c3a",
-      hotkey: null,
-      order: 99,
-      kind: "defect",
-      default_severity: 3,
-      group: "Concrete defects",
-    },
-  ];
-  await route.fulfill({ response: res, json: body });
 }
 
 function finding(id: string, number: number, anchor: { x: number; y: number; z: number }) {
@@ -142,7 +137,7 @@ test("pin flow: M, pick, choose a type, Enter creates with F's cloud anchor, the
   await viewerSettled(page);
   // The types must be in before the pick: a draft opened while the pins feature's project GET is
   // still out gets the first type seeded when it lands (T6-4), and Create is then enabled. On a
-  // loaded run that GET (proxied to the mock) answered only after the pick.
+  // loaded run that GET (then proxied to the mock) answered only after the pick.
   await expect.poll(projectGetsInFlight).toBe(0);
 
   await page.keyboard.press("m");
