@@ -20,7 +20,7 @@ jobs:
       - run: pnpm check
         working-directory: contract
 
-  backend:
+  backend-lint:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -34,12 +34,28 @@ jobs:
       - run: .venv/Scripts/ruff check . && .venv/Scripts/ruff format --check .
         working-directory: backend
         shell: bash
+
+  backend:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv venv --python 3.11.15 .venv
+        working-directory: backend
+      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
+        working-directory: backend
+        shell: bash
       # Pinned-SHA starter weights: the registry tests import yolo11n.pt (they skip without it).
       - uses: actions/cache@v6
         with: { path: backend/starter_weights, key: "starter-weights-${{ hashFiles('backend/scripts/fetch_starter_weights.ps1') }}" }
       - run: .\scripts\fetch_starter_weights.ps1
         working-directory: backend
-      - run: .venv/Scripts/python -m pytest -q
+      # Two runners, each with -n auto (4 workers on windows-latest). Durations are from a serial local run.
+      - run: .venv/Scripts/python -m pytest -n auto -q --splits 2 --group ${{ matrix.group }} --splitting-algorithm least_duration --durations-path .test_durations
         working-directory: backend
         shell: bash
 

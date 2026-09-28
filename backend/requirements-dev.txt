@@ -1,6 +1,9 @@
 -r requirements.txt
 pytest
 pytest-asyncio
+pytest-split==0.11.0
+pytest-xdist==3.8.0
+execnet==2.1.2
 schemathesis>=4
 hypothesis
 pyyaml
