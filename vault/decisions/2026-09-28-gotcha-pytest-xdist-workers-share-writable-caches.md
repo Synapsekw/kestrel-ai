@@ -23,9 +23,16 @@ only checks that the Windows backend is pinned. It does not read or write a pass
 ## Decision
 
 `tests/conftest.py` `pytest_configure` runs only when `PYTEST_XDIST_WORKER` is set. Each worker gets
-a private temp dir for `MPLCONFIGDIR`, `YOLO_CONFIG_DIR`, and a Hypothesis
-`DirectoryBasedExampleDatabase`. Serial `pytest` (including `-p no:xdist`) does not set them.
-Tests that need one of those variables unset still clear it themselves.
+a private temp dir for `MPLCONFIGDIR` and `YOLO_CONFIG_DIR`. Serial `pytest` (including
+`-p no:xdist`) does not set them. Tests that need one of those variables unset still clear it
+themselves.
+
+Hypothesis is the exception. On GitHub Actions the `CI` environment variable loads Hypothesis's
+`ci` profile (`derandomize=True`, `database=None`) at import. Passing a database then raises
+`derandomize=True implies database=None` while collecting `test_responses_conform`. That profile
+already has no example file, so the hook leaves it alone. A local run is not derandomized, and
+each worker gets its own `DirectoryBasedExampleDatabase` so they do not lock the checkout's
+`.hypothesis` directory.
 
 CI shards with `pytest-split` (`least_duration`, committed `backend/.test_durations`) and runs
 `-n auto` inside each shard. Every collected test is in exactly one shard. Nothing is skipped to

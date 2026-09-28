@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2]
+        group: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -54,8 +54,9 @@ jobs:
         with: { path: backend/starter_weights, key: "starter-weights-${{ hashFiles('backend/scripts/fetch_starter_weights.ps1') }}" }
       - run: .\scripts\fetch_starter_weights.ps1
         working-directory: backend
-      # Two runners, each with -n auto (4 workers on windows-latest). Durations are from a serial local run.
-      - run: .venv/Scripts/python -m pytest -n auto -q --splits 2 --group ${{ matrix.group }} --splitting-algorithm least_duration --durations-path .test_durations
+      # Three runners. A two-way split still left one shard over 20 min on windows-latest
+      # (2 workers from cpu_count). Durations are from a serial local run.
+      - run: .venv/Scripts/python -m pytest -n auto -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration --durations-path .test_durations
         working-directory: backend
         shell: bash
 

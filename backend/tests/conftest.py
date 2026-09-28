@@ -47,11 +47,16 @@ def pytest_configure(config: pytest.Config) -> None:
     from hypothesis import settings
     from hypothesis.database import DirectoryBasedExampleDatabase
 
-    settings.register_profile(
-        "kestrel-xdist",
-        database=DirectoryBasedExampleDatabase(root / "hypothesis"),
-    )
-    settings.load_profile("kestrel-xdist")
+    # GitHub Actions sets CI, so Hypothesis loads its ci profile before this hook:
+    # derandomize=True and database=None. A database is illegal in that mode, and
+    # there is no shared example file to lock. Locally the database is on, so each
+    # worker gets its own directory instead of the checkout's .hypothesis folder.
+    if not settings.default.derandomize:
+        settings.register_profile(
+            "kestrel-xdist",
+            database=DirectoryBasedExampleDatabase(root / "hypothesis"),
+        )
+        settings.load_profile("kestrel-xdist")
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
