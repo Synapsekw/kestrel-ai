@@ -44,7 +44,7 @@ export interface DatasetBuilderProps {
   onClose: () => void;
 }
 
-const TASKS: { value: DatasetTask; label: string; disabled?: boolean }[] = [
+const TASKS: { value: DatasetTask; label: string }[] = [
   { value: "detect", label: "Boxes" },
   { value: "obb", label: "Rotated boxes" },
   { value: "segment", label: "Polygons" },

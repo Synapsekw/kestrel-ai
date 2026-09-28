@@ -34,7 +34,7 @@ const image = (id: string) => ({
   width: 4000,
   height: 2667,
   source_id: "s1",
-  group_key: null,
+  group_key: "",
   capture_time: null,
   lat: null,
   lon: null,
