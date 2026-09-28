@@ -122,8 +122,10 @@ def main() -> int:
         c.close()
         a.out.parent.mkdir(parents=True, exist_ok=True)
         a.out.write_text(json.dumps(raw, indent=2, default=str) + "\n")
-    print(json.dumps({k: v.get("pass") if isinstance(v, dict) else None for k, v in raw["steps"].items()}))
-    return 0
+    passes = {k: v.get("pass") if isinstance(v, dict) else None for k, v in raw["steps"].items()}
+    print(json.dumps(passes))
+    # A step that ran and failed fails the run; `None` is a step left to the operator, not a failure.
+    return 1 if any(p is False for p in passes.values()) else 0
 
 
 def _run(c: httpx.Client, a, m: dict, raw: dict) -> None:
