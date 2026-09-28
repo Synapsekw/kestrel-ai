@@ -63,4 +63,52 @@ describe("isOccluded", () => {
     expect(isOccluded(cam, [0, 10, 0], [[0, 9.8, 0]], 0.3)).toBe(false);
     expect(isOccluded(cam, [0, 10, 0], [], 0.3)).toBe(false);
   });
+
+  it("ignores a nearer point beside the line of sight: the pin's own surface seen obliquely", () => {
+    // 1 m nearer along the line of sight but 1 m off it: a surface through the pin at 45°, not a
+    // point in front of it (it would need to be more than 0.3 + 2 × 1 m nearer)
+    expect(isOccluded(cam, [0, 10, 0], [[1, 9, 0]], 0.3)).toBe(false);
+    expect(isOccluded(cam, [0, 10, 0], [[1, 7.5, 0]], 0.3)).toBe(true);
+  });
+
+  // Task 17, the chimney (21.7 M points) with the whole cloud in view (about 1.7 m per pixel, so the
+  // 3 px disk is about 5 m across): the drawn points the pass decoded around each pin.
+  it("chimney, Iso and Top: the pin just inside the rim is not occluded by the rim beside it", () => {
+    const pin: [number, number, number] = [243514.864, 3178241.331, 187.651];
+    const iso: [number, number, number] = [244197.5, 3177605.86, 677.68];
+    const top: [number, number, number] = [243537.57, 3178265.68, 1146.53];
+    expect(
+      isOccluded(
+        iso,
+        pin,
+        [
+          [243515.76, 3178239, 186.52],
+          [243516.53, 3178240.16, 186.68],
+        ],
+        0.514,
+      ),
+    ).toBe(false);
+    expect(
+      isOccluded(
+        top,
+        pin,
+        [
+          [243513.48, 3178241.89, 189.37],
+          [243511.71, 3178243.32, 189.18],
+        ],
+        0.514,
+      ),
+    ).toBe(false);
+  });
+
+  it("chimney, Front: a pin on the far side of the stack stays occluded by the near wall", () => {
+    const front: [number, number, number] = [243537.57, 3177126.46, 24.18];
+    const near: Array<[number, number, number]> = [
+      [243519.47, 3178244, 166.7],
+      [243517.18, 3178243.52, 171.2],
+      [243515.91, 3178242.33, 173.08],
+      [243518.19, 3178244.13, 175.43],
+    ];
+    expect(isOccluded(front, [243519.493, 3178256.158, 173.836], near, 0.3)).toBe(true);
+  });
 });

@@ -20,19 +20,19 @@ describe("pickWindowPixels", () => {
     statics.nodesOnRay = saved.nodesOnRay;
   });
 
-  it("renders the chosen nodes, copies the raw window, and restores the statics", () => {
+  it("renders the chosen nodes, keeps the raw window, and restores the statics", () => {
     const chosen = [{ id: "a" }, { id: "b" }];
     const pixels = new Uint8Array(4 * 2 * 2);
     pixels[3] = 2; // node index 1 drawn at pixel 0
     let seenNodes: unknown = null;
     let seenParams: Record<string, unknown> | null = null;
+    const findHit = statics.findHit;
     const pco = {
       pick: vi.fn((_r: unknown, _c: unknown, ray: unknown, params: Record<string, unknown>) => {
         seenParams = params;
         seenNodes = statics.nodesOnRay(pco, ray);
-        statics.findHit(pixels, 2);
-        pixels[3] = 0; // potree's findHit zeroes the alpha after reading it
-        statics.getPickPoint(null, [{ node: chosen[0] }, { node: chosen[1] }]);
+        const hit = statics.findHit(pixels, 2);
+        statics.getPickPoint(hit, [{ node: chosen[0] }, { node: chosen[1] }]);
         return null;
       }),
     };
@@ -55,7 +55,11 @@ describe("pickWindowPixels", () => {
       10, 20, 0,
     ]);
     expect(got?.size).toBe(2);
-    expect(got?.rgba[3]).toBe(2); // the copy taken before the alpha was zeroed
+    // potree's own findHit (a per-pixel scan of the whole window that zeroes every alpha: ~2 ms per
+    // window, ~20 ms under the CPU profiler) is never run; its hit is not used (Task 17)
+    expect(findHit).not.toHaveBeenCalled();
+    expect(got?.rgba).toBe(pixels); // potree allocates the read-back per pick: no copy is needed
+    expect(got?.rgba[3]).toBe(2);
     expect(got?.nodes.map((n) => n.node)).toEqual(chosen);
     expect(statics.nodesOnRay(pco, null)).toEqual(["the ray's nodes"]); // restored
   });
