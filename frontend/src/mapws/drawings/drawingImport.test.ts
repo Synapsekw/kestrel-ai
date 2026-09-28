@@ -9,12 +9,7 @@ import {
   renderSize,
   toDrawingRequest,
 } from "./drawingImport";
-import {
-  bigPdfInspection,
-  dxfInspection,
-  pdfInspection,
-  pngWorldFileInspection,
-} from "./testFixtures";
+import { bigPdfInspection, dxfInspection, pdfInspection, pngWorldFileInspection } from "./testFixtures";
 
 describe("families", () => {
   it.each([
@@ -69,18 +64,17 @@ describe("initialDrawingForm and placement", () => {
       dpi: 150,
       placement: "none",
     });
-    expect(placementChoices(pdfInspection).map((c) => c.value)).toEqual([
-      "none",
-    ]);
+    expect(placementChoices(pdfInspection).map((c) => c.value)).toEqual(["none"]);
   });
   it("a world file offers embedded placement and asks for its CRS", () => {
     expect(initialDrawingForm(pngWorldFileInspection)).toMatchObject({
       placement: "embedded",
       epsg: "",
     });
-    expect(
-      placementChoices(pngWorldFileInspection).map((c) => c.label),
-    ).toEqual(["World file", "Place with control points"]);
+    expect(placementChoices(pngWorldFileInspection).map((c) => c.label)).toEqual([
+      "World file",
+      "Place with control points",
+    ]);
   });
   it("a DXF prefills the EPSG found in its CRS hint, its units and its non-empty default layers", () => {
     expect(epsgFromHint("WGS 84 / UTM zone 38N (EPSG:32638)")).toBe(32638);
@@ -118,12 +112,9 @@ describe("toDrawingRequest", () => {
     const f = initialDrawingForm(pngWorldFileInspection);
     expect(toDrawingRequest(pngWorldFileInspection, f)).toEqual({
       ok: false,
-      error:
-        "A world file has no CRS: enter the EPSG code of its coordinates, such as 32638.",
+      error: "A world file has no CRS: enter the EPSG code of its coordinates, such as 32638.",
     });
-    expect(
-      toDrawingRequest(pngWorldFileInspection, { ...f, epsg: "32638" }),
-    ).toMatchObject({
+    expect(toDrawingRequest(pngWorldFileInspection, { ...f, epsg: "32638" })).toMatchObject({
       ok: true,
       body: { placement: { method: "embedded", crs: "EPSG:32638" } },
     });

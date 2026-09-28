@@ -1,10 +1,5 @@
 import type { LinearUnit } from "@/api/designSurfaces";
-import type {
-  DrawingCreate,
-  DrawingFormat,
-  DrawingInspection,
-  DrawingPage,
-} from "@/api/drawings";
+import type { DrawingCreate, DrawingFormat, DrawingInspection, DrawingPage } from "@/api/drawings";
 import type { SegmentedOption } from "@/ui";
 
 export type DrawingFamily = "vector" | "pdf" | "raster";
@@ -27,10 +22,7 @@ export function familyOf(format: DrawingFormat): DrawingFamily {
 
 type PageSize = Pick<DrawingPage, "width_pt" | "height_pt">;
 
-export function renderSize(
-  page: PageSize,
-  dpi: number,
-): { width: number; height: number } {
+export function renderSize(page: PageSize, dpi: number): { width: number; height: number } {
   return {
     width: Math.round((page.width_pt / 72) * dpi),
     height: Math.round((page.height_pt / 72) * dpi),
@@ -53,9 +45,7 @@ function fitsAt(page: PageSize, dpi: number): boolean {
  */
 function maxDpi(page: PageSize): number {
   const { width_pt: w, height_pt: h } = page;
-  let d = Math.floor(
-    Math.min((MAX_SIDE_PX * 72) / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)) * 72),
-  );
+  let d = Math.floor(Math.min((MAX_SIDE_PX * 72) / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)) * 72));
   while (d > 1 && !fitsAt(page, d)) d -= 1;
   return Math.max(d, 1);
 }
@@ -71,9 +61,7 @@ export function fitDpi(
   wanted: DpiChoice,
 ): { dpi: DpiChoice; renderDpi: number; lowered: boolean } {
   const cap = maxDpi(page);
-  const dpi =
-    [...DPI_CHOICES].reverse().find((d) => d <= wanted && d <= cap) ??
-    DPI_CHOICES[0];
+  const dpi = [...DPI_CHOICES].reverse().find((d) => d <= wanted && d <= cap) ?? DPI_CHOICES[0];
   const renderDpi = Math.min(dpi, cap);
   return { dpi, renderDpi, lowered: renderDpi < wanted };
 }
@@ -112,31 +100,23 @@ export function initialDrawingForm(insp: DrawingInspection): DrawingForm {
     placement,
     epsg: epsg ? String(epsg) : "",
     units: family === "vector" ? (insp.units ?? "metre") : null,
-    layers: insp.layers
-      .filter((l) => l.visible_default && l.entity_count > 0)
-      .map((l) => l.name),
+    layers: insp.layers.filter((l) => l.visible_default && l.entity_count > 0).map((l) => l.name),
     name: null,
   };
 }
 
-export function placementChoices(
-  insp: DrawingInspection,
-): SegmentedOption<PlacementKind>[] {
+export function placementChoices(insp: DrawingInspection): SegmentedOption<PlacementKind>[] {
   const none: SegmentedOption<PlacementKind> = {
     value: "none",
     label: "Place with control points",
   };
   const family = familyOf(insp.format);
-  if (family === "vector")
-    return [{ value: "crs", label: "Coordinates (EPSG)" }, none];
+  if (family === "vector") return [{ value: "crs", label: "Coordinates (EPSG)" }, none];
   if (family === "raster" && insp.embedded)
     return [
       {
         value: "embedded",
-        label:
-          insp.embedded.source === "world_file"
-            ? "World file"
-            : "GeoTIFF coordinates",
+        label: insp.embedded.source === "world_file" ? "World file" : "GeoTIFF coordinates",
       },
       none,
     ];
@@ -147,15 +127,9 @@ function stem(path: string): string {
   return (path.split(/[\\/]/).pop() ?? "").replace(/\.[^.]+$/, "");
 }
 
-export function defaultDrawingName(
-  insp: DrawingInspection,
-  page: number,
-): string {
+export function defaultDrawingName(insp: DrawingInspection, page: number): string {
   const base = stem(insp.path);
-  const name =
-    familyOf(insp.format) === "pdf" && (insp.page_count ?? 0) > 1
-      ? `${base} · p${page}`
-      : base;
+  const name = familyOf(insp.format) === "pdf" && (insp.page_count ?? 0) > 1 ? `${base} · p${page}` : base;
   return name.slice(0, MAX_NAME_LENGTH);
 }
 
@@ -163,18 +137,13 @@ function parseEpsg(s: string): number | null {
   return /^\d{4,6}$/.test(s.trim()) ? Number(s.trim()) : null;
 }
 
-export type DrawingRequest =
-  { ok: true; body: DrawingCreate } | { ok: false; error: string };
+export type DrawingRequest = { ok: true; body: DrawingCreate } | { ok: false; error: string };
 
-export function toDrawingRequest(
-  insp: DrawingInspection,
-  f: DrawingForm,
-): DrawingRequest {
+export function toDrawingRequest(insp: DrawingInspection, f: DrawingForm): DrawingRequest {
   const family = familyOf(insp.format);
   const name = (f.name ?? defaultDrawingName(insp, f.page)).trim();
   if (!name) return { ok: false, error: "Give the drawing a name." };
-  if (name.length > MAX_NAME_LENGTH)
-    return { ok: false, error: "Keep the name under 200 characters." };
+  if (name.length > MAX_NAME_LENGTH) return { ok: false, error: "Keep the name under 200 characters." };
   const body: DrawingCreate = {
     inspection_id: insp.id,
     name,
@@ -191,13 +160,11 @@ export function toDrawingRequest(
     body.dpi = size ? fitDpi(size, f.dpi).dpi : f.dpi;
   }
   if (family === "vector") {
-    if (f.layers.length === 0)
-      return { ok: false, error: "Choose at least one layer to import." };
+    if (f.layers.length === 0) return { ok: false, error: "Choose at least one layer to import." };
     body.layers = f.layers;
     if (f.placement === "crs") {
       const epsg = parseEpsg(f.epsg);
-      if (epsg === null)
-        return { ok: false, error: "Enter an EPSG code such as 32638." };
+      if (epsg === null) return { ok: false, error: "Enter an EPSG code such as 32638." };
       body.placement = {
         method: "crs",
         crs: `EPSG:${epsg}`,
@@ -211,8 +178,7 @@ export function toDrawingRequest(
       if (epsg === null)
         return {
           ok: false,
-          error:
-            "A world file has no CRS: enter the EPSG code of its coordinates, such as 32638.",
+          error: "A world file has no CRS: enter the EPSG code of its coordinates, such as 32638.",
         };
       body.placement = { method: "embedded", crs: `EPSG:${epsg}` };
     } else body.placement = { method: "embedded" };
