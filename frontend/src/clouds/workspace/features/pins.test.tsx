@@ -100,6 +100,7 @@ function Harness({ ctx }: { ctx: FeatureContext }) {
       </button>
       <span data-testid="cancelled">{cancelled}</span>
       <span data-testid="tool">{`${tool.id} picks=${tool.picks} canCommit=${tool.canCommit}`}</span>
+      <span data-testid="hint-actions">{String(tool.hintActions !== false)}</span>
       <span data-testid="count">{f.findingsTab!.count}</span>
       <span data-testid="dots">{f.minimap!.length}</span>
       <span data-testid="marks">
@@ -221,9 +222,12 @@ describe("usePinsFeature", () => {
   it("a pick opens the draft; commit creates it once; cancel drops a draft", async () => {
     localStorage.setItem(LAST_TYPE_KEY, TYPE_SPALLING);
     const { requests } = mount();
+    expect(screen.getByTestId("hint-actions")).toHaveTextContent("true"); // no draft: the hint bar's Cancel
     await userEvent.click(screen.getByRole("button", { name: "pick" }));
     expect(await screen.findByTestId("pin-callout-create")).toBeInTheDocument();
     expect(screen.getByTestId("tool")).toHaveTextContent("canCommit=true");
+    // A5: the callout owns Create/Cancel for a draft; the hint bar does not repeat them.
+    expect(screen.getByTestId("hint-actions")).toHaveTextContent("false");
     await userEvent.click(screen.getByRole("button", { name: "commit" }));
     await waitFor(() => expect(count(requests, "POST")).toBe(1));
     await waitFor(() => expect(screen.queryByTestId("pin-callout-create")).toBeNull());

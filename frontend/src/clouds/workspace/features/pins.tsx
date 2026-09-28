@@ -253,6 +253,8 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
     onCommit: () => submitRef.current?.(),
     canCommit: tool.draft !== null,
     commitLabel: "Create",
+    // A5: a draft's callout carries its own Create/Cancel; don't repeat them in the hint bar.
+    hintActions: tool.draft === null,
     // T7-3: true after dropping a draft (stay armed), false after cancelling a pending Move pin (W1 arms Orbit).
     onCancel: () => tool.cancel(),
     hint: movingPin ? (
