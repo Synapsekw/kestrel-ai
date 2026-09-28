@@ -149,6 +149,10 @@ def test_delete_cloud_refused_while_its_profile_job_is_live_then_allowed(
 
     busy = client.delete(f"{BASE}/{project_id}/pointclouds/{cloud_id}")
     assert busy.status_code == 409 and busy.json()["error"]["code"] == "job_running"
+    # the message names every kind of job that holds the cloud (C-G final review m5)
+    assert busy.json()["error"]["message"] == (
+        "the point cloud has an import, export or cross-section running; cancel it first"
+    )
 
     gate.set()
     assert wait_job(project_id, job_id)["state"] == "failed"

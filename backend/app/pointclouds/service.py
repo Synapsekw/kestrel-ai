@@ -246,7 +246,9 @@ def delete_cloud(
         ]
         if any(j and is_live(j) for j in job_ids):
             raise AppError(
-                "job_running", "the point cloud has an import or export running; cancel it first", 409
+                "job_running",
+                "the point cloud has an import, export or cross-section running; cancel it first",
+                409,
             )
         n = s.execute(
             select(func.count())
