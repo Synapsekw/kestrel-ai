@@ -134,6 +134,13 @@ describe("PinsLayerController", () => {
     expect(el(host, "a").hasAttribute("data-pulse")).toBe(false);
   });
 
+  it("selects a pin created after setSelected named it (the store change arrives before the render)", () => {
+    ctl.setSelected("a");
+    ctl.setPins([view("a", 0, 0, 0)]);
+    expect(el(host, "a").hasAttribute("data-selected")).toBe(true);
+    expect(el(host, "a").hasAttribute("data-pulse")).toBe(true);
+  });
+
   it("drops new pins once and removes pins that are gone", () => {
     expect(ctl.setPins([view("a", 0, 0, 0), view("b", 1, 0, 0)])).toEqual(["a", "b"]);
     expect(el(host, "a").hasAttribute("data-enter")).toBe(true);

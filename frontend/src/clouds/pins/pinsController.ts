@@ -278,6 +278,13 @@ export class PinsLayerController {
       occluded: false,
     };
     this.update(pin, v, true);
+    // setSelected can run before the selected pin's element exists (Task 5 calls it on a store
+    // change, and setPins on the next render), so a pin created already-selected must get the same
+    // attributes setSelected would have written.
+    if (v.id === this.selected) {
+      el.setAttribute("data-selected", "");
+      el.setAttribute("data-pulse", "");
+    }
     return pin;
   }
 
