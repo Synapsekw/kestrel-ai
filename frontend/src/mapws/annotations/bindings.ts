@@ -5,9 +5,10 @@ import type { WorkspaceLayer } from "@/mapws/types";
 
 /*
  * The only W3 module that names M-W1's or M-W2's modules (as W1's R-W1-3 isolates M-C0): if a merged
- * name changes, only this file changes. Everything in measure/, findings/ and zones/ imports from
- * here, never from mapws/context, mapws/data, mapws/layers, mapws/tools, mapws/inspect, mapws/view,
- * mapws/timeline or mapws/readout directly.
+ * name changes, only this file changes. Everything in measure/, findings/ and zones/ imports the
+ * W1/W2 modules (mapws/context, mapws/data, mapws/layers, mapws/tools, mapws/inspect, mapws/view,
+ * mapws/timeline, mapws/readout) from here, never directly; W3's own files in those folders (e.g.
+ * inspect/ProfileChart) are imported by path.
  */
 export { WorkspaceProvider, useTools, useWorkspace, useWorkspaceStores } from "@/mapws/context";
 export { SELECTION_PROP, layerRegistry } from "@/mapws/layers/layerRegistry";

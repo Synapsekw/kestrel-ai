@@ -74,6 +74,14 @@ describe("findingToolUnavailable", () => {
       }),
     ).toBe("Findings need an orthomosaic — import one");
   });
+
+  it("is off when every ortho is gone this session (M-W3 P4)", () => {
+    const maps = LAYERS.filter((l) => l.kind === "map").map((l) => `map:${l.id}`);
+    expect(findingToolUnavailable({ frame: UTM38, layers: LAYERS, gone: new Set(maps) })).toBe(
+      "Findings need an orthomosaic — import one",
+    );
+    expect(findingToolUnavailable({ frame: UTM38, layers: LAYERS, gone: new Set(maps.slice(1)) })).toBeNull();
+  });
 });
 
 describe("createMapFinding", () => {

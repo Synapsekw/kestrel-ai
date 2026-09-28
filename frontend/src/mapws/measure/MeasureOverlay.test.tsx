@@ -99,8 +99,9 @@ describe("MeasureOverlay", () => {
     await waitFor(() =>
       expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("No elevation under this line"),
     );
+    // T5a: the server's refusal with the spec's copy toasts info, like a client refusal (W3-16).
     expect(useToastStore.getState().toasts.find((t) => t.text === "No elevation under this line")?.tone).toBe(
-      "danger",
+      "info",
     );
     expect(stores.tools.getState().completed).toBeNull();
     expect(stores.workspace.getState().selection).toBeNull();
@@ -142,6 +143,8 @@ describe("MeasureOverlay", () => {
       });
     });
     expect(screen.getByRole("status")).toHaveTextContent("≈ 50.00 m grid");
+    // A label that changes on every pointer move is not announced.
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "off");
   });
 
   it("says local in a local-metres frame, and nothing without a second point", () => {

@@ -123,6 +123,16 @@ describe("ZoneInspector", () => {
     expect(useZonesStore.getState().items).toEqual([]);
   });
 
+  it("a second click on Delete while the first runs sends nothing", async () => {
+    const { requests, onClose } = renderInspector();
+    const button = screen.getByRole("button", { name: "Delete" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(requests.filter((r) => r.method === "DELETE")).toHaveLength(1);
+    expect(vi.mocked(toast).mock.calls.filter(([tone]) => tone === "danger")).toEqual([]);
+  });
+
   it("reads the zones itself when the selected zone is not in the store (M-W3 P12)", async () => {
     useZonesStore.setState({ items: [] });
     const { requests } = renderInspector([{ method: "GET", path: LIST, body: { items: [area] } }]);

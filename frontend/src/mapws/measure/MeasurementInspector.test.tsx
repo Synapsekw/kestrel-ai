@@ -2,7 +2,7 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ApiClient } from "@contract/client";
-import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
+import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { useToastStore } from "@/ui";
 import {
   DESIGN,
@@ -163,6 +163,91 @@ describe("MeasurementInspector", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(requests.some((r) => r.method === "DELETE")).toBe(true);
+  });
+
+  it("a second click on Delete while the first runs sends nothing", async () => {
+    const { requests, onClose } = renderInspector([
+      { method: "GET", path: ITEM, body: measurement("distance") },
+      { method: "DELETE", path: ITEM, status: 204 },
+    ]);
+    const button = await screen.findByRole("button", { name: "Delete" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(requests.filter((r) => r.method === "DELETE")).toHaveLength(1);
+    expect(useToastStore.getState().toasts.map((t) => t.tone)).toEqual(["ok"]);
+  });
+
+  it("a surface change over no elevation toasts the spec's refusal as info (T5a)", async () => {
+    const { requests } = renderInspector([
+      { method: "GET", path: ITEM, body: measurement("profile") },
+      {
+        method: "PATCH",
+        path: ITEM,
+        status: 422,
+        body: errorBody("no_surface_under_line", "raw server text"),
+      },
+    ]);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Site plan rev C" }));
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    expect(patches(requests)).toHaveLength(1);
+    expect(useToastStore.getState().toasts[0]).toEqual(
+      expect.objectContaining({ tone: "info", text: "No elevation under this line" }),
+    );
+  });
+
+  it("a surface still being built toasts danger with the spec's copy, not the raw message", async () => {
+    renderInspector([
+      { method: "GET", path: ITEM, body: measurement("profile") },
+      { method: "PATCH", path: ITEM, status: 409, body: errorBody("not_ready", "raw server text") },
+    ]);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Site plan rev C" }));
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    expect(useToastStore.getState().toasts[0]).toEqual(
+      expect.objectContaining({
+        tone: "danger",
+        text: "A surface is still being built — try again when it is ready",
+      }),
+    );
+  });
+
+  it("a PATCH still running for one measurement does not mark the next one as saving", async () => {
+    const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+    const api = {
+      GET: vi.fn((_path: string, opts: { params: { path: { mapMeasurementId: string } } }) =>
+        Promise.resolve(
+          ok(
+            opts.params.path.mapMeasurementId === MEASURE_ID
+              ? measurement("profile")
+              : measurement("profile", { id: MEASURE_ID_2, name: "Profile 2" }),
+          ),
+        ),
+      ),
+      PATCH: vi.fn(() => new Promise(() => undefined)),
+    } as unknown as ApiClient;
+    function Switcher() {
+      const [id, setId] = useState(MEASURE_ID);
+      return (
+        <>
+          <button type="button" onClick={() => setId(MEASURE_ID_2)}>
+            next
+          </button>
+          <MeasurementInspector
+            selection={sel(id)}
+            projectId={PROJECT_ID}
+            frame={UTM38}
+            onClose={() => undefined}
+          />
+        </>
+      );
+    }
+    renderInWorkspace(<Switcher />, { stores: w3Stores(), api });
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Site plan rev C" }));
+    expect(await screen.findByText("Recomputing…")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "next" }));
+    expect(await screen.findByDisplayValue("Profile 2")).toBeInTheDocument();
+    expect(screen.queryByText("Recomputing…")).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Site plan rev C" })).toBeEnabled();
   });
 
   it("says so when the measurement is gone", async () => {

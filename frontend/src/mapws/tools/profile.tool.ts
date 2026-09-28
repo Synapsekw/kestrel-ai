@@ -1,4 +1,4 @@
-import type { MapTool } from "@/mapws/annotations/bindings";
+import { useGoneLayers, type MapTool } from "@/mapws/annotations/bindings";
 import { hasElevation } from "@/mapws/annotations/pick";
 import { PROFILE_NEEDS_ELEVATION } from "@/mapws/measure/actions";
 import { ProfileOverlay } from "@/mapws/measure/MeasureOverlay";
@@ -13,7 +13,9 @@ const profile: MapTool = {
   action: "profile",
   hint: "Click the start and the end · more clicks bend the line · double-click finishes",
   draw: { shape: "line", min: 2 },
-  disabledReason: (ctx) => (hasElevation(ctx.layers) ? null : PROFILE_NEEDS_ELEVATION),
+  // W1's ToolContext has no gone keys: read them here (M-W3 P4).
+  disabledReason: (ctx) =>
+    hasElevation(ctx.layers, useGoneLayers.getState().gone) ? null : PROFILE_NEEDS_ELEVATION,
   Overlay: ProfileOverlay,
 };
 

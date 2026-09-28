@@ -23,6 +23,7 @@ export function ZoneInspector({ selection, projectId, frame, onClose }: Inspecto
   // M-W3 P12: the id this inspector has read the zones for itself (row hidden, deep link).
   const [lookedUp, setLookedUp] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const local = frame.kind === "local";
 
   useEffect(() => {
@@ -92,12 +93,16 @@ export function ZoneInspector({ selection, projectId, frame, onClose }: Inspecto
 
   // W3-14: the inspector's Delete deletes at once; only W1's `Del` asks first (remove.confirm).
   async function remove(name: string) {
+    if (deleting) return;
+    setDeleting(true);
     try {
       await removeZone(api, projectId, id);
       toast("ok", zoneDeleted(name));
       onClose();
     } catch (e) {
       toast("danger", messageOf(e, "could not delete the zone"));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -117,6 +122,7 @@ export function ZoneInspector({ selection, projectId, frame, onClose }: Inspecto
           size="sm"
           icon="trash"
           className="w-full justify-center"
+          disabled={deleting}
           onClick={() => void remove(area.name)}
         >
           Delete

@@ -43,7 +43,7 @@ import {
 import { NameField } from "@/mapws/annotations/NameField";
 import { elevationLayers, seriesRole, type Shown } from "@/mapws/annotations/pick";
 import { ProfileChart, type ChartSeries } from "@/mapws/inspect/ProfileChart";
-import { removeMeasurement } from "./actions";
+import { createFailure, isMeasureRefusal, removeMeasurement } from "./actions";
 import { useProfileHover } from "./profileHover";
 import { ProfileSheet } from "./ProfileSheet";
 import { areaView, crsText, distanceView, profileView, vertexCount } from "./results";
@@ -230,7 +230,9 @@ export function MeasurementInspector({ selection, projectId, onClose }: Inspecto
   const hoverId = useProfileHover((s) => s.measurementId);
   const hoverIndex = useProfileHover((s) => s.index);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [saving, setSaving] = useState(false);
+  // Keyed by id: a PATCH still running for another measurement never marks this one as saving.
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [sheet, setSheet] = useState(false);
 
   useEffect(() => {
@@ -262,26 +264,31 @@ export function MeasurementInspector({ selection, projectId, onClose }: Inspecto
   const m = current?.m ?? null;
 
   async function save(base: MapMeasurement, patch: MapMeasurementPatch) {
-    setSaving(true);
+    setSavingId(base.id);
     try {
       const full = mergeSaved(base, await patchMapMeasurement(api, projectId, base.id, patch));
       setLoaded((prev) => (prev && prev.id === base.id ? { id: base.id, m: full, error: null } : prev));
       useMeasurementsStore.getState().upsert(full);
     } catch (e) {
-      toast("danger", messageOf(e, "could not save the measurement"));
+      // T5a: no_surface_under_line is a refusal with the spec's copy (info); not_ready gets its copy too.
+      toast(isMeasureRefusal(e) ? "info" : "danger", createFailure(e));
     } finally {
-      setSaving(false);
+      setSavingId((s) => (s === base.id ? null : s));
     }
   }
 
   // W3-14: the inspector's Delete deletes at once; only W1's `Del` asks first (remove.confirm).
   async function remove(target: MapMeasurement) {
+    if (deleting) return;
+    setDeleting(true);
     try {
       await removeMeasurement(api, projectId, target.id);
       toast("ok", `${target.name} deleted`);
       onClose();
     } catch (e) {
       toast("danger", messageOf(e, "could not delete the measurement"));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -321,6 +328,7 @@ export function MeasurementInspector({ selection, projectId, onClose }: Inspecto
             size="sm"
             icon="trash"
             className="w-full justify-center"
+            disabled={deleting}
             onClick={() => void remove(m)}
           >
             Delete
@@ -338,7 +346,7 @@ export function MeasurementInspector({ selection, projectId, onClose }: Inspecto
             layers={layers}
             view={view}
             shown={shown}
-            saving={saving}
+            saving={savingId === m.id}
             cursor={cursor}
             onCursor={onCursor}
             onSurfaces={(surface_ids) => void save(m, { surface_ids })}

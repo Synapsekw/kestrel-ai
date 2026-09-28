@@ -14,7 +14,7 @@ import {
 } from "@/mapws/annotations/bindings";
 import { FloatLabel } from "@/mapws/annotations/FloatLabel";
 import { liveLabel, type MeasureKind } from "@/mapws/annotations/format";
-import { MeasureRefusal, createFailure, createMeasurement } from "./actions";
+import { createFailure, createMeasurement, isMeasureRefusal } from "./actions";
 
 /** Mounted by W1 while the tool is active: the live label, then the save of W1's `completed` line. */
 function MeasureOverlay({ kind, projectId, frame }: ToolOverlayProps & { kind: MeasureKind }) {
@@ -45,7 +45,7 @@ function MeasureOverlay({ kind, projectId, frame }: ToolOverlayProps & { kind: M
         bumpMapMeasurements();
         select({ kind: "measurement", id: m.id }); // W3-10: the tool stays active
       })
-      .catch((e: unknown) => toast(e instanceof MeasureRefusal ? "info" : "danger", createFailure(e)))
+      .catch((e: unknown) => toast(isMeasureRefusal(e) ? "info" : "danger", createFailure(e)))
       .finally(() => {
         setBusy(false);
         clearCompleted();
@@ -57,7 +57,7 @@ function MeasureOverlay({ kind, projectId, frame }: ToolOverlayProps & { kind: M
   const at = drawn[drawn.length - 1];
   const px = at && viewApi ? viewApi.pixelOf([at[0], at[1]]) : null;
   if (!text || !px) return null;
-  return <FloatLabel px={px} text={text} />;
+  return <FloatLabel px={px} text={text} announce={busy} />;
 }
 
 export function DistanceOverlay(props: ToolOverlayProps) {

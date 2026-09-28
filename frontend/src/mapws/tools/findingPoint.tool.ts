@@ -1,4 +1,4 @@
-import type { MapTool } from "@/mapws/annotations/bindings";
+import { useGoneLayers, type MapTool } from "@/mapws/annotations/bindings";
 import { findingToolUnavailable } from "@/mapws/findings/actions";
 import { FindingPointOverlay } from "@/mapws/findings/FindingOverlay";
 
@@ -12,7 +12,8 @@ const findingPoint: MapTool = {
   action: "finding-marker",
   hint: "Click where the defect is · then pick its type",
   draw: { shape: "point" },
-  disabledReason: findingToolUnavailable,
+  // W1's ToolContext has no gone keys: read them here (M-W3 P4).
+  disabledReason: (ctx) => findingToolUnavailable({ ...ctx, gone: useGoneLayers.getState().gone }),
   Overlay: FindingPointOverlay,
 };
 

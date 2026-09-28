@@ -71,6 +71,8 @@ describe("ZoneOverlay", () => {
     expect((requests[0].body as { polygon_wgs84: number[][] }).polygon_wgs84).toHaveLength(3);
     expect(stores.tools.getState().completed).toBeNull();
     expect(useZonesStore.getState().revision).toBe(revision + 1);
+    // The new zone is in the store before the re-read, so the inspector needs no lookup (P12).
+    expect(useZonesStore.getState().items.map((a) => a.id)).toContain("z1");
     expect(toasts()).toContainEqual(["ok", "Crane exclusion saved — counts update in the background"]);
   });
 

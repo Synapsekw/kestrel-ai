@@ -135,6 +135,14 @@ describe("only usable layers are picked (M-W3 P4)", () => {
     expect(ids(pickProfileSurfaces(LAYERS, gone(`surface:${DESIGN}`), single))).toEqual([DSM_SEP]);
     expect(ids(elevationLayers(LAYERS, gone(`surface:${DSM_AUG}`)))).toEqual([DESIGN, DSM_SEP]);
   });
+
+  it("a gone layer does not count for hasElevation / hasOrtho (the E/M/G tools)", () => {
+    const surfaces = [DESIGN, DSM_AUG, DSM_SEP].map((id) => `surface:${id}`);
+    expect(hasElevation(LAYERS, new Set(surfaces))).toBe(false);
+    expect(hasElevation(LAYERS, new Set(surfaces.slice(1)))).toBe(true);
+    expect(hasOrtho(LAYERS, new Set([`map:${MAP_AUG}`, `map:${MAP_SEP}`]))).toBe(false);
+    expect(hasOrtho(LAYERS, new Set([`map:${MAP_AUG}`]))).toBe(true);
+  });
 });
 
 describe("findingMapIds (W3-13)", () => {

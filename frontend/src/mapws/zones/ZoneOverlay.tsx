@@ -24,7 +24,10 @@ export function ZoneOverlay({ projectId, frame }: ToolOverlayProps) {
     setBusy(true);
     try {
       const area = await createZone(api, projectId, { ...value, ring, frame });
-      useZonesStore.getState().bump(); // the Zones layer re-reads (there is no site-area event)
+      // In the store at once, so the inspector's P12 lookup does not re-read; then the Zones layer
+      // re-reads (there is no site-area event).
+      useZonesStore.getState().upsert(area);
+      useZonesStore.getState().bump();
       select({ kind: "zone", id: area.id }); // W3-10: the tool stays active
       toast("ok", `${area.name} saved — counts update in the background`);
       clearCompleted();

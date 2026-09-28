@@ -59,9 +59,11 @@ export function anchorMapFor(
 export function findingToolUnavailable(ctx: {
   frame: SiteFrame;
   layers: readonly PickLayer[];
+  /** The session's gone keys (M-W3 P4); W1's ToolContext has none, so the tool files pass them. */
+  gone?: ReadonlySet<string>;
 }): string | null {
   if (ctx.frame.kind === "local") return FINDINGS_LOCAL;
-  if (!hasOrtho(ctx.layers)) return "Findings need an orthomosaic — import one";
+  if (!hasOrtho(ctx.layers, ctx.gone)) return "Findings need an orthomosaic — import one";
   return null;
 }
 

@@ -19,9 +19,11 @@ import {
   PROFILE_NEEDS_ELEVATION,
   createFailure,
   createMeasurement,
+  isMeasureRefusal,
   measurementBody,
   removeMeasurement,
 } from "./actions";
+import { useGoneLayers } from "@/mapws/annotations/bindings";
 import { useMeasurementsStore } from "./store";
 import profileTool from "@/mapws/tools/profile.tool";
 
@@ -201,6 +203,29 @@ describe("createMeasurement", () => {
     expect(await fail(409, "not_ready")).toBe("A surface is still being built — try again when it is ready");
     expect(await fail(501, "not_implemented")).toBe("Measurements need the map measurement backend (M-B4)");
   });
+
+  it("a client refusal and the server's no_surface_under_line are refusals; other failures are not (T5a)", async () => {
+    const fail = async (status: number, code: string) => {
+      const { api } = fakeClient([
+        { method: "POST", path: /\/map-measurements$/, status, body: errorBody(code, code) },
+      ]);
+      return createMeasurement(
+        api,
+        PROJECT_ID,
+        "distance",
+        [
+          [0, 0],
+          [5, 5],
+        ],
+        ctx,
+      ).catch((e: unknown) => e);
+    };
+    expect(isMeasureRefusal(new MeasureRefusal("x"))).toBe(true);
+    expect(isMeasureRefusal(await fail(422, "no_surface_under_line"))).toBe(true);
+    expect(isMeasureRefusal(await fail(409, "not_ready"))).toBe(false);
+    expect(isMeasureRefusal(await fail(500, "internal"))).toBe(false);
+    expect(isMeasureRefusal(new Error("boom"))).toBe(false);
+  });
 });
 
 describe("removeMeasurement", () => {
@@ -241,5 +266,16 @@ describe("the profile tool", () => {
         layers: LAYERS.filter((l) => l.kind !== "surface"),
       }),
     ).toBe(PROFILE_NEEDS_ELEVATION);
+  });
+
+  it("is disabled when every surface is gone this session (M-W3 P4)", () => {
+    const base = { frame: UTM38, selection: null, surveys: [], r: SEP, layers: LAYERS };
+    const surfaces = LAYERS.filter((l) => l.kind === "surface").map((l) => `surface:${l.id}`);
+    useGoneLayers.setState({ gone: new Set(surfaces) });
+    try {
+      expect(profileTool.disabledReason?.(base)).toBe(PROFILE_NEEDS_ELEVATION);
+    } finally {
+      useGoneLayers.setState({ gone: new Set() });
+    }
   });
 });

@@ -81,6 +81,11 @@ export function createMeasurement(
   }
 }
 
+/** A refusal (client, or the server's with the spec's copy) toasts `info`; anything else `danger` (W3-16, T5a). */
+export function isMeasureRefusal(e: unknown): boolean {
+  return e instanceof MeasureRefusal || codeOf(e) === "no_surface_under_line";
+}
+
 export function createFailure(e: unknown): string {
   if (e instanceof MeasureRefusal) return e.message;
   if (isNotImplemented(e)) return "Measurements need the map measurement backend (M-B4)";

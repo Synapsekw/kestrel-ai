@@ -37,20 +37,22 @@ export const layerKeyOf = (l: Pick<PickLayer, "kind" | "id">) => `${l.kind}:${l.
 const visible = (l: PickLayer, shown: Shown) => isShown(l, shown.layerState);
 
 /** M-W3 P4: in the site frame, ready, and not dropped this session. */
-function usable(layers: readonly PickLayer[], shown?: Shown): PickLayer[] {
-  return layers.filter((l) => l.in_frame && l.status === "ready" && !shown?.gone?.has(layerKeyOf(l)));
+function usable(layers: readonly PickLayer[], gone?: ReadonlySet<string>): PickLayer[] {
+  return layers.filter((l) => l.in_frame && l.status === "ready" && !gone?.has(layerKeyOf(l)));
 }
 
 export const isDsm = (l: PickLayer) =>
   l.kind === "surface" &&
   (surfaceKindOf(l) === "cloud_dsm" || (surfaceKindOf(l) === "dem" && elevationRoleOf(l) === "dsm"));
-export const hasElevation = (layers: readonly PickLayer[]) =>
-  usable(layers).some((l) => l.kind === "surface");
-export const hasOrtho = (layers: readonly PickLayer[]) => usable(layers).some((l) => l.kind === "map");
+/** `gone`: the session's gone keys (`useGoneLayers`), so a dropped layer never enables E, M or G. */
+export const hasElevation = (layers: readonly PickLayer[], gone?: ReadonlySet<string>) =>
+  usable(layers, gone).some((l) => l.kind === "surface");
+export const hasOrtho = (layers: readonly PickLayer[], gone?: ReadonlySet<string>) =>
+  usable(layers, gone).some((l) => l.kind === "map");
 
 /** The group's usable layers as the layers panel shows them, top first (M-W3 P3). */
 function panel(layers: readonly PickLayer[], group: Group, shown: Shown): PickLayer[] {
-  const ctx = { layers: usable(layers, shown) };
+  const ctx = { layers: usable(layers, shown.gone) };
   const rows = group === "base" ? baseMapRows(ctx) : elevationRows(ctx);
   return orderRows(rows, shown.order[group]).flatMap((r) => (r.layer ? [r.layer] : []));
 }
