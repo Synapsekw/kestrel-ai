@@ -46,6 +46,12 @@ const NONE: Live = { results: null, refusal: null, warning: null };
 export const DEGREES = NEEDS_PROJECTED_CRS;
 /** One copy of the failed-profile fallback (M1 Ruling R13); reused by the Measurements tab and the profile panel. */
 export const PROFILE_FAILED = "the profile could not be cut";
+/** The hint bar's rings steps and section note (MeasureHint.tsx; here for react-refresh, as M1 Ruling R6). */
+export const RING_STEPS = [
+  "lower ring: three or more picks, then N",
+  "upper ring: three or more picks, then Enter",
+] as const;
+export const SECTION_NOTE = "B takes A's height";
 
 export function lineLength(a: MPoint, b: MPoint): number {
   return Math.hypot(b.x - a.x, b.y - a.y);

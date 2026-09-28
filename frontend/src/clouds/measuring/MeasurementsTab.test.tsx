@@ -153,7 +153,24 @@ describe("Measurements tab", () => {
     expect(button).toBeDisabled();
     await userEvent.click(button);
     expect(onRetry).toHaveBeenCalledOnce();
-    resolve();
+    await act(async () => resolve());
+    await waitFor(() => expect(button).toBeEnabled());
+  });
+
+  it("unlocks a row's Retry after a rejection or a synchronous throw, with no unhandled rejection", async () => {
+    const onRetry = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockImplementationOnce(() => {
+        throw new Error("sync");
+      });
+    mount([failed], [], { onRetry });
+    const button = await screen.findByRole("button", { name: "Retry" });
+    await userEvent.click(button);
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(button).toBeEnabled());
   });
 
   it("hands a clicked row to the workspace", async () => {

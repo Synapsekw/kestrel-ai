@@ -26,7 +26,12 @@ function Row({
   const handleRetry = () => {
     if (retrying) return;
     setRetrying(true);
-    onRetry().finally(() => setRetrying(false));
+    // A synchronous throw or a rejection still unlocks the button, never as an unhandled rejection:
+    // the caller reports its own failure (a toast), as in ProfilePanel.
+    Promise.resolve()
+      .then(onRetry)
+      .catch(() => {})
+      .finally(() => setRetrying(false));
   };
   return (
     <li className="flex flex-col gap-1">

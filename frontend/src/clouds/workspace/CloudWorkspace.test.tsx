@@ -18,7 +18,7 @@ vi.mock("@/clouds/CloudViewer", async () => ({
 const routes = (items: object[]) => [
   { method: "GET", path: /\/pointclouds$/, body: { items } },
   { method: "GET", path: /\/maps$/, body: { items: [] } },
-  { method: "GET", path: /\/measurements$/, body: { items: [] } }, // S1's MeasurePanel in the Measurements tab
+  { method: "GET", path: /\/measurements$/, body: { items: [] } }, // the Measurements tab's saved list
   {
     method: "GET",
     path: /\/views$/,
@@ -152,8 +152,8 @@ describe("CloudWorkspace (spec §6)", () => {
       ["Fly", true],
       ["Distance", true],
       ["Clipping box", true],
-      ["Area", false],
-      ["Cross-section", false],
+      ["Area", true],
+      ["Cross-section", true],
       ["Pin a finding", false],
       ["Photo link", false],
     ] as const)
