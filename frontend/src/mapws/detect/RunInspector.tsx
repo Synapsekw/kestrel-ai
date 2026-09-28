@@ -36,7 +36,9 @@ export function RunInspector({ selection, projectId, onClose }: InspectorBodyPro
   const current = loaded?.runId === selection.id ? loaded : null;
   const run = current?.run ?? null;
   const running = run?.state === "running" || run?.state === "queued";
-  const { job } = useTrackedJob(projectId, running ? run.job_id : null);
+  const failed = run?.state === "failed";
+  // A failed run's reason lives on its job (MapRun has no error field): fetched once, not polled.
+  const { job } = useTrackedJob(projectId, running || failed ? run.job_id : null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +95,7 @@ export function RunInspector({ selection, projectId, onClose }: InspectorBodyPro
             </Pill>
           )}
           <span className="flex-1" />
-          <Pill size="sm" tone={done ? "ok" : run.state === "failed" ? "danger" : "neutral"} live={running}>
+          <Pill size="sm" tone={done ? "ok" : failed ? "danger" : "neutral"} live={running}>
             {stateLabel(run.state ?? "queued")}
           </Pill>
         </div>
@@ -101,9 +103,10 @@ export function RunInspector({ selection, projectId, onClose }: InspectorBodyPro
     >
       <InspectorSection
         key="progress"
-        title={done ? `${run.detection_count} detections` : run.state === "failed" ? "Failed" : "Scanning"}
+        title={done ? `${run.detection_count} detections` : failed ? "Failed" : "Scanning"}
       >
         {running && <Progress value={job?.progress} running label="Detecting" />}
+        {failed && job?.error && <p className="text-xs text-muted">{job.error}</p>}
         {run.scope === "region" && (
           <p className="mt-1 text-xs text-muted">A region run never changes the survey's counts.</p>
         )}

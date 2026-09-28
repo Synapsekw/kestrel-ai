@@ -133,6 +133,7 @@ describe("arrival (spec §5, §9.4, R-W1-6)", () => {
 
   it("centres a clouds jump (native CRS of the map) in the site frame", () => {
     const plan = planMapArrival({
+      projectId: PROJECT_ID,
       map: exampleGeoMap,
       at: [500100, 4982000],
       frame: UTM33,
@@ -141,9 +142,20 @@ describe("arrival (spec §5, §9.4, R-W1-6)", () => {
     expect(plan.centre![0]).toBeCloseTo(500100, 6);
     expect(plan.centre![1]).toBeCloseTo(4982000, 6);
     expect(plan.r).toBe("2026-04-15");
-    expect(planMapArrival({ map: exampleGeoMap, at: null, frame: UTM33 })).toMatchObject({
+    expect(
+      planMapArrival({ projectId: PROJECT_ID, map: exampleGeoMap, at: null, frame: UTM33 }),
+    ).toMatchObject({
       centre: null,
       r: "2026-04-15",
     });
+  });
+
+  it("sends a map with no coordinates to its evaluation screen (spec §14)", () => {
+    const flat = { ...exampleGeoMap, crs_wkt: null, proj4: null };
+    for (const at of [null, [10, 20] as [number, number]])
+      expect(planMapArrival({ projectId: PROJECT_ID, map: flat, at, frame: UTM33 })).toEqual({
+        kind: "navigate",
+        to: `/p/${PROJECT_ID}/maps/${MAP_ID}/evaluate`,
+      });
   });
 });

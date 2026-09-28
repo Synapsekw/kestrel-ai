@@ -1,0 +1,76 @@
+{
+  "runs": [
+    {
+      "at": "2026-09-28T09:52:37.466Z",
+      "budget": true,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "hardwareConcurrency": 24,
+      "viewport": "1280x720@1",
+      "surfaces": {
+        "swipe-pan-zoom": {
+          "what": "Swipe, 4 layers, drag-pan + wheel zoom continuously",
+          "samples": 113,
+          "p50": 16.7,
+          "p95": 16.7,
+          "max": 150
+        },
+        "swipe-divider": {
+          "what": "Swipe, 4 layers, divider dragged side to side continuously",
+          "samples": 121,
+          "p50": 16.7,
+          "p95": 16.7,
+          "max": 16.8
+        }
+      }
+    },
+    {
+      "at": "2026-09-28T09:52:53.066Z",
+      "budget": true,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "hardwareConcurrency": 24,
+      "viewport": "1280x720@1",
+      "surfaces": {
+        "swipe-pan-zoom": {
+          "what": "Swipe, 4 layers, drag-pan + wheel zoom continuously",
+          "samples": 113,
+          "p50": 16.7,
+          "p95": 16.8,
+          "max": 150
+        },
+        "swipe-divider": {
+          "what": "Swipe, 4 layers, divider dragged side to side continuously",
+          "samples": 121,
+          "p50": 16.7,
+          "p95": 16.7,
+          "max": 16.8
+        }
+      }
+    },
+    {
+      "at": "2026-09-28T09:53:08.983Z",
+      "budget": true,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "hardwareConcurrency": 24,
+      "viewport": "1280x720@1",
+      "surfaces": {
+        "swipe-pan-zoom": {
+          "what": "Swipe, 4 layers, drag-pan + wheel zoom continuously",
+          "samples": 113,
+          "p50": 16.7,
+          "p95": 16.8,
+          "max": 150
+        },
+        "swipe-divider": {
+          "what": "Swipe, 4 layers, divider dragged side to side continuously",
+          "samples": 121,
+          "p50": 16.7,
+          "p95": 16.7,
+          "max": 16.8
+        }
+      }
+    }
+  ]
+}

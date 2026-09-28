@@ -3,6 +3,7 @@ import type { GeoMap } from "@contract/client";
 import type { Finding } from "@/api/findings";
 import { parseAt as parseAtXY } from "@/clouds/jump";
 import { findingHref } from "@/findings/links";
+import { evaluateHref } from "../links";
 import type { Coord, Selection, SiteFrame } from "../types";
 import { fromWgs84 } from "../view/siteFrame";
 
@@ -104,12 +105,17 @@ export function planFindingArrival(a: {
   };
 }
 
-/** `maps?map=<id>[&at=x,y]`: that map's date as r, and the point (in the map's native CRS) centred. */
+/**
+ * `maps?map=<id>[&at=x,y]`: that map's date as r, and the point (in the map's native CRS) centred.
+ * A map with no coordinates is not in the workspace; it goes to its evaluation screen (spec §14).
+ */
 export function planMapArrival(a: {
-  map: Pick<GeoMap, "captured_on" | "created_at" | "proj4">;
+  projectId: string;
+  map: Pick<GeoMap, "id" | "captured_on" | "created_at" | "crs_wkt" | "proj4">;
   at: Coord | null;
   frame: SiteFrame;
 }): ArrivalPlan {
+  if (!a.map.crs_wkt) return { kind: "navigate", to: evaluateHref(a.projectId, a.map.id) };
   const r = mapSurveyDate(a.map);
   const stay = {
     kind: "arrive" as const,

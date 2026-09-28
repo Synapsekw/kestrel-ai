@@ -1,5 +1,6 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { useAddData } from "@/app/addDataStore";
 import { registerLayerKind, type LayerRow } from "../layers/layerRegistry";
 import { renderInWorkspace } from "../test/harness";
 import { LayersPanel } from "./LayersPanel";
@@ -82,7 +83,7 @@ describe("LayersPanel (spec §5.2)", () => {
         name: "Scan.tif",
         unavailable: {
           reason: "no coordinates — open in evaluation view",
-          href: "/p/p1/maps/raw",
+          href: "/p/p1/maps/raw/evaluate",
           linkLabel: "Open in evaluation view",
         },
       }),
@@ -90,7 +91,7 @@ describe("LayersPanel (spec §5.2)", () => {
     expect(screen.getByText("no coordinates — open in evaluation view")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open in evaluation view" })).toHaveAttribute(
       "href",
-      "/p/p1/maps/raw",
+      "/p/p1/maps/raw/evaluate",
     );
     expect(screen.queryByRole("slider", { name: "Scan.tif opacity" })).toBeNull();
   });
@@ -100,5 +101,21 @@ describe("LayersPanel (spec §5.2)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Collapse layers" }));
     expect(stores.workspace.getState().layersCollapsed).toBe(true);
     expect(screen.queryByText("Orthomosaic sep")).toBeNull();
+  });
+
+  it("opens Add data straight on the Drawing import from Import drawing (R-P5.3)", () => {
+    useAddData.setState({ projectId: "p1", open: false, tile: null });
+    try {
+      setup([row("a", "2026-04-15")]);
+      fireEvent.click(screen.getByRole("button", { name: "Add a layer" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Import drawing/ }));
+      expect(useAddData.getState()).toMatchObject({ open: true, tile: "drawing" });
+      // The Drawings group's own "+ Import" goes to the same place.
+      useAddData.setState({ open: false, tile: null });
+      fireEvent.click(screen.getByRole("button", { name: "+ Import" }));
+      expect(useAddData.getState()).toMatchObject({ open: true, tile: "drawing" });
+    } finally {
+      useAddData.setState({ projectId: null, open: false, tile: null });
+    }
   });
 });

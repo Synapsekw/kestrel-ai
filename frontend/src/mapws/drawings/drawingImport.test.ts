@@ -162,6 +162,13 @@ describe("toDrawingRequest", () => {
     });
   });
 
+  it("keeps the page suffix when it caps a long multi-page default name", () => {
+    const insp = { ...pdfInspection, path: `D:/plans/${"x".repeat(250)}.pdf` };
+    const name = defaultDrawingName(insp, 12);
+    expect(name).toHaveLength(200);
+    expect(name.endsWith(" · p12")).toBe(true);
+  });
+
   it("caps a long default name and refuses a longer user-given one (PF12a)", () => {
     const longStem = "x".repeat(250);
     const insp = {

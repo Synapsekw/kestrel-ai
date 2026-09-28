@@ -128,9 +128,9 @@ function stem(path: string): string {
 }
 
 export function defaultDrawingName(insp: DrawingInspection, page: number): string {
-  const base = stem(insp.path);
-  const name = familyOf(insp.format) === "pdf" && (insp.page_count ?? 0) > 1 ? `${base} · p${page}` : base;
-  return name.slice(0, MAX_NAME_LENGTH);
+  // The stem gives way, so a capped name keeps its " · pN" page suffix.
+  const suffix = familyOf(insp.format) === "pdf" && (insp.page_count ?? 0) > 1 ? ` · p${page}` : "";
+  return stem(insp.path).slice(0, MAX_NAME_LENGTH - suffix.length) + suffix;
 }
 
 function parseEpsg(s: string): number | null {

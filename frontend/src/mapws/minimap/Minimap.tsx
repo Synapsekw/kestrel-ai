@@ -37,7 +37,8 @@ function MinimapPanel({ projectId, frame }: PanelProps) {
     () => (viewInfo && paneW !== null && paneH !== null ? viewportRing(viewInfo, [paneW, paneH]) : null),
     [viewInfo, paneW, paneH],
   );
-  const onRecentre = useCallback((c: Coord) => viewApi?.centreOn(c), [viewApi]);
+  // Instant for click and drag alike: an animation per pointer move makes the drag lag (M-W2 hand-off).
+  const onRecentre = useCallback((c: Coord) => viewApi?.centreOn(c, undefined, { instant: true }), [viewApi]);
 
   // Nothing in this frame has a footprint: no overview to show, so no empty glass box either.
   if (!extent) return null;

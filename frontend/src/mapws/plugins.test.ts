@@ -47,7 +47,7 @@ describe("W1's plugins, discovered from their files (R-W1-1)", () => {
         group: "base",
         unavailable: {
           reason: "No coordinates",
-          href: `/p/${PROJECT_ID}/maps/${MAP_ID}`,
+          href: `/p/${PROJECT_ID}/maps/${MAP_ID}/evaluate`,
           linkLabel: "Open in evaluation view",
         },
       }),

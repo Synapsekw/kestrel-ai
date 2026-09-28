@@ -236,12 +236,13 @@ describe("DrawingInspector (spec §5.3)", () => {
     });
   });
 
-  it("discards an unsaved session when the drawing is deselected (unmount)", () => {
+  it("discards an unsaved session when the drawing is deselected (unmount)", async () => {
     load();
     const { unmount } = show(fakeClient([]).api);
     sessionWith(PAIRS.slice(0, 1));
     unmount();
-    expect(useAlignStore.getState().session).toBeNull();
+    // Task 8 F1: the discard waits a microtask, so a remount (StrictMode, a parent) keeps the session.
+    await waitFor(() => expect(useAlignStore.getState().session).toBeNull());
   });
   it("at the minimum pair count shows no residuals and saves without claiming a perfect fit", async () => {
     load();

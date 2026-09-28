@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { emptyCameras, routeCameras } from "./fixtures/cameras";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
+import { clickSite, enableDiagnostics, serveMapWorkspace, sitePixel } from "./fixtures/mapWorkspace";
 import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -310,10 +311,6 @@ test("export LAZ ends with a toast that reveals the folder", async ({ page }) =>
 const MAP = "a0000000-6666-4000-8000-000000000009";
 const RUN = "r0000000-7777-4000-8000-000000000009";
 const EXC = "c1a2b3c4-0000-4000-8000-000000000001";
-const PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkaGhgAAAChACB8f3CzwAAAABJRU5ErkJggg==",
-  "base64",
-);
 const siteMap = {
   id: MAP,
   name: "Chimney ortho",
@@ -358,28 +355,65 @@ const siteRun = {
   created_at: "2026-09-24T10:00:00Z",
 };
 
+/**
+ * The map workspace in this file's EPSG:32639 site, built by the fixture's `site` option (R-P3), with
+ * `siteRun` as its one ortho's basis run (the AI detections row draws only basis runs) and the fixture
+ * cloud linked to that ortho. The spec only renames the fixture's ortho to `MAP` and swaps in its own
+ * run and detection.
+ */
 async function mapRoutes(page: Page) {
   const cors = { "Access-Control-Allow-Origin": "*" };
   const j = (pattern: (u: URL) => boolean, body: unknown) =>
     page.route(pattern, (r) =>
       r.fulfill({ contentType: "application/json", headers: cors, body: JSON.stringify(body) }),
     );
-  await page.route(
-    (u) => u.pathname.includes(`/maps/${MAP}/tiles/`),
-    (r) => r.fulfill({ contentType: "image/png", headers: cors, body: PNG }),
-  );
-  await j((u) => u.pathname === `/api/v1/projects/${P}/maps`, { items: [siteMap] });
-  await j((u) => u.pathname.endsWith(`/maps/${MAP}/runs`), { items: [siteRun] });
-  await j((u) => u.pathname.endsWith(`/maps/${MAP}/labels`), { items: [] });
-  await j((u) => u.pathname.endsWith(`/maps/${MAP}/zones`), { items: [] });
-  await j((u) => u.pathname.endsWith("/density"), {
-    cell_size: 2000,
-    cells: [{ gx: 0, gy: 0, class_id: EXC, count: 1 }],
+  const world = await serveMapWorkspace(page, {
+    surveys: 1,
+    site: {
+      epsg: 32639,
+      proj4: siteMap.proj4,
+      name: "WGS 84 / UTM zone 39N",
+      bounds: [243500, 3178000, 243600, 3178100],
+    },
   });
-  // one big detection over the middle of the map: a click at the canvas centre lands on it
-  await j((u) => u.pathname.endsWith("/detections"), {
-    items: [{ id: "d1", class_id: EXC, confidence: 0.9, x: 900, y: 900, w: 200, h: 200, angle: null }],
-    truncated: false,
+  await enableDiagnostics(page);
+  // The fixture's one ortho, already in the 32639 frame, takes this spec's id (the cloud's `map_id`).
+  Object.assign(world.maps[0], { id: MAP, name: siteMap.name });
+  const date = String(world.maps[0].captured_on);
+  await j((u) => u.pathname === `/api/v1/projects/${P}/map-workspace/surveys`, {
+    items: [
+      {
+        date,
+        date_is_import_date: false,
+        planned: false,
+        note: null,
+        maps: [{ id: MAP, name: siteMap.name, gsd_cm: siteMap.gsd_cm, basis_run_id: RUN }],
+        surfaces: world.surfaces
+          .filter((s) => s.captured_on === date)
+          .map((s) => ({ id: s.id, name: s.name, kind: s.kind, elevation_role: s.elevation_role })),
+      },
+    ],
+  });
+  await j((u) => u.pathname.endsWith(`/map-runs/${RUN}`), siteRun);
+  await j((u) => u.pathname.endsWith(`/maps/${MAP}/runs`), { items: [siteRun] });
+  // one detection over the middle of the map, box centre (243550, 3178050)
+  world.detections.splice(0, world.detections.length, {
+    id: "d1",
+    class_id: EXC,
+    confidence: 0.9,
+    x: 900,
+    y: 900,
+    w: 200,
+    h: 200,
+    angle: null,
+    review_state: "unreviewed",
+    provenance_kind: "local_model",
+    corners_site: [
+      [243545, 3178055],
+      [243555, 3178055],
+      [243555, 3178045],
+      [243545, 3178045],
+    ],
   });
   await j((u) => u.pathname === `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson({ map_id: MAP })] });
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson({ map_id: MAP }));
@@ -394,12 +428,10 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
   page,
 }) => {
   await mapRoutes(page);
-  await page.goto(`/p/${P}/maps/${MAP}`);
-  await page.getByRole("checkbox", { name: /Show machinery-v3/ }).check();
-  const mapBox = (await page.getByTestId("map-view").boundingBox())!;
-  await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
-  await page.getByRole("button", { name: "Open in 3D" }).click();
-  // box centre (1000, 1000) px -> 243500 + 1000 * 0.05, 3178100 - 1000 * 0.05
+  await page.goto(`/p/${P}/maps?map=${MAP}&sel=run:${RUN}`);
+  await clickSite(page, 243550, 3178050);
+  await page.getByTestId("map-inspector").getByRole("button", { name: "Open in 3D" }).click();
+  // the box centre of corners_site, and its corners as the footprint
   await expect(page).toHaveURL(
     new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=243550\\.000,3178050\\.000&fp=243545\\.000,3178055\\.000;`),
   );
@@ -430,9 +462,17 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
 
   const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
   await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  // The spot the click picked (a splat near, not on, 243550, 3178050); the cloud and map share EPSG:32639.
+  const picked = (await page.evaluate(() => window.__kestrelCloudViewer!.pickCenter()))!;
+  expect(Math.hypot(picked.x - 243550, picked.y - 3178050)).toBeLessThan(3);
   await page.getByRole("button", { name: "Show on map" }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/maps/${MAP}\\?at=243`));
-  await expect(page.getByTestId("map-at-marker")).toBeVisible();
+  // The workspace takes the `map`/`at` arrival and then strips it (R-URL: assert only the settled
+  // URL). It centres the spot rather than marking it (R-P4).
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/maps(\\?(?!.*\\bat=)[^#]*)?$`));
+  const at = await sitePixel(page, picked.x, picked.y);
+  const pane = (await page.getByTestId("site-map").boundingBox())!;
+  expect(Math.abs(at.x - (pane.x + pane.width / 2))).toBeLessThan(5);
+  expect(Math.abs(at.y - (pane.y + pane.height / 2))).toBeLessThan(5);
 });
 
 test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor seen past it", async ({
@@ -466,9 +506,8 @@ test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor 
 
 test("right-click on the map opens that spot in 3D; a spot outside the cloud says so", async ({ page }) => {
   await mapRoutes(page);
-  await page.goto(`/p/${P}/maps/${MAP}`);
-  const mapBox = (await page.getByTestId("map-view").boundingBox())!;
-  await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2, { button: "right" });
+  await page.goto(`/p/${P}/maps?map=${MAP}`);
+  await clickSite(page, 243550, 3178050, { button: "right" });
   await page.getByRole("menuitem", { name: "Open this spot in 3D" }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=`));
   await page.goto(`/p/${P}/clouds/${CLOUD}?at=100.000,200.000`);

@@ -237,10 +237,11 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
             pick={shown}
             onShowOnMap={
               pick && linkedMap
-                ? () =>
-                    navigate(
-                      `/p/${projectId}/maps/${linkedMap.id}${jumpQuery(cloudToMapNative(cloud, linkedMap, pick))}`,
-                    )
+                ? () => {
+                    const q = cloudToMapNative(cloud, linkedMap, pick);
+                    // The workspace on that map; `at` stays in the map's native CRS (clouds/jump.ts).
+                    navigate(`/p/${projectId}/maps?map=${linkedMap.id}&${jumpQuery(q).slice(1)}`);
+                  }
                 : undefined
             }
           />

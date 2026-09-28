@@ -77,7 +77,7 @@ describe("Minimap (M §5, deviation 5)", () => {
     act(() => stores.workspace.getState().setDates(null, "2026-08-14"));
     expect(seen.at(-1)?.ortho).toBe("aug");
     seen.at(-1)?.onRecentre([10, 20]);
-    expect(centreOn).toHaveBeenCalledWith([10, 20]);
+    expect(centreOn).toHaveBeenCalledWith([10, 20], undefined, { instant: true });
   });
 
   it("draws one pane's viewport in Side-by-side (half the stage width)", () => {

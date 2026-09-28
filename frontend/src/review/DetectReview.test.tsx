@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { Route, Routes } from "react-router-dom";
+import { act, fireEvent, screen } from "@testing-library/react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import type { Source } from "@contract/client";
 import { exampleSource, fakeClient, MAP_ID, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { RunSummary } from "@/api/review";
 import { useAddData } from "@/app/addDataStore";
 import { ReviewRoute } from "@/routes/ReviewRoute";
+
+function MapProbe() {
+  const loc = useLocation();
+  return <p data-testid="map-route">{loc.pathname + loc.search}</p>;
+}
 
 const photos: Source = {
   ...exampleSource,
@@ -46,7 +51,7 @@ function renderScreen(routes: Parameters<typeof fakeClient>[0], route = `/p/${PR
   renderWithProviders(
     <Routes>
       <Route path="/p/:projectId/review" element={<ReviewRoute />} />
-      <Route path="/p/:projectId/maps/:mapId" element={<p data-testid="map-route">map route</p>} />
+      <Route path="/p/:projectId/maps" element={<MapProbe />} />
     </Routes>,
     { api, route },
   );
@@ -75,7 +80,9 @@ describe("Detection review", () => {
     expect(await screen.findByText("412 of 530 reviewed")).toBeInTheDocument();
     expect(screen.getByText("Pinned")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review on the map" }));
-    await waitFor(() => expect(screen.getByTestId("map-route")).toBeInTheDocument());
+    expect(await screen.findByTestId("map-route")).toHaveTextContent(
+      `/p/${PROJECT_ID}/maps?map=${MAP_ID}&sel=run:pinned`,
+    );
   });
 
   it("sends a photo source's suggestions to the Images workspace", async () => {

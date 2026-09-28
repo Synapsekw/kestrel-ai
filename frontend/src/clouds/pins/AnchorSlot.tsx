@@ -61,7 +61,7 @@ export function AnchorSlot({ projectId, cloud, pin, view, viewer, moving, onMove
             icon="map"
             onClick={() => {
               const q = cloudToMapNative(cloud, map, { x: pin.p[0], y: pin.p[1] });
-              void navigate(`/p/${projectId}/maps/${map.id}${jumpQuery(q)}`);
+              void navigate(`/p/${projectId}/maps?map=${map.id}&${jumpQuery(q).slice(1)}`);
             }}
           >
             Show on map

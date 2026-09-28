@@ -8,7 +8,7 @@ import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
 import { ExportScreen } from "@/screens/ExportScreen";
-import { MapsScreen } from "@/screens/MapsScreen";
+import { MapEvaluateRoute } from "@/screens/MapEvaluateScreen";
 import { RunsScreen } from "@/screens/RunsScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { SiteAreasScreen } from "@/screens/SiteAreasScreen";
@@ -26,9 +26,11 @@ export const projectRoutes: RouteObject[] = [
   //   /p/:projectId/images/:imageId?finding=<fid>
   //   /p/:projectId/images/:imageId?at=px,py&r=rpx&from=cloud:<cloudId>   (stored-image pixels)
   { path: "images/:imageId?", element: <ImagesWorkspace /> },
-  // Maps: the map workspace (M-W1); `maps/:mapId` stays today's viewer until M-X redirects it.
+  // Maps: the map workspace (M-W1).
   { path: "maps", element: <MapWorkspace /> },
-  { path: "maps/:mapId", element: <MapsScreen /> },
+  // Maps: one map's labels, evaluation zones and score in pixels, and the maps without coordinates
+  // (spec 2026-09-26-map-workspace section 11). `maps/:mapId` is a redirect (legacyRedirects).
+  { path: "maps/:mapId/evaluate", element: <MapEvaluateRoute /> },
   // The 3D jump contract (spec 2026-09-23-point-clouds section 10), used unchanged by the
   // maps -> 3D jump, the 3D -> map jump and the Volumes screen's "View in 3D":
   //   /p/:projectId/clouds/:cloudId?at=x,y[&fp=x1,y1;x2,y2;x3,y3;x4,y4]

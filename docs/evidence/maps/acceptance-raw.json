@@ -1,0 +1,180 @@
+{
+  "mode": "synthetic",
+  "steps": {
+    "imports": {
+      "maps": 2,
+      "surfaces": 3,
+      "seconds": 5.8,
+      "pass": true
+    },
+    "frame": {
+      "kind": "crs",
+      "epsg": 32633,
+      "name": "WGS 84 / UTM zone 33N",
+      "frame_items": {
+        "crs": 5,
+        "local": 0
+      },
+      "pass": true
+    },
+    "layers": {
+      "items": [
+        {
+          "kind": "map",
+          "group": "base",
+          "status": "ready",
+          "in_frame": true,
+          "date": "2026-09-14",
+          "max_zoom": 16
+        },
+        {
+          "kind": "map",
+          "group": "base",
+          "status": "ready",
+          "in_frame": true,
+          "date": "2026-08-14",
+          "max_zoom": 16
+        },
+        {
+          "kind": "surface",
+          "group": "elevation",
+          "status": "ready",
+          "in_frame": true,
+          "date": "2026-09-28",
+          "max_zoom": 15
+        },
+        {
+          "kind": "surface",
+          "group": "elevation",
+          "status": "ready",
+          "in_frame": true,
+          "date": "2026-09-14",
+          "max_zoom": 15
+        },
+        {
+          "kind": "surface",
+          "group": "elevation",
+          "status": "ready",
+          "in_frame": true,
+          "date": "2026-08-14",
+          "max_zoom": 15
+        }
+      ],
+      "pass": true
+    },
+    "dxf": {
+      "method": "crs",
+      "epsg": 32633,
+      "max_offset_m": 0.0052,
+      "offsets_m": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0052
+      ],
+      "pass": true
+    },
+    "pdf": {
+      "model": "similarity",
+      "rmse_m": 9.313225746154785e-10,
+      "residuals_m": [
+        9.313225746154785e-10,
+        9.313225746154785e-10,
+        9.313225746154785e-10,
+        9.313225746154785e-10
+      ],
+      "warnings": [],
+      "georef_version": 1,
+      "pass": true
+    },
+    "measurements": {
+      "distance": {
+        "length_m": 60.024009596218626,
+        "grid_length_m": 60.0,
+        "scale_factor": 0.9996000001269469,
+        "length_3d_m": 63.08464223851452,
+        "nodata_fraction": 0.0,
+        "dsm_surface_id": "e34bc04d-b75f-425b-90bc-d997aa949e42"
+      },
+      "area": {
+        "area_m2": 200.16009573037172,
+        "perimeter_m": 60.02400959701601,
+        "grid_area_m2": 200.0,
+        "grid_perimeter_m": 60.0,
+        "areal_scale_factor": 0.9992001616017041
+      },
+      "profile": {
+        "length_m": 80.03201279467599,
+        "grid_length_m": 80.0,
+        "z_min": 600.1500091552734,
+        "z_max": 608.5221955415132,
+        "cut_area_m2": -0.0,
+        "fill_area_m2": 39.99844453333374,
+        "nodata_fraction": 0.0,
+        "series": 2
+      },
+      "expected_grid": {
+        "length_m": 60.0,
+        "area_m2": 200.0
+      },
+      "pass": true
+    },
+    "volumes": {
+      "results": {
+        "lowest_point": {
+          "status": "ready",
+          "net_m3": 4271.0161456296,
+          "cut_m3": 0.0011407470703682068,
+          "fill_m3": 4271.01728637667,
+          "area_m2": 2500.0000000000005,
+          "vs_cone_pct": 27.454
+        },
+        "best_fit_plane": {
+          "status": "ready",
+          "net_m3": 3351.033235472326,
+          "cut_m3": 0.00948151160974135,
+          "fill_m3": 3351.042716983936,
+          "area_m2": 2500.0000000000005,
+          "vs_cone_pct": 0.0
+        },
+        "design_dtm": {
+          "status": "ready",
+          "net_m3": 3351.0332354736333,
+          "cut_m3": 0.0,
+          "fill_m3": 3351.0332354736333,
+          "area_m2": 2500.0000000000005,
+          "vs_cone_pct": 0.0
+        },
+        "earlier_survey": {
+          "status": "ready",
+          "net_m3": 837.758201904297,
+          "cut_m3": 0.0,
+          "fill_m3": 837.758201904297,
+          "area_m2": 2500.0000000000005,
+          "vs_cone_pct": -75.0
+        }
+      },
+      "expected": {
+        "sep_cone_m3": 3351.032163829113
+      },
+      "pass": true
+    },
+    "dsm_crosscheck": {
+      "pass": null,
+      "note": "operator data needed (walkthrough)"
+    },
+    "union": {
+      "kinds": [
+        "map/area",
+        "map/distance",
+        "map/profile",
+        "volume/volume"
+      ],
+      "count": 7,
+      "pass": true
+    }
+  },
+  "http_5xx": []
+}
