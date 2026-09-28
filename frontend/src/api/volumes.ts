@@ -80,3 +80,29 @@ export async function createVolumeExport(
 ): Promise<Job> {
   return (await unwrap(api.POST(`${P}/volume-exports`, { params: { path: { projectId } }, body }))).job;
 }
+
+/** The measurement with `polygon_site` filled (spec 2026-09-26-map-workspace §12, M-B1). */
+export function fetchVolumeSite(
+  api: ApiClient,
+  projectId: string,
+  measurementId: string,
+): Promise<VolumeMeasurement> {
+  return unwrap(
+    api.GET(`${P}/volumes/{measurementId}`, {
+      params: { path: { projectId, measurementId }, query: { frame: "site" } },
+    }),
+  );
+}
+
+/** Machine footprints with `ring_site` filled. */
+export function fetchFootprintsSite(
+  api: ApiClient,
+  projectId: string,
+  measurementId: string,
+): Promise<VolumeFootprints> {
+  return unwrap(
+    api.GET(`${P}/volumes/{measurementId}/footprints`, {
+      params: { path: { projectId, measurementId }, query: { frame: "site" } },
+    }),
+  );
+}

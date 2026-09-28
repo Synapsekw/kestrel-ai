@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AppEvent } from "@contract/client";
 import { useChangesStore } from "./changes";
+import { EMPTY_LEDGER } from "./changesEcho";
 
 const ev = (type: AppEvent["type"]): AppEvent => ({ type, payload: {} }) as AppEvent;
 
@@ -55,5 +56,35 @@ describe("changes store: findings, data and migrations", () => {
     useChangesStore.getState().bumpFindings();
     useChangesStore.getState().bumpData();
     expect(useChangesStore.getState()).toMatchObject({ findingsRevision: 1, dataRevision: 1 });
+  });
+});
+
+describe("changes store: the ids of the last findings.changed (M-W4)", () => {
+  beforeEach(() =>
+    useChangesStore.setState({ openProjectId: null, lastFindingIds: [], findingEchoes: EMPTY_LEDGER }),
+  );
+  const findings = (ids: unknown[]) =>
+    useChangesStore.getState().applyEvent({
+      type: "findings.changed",
+      project_id: "p",
+      payload: { ids },
+    } as never);
+
+  it("keeps the ids of the last findings.changed", () => {
+    findings(["f1", 2, "f2"]);
+    expect(useChangesStore.getState().lastFindingIds).toEqual(["f1", "f2"]);
+  });
+
+  it("an own finding write clears the ids, so a waiter never sees a stale list (IMC item 4)", () => {
+    useChangesStore.setState({ lastFindingIds: ["old"] });
+    useChangesStore.getState().bumpFindings();
+    expect(useChangesStore.getState().lastFindingIds).toEqual([]);
+  });
+
+  it("the skipped echo of an own write does not set the ids (it never names a review-created finding)", () => {
+    useChangesStore.setState({ lastFindingIds: [] });
+    useChangesStore.getState().expectFindingEchoes(["own"]);
+    findings(["own"]);
+    expect(useChangesStore.getState().lastFindingIds).toEqual([]);
   });
 });

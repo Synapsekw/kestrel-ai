@@ -28,6 +28,9 @@ interface ChangesState {
   /** Bumped on `findings.changed` (except the echo of this client's own write) and after this
    * client's own finding writes (F §8.3). */
   findingsRevision: number;
+  /** `payload.ids` of the last `findings.changed` (M-W4 opens a finding a review just created, M-B5 R-B5-9);
+   * cleared by `bumpFindings`, so an own write never leaves a stale list for a waiter. */
+  lastFindingIds: string[];
   /** Own finding writes whose `findings.changed` echo is still expected (rulings R8). */
   findingEchoes: EchoLedger;
   expectFindingEchoes: (ids: readonly string[]) => void;
@@ -71,6 +74,11 @@ const PROJECT_SCOPED_EVENTS: ReadonlySet<string> = new Set([
   "map_measurements.changed",
 ]);
 
+function idsOf(ev: AppEvent): string[] {
+  const ids = (ev.payload as { ids?: unknown } | null)?.ids;
+  return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+}
+
 export const useChangesStore = create<ChangesState>((set) => ({
   imagesRevision: 0,
   boxesRevision: {},
@@ -80,6 +88,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   catalogueRevision: 0,
   dataRevision: 0,
   findingsRevision: 0,
+  lastFindingIds: [],
   findingEchoes: EMPTY_LEDGER,
   expectFindingEchoes: (ids) =>
     set((s) => ({ findingEchoes: expectEchoes(s.findingEchoes, ids, Date.now()) })),
@@ -92,7 +101,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   openProjectId: null,
   setOpenProject: (openProjectId) => set({ openProjectId }),
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
-  bumpFindings: () => set((s) => ({ findingsRevision: s.findingsRevision + 1 })),
+  bumpFindings: () => set((s) => ({ findingsRevision: s.findingsRevision + 1, lastFindingIds: [] })),
   bumpData: () => set((s) => ({ dataRevision: s.dataRevision + 1 })),
   applyEvent: (ev) =>
     set((s) => {
@@ -122,7 +131,11 @@ export const useChangesStore = create<ChangesState>((set) => ({
         // This client's own write already bumped once; its echo would re-read every view again.
         const echo = consumeEcho(s.findingEchoes, ev.payload, Date.now());
         if (echo.skip) return { findingEchoes: echo.ledger };
-        return { findingsRevision: s.findingsRevision + 1, findingEchoes: echo.ledger };
+        return {
+          findingsRevision: s.findingsRevision + 1,
+          findingEchoes: echo.ledger,
+          lastFindingIds: idsOf(ev),
+        };
       }
       if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
       if (ev.type === "catalogue.changed") return { catalogueRevision: s.catalogueRevision + 1 };
