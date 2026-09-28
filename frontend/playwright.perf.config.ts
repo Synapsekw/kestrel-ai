@@ -6,7 +6,7 @@ import base from "./playwright.config";
 // (CI renders in software: vault/decisions/2026-09-26-gotcha-swiftshader-compositing.md).
 export default defineConfig({
   ...base,
-  testMatch: /images-perf\.spec\.ts$/,
+  testMatch: /images-(perf|map-scale)\.spec\.ts$/,
   workers: 1,
   retries: 0,
   metadata: { frameBudget: true },
