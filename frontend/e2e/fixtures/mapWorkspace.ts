@@ -1,5 +1,5 @@
 import { deflateSync } from "node:zlib";
-import { errors, type Page, type Route, type WebSocketRoute } from "@playwright/test";
+import { errors, expect, type Locator, type Page, type Route, type WebSocketRoute } from "@playwright/test";
 import proj4 from "proj4";
 import { maxZoomFor, SITE_MAX_Z } from "../../src/mapws/view/siteGrid";
 import { fromMock, jsonReply } from "../mock";
@@ -250,14 +250,43 @@ export async function clickSite(
   await page.mouse.click(x, y, { button: opts.button ?? "left" });
 }
 
+/** Longer than OpenLayers' 250 ms double-click window (see `drawSite`). */
+const VERTEX_PACE_MS = 300;
+
+/** Presses `key` until `button` reads pressed; a re-press keeps a tool active (no toggle). */
+async function pressUntilPressed(page: Page, key: string, button: Locator): Promise<void> {
+  await expect(async () => {
+    await page.keyboard.press(key);
+    await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 500 });
+  }).toPass();
+}
+
 /**
- * Presses a tool key, clicks each vertex, and finishes with Enter (spec §5.1). Tool keys are
- * window-level (`site-map` is not focusable), so nothing is focused first; a control that holds
+ * Arms the palette tool `name` with its `key`, pressing until its button reads pressed. A key
+ * pressed in the first moments after the workspace appears is not always bound yet, so a single
+ * press can be lost.
+ */
+export async function armTool(page: Page, name: string, key: string): Promise<void> {
+  await pressUntilPressed(page, key, page.getByRole("button", { name, exact: true }));
+}
+
+/**
+ * Arms the tool bound to `key` (as `armTool`, found by the palette button's `aria-keyshortcuts`),
+ * clicks each vertex and finishes with Enter (spec §5.1). Vertices are clicked 300 ms apart:
+ * OpenLayers turns any second click within 250 ms into a `dblclick`, wherever it lands, and a
+ * double-click finishes the draft, so back-to-back clicks (~60 ms) would end a line early. Tool keys
+ * are window-level (`site-map` is not focusable), so nothing is focused first; a control that holds
  * focus (e.g. the Blend slider) must be blurred by the caller.
  */
 export async function drawSite(page: Page, key: string, pts: [number, number][]): Promise<void> {
-  await page.keyboard.press(key);
-  for (const [e, n] of pts) await clickSite(page, e, n);
+  const button = page
+    .getByRole("toolbar", { name: "Map tools" })
+    .locator(`button[aria-keyshortcuts="${key.toUpperCase()}"]`);
+  await pressUntilPressed(page, key, button);
+  for (const [i, [e, n]] of pts.entries()) {
+    if (i > 0) await page.waitForTimeout(VERTEX_PACE_MS);
+    await clickSite(page, e, n);
+  }
   await page.keyboard.press("Enter");
 }
 

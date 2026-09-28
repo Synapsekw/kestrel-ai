@@ -1,6 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { evidencePath } from "./evidence";
-import { P, SITE, clickSite, enableDiagnostics, serveMapWorkspace } from "./fixtures/mapWorkspace";
+import { P, SITE, drawSite, enableDiagnostics, serveMapWorkspace } from "./fixtures/mapWorkspace";
 
 // Spec M §15 flows 3 and 6. The numbers are the server's (the fake's `results`); the client may
 // only show its "≈ grid" label while drawing (spec M13). Selectors: task-1-inventory.md and ruling
@@ -10,34 +10,6 @@ import { P, SITE, clickSite, enableDiagnostics, serveMapWorkspace } from "./fixt
 test.beforeEach(async ({ page }) => {
   await enableDiagnostics(page);
 });
-
-/**
- * Presses a tool key until its palette button reads pressed. A key pressed in the first moments
- * after the workspace appears is not always bound yet (a single press can be lost); a re-press
- * keeps the tool active (toolStore has no toggle), so repeating is harmless.
- */
-async function arm(page: Page, key: string, name: string) {
-  const button = page.getByRole("button", { name, exact: true });
-  await expect(async () => {
-    await page.keyboard.press(key);
-    await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 500 });
-  }).toPass();
-}
-
-/**
- * `drawSite` at a human pace: OpenLayers turns any second click within 250 ms into a `dblclick`,
- * wherever it lands, and a double-click finishes the draft. Back-to-back `clickSite` calls come
- * ~60 ms apart, so `drawSite` ends a three-vertex line after two. 300 ms between vertices is a
- * quick hand, not a double-click.
- */
-async function draw(page: Page, key: string, name: string, pts: [number, number][]) {
-  await arm(page, key, name);
-  for (const [i, [e, n]] of pts.entries()) {
-    if (i > 0) await page.waitForTimeout(300);
-    await clickSite(page, e, n);
-  }
-  await page.keyboard.press("Enter");
-}
 
 const posts = (world: { calls: { method: string; path: string; body: unknown }[] }) =>
   world.calls.filter((c) => c.method === "POST" && c.path === "/map-measurements");
@@ -53,7 +25,7 @@ test("flow 3: distance, area and a profile are stored by the server and listed w
   const inspector = page.getByTestId("map-inspector");
 
   // Distance: 30 m east then 40 m south = 70 m grid; the fake's ellipsoidal value is ×1.0004.
-  await draw(page, "l", "Measure distance", [
+  await drawSite(page, "l", [
     [SITE.cE - 30, SITE.cN + 20],
     [SITE.cE, SITE.cN + 20],
     [SITE.cE, SITE.cN - 20],
@@ -65,7 +37,7 @@ test("flow 3: distance, area and a profile are stored by the server and listed w
   expect((posts(world)[0].body as { vertices: number[][] }).vertices).toHaveLength(3);
 
   // Area: a 20 × 10 m rectangle = 200 m² grid (×1.0008 on the ellipsoid).
-  await draw(page, "q", "Measure area", [
+  await drawSite(page, "q", [
     [SITE.cE - 10, SITE.cN + 5],
     [SITE.cE + 10, SITE.cN + 5],
     [SITE.cE + 10, SITE.cN - 5],
@@ -76,7 +48,7 @@ test("flow 3: distance, area and a profile are stored by the server and listed w
 
   // Profile across the pit: a chart in the inspector. Surface rows are hidden by default (R-DSM);
   // the profile still picks the first elevation layer, so no toggle is needed here.
-  await draw(page, "e", "Elevation profile", [
+  await drawSite(page, "e", [
     [SITE.cE - 40, SITE.cN],
     [SITE.cE + 40, SITE.cN],
   ]);
@@ -104,8 +76,8 @@ test("flow 6: the zone tool saves a site area with its category", async ({ page 
   await expect(page).toHaveURL(new RegExp(`/p/${P}/maps(\\?|$)`));
   await expect(page).not.toHaveURL(/tool=/);
 
-  // Re-pressing a tool key keeps it active (toolStore, no toggle), so `draw`'s "z" is safe.
-  await draw(page, "z", "Zone", [
+  // Re-pressing a tool key keeps it active (toolStore, no toggle), so `drawSite`'s "z" is safe.
+  await drawSite(page, "z", [
     [SITE.cE - 20, SITE.cN + 20],
     [SITE.cE + 20, SITE.cN + 20],
     [SITE.cE + 20, SITE.cN - 20],
