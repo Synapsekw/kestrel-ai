@@ -86,6 +86,22 @@ describe("waitForNodes", () => {
     await expect(waitForNodes(() => ({ busy: true, loads: [] }), 1_000, clock)).resolves.toBe(false);
     expect(t).toBeGreaterThanOrEqual(1_000);
   });
+
+  // C-G Task 16: potree-core 2.0.15's OctreeGeometryNode.load() returns undefined, so
+  // `nodeLoadPromises` is [undefined, …]; racing those settles at once, and a loop that only awaits
+  // microtasks starves the fetches and workers that finish the loads (the chimney spun 33 509 steps
+  // in 10 s, then gave up). A node load here finishes on a macrotask, as the real one does.
+  it.each([
+    ["undefined", () => [undefined]],
+    ["already settled", () => [Promise.resolve()]],
+  ])("yields to the event loop between steps when the loads are %s", async (_, loads) => {
+    let loaded = false;
+    setTimeout(() => {
+      loaded = true;
+    }, 0);
+    const step = () => ({ busy: !loaded, loads: loads() as Promise<unknown>[] });
+    await expect(waitForNodes(step, 300)).resolves.toBe(true);
+  });
 });
 
 describe("encodeView", () => {

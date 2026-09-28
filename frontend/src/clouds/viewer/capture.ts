@@ -104,8 +104,14 @@ const realClock: WaitClock = {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 };
 
+/** The longest wait between two `waitForNodes` steps: about a frame, as the screen loop polls. */
+export const WAIT_STEP_MS = 16;
+
 /** Calls `step` (one `updatePointClouds` for the capture camera) until it is not busy (true) or the
- * timeout passes (false), waiting on its loads or 50 ms between calls. */
+ * timeout passes (false), waiting between calls until one of its loads settles or `WAIT_STEP_MS`
+ * passes. Every wait goes through a timer, never the microtask queue alone: potree-core 2.0.15's
+ * `OctreeGeometryNode.load()` returns undefined, so `loads` may be settled already, and a loop that
+ * never yields starves the fetches and workers that finish the loads (C-G Task 16). */
 export async function waitForNodes(
   step: () => { busy: boolean; loads: Promise<unknown>[] },
   timeoutMs: number,
@@ -116,7 +122,7 @@ export async function waitForNodes(
     const s = step();
     if (!s.busy) return true;
     if (clock.now() >= deadline) return false;
-    await Promise.race([Promise.allSettled(s.loads), clock.sleep(50)]);
+    await Promise.race([Promise.allSettled(s.loads).then(() => clock.sleep(0)), clock.sleep(WAIT_STEP_MS)]);
   }
 }
 
