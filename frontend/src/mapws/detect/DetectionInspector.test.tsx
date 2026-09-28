@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { MAP_ID, MAP_RUN_ID, PROJECT_ID, exampleMapRun, fakeClient, type FakeRoute } from "@/test/fixtures";
 import { TYPE_CRACK, typedProject } from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
@@ -71,21 +71,33 @@ const routes = (extra: FakeRoute[] = []): FakeRoute[] => [
   },
   ...extra,
 ];
+const confirmed = (url: string) => url.includes("confirm_finding_delete=true");
+/** Refuses the review with F's 409 unless the retry says `confirm_finding_delete=true`. */
 const refusedReject = () =>
   routes([
     {
       method: "POST",
       path: /\/review$/,
-      status: 409,
-      body: {
-        error: {
-          code: "finding_would_be_deleted",
-          message: "x",
-          details: { finding_id: "f5", finding_ids: ["f5"], count: 1 },
-        },
-      },
+      status: (r) => (confirmed(r.url) ? 200 : 409),
+      body: (r) =>
+        confirmed(r.url)
+          ? { updated: 1 }
+          : {
+              error: {
+                code: "finding_would_be_deleted",
+                message: "x",
+                details: { finding_id: "f5", finding_ids: ["f5"], count: 1 },
+              },
+            },
+    },
+    {
+      method: "GET",
+      path: /\/next-unreviewed$/,
+      body: { detection: null, remaining: 0 },
     },
   ]);
+/** Lets every pending promise (and the fetches it starts) settle before a negative assertion. */
+const flush = () => act(() => new Promise<void>((r) => setTimeout(r, 0)));
 const render = (api: ReturnType<typeof fakeClient>["api"], id = `${MAP_RUN_ID}.d1`) =>
   renderWithProviders(
     <>
@@ -173,8 +185,73 @@ describe("DetectionInspector", () => {
     expect(posts()).toBe(1);
     fireEvent.keyDown(window, { key: "a" });
     fireEvent.keyDown(window, { key: "x" });
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     expect(posts()).toBe(1);
+  });
+
+  it("Delete finding retries the review with confirm_finding_delete=true", async () => {
+    accepted();
+    const { api, requests } = fakeClient(refusedReject());
+    render(api);
+    await screen.findByTestId("detection-inspector");
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    await screen.findByTestId("confirm-finding-delete");
+    fireEvent.click(screen.getByRole("button", { name: "Delete finding" }));
+    await waitFor(() => expect(requests.filter((r) => r.method === "POST")).toHaveLength(2));
+    const [first, retry] = requests.filter((r) => r.method === "POST");
+    expect(confirmed(first.url)).toBe(false);
+    expect(confirmed(retry.url)).toBe(true);
+    expect(retry.body).toEqual({ detection_ids: ["d1"], action: "reject" });
+    await waitFor(() => expect(screen.queryByTestId("confirm-finding-delete")).toBeNull());
+  });
+
+  it("Keep it closes the confirm and sends nothing more", async () => {
+    accepted();
+    const { api, requests } = fakeClient(refusedReject());
+    render(api);
+    await screen.findByTestId("detection-inspector");
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    await screen.findByTestId("confirm-finding-delete");
+    fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    await waitFor(() => expect(screen.queryByTestId("confirm-finding-delete")).toBeNull());
+    await flush();
+    expect(requests.filter((r) => r.method === "POST")).toHaveLength(1);
+  });
+
+  it("says the run could not load instead of blaming a missing point cloud", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: typedProject },
+      {
+        method: "GET",
+        path: /\/map-runs\/[^/]+$/,
+        status: 500,
+        body: { error: { code: "internal", message: "boom", details: {} } },
+      },
+    ]);
+    render(api);
+    expect(
+      await screen.findByText("Could not load this detection's run. Reopen the detection to try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/point cloud/)).toBeNull();
+    expect(h.open3d).not.toHaveBeenCalled();
+  });
+
+  it("shows no 3D small print while the run is loading", () => {
+    render(fakeClient(routes()).api);
+    expect(screen.getByTestId("detection-inspector")).toBeInTheDocument();
+    expect(screen.queryByText(/point cloud|could not load|site coordinates/i)).toBeNull();
+  });
+
+  it("says a detection without site coordinates cannot be opened in 3D", async () => {
+    useDetectStore.setState({
+      byId: new Map([["d1", { runId: MAP_RUN_ID, d: { ...det, corners_site: null } }]]),
+    });
+    render(fakeClient(routes()).api);
+    expect(
+      await screen.findByText("This detection has no site coordinates, so it cannot be opened in 3D."),
+    ).toBeInTheDocument();
+    await screen.findByText(/machinery-v3/);
+    expect(screen.queryByText(/point cloud/)).toBeNull();
   });
 
   it("offers Open in 3D at the box centre when the survey has a linked cloud", async () => {

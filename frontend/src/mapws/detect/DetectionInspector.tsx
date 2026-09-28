@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { MapRun } from "@contract/client";
 import { useApi } from "@/api/client";
+import { messageOf } from "@/api/errors";
 import { fetchMapRun } from "@/api/maps";
+import { pushLog } from "@/app/diagnostics";
 import { useProjectTypes } from "@/findings/useProjectTypes";
 import { REVIEW_STATE } from "@/maps/reviewState";
 import { formatSurveyDate, useOpenIn3d, useWorkspace, type InspectorBodyProps } from "@/mapws/w4host";
@@ -34,19 +36,25 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
   const entry = useDetectStore((s) => (parsed ? s.byId.get(parsed.detectionId) : undefined));
   const { types, all } = useProjectTypes(projectId);
   const review = useReview(projectId);
-  const [run, setRun] = useState<MapRun | null>(null);
+  // Keyed by run id so a stale run never shows for a new selection; `run: null` = the load failed.
+  const [loaded, setLoaded] = useState<{ runId: string; run: MapRun | null } | null>(null);
   const [picking, setPicking] = useState(false);
   const typeButton = useRef<HTMLButtonElement>(null);
   const d = entry?.d ?? null;
   const runId = parsed?.runId ?? "";
   const kindOf: KindOf = (t) => types.get(t)?.kind;
+  const run = loaded?.runId === runId ? loaded.run : null;
+  const runFailed = loaded?.runId === runId && loaded.run === null;
 
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
     fetchMapRun(api, projectId, runId)
-      .then((r) => !cancelled && setRun(r))
-      .catch(() => undefined);
+      .then((r) => !cancelled && setLoaded({ runId, run: r }))
+      .catch((err: unknown) => {
+        pushLog(`load the detection's run failed: ${messageOf(err, "could not load the run")}`);
+        if (!cancelled) setLoaded({ runId, run: null });
+      });
     return () => {
       cancelled = true;
     };
@@ -91,6 +99,18 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
   const t = types.get(d.class_id);
   const state = REVIEW_STATE[d.review_state];
   const jump = d.corners_site && survey ? openIn3d(...boxCentre(d.corners_site), survey.date) : null;
+  // Why there is no 3D button; nothing while the run is still loading.
+  const noJumpReason = !d.corners_site
+    ? "This detection has no site coordinates, so it cannot be opened in 3D."
+    : runFailed
+      ? "Could not load this detection's run. Reopen the detection to try again."
+      : !run
+        ? null
+        : !survey
+          ? "This detection's map is not in any survey of this site, so it cannot be opened in 3D."
+          : jump && jump.href === null
+            ? jump.reason
+            : null;
   return (
     <>
       <InspectorPane
@@ -158,9 +178,7 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
               Open in 3D
             </Button>
           ) : (
-            <p className="text-xs text-muted">
-              {jump && jump.href === null ? jump.reason : "No point cloud for this map."}
-            </p>
+            noJumpReason && <p className="text-xs text-muted">{noJumpReason}</p>
           )}
         </InspectorSection>
       </InspectorPane>
