@@ -4,6 +4,7 @@ import type { Drawing } from "@/api/drawings";
 import "@/mapws/plugins";
 import { makeStores, renderInWorkspace } from "@/mapws/test/harness";
 import alignDrawing from "@/mapws/tools/alignDrawing.tool";
+import selectTool from "@/mapws/tools/select.tool";
 import { toolRegistry } from "@/mapws/tools/toolStore";
 import { useChangesStore } from "@/store/changes";
 import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
@@ -24,7 +25,7 @@ function mount(o: { seed?: Drawing[] | null; routes?: FakeRoute[]; hidden?: bool
   if (o.seed !== null) useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, o.seed ?? [pdfDrawing]);
   const stores = makeStores({
     frame: SITE_FRAME,
-    lookup: (id) => (id === ALIGN_TOOL_ID ? alignDrawing : undefined),
+    lookup: (id) => (id === ALIGN_TOOL_ID ? alignDrawing : id === "select" ? selectTool : undefined),
   });
   const ws = stores.workspace.getState();
   ws.setViewInfo(VIEW);
@@ -186,7 +187,7 @@ describe("the align-drawing tool (spec §8.3)", () => {
   });
 
   it("Backspace removes the last pair; Enter saves a valid fit with PUT georef and ends the session", async () => {
-    const { click, requests } = mount();
+    const { stores, click, requests } = mount();
     for (const [src, dst] of PAIRS) {
       click(onDrawing(src));
       click(dst);
@@ -201,9 +202,10 @@ describe("the align-drawing tool (spec §8.3)", () => {
     // A second Enter while the save is in flight sends nothing more.
     key("Enter");
     await waitFor(() => expect(useAlignStore.getState().session).toBeNull());
-    // The saved drawing arrives in the list: K stays active, but the session does not restart.
+    // Task 9 ruling: a save hands back to Select, so K is never left active without a session.
     await act(async () => {});
     expect(useAlignStore.getState().session).toBeNull();
+    expect(stores.tools.getState().active).toBe("select");
     const puts = requests.filter((r) => r.method === "PUT");
     expect(puts).toHaveLength(1);
     expect(puts[0].body).toMatchObject({ model: "similarity", dst_frame: "site" });
@@ -217,6 +219,26 @@ describe("the align-drawing tool (spec §8.3)", () => {
     click(onDrawing(PAIRS[0][0]));
     click(PAIRS[0][1]);
     expect(key("Enter").defaultPrevented).toBe(false);
+    expect(useAlignStore.getState().session).not.toBeNull();
+  });
+
+  it("a mirrored third pair keeps the transform, and Enter neither acts nor saves", async () => {
+    const { click, requests } = mount();
+    for (const [src, dst] of PAIRS.slice(0, 2)) {
+      click(onDrawing(src));
+      click(dst);
+    }
+    const before = useAlignStore.getState().session!.transform;
+    click(onDrawing([100, -3400]));
+    // Mirrored: north of the first two pairs on the map, south of them on the drawing.
+    click([500002, 4983064]);
+    const s = useAlignStore.getState().session!;
+    expect(s.pairs).toHaveLength(3);
+    expect(s.fit).toMatchObject({ ok: false, error: "reflection" });
+    expect(s.transform).toEqual(before);
+    expect(key("Enter").defaultPrevented).toBe(false);
+    await act(async () => {});
+    expect(requests.some((r) => r.method === "PUT")).toBe(false);
     expect(useAlignStore.getState().session).not.toBeNull();
   });
 

@@ -23,6 +23,7 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
   const hasView = useWorkspace((s) => s.viewInfo !== null);
   const completed = useTools((s) => s.completed);
   const clearCompleted = useTools((s) => s.clearCompleted);
+  const activate = useTools((s) => s.activate);
   const drawingId = selection?.kind === "drawing" ? selection.id : null;
   // Subscribed, so the session starts once the drawings list arrives.
   const drawing = useDrawing(projectId, drawingId ?? "");
@@ -78,7 +79,11 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
         if (!saving.current) {
           saving.current = true;
           saveAlignment(api, projectId, st.session)
-            .then((d) => toast("ok", `Placement saved · RMSE ${formatMetres(d.georef?.rmse_m ?? 0)}`))
+            .then((d) => {
+              // Task 9 ruling: a save hands back to Select, so K is never left active and dead.
+              activate("select");
+              toast("ok", `Placement saved · RMSE ${formatMetres(d.georef?.rmse_m ?? 0)}`);
+            })
             .catch((err: unknown) => toast("danger", georefErrorText(err)))
             .finally(() => {
               saving.current = false;
@@ -92,7 +97,7 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [api, projectId]);
+  }, [api, projectId, activate]);
 
   return <div ref={stage} aria-hidden className="pointer-events-none absolute inset-0" />;
 }

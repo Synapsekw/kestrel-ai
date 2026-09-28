@@ -41,27 +41,36 @@ describe("the drawing layer kind", () => {
     });
   });
 
-  it("row menu: Align (K), Knock out white, Re-import, Delete for a raster; Layers for a DXF", () => {
+  it("row menu: Properties, Align (K), Knock out white, Re-import, Delete for a raster; Layers for a DXF", () => {
     useDrawingsStore.getState().set("p:0", "p", [pdfDrawing, dxfDrawing]);
     const raster = drawingRowMenu(drawingRowOf(pdfDrawing));
-    expect(raster.map((i) => i.label)).toEqual(["Align", "Knock out white", "Re-import…", "Delete…"]);
-    expect(raster[0].shortcut).toBe("K");
-    expect(raster[3].danger).toBe(true);
+    expect(raster.map((i) => i.label)).toEqual([
+      "Properties",
+      "Align",
+      "Knock out white",
+      "Re-import…",
+      "Delete…",
+    ]);
+    expect(raster[1].shortcut).toBe("K");
+    expect(raster[4].danger).toBe(true);
     expect(drawingRowMenu(drawingRowOf(dxfDrawing)).map((i) => i.label)).toEqual([
+      "Properties",
       "Align",
       "Layers…",
       "Re-import…",
       "Delete…",
     ]);
-    raster[1].onSelect();
+    raster[0].onSelect();
+    expect(useDrawingUi.getState().intent).toEqual({ kind: "properties", id: pdfDrawing.id });
+    raster[2].onSelect();
     expect(useDrawingUi.getState().intent).toEqual({ kind: "knockout", id: pdfDrawing.id });
-    raster[3].onSelect();
+    raster[4].onSelect();
     expect(useDrawingUi.getState().intent).toEqual({ kind: "delete", id: pdfDrawing.id });
   });
 
   it("the knockout item reads 'Show white' while white is knocked out", () => {
     const on = { ...pdfDrawing, layer_state: { hidden_layers: [], knockout_white: true } };
     useDrawingsStore.getState().set("p:0", "p", [on]);
-    expect(drawingRowMenu(drawingRowOf(on))[1].label).toBe("Show white");
+    expect(drawingRowMenu(drawingRowOf(on))[2].label).toBe("Show white");
   });
 });

@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
-/** R-W5-15: what a row-menu item asked for; the component that hosts the drawing dialogs performs it. */
+/** R-W5-15: what a row-menu item asked for; `DrawingDialogs` (a stage panel, PF8) performs it. */
 export interface DrawingIntent {
-  kind: "align" | "layers" | "knockout" | "reimport" | "delete";
+  kind: "properties" | "align" | "layers" | "knockout" | "reimport" | "delete";
   id: string;
 }
 

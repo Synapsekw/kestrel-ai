@@ -44,6 +44,16 @@ export function fitSummary(
   };
 }
 
+/** The fit line of a saved control-point placement (preflight #5): the server's RMSE, no refit. */
+export function savedFitSummary(
+  model: GeorefModelName,
+  pairs: number,
+  rmse_m: number,
+): { tone: "info" | "ok"; text: string } {
+  if (pairs <= MIN_PAIRS[model]) return { tone: "info", text: "Add a point to check the fit." };
+  return { tone: "ok", text: `RMSE ${formatMetres(rmse_m)}` };
+}
+
 /** A failed `PUT …/georef` (B3: 422 `too_few_points` | `too_many_points` | `degenerate` | `collinear` | `reflection`) in words. */
 export function georefErrorText(err: unknown): string {
   const code = codeOf(err);
