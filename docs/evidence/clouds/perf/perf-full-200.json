@@ -14,43 +14,43 @@
     "warm": false,
     "httpCacheCleared": true
   },
-  "firstPointsMs": 445.09999990463257,
-  "settledMs": 812,
+  "firstPointsMs": 556,
+  "settledMs": 939.5999999046326,
   "visiblePoints": 404407,
   "pins": 200,
-  "pinsVisible": 34,
+  "pinsVisible": 97,
   "edl": true,
-  "orbitRafCalls": 609,
+  "orbitRafCalls": 610,
   "orbitInput": "mouse",
   "orbitStart": {
     "x": 736.9385325410793,
     "y": 422.3910362600903
   },
-  "orbitCameraMoved": 1733.076,
+  "orbitCameraMoved": 790.776,
   "orbitRaf": {
-    "samples": 1085,
+    "samples": 1091,
     "p50": 16.7,
     "p95": 16.8,
     "max": 16.8
   },
   "orbitRender": {
-    "samples": 607,
+    "samples": 608,
     "p50": 16.7,
-    "p95": 16.9,
-    "max": 17.6
+    "p95": 17,
+    "max": 19.3
   },
   "orbitRenderRingExact": true,
   "pinPass": {
     "measured": true,
-    "totalMs": 34.028,
+    "totalMs": 31.136,
     "framesRan": 305,
     "ringFrames": 303,
-    "msPerFrame": 0.1116,
+    "msPerFrame": 0.1021,
     "hookPassMs": {
-      "samples": 89,
+      "samples": 88,
       "p50": 0,
       "p95": 0.3,
-      "max": 0.3
+      "max": 0.5
     }
   },
   "duringOrbit": {
@@ -60,48 +60,48 @@
   },
   "occlusion": {
     "measured": true,
-    "totalMs": 45.407,
+    "totalMs": 13.953,
     "calls": 1,
-    "msPerSettle": 45.407,
-    "engineMs": 44.86,
+    "msPerSettle": 13.953,
+    "engineMs": 13.395,
     "hook": {
       "pins": 200,
-      "ms": 10.9,
+      "ms": 8.8,
       "settled": true
     }
   },
   "idle": {
     "rafCalls": 0,
     "renders": 0,
-    "rendersExact": false,
+    "rendersExact": true,
     "animations": []
   },
-  "hoverPathPoints": 88,
+  "hoverPathPoints": 90,
   "hoverRuns": [
     {
-      "seconds": 5.004,
-      "calls": 45,
-      "totalMs": 68.425,
-      "hz": 8.99,
-      "msPerCall": 1.521
+      "seconds": 5.031,
+      "calls": 43,
+      "totalMs": 87.732,
+      "hz": 8.55,
+      "msPerCall": 2.04
     },
     {
-      "seconds": 5.013,
+      "seconds": 5.002,
+      "calls": 44,
+      "totalMs": 91.472,
+      "hz": 8.8,
+      "msPerCall": 2.079
+    },
+    {
+      "seconds": 5.01,
       "calls": 46,
-      "totalMs": 52.184,
+      "totalMs": 100.461,
       "hz": 9.18,
-      "msPerCall": 1.134
-    },
-    {
-      "seconds": 5.02,
-      "calls": 47,
-      "totalMs": 55.348,
-      "hz": 9.36,
-      "msPerCall": 1.178
+      "msPerCall": 2.184
     }
   ],
-  "hoverPickHz": 9.18,
-  "hoverPickMsPerCall": 1.178,
+  "hoverPickHz": 8.8,
+  "hoverPickMsPerCall": 2.079,
   "fnNames": {
     "pins": [
       "frame@pinsController"
@@ -116,7 +116,7 @@
   },
   "timingNote": "pin pass, occlusion and hover pick: CPU-profile estimates, 100 us sampling, with precise-coverage call counting on (ruling G5)",
   "webviewPeakGB": 1.61,
-  "webviewSamples": 70,
+  "webviewSamples": 64,
   "webviewProcesses": 11,
   "problems": []
 }

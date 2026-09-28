@@ -12,13 +12,13 @@
   "restartTolM": 0.000001,
   "rows": [
     {
-      "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+      "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
       "pre": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
-        "x": 243513.80299942225,
-        "y": 3178241.788998446,
-        "z": 189.5539990252819,
+        "x": 243514.86399929255,
+        "y": 3178241.330998263,
+        "z": 187.65099900020326,
         "uncertainty_m": 0.17125732446288566
       },
       "anchor": {
@@ -29,8 +29,8 @@
         "z": 187.65099900020326,
         "uncertainty_m": 0.17125732446288566
       },
-      "dRestart": 2.226408315640067,
-      "kept": false,
+      "dRestart": 0,
+      "kept": true,
       "pick": {
         "x": 243514.93399898737,
         "y": 3178240.894999346,
@@ -43,7 +43,7 @@
       "pass": false
     },
     {
-      "id": "0f8075a9-7f23-4947-9e44-89cf12643ed2",
+      "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
       "pre": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -74,7 +74,7 @@
       "pass": true
     },
     {
-      "id": "f074a8f8-6924-4d54-8f24-d85dd534e90a",
+      "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
       "pre": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -105,7 +105,7 @@
       "pass": true
     },
     {
-      "id": "c841bad4-02b5-4b14-81f8-c66733dc39b9",
+      "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
       "pre": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -136,7 +136,7 @@
       "pass": false
     },
     {
-      "id": "09119ca2-8080-4aea-a24e-49a10fed5070",
+      "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
       "pre": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -167,7 +167,5 @@
       "pass": false
     }
   ],
-  "problems": [
-    "pins-check 533a056c-ddb9-4790-a686-0c1b75e09c70: anchor moved 2.226408315640067 m across the restart"
-  ]
+  "problems": []
 }

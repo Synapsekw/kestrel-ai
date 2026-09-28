@@ -93,18 +93,21 @@ exist to remove. (Confirms the controller's note that W1 kept the three S1 specs
 
 ## Deviations (code wins over the spec's names; ruling G3)
 
-| Spec name                                                       | Name on `main`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                                                                              |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getByRole("toolbar", { name: "Tools" })`                       | `getByRole("toolbar", { name: "Point cloud tools" })`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `frontend/src/clouds/workspace/Palette.tsx:19` (`FloatingToolbar label="Point cloud tools"`)                                                       |
-| Tool name `"Pin finding"`                                       | `"Pin a finding"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `frontend/src/clouds/workspace/tools.ts` (`entry("pin", "Pin a finding", ...)`) — also its hotkey binding label in `frontend/src/ui/keymap.ts:206` |
-| `getByTestId("pick-readout")`                                   | `getByTestId("cloud-readout")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `frontend/src/clouds/workspace/Readout.tsx:44`                                                                                                     |
-| `getByTestId("cloud-hint-bar")`                                 | `getByTestId("cloud-hintbar")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `frontend/src/clouds/workspace/HintBar.tsx:40`                                                                                                     |
-| `getByRole("region", { name: "Site map" })`                     | `getByTestId("cloud-minimap")` (no `region` role; the inner `<svg>` only has `role="img" aria-label="Site map: click to centre the view there"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `frontend/src/clouds/workspace/SiteMinimap.tsx:113-136`                                                                                            |
-| `getByRole("button", { name: new RegExp(`^${cloudName}`) })`    | `getByRole("button", { name: new RegExp(`^Point cloud: ${cloudName}`) })` — the picker button's accessible name is `Point cloud: {name} · {date} · {count}. Choose another`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `frontend/src/clouds/workspace/CloudPanel.tsx` (`CloudPicker`, `aria-label={`Point cloud: ${title}. Choose another`}`)                             |
-| `inspectorPanel: page.getByRole("tabpanel")`                    | `page.getByTestId("cloud-inspector")` — no `role="tabpanel"` exists anywhere in `frontend/src` (`git grep -n "tabpanel" -- frontend/src` is empty); `Tabs.tsx`'s tab buttons carry no `aria-controls`, and the active tab's body is a plain, unlabelled `<div>` inside the same `GlassPanel` as the tab bar. `cloud-inspector` is the closest real container (tab bar + body together); a caller after just the body scopes further into `findingsTab`/`measurementsTab`'s own named regions instead (`getByRole("list", { name: "Findings on this cloud" })`, `getByRole("list", { name: "Saved measurements" })`, or `getByTestId("cloud-findings-tab")`). Found in review round 1. | `frontend/src/clouds/workspace/Inspector.tsx:27` (`data-testid="cloud-inspector"`), `Inspector.tsx:46` (the unlabelled body `<div>`)               |
-| `image-arrival-ring`                                            | `arrival-marker` — a hidden DOM probe standing in for the Konva ring; the test asserts its `data-at` attribute, not `toBeVisible`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `frontend/src/images/workspace` (I-FW's `ArrivalProbe`)                                                                                            |
-| The brief's 1 x 1 grey PNG literal (Task 4 Step 3)              | Not a decodable PNG (`createImageBitmap` throws "could not be decoded"); replaced with a generated valid 1 x 1 grey PNG (Python zlib)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `frontend/e2e/clouds-journey.spec.ts`                                                                                                              |
-| The brief's landing image (C-L1's `routeImageRow`, 2048 x 1536) | The journey routes its own image row at 4000 x 3000 (`nadirCamera()`'s size) — at 2048 x 1536 the pixel falls outside the image and I-FW's `withinImage` drops the arrival (and the Back to 3D chip with it)                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `frontend/e2e/clouds-journey.spec.ts`                                                                                                              |
+| Spec name                                                                                       | Name on `main`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getByRole("toolbar", { name: "Tools" })`                                                       | `getByRole("toolbar", { name: "Point cloud tools" })`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `frontend/src/clouds/workspace/Palette.tsx:19` (`FloatingToolbar label="Point cloud tools"`)                                                       |
+| Tool name `"Pin finding"`                                                                       | `"Pin a finding"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `frontend/src/clouds/workspace/tools.ts` (`entry("pin", "Pin a finding", ...)`) — also its hotkey binding label in `frontend/src/ui/keymap.ts:206` |
+| `getByTestId("pick-readout")`                                                                   | `getByTestId("cloud-readout")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `frontend/src/clouds/workspace/Readout.tsx:44`                                                                                                     |
+| `getByTestId("cloud-hint-bar")`                                                                 | `getByTestId("cloud-hintbar")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `frontend/src/clouds/workspace/HintBar.tsx:40`                                                                                                     |
+| `getByRole("region", { name: "Site map" })`                                                     | `getByTestId("cloud-minimap")` (no `region` role; the inner `<svg>` only has `role="img" aria-label="Site map: click to centre the view there"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `frontend/src/clouds/workspace/SiteMinimap.tsx:113-136`                                                                                            |
+| `getByRole("button", { name: new RegExp(`^${cloudName}`) })`                                    | `getByRole("button", { name: new RegExp(`^Point cloud: ${cloudName}`) })` — the picker button's accessible name is `Point cloud: {name} · {date} · {count}. Choose another`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `frontend/src/clouds/workspace/CloudPanel.tsx` (`CloudPicker`, `aria-label={`Point cloud: ${title}. Choose another`}`)                             |
+| `inspectorPanel: page.getByRole("tabpanel")`                                                    | `page.getByTestId("cloud-inspector")` — no `role="tabpanel"` exists anywhere in `frontend/src` (`git grep -n "tabpanel" -- frontend/src` is empty); `Tabs.tsx`'s tab buttons carry no `aria-controls`, and the active tab's body is a plain, unlabelled `<div>` inside the same `GlassPanel` as the tab bar. `cloud-inspector` is the closest real container (tab bar + body together); a caller after just the body scopes further into `findingsTab`/`measurementsTab`'s own named regions instead (`getByRole("list", { name: "Findings on this cloud" })`, `getByRole("list", { name: "Saved measurements" })`, or `getByTestId("cloud-findings-tab")`). Found in review round 1. | `frontend/src/clouds/workspace/Inspector.tsx:27` (`data-testid="cloud-inspector"`), `Inspector.tsx:46` (the unlabelled body `<div>`)               |
+| `image-arrival-ring`                                                                            | `arrival-marker` — a hidden DOM probe standing in for the Konva ring; the test asserts its `data-at` attribute, not `toBeVisible`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `frontend/src/images/workspace` (I-FW's `ArrivalProbe`)                                                                                            |
+| The brief's 1 x 1 grey PNG literal (Task 4 Step 3)                                              | Not a decodable PNG (`createImageBitmap` throws "could not be decoded"); replaced with a generated valid 1 x 1 grey PNG (Python zlib)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `frontend/e2e/clouds-journey.spec.ts`                                                                                                              |
+| The brief's landing image (C-L1's `routeImageRow`, 2048 x 1536)                                 | The journey routes its own image row at 4000 x 3000 (`nadirCamera()`'s size) — at 2048 x 1536 the pixel falls outside the image and I-FW's `withinImage` drops the arrival (and the Back to 3D chip with it)                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `frontend/e2e/clouds-journey.spec.ts`                                                                                                              |
+| §7 / C6 occlusion: a pin is occluded by "a drawn point more than max(0.3 m, 3u) in front of it" | A decoded point occludes the pin only when it is nearer **along the line of sight** by more than `tol + 2 × its distance from that line` (`OCCLUSION_CONE_SLOPE = 2`, tol = max(0.3 m, 3u) unchanged). Trade-off: at whole-cloud zoom (about 1.5-2 m per pixel), a far-side pin **without a stored normal** on a thin structure (so the facing test cannot dim it) may stay visible, because the wall in front of it is beside the line of sight rather than on it. Task 17 (C-G, for C-P1), commit `53736c91`; the controller may want this in the spec.                                                                                                                             | `frontend/src/clouds/viewer/occlusion.ts` (`isOccluded`)                                                                                           |
+| (none: shared design-system primitives)                                                         | C-G Task 18 changed two shared primitives to remove the cloud panel's horizontal scrollbar (criterion 1): `Input`'s `fieldClass` skips its default `w-full` when the caller's `className` sets a width (as `Select` already did), and `Slider`'s thumb is placed with `left: pct%` instead of a full-track wrapper moved by `translateX`. Every `Input` with a width class and every `Slider` in the app is affected: **IMC-X to eyeball Images and Maps** (their sliders and sized inputs). Commit `063ae702`.                                                                                                                                                                       | `frontend/src/ui/Input.tsx`, `frontend/src/ui/Slider.tsx`                                                                                          |
+| Criterion 5 top band: bins with n ≥ 5 points (Task 11's scenario)                               | Bins with **≥ 3 points** count towards the median (`MIN_BIN_POINTS = 3`), and the crosscheck uses the app's inclusive slab rule (`EPS = 1e-6` m from `profile_cut.py`), float32 `s`/`z` and `s` clipped to `[0, length]` before binning. Task 18, commits `063ae702` and `6c4b66a0`.                                                                                                                                                                                                                                                                                                                                                                                                  | `backend/scripts/pointcloud_acceptance.py` (`_summary`, `run_crosscheck`)                                                                          |
 
 Everything else in the brief's `ws()` (viewport/canvas/callout test ids, the Inspector tablist, the
 Colour by radiogroup and its RGB/Elevation/Intensity/Class radios, Point budget/Point size sliders,
@@ -227,7 +230,7 @@ The 3 runs originally captured under the buggy methodology were replaced (not ap
 fresh orbit-only runs; `render.samples` in the new runs (≈ 280–301) now tracks `raf.samples`
 (≈ 280–283) as expected for a genuine ~5 s orbit.
 
-# Task 11: acceptance (§16 items 1-10) and performance (§13), 2026-09-28
+# Task 11 and 11b: acceptance (§16 items 1-10) and performance (§13), 2026-09-28
 
 Everything below ran in **dev mode, in Edge 154.0.4258.37 on an RTX 5070 Ti** (ruling G1): the venv
 backend, Vite, and Microsoft Edge over CDP. The launcher is
@@ -236,7 +239,28 @@ and the API scenarios `backend/scripts/pointcloud_acceptance.py`. Work dir:
 `D:\kestrel-acceptance\clouds` (not committed). Per-pass times (pin pass, occlusion, hover pick) are
 **CPU-profile estimates at 100 µs sampling (G5)**, with precise-coverage call counting on. They are
 cross-checked against the app's own timers: the pins layer's `passMs`, and the diagnostics hook's
-timed `occlusion()` over the same shown pins. No credential value is in any file here (the Step 9 grep is below).
+timed `occlusion()` over the same shown pins. No credential value is in any file here (the grep is
+at the end).
+
+**Task 11b** (the same day, same machine and data) re-ran every step that four fixes made after Task
+11 could change, and replaced those results in this folder:
+
+| Fix                                                                                                                                                                                                       | Commit                 | Re-run                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
+| Task 16 (C-V2): the report-view capture no longer spins to the 10 s timeout (potree's 2.0 `load()` returns `undefined`; `waitForNodes` now yields to the event loop)                                      | `7ddd9036`             | criteria 2, 9 (capture), 10         |
+| Task 17 (C-P1): occlusion counts only points on the pin's line of sight; the pick no longer runs potree's `findHit`                                                                                       | `53736c91`             | criteria 2 (dimming), 9 (occlusion) |
+| Task 18 (C-L1 and the driver): the cloud panel's scrollbar (`ui/Input`, `ui/Slider`); `pins` closes the callout; `pins-check` compares with the post-Move anchor; the crosscheck uses the app's slab rule | `063ae702`, `6c4b66a0` | criteria 1, 2, 5                    |
+| Photo-link spots moved to the stack wall 15-30 m below the rim (the flight stays below the rim)                                                                                                           | (evidence only)        | criterion 7                         |
+
+Not re-run (no fix touches them): criteria 3-4 (`shapes.json`, `formulas-full.json`), criterion 8's
+automated round trip (`photolink/image2cloud-*`), the 195 M import (`import-195m.json`), and the
+extra Task 11 perf runs (`perf/perf-full-500-script.*`, `perf-full-200-repeat.*`,
+`perf-full-200-third.*`, which stay as "before the fixes" history). Task 11's own files for the
+re-run steps are in git at commit `563fb623`; their numbers are kept below as "before the fixes".
+
+Before the re-run, every finding on the chimney cloud (5) and every point measurement (12) was
+deleted through the API, so every report view listed in `views.json` was captured by the fixed app
+(re-created, not refreshed). The profile measurement was kept.
 
 Verdict words: `pass`, `fail (<why>, reported to <unit>)`, `not run (<why>)`, `pending operator`.
 Targets are applied literally.
@@ -249,9 +273,9 @@ Targets are applied literally.
 | 195 M LAZ        | `D:\kestrel-acceptance\clouds-data\big9.laz` (S1's `big9.las` tiled by `make_tiled_cloud.py`, compressed with laspy/lazrs in 2 M-point chunks) | 195 274 656 points, 1 386 992 714 bytes                                                                                                |
 | Posed DJI flight | `\\DanNas\Work Data\Inspections\Kuwait\Chemney Stack POC\I2 3D Modeling\RAW Data`, read in place                                               | 420 `DJI_*.JPG`, DJI FC6540, 5248 × 3936, gimbal yaw/pitch/roll in XMP; 395 are near the cloud, and all 395 are posed (`cameras.json`) |
 | S1 rim centre    | `docs/evidence/2026-09-24-point-clouds/rim.txt`                                                                                                | 243513.718, 3178242.151; top points z 189.264–189.554, so the brief's z = 189.3 is kept                                                |
-| Staging record   | `D:\kestrel-acceptance\clouds-data\staging.json` (Step 1, done before this task)                                                               | all byte and point counts verified                                                                                                     |
+| Staging record   | `D:\kestrel-acceptance\clouds-data\staging.json` (Step 1, done before Task 11)                                                                 | all byte and point counts verified                                                                                                     |
 
-The setup (the launcher's first run, `layout`) imported the cloud in **9.35 s** and the 420-photo
+The setup (Task 11's first launcher run, `layout`) imported the cloud in **9.35 s** and the 420-photo
 source in **77.6 s** (`layout/state.json`). The 195 M LAZ import (`import-195m.json`) took
 **55.97 s**, with an octree of 1 234 976 658 bytes (ratio 0.89 of the LAZ).
 
@@ -262,124 +286,135 @@ source in **77.6 s** (`layout/state.json`). The 195 M LAZ import (`import-195m.j
   (Meta Virtual Monitor) was attached.
 - Browser: Microsoft Edge **154.0.4258.37**. WebGL renderer "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070
   Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)". Window 1440 × 900 at (0, 0); the page viewport
-  is 1416 × 774.
+  is 1416 × 774. Node v24.11.0 runs the driver.
 - Build: dev (Vite, unminified), per ruling G1. The packaged re-run belongs to IMC-X.
 - Load:
-  - `\Processor(_Total)\% Processor Time` read 13–37 % just before each perf run.
-  - Another session's backend `pytest -q` (PID 17572, started 13:25) was running throughout. Its
-    process used about 1–2 cores.
-  - Label Studio, the ML backend and a few static `http.server` processes were idle.
-  - No other suite of this unit was running.
+  - Task 11: `\Processor(_Total)\% Processor Time` read 13–37 % before each perf run, with another
+    session's backend `pytest -q` running throughout (about 1–2 cores).
+  - Task 11b: 22–30 % before each perf run (three 2 s samples each); no test suite was running.
+    Label Studio, the ML backend and a few static `http.server` processes were idle in both.
 - Ports:
-  - The launcher takes OS-assigned free ports for the backend (`APP_PORT=0`), Vite and CDP
-    (Task 9's `Get-FreePort`), so it cannot collide with another unit.
-  - Step 6's own API backend ran on 127.0.0.1:**5608** (the controller's 5600-5609 range), not the
-    brief's 8799.
+  - Task 11: the committed launcher takes OS-assigned free ports for the backend (`APP_PORT=0`), Vite
+    and CDP (Task 9's `Get-FreePort`). Step 6's API backend ran on 127.0.0.1:**5608**.
+  - Task 11b: the controller's range 5600-5609 only. The launcher runs were made with a scratch copy
+    of the committed launcher whose only change is fixed ports (Vite 5600, CDP 5601, backend 5602,
+    `$PSScriptRoot` spelled out); the committed driver ran unchanged. The API steps and the clean-up
+    ran against a backend on 5608.
 
 ## Criterion 1 Layout
 
 `layout/layout-side-by-side.jpg`: the app on the left, the mockup `ws-clouds.html` on the right, at
 the same 1416 × 774 viewport. The single shots are `layout/layout-app.png` and
-`layout/layout-mockup.jpg`; the boxes are in `layout/layout-full.json`.
+`layout/layout-mockup.jpg`; the boxes are in `layout/layout-full.json` (Task 11b, identical to Task
+11's to the pixel).
 
-| Panel               | Mockup CSS                                                          | Measured box (x, y, w, h)                                                           | Match                                                                            |
-| ------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Viewport (3D area)  | `.vp`: fills `.main` beside the 64 px rail                          | 64, 56, 1352, 718                                                                   | yes: x = rail 64, fills to the right and bottom edges                            |
-| Tool palette        | `.tools { left: 14px; top: 14px }`, 38 px tools                     | 78, 70, 50, 499                                                                     | yes: 64 + 14, 56 + 14                                                            |
-| Cloud / layer panel | `.layer { left: 72px; top: 14px; width: 282px }`                    | not measured by the driver; on the screenshot it sits beside the palette at the top | position yes; content: see the defect below                                      |
-| Inspector (tabs)    | `.insp { right: 14px; top: 14px; bottom: 204px; width: 330px }`     | tabs 1081, 79, 280, 41 (panel x = 1072)                                             | yes: 1072 + 330 = 1402 = 1416 − 14; the tabs sit inside the panel's 8 px padding |
-| Site map            | `.mini { right: 14px; bottom: 14px; width: 330px; height: 178px }`  | 1072, 582, 330, 178                                                                 | yes: 1402 = 1416 − 14 and 760 = 774 − 14; 330 × 178 exactly                      |
-| Readout             | `.readout { left: 50%; bottom: 14px; transform: translateX(-50%) }` | 494.0, 726, 491.9, 34                                                               | yes: centre x 740.0 = viewport centre 64 + 676; bottom 760 = 774 − 14            |
-| View buttons + axes | `.views` 2 × 2 grid, bottom left                                    | bottom left, 2 × 2 (Top, Front, Side, Iso) with the axis gizmo                      | yes                                                                              |
+| Panel               | Mockup CSS                                                          | Measured box (x, y, w, h)                                      | Match                                                                            |
+| ------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Viewport (3D area)  | `.vp`: fills `.main` beside the 64 px rail                          | 64, 56, 1352, 718                                              | yes: x = rail 64, fills to the right and bottom edges                            |
+| Tool palette        | `.tools { left: 14px; top: 14px }`, 38 px tools                     | 78, 70, 50, 499                                                | yes: 64 + 14, 56 + 14                                                            |
+| Cloud / layer panel | `.layer { left: 72px; top: 14px; width: 282px }`                    | 136, 70, 282, 364 (`layout/layout-panel-overflow.json`)        | yes: 64 + 72, 56 + 14, 282 wide; no horizontal scrollbar (below)                 |
+| Inspector (tabs)    | `.insp { right: 14px; top: 14px; bottom: 204px; width: 330px }`     | tabs 1081, 79, 280, 41 (panel x = 1072)                        | yes: 1072 + 330 = 1402 = 1416 − 14; the tabs sit inside the panel's 8 px padding |
+| Site map            | `.mini { right: 14px; bottom: 14px; width: 330px; height: 178px }`  | 1072, 582, 330, 178                                            | yes: 1402 = 1416 − 14 and 760 = 774 − 14; 330 × 178 exactly                      |
+| Readout             | `.readout { left: 50%; bottom: 14px; transform: translateX(-50%) }` | 494.0, 726, 491.9, 34                                          | yes: centre x 740.0 = viewport centre 64 + 676; bottom 760 = 774 − 14            |
+| View buttons + axes | `.views` 2 × 2 grid, bottom left                                    | bottom left, 2 × 2 (Top, Front, Side, Iso) with the axis gizmo | yes                                                                              |
 
-Differences found by eye:
+The scrollbar check (Task 11b): with the workspace open and settled (a `-Mode hold` session), a CDP
+evaluate read the cloud panel (`data-testid="cloud-panel"`, `overflow-x: auto`): **scrollWidth 280 =
+clientWidth 280**, overflow 0 px, and **0** descendants whose right edge passes the panel's
+(`layout/layout-panel-overflow.json`). No other element inside the panel scrolls. The screenshot
+`layout/layout-app.png` shows the offset row ("raw_data − 0 m +") with no scrollbar under it.
 
-- **The cloud panel shows a horizontal scrollbar** under the camera-offset row ("− 0 m +") that the
-  mockup does not have. It is visible in `layout/layout-app.png`, and in every later screenshot
-  (`pins/*.png`, `clip/*.jpg`). The panel's content is wider than the panel. Reported to C-L1, whose
-  `CamerasPanelRow` adds the offset row that probably overflows. Not diagnosed further here, since
-  app code is out of scope.
+Other differences found by eye, not scored:
+
 - The mockup's project tab row (Overview, Images, … under the top bar) is not above the point-cloud
   workspace in the app. The app's navigation rail replaces it, so the viewport starts at y = 56
-  instead of below a tab row. This is the app shell (not unit C) and every panel is placed relative
-  to the viewport, so it is recorded but not scored.
-- The camera glyph count reads "395 photos · 395 with angles". The mockup's content (a different
-  site) is sample text.
+  instead of below a tab row. This is the app shell (not unit C), and every panel is placed relative
+  to the viewport.
+- The camera count reads "395 photos · 395 with angles". The mockup's content (a different site) is
+  sample text.
 
-**Verdict: fail** (the cloud panel's horizontal scrollbar is content the mockup does not have;
-reported to C-L1). Every panel's **position** matches the mockup to the pixel as listed above.
+Before the fixes (Task 11): **fail**, the cloud panel showed a horizontal scrollbar under the
+camera-offset row. Task 18 found the cause in two shared primitives (`ui/Input`'s `w-full` beating the
+row's `w-20`, and `ui/Slider`'s thumb wrapper overflowing the track; see "Deviations").
+
+**Verdict: pass** (every panel at its mockup position; the cloud panel's scrollWidth equals its
+clientWidth).
 
 ## Criterion 2 Pins
 
 `pins` mode arrives at S1's rim (`?at=243513.718,3178242.151`) and pins 5 Crack findings, at the
-canvas centre and at the offsets (±60, 10), (20, 60) and (−20, −60) px. It then steps through
-Top/Front/Side/Iso, and moves pin 1 with Move pin. `pins-check` then starts a fresh backend, Vite
-and Edge (the restart), arrives at each finding with `?finding=` and re-picks at the canvas centre.
+canvas centre and at the offsets (±60, 10), (20, 60) and (−20, −60) px. It steps through
+Top/Front/Side/Iso, then moves pin 1 with Move pin and records its new anchor. `pins-check` then
+starts a fresh backend, Vite and Edge (the restart), arrives at each finding with `?finding=` and
+re-picks at the canvas centre.
 
-Runs (all recorded):
+Runs (Task 11b, all recorded):
 
-1. `pins`, attempt 1 (the committed driver): `measure FAIL no clear canvas point near (-60, 10)`,
-   exit 1. The 200 perf pins from Step 3 were still on the cloud.
-2. `pins`, attempt 2, after every finding was deleted through the API (a throwaway script, 202
-   findings): the same `FAIL … (-60, 10)`, exit 1. A diagnostic screenshot showed the cause:
-   **after Enter creates a pin, the new finding stays selected and its callout stays open**, left
-   of the centre. The driver's single Escape does not close it, and the callout covers the next
-   offset. This is a driver defect (Task 9), not an app bug. The app keeps the new finding selected
-   on purpose.
-3. `pins`, attempt 3: a copy of the driver with one change (after Escape, if the callout is still
-   visible, click its **Close** button, then wait 300 ms), passed with `-Driver`. The findings from
-   attempt 2 were deleted first. Result: `measure pins ok`. The copy is not committed; the committed
-   driver needs this fix (reported to the C-G controller, Task 9's driver).
-4. `pins-check`, committed driver: `measure PROBLEM pins-check 533a056c…: anchor moved 2.226 m across
-the restart`, then `measure pins-check FAIL`, exit 1. Pin 1 is the pin that `pins` mode itself
-   moved with Move pin **after** it recorded the anchors. `pins-check` compares against that pre-move
-   anchor. This is a second driver defect (reported with the first), not a restart loss.
+1. `pins`, attempt 1: the five pins were created, the four views and Move pin ran, and
+   `pins-full.json` was written, but node then died with exit code −1073740791 (0xC0000409). The
+   launcher printed no driver output.
+2. After deleting the 10 findings the two attempts had made (attempt 1 and a first repeat with the
+   same crash), attempt 3 printed `measure pins ok …\pins-full.json`, then
+   `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76` and the
+   same exit code. The JSON is complete (`problems: []`); the crash is in `process.exit` after it is
+   written (a libuv assertion on Windows, Node v24.11.0, likely an open `fetch` socket from the
+   post-Move `GET /findings/{id}`). **Driver defect** (the exit code only), reported to the C-G
+   controller. The Task 18 fixes themselves worked: the callout was closed after each create (no
+   `no clear canvas point` failure), and pin 1's recorded anchor is the post-Move one.
+3. `pins-check`: `measure pins-check ok`, exit 0, `problems: []`.
 
 The five anchors and the restart (`pins/pins-full.json`, `pins/pins-check-full.json`):
 
-| Pin (id)     | Anchor before (E, N, Z)          | u (m) | Anchor after restart             | d restart (m)           | Re-pick d (m) | tol (m) | Row `pass` |
-| ------------ | -------------------------------- | ----- | -------------------------------- | ----------------------- | ------------- | ------- | ---------- |
-| 1 `533a056c` | 243513.803, 3178241.789, 189.554 | 0.171 | 243514.864, 3178241.331, 187.651 | 2.226 (Move pin, see 4) | 0.442         | 0.171   | false      |
-| 2 `0f8075a9` | 243519.493, 3178256.158, 173.836 | 0.086 | unchanged                        | 0                       | 0             | 0.086   | true       |
-| 3 `f074a8f8` | 243483.456, 3178430.736, −7.393  | 0.343 | unchanged                        | 0                       | 0.184         | 0.343   | true       |
-| 4 `c841bad4` | 243515.279, 3178239.938, 186.218 | 0.171 | unchanged                        | 0                       | 0.655         | 0.171   | false      |
-| 5 `09119ca2` | 243503.553, 3178472.323, 3.498   | 0.343 | unchanged                        | 0                       | 0.686         | 0.343   | false      |
+| Pin (id)     | Anchor (E, N, Z) as recorded                      | u (m) | d restart (m) | Re-pick d (m) | tol (m) | Row `pass` | Capture (ms) |
+| ------------ | ------------------------------------------------- | ----- | ------------- | ------------- | ------- | ---------- | ------------ |
+| 1 `ec30f255` | 243514.864, 3178241.331, 187.651 (after Move pin) | 0.171 | 0             | 0.442         | 0.171   | false      | 874          |
+| 2 `a63381aa` | 243519.493, 3178256.158, 173.836                  | 0.086 | 0             | 0             | 0.086   | true       | 507          |
+| 3 `2770059e` | 243483.456, 3178430.736, −7.393                   | 0.343 | 0             | 0.184         | 0.343   | true       | 611          |
+| 4 `47a8a5ad` | 243515.279, 3178239.938, 186.218                  | 0.171 | 0             | 0.655         | 0.171   | false      | 221          |
+| 5 `e6fca62a` | 243503.553, 3178472.323, 3.498                    | 0.343 | 0             | 0.686         | 0.343   | false      | 331          |
 
-(Pins 3 and 5 are the offsets that fell past the stack onto the ground about 190-230 m north. They
-are still valid cloud findings.)
+The anchors are the same points Task 11 pinned (the driver clicks the same pixels on the same view);
+pin 1 was created at 243513.803, 3178241.789, 189.554 on the rim, then moved. Pins 3 and 5 are
+offsets that fell past the stack onto the ground about 190-230 m north.
 
-- **Persistence:**
-  - The four pins that were not moved come back with bit-identical anchors (d restart = 0).
-  - Pin 1 comes back at its moved position, which is the anchor the backend served after the restart.
-- **Re-pick at the arrival (the driver's `pass`):** 2 of 5 rows pass.
-  - Pins 4 and 5: the canvas-centre pick lands 0.655 and 0.686 m from the anchor, against u = 0.171
-    and 0.343 m. After `?finding=` the camera centres on the anchor, but the centre pixel picks a
-    nearer or neighbouring point at that level of detail.
-  - Pin 1: see run 4 above.
-- **Far-side dimming (`byView`):** the far-side pins are `back` (dimmed) in every view, as required:
-  - Top: pin 1 `visible`; pins 2-5 `back`.
-  - Front, Side, Iso: all 5 `back` (`occluded: true`).
+- **Persistence:** all five stored anchors come back bit-identical after the restart (d restart = 0,
+  `kept: true`), pin 1 included now that `pins-check` compares with its post-Move anchor.
+- **Re-pick at the arrival (the driver's `pass`):** 2 of 5 rows pass. Pins 1, 4 and 5: after
+  `?finding=` the camera centres on the anchor, but the canvas-centre pick lands 0.442, 0.655 and
+  0.686 m away against u = 0.171, 0.171 and 0.343 m (a nearer or neighbouring point at the level of
+  detail the arrival shows). Pins 4 and 5 are unchanged from Task 11; pin 1's row is now a real
+  re-pick miss instead of the driver artefact.
+- **Dimming by view (`byView`; `occluded` is the settle pass, `back` without it is the facing test):**
 
-  The rim pin (1) dims in Front, Side and Iso even though it is the stack's highest point, and
-  `pins/pins-front.png` shows nothing between it and the camera. This looks like an occlusion
-  **false positive** when the whole cloud is in view (a pin about 0.5 m/px across, u = 0.17 m).
-  Reported to C-P1 (`PinsLayer` settle-time occlusion) with `pins/pins-front.png` and
-  `pins/pins-iso.png`.
+  | Pin                    | Top             | Front           | Side            | Iso             |
+  | ---------------------- | --------------- | --------------- | --------------- | --------------- |
+  | 1 rim (moved, 187.7 m) | visible         | back (facing)   | back (facing)   | visible         |
+  | 2 wall (173.8 m)       | back (occluded) | back (occluded) | back (occluded) | visible         |
+  | 3 ground north         | back (occluded) | back (occluded) | back (occluded) | back (occluded) |
+  | 4 rim (186.2 m)        | visible         | visible         | back (facing)   | back (facing)   |
+  | 5 ground north         | back (occluded) | back (occluded) | back (occluded) | back (occluded) |
 
-**Verdict: fail**:
+  The far-side pins (the ground behind the stack, 3 and 5) are dimmed by occlusion in every view.
+  The near-side rim pins are **never** dimmed by occlusion any more; where they are `back`, it is the
+  facing test (their stored normals point up or away, and Front/Side put the camera 165 m below the
+  rim), which Task 17 showed is correct. Screenshots: `pins/pins-{top,front,side,iso}.*`.
 
-- 3 of 5 `pins-check` rows are `pass: false`. One is the driver comparing a moved pin with its
-  pre-move anchor (reported to the C-G controller). Two are re-picks 0.655 and 0.686 m from anchors
-  with u = 0.171 and 0.343 m (reported to C-P1 / C-L1 for the `?finding=` arrival framing).
-- The near-side rim pin is dimmed in 3 of 4 views (reported to C-P1).
-- The stored anchors themselves survive the restart exactly.
+Before the fixes (Task 11): `pins` needed a scratch driver copy (the open callout), `pins-check`
+failed on pin 1's pre-Move anchor (2.226 m), the rim pin was `occluded` in Front, Side and Iso, and the
+capture took 10 255-10 910 ms per pin.
+
+**Verdict: fail** (3 of 5 re-picks at the `?finding=` arrival land beyond u: 0.442, 0.655 and 0.686 m
+against 0.171, 0.171 and 0.343 m; reported to C-P1 and C-L1 in Task 11, unchanged). The stored
+anchors survive the restart exactly, the far-side pins dim, and the occlusion false positive is gone.
+The driver's exit code after a good `pins` run is a separate driver defect (reported to the C-G
+controller).
 
 ## Criteria 3-4 Area and rings
 
-`shapes.json` comes from a synthetic LAS: a 2 × 1.5 m patch tilted 60°, and a 20 m cylinder leaning
-1.000° towards grid east. The picks have seeded noise σ = 0.01 m (`default_rng(7)`, ruling G7).
-`formulas-full.json` runs the same points through the client's `measureResults` in the browser,
-through Vite.
+Not re-run in Task 11b (no fix touches them). `shapes.json` comes from a synthetic LAS: a 2 × 1.5 m
+patch tilted 60°, and a 20 m cylinder leaning 1.000° towards grid east. The picks have seeded noise
+σ = 0.01 m (`default_rng(7)`, ruling G7). `formulas-full.json` runs the same points through the
+client's `measureResults` in the browser, through Vite.
 
 | Check                   | Server                    | Client (browser) | Equal | Target              | Result                                         |
 | ----------------------- | ------------------------- | ---------------- | ----- | ------------------- | ---------------------------------------------- |
@@ -394,77 +429,66 @@ Criterion 3: `checks.surface_3_000_within_0_5pct` and `plan_1_500_within_0_5pct`
 server = client. **Verdict: pass.**
 
 Criterion 4: `rings_angle_1_00_within_0_01` is true; `rings_azimuth_90_within_0_5` is **false**.
-Server = client in every row, and the ring error is below the two-point error.
+Server = client in every row, and the ring error is below the two-point error. The azimuth miss is
+statistical, not a formula bug: the same noise model over 2 000 seeds, with a plain algebraic circle
+fit, gives an azimuth standard deviation of **1.28°**; it meets ± 0.5° in 31 % of seeds (and
+± 0.01° on the angle in 34 %). With σ = 0.01 m on 8 picks per ring and a 0.31 m lean offset over
+18 m, the target is out of reach of any fit.
 
-The azimuth miss is statistical, not a formula bug. The same noise model, re-run over 2 000 seeds
-with a plain algebraic circle fit, gives an azimuth standard deviation of **1.28°**. It meets
-± 0.5° in 31 % of seeds and ± 0.01° on the angle in 34 %. With σ = 0.01 m on 8 picks per ring and
-a 0.31 m lean offset over 18 m, the target is out of reach of any fit. Seed 7 happens to meet the
-angle and miss the azimuth.
-
-The chimney row ("both methods recorded") needs the operator's hand measurement (Step 8), which is
-pending.
-
-**Verdict: fail** (azimuth 88.898°, 1.102° from 90° against ± 0.5°). Reported to the C-G controller
-as a conflict between ruling G7's noise (σ = 0.01 m) and the spec's ± 0.5° / ± 0.01° targets; not a
-B1 bug, since server and client agree. The chimney part is **pending operator**.
+**Verdict (as ruled by the controller): fail by test design** for the azimuth (88.898°, 1.102° from
+90° against ± 0.5°, under G7's noise); the angle passes, and the rings beat the two-point method. The
+chimney row ("both methods recorded") is **pending operator** (Step 8).
 
 ## Criterion 5 Profile
 
-`profile-chimney.json` is a 0.2 m section from 8 m east of the rim centre to the centre (ruling
-G6). `crosscheck-chimney.json` is the same slab cut from the source LAS by an independent script.
-`profile-195m.json` is the same line on the 195 M cloud.
+`profile-chimney.json` is a 0.2 m section from 8 m east of the rim centre to the centre (ruling G6).
+`crosscheck-chimney.json` is the same slab cut from the source LAS by an independent script, which
+now keeps the app's inclusive slab edges (`EPS = 1e-6` m), bins float32 `s`/`z` with `s` clipped to
+the line as the app stores them, and counts a 0.1 m bin towards the top band's median when it holds
+**at least 3 points** (Task 18). `profile-195m.json` is the same line on the 195 M cloud.
 
-| Measure                                                   | Value                                    | Target                   | Result                   |
-| --------------------------------------------------------- | ---------------------------------------- | ------------------------ | ------------------------ |
-| Chimney profile job                                       | `succeeded`, **1.07 s**                  | ≤ 10 s                   | pass                     |
-| 195 M LAZ profile job                                     | `succeeded`, **9.40 s**                  | ≤ 90 s                   | pass                     |
-| Top band (top 10 m below the rim, 0.1 m bins, n ≥ 5), app | median **0.439 m**, max 1.072 m, 21 bins | = crosscheck ± 0.02 m    | **fail**                 |
-| Top band, crosscheck from the source LAS                  | median **0.652 m**, max 1.072 m, 20 bins | (reference)              |                          |
-| `profile_width_max_m` (whole height)                      | **3.208 m** (1 144 points)               | = hand thickness ± 2 cm  | G6 deviation (see below) |
-| Hand-measured shell thickness (Step 8)                    | pending operator                         | within 2 cm of the above | pending operator         |
+| Measure                                                        | Task 11b                                 | Before the fixes (Task 11) | Target                   | Result                   |
+| -------------------------------------------------------------- | ---------------------------------------- | -------------------------- | ------------------------ | ------------------------ |
+| Chimney profile job                                            | `succeeded`, **2.56 s**                  | 1.07 s                     | ≤ 10 s                   | pass                     |
+| 195 M LAZ profile job                                          | `succeeded`, **12.04 s**                 | 9.40 s                     | ≤ 90 s                   | pass                     |
+| Top band (top 10 m below the rim, 0.1 m bins, ≥ 3 points), app | median **0.301 m**, max 1.072 m, 42 bins | 0.439 m (21 bins, n ≥ 5)   | = crosscheck ± 0.02 m    | **pass (Δ 0)**           |
+| Top band, crosscheck from the source LAS                       | median **0.301 m**, max 1.072 m, 42 bins | 0.652 m (20 bins, n ≥ 5)   | (reference)              |                          |
+| Slab points, app / crosscheck                                  | 1 144 / 1 144                            | 1 144 / 1 129              | equal                    | pass                     |
+| `profile_width_max_m` (whole height)                           | **3.208 m**                              | 3.208 m                    | = hand thickness ± 2 cm  | G6 deviation (see below) |
+| Hand-measured shell thickness (Step 8)                         | pending operator                         |                            | within 2 cm of the above | pending operator         |
 
-Why the medians differ:
+All 73 top-band rows match between the app and the crosscheck: the same bins, the same point count in
+every bin, and widths within 4.3 × 10⁻⁷ m (float32 rounding). The 195 M profile gives the same 1 144
+points and top band (the tiles outside the original chimney are not on the line). The chimney job
+took 2.56 s against Task 11's 1.07 s; both are well inside the target, and nothing in the fixes
+touches the profile job.
 
-- Every 0.1 m bin the two share has the **same** point count and width to 1e-9 m.
-- The app's profile holds 15 points more than the crosscheck (1 144 against 1 129).
-  - In the top band, that is one point in bin z = 180.85 (5 points in the app, 4 in the crosscheck).
-    It moves that bin across the `n ≥ 5` threshold.
-  - The other extra point is bin 184.75 (1 point, below the threshold).
-- The band's widths are bimodal, so one bin more moves the median from 0.652 to 0.439 m.
-- The difference is a slab-edge point, one the app's section keeps and the crosscheck's
-  `|t| ≤ thickness/2` drops, or the reverse. Float32 against float64, or `<` against `≤` at the
-  boundary, are the likely causes.
-- The statistic is fragile: the top band holds 1-14 points per bin, so its "width" is the spread of a
-  few sparse points, not a clean shell thickness.
-
-G6: `profile_width_max_m` = 3.208 m is far above the top band (0.44-0.65 m). Over the whole height,
-the slab also crosses the ground and the structures at the base. This is **recorded as a spec
+G6: `profile_width_max_m` = 3.208 m is far above the top band (0.30 m). Over the whole height, the
+slab also crosses the ground and the structures at the base. This is **recorded as a spec
 deviation**: §16.5's "`profile_width_max_m` equals the shell thickness" does not hold for a line
 from outside the stack into the flue. The criterion is judged on the top band.
 
-**Verdict: fail** (top-band median app 0.439 m against crosscheck 0.652 m, Δ 0.213 m > 0.02 m, from a
-single slab-edge point; reported to C-B2 for the boundary rule and to the C-G controller for the
-median statistic). Timings pass. The hand comparison is **pending operator** (Step 8).
+**Verdict: pending operator** (the hand thickness, Step 8). Every automated part passes: app =
+crosscheck exactly (0.301 m), 2.56 s ≤ 10 s, 12.04 s ≤ 90 s.
 
 ## Criterion 6 Clip box
 
-| Run                                                   | Clicks | Saved | Outside | No box | Exit                                                                       |
-| ----------------------------------------------------- | ------ | ----- | ------- | ------ | -------------------------------------------------------------------------- |
-| Default spread 0.40 (`clip/clip-full-spread040.json`) | 14     | 5     | 0       | 0      | 1: `clip: 14 of 20 clicks made (no canvas point clear of pins and panels)` |
-| `KESTREL_CLIP_SPREAD=0.25` (`clip/clip-full.json`)    | **20** | **7** | **0**   | **0**  | 0, `measure clip ok`                                                       |
+| Run                                                   | Clicks | Saved | Outside | No box | Saved picks' distance inside the nearest face | Exit                                                                       |
+| ----------------------------------------------------- | ------ | ----- | ------- | ------ | --------------------------------------------- | -------------------------------------------------------------------------- |
+| Default spread 0.40 (`clip/clip-full-spread040.json`) | 14     | 3     | 0       | 0      | 7.2, 136.2, 142.7 m                           | 1: `clip: 14 of 20 clicks made (no canvas point clear of pins and panels)` |
+| `KESTREL_CLIP_SPREAD=0.25` (`clip/clip-full.json`)    | **20** | **6** | **0**   | **0**  | 126.5-157.4 m                                 | 0, `measure clip ok`                                                       |
+
+Task 11 had the same shape: 14 clicks / 5 saved at 0.40 (exit 1) and 20 / 7 / 0 / 0 at 0.25.
 
 - The box is the app's default box (`defaultClipBox`) recentred on the rim: centre (243513.803,
   3178241.789, 189.554), size **343.3 × 350.7 × 332.7 m**, yaw 0, `show_inside`. That is half the
   cloud's extent in X and Y.
-- The 13 clicks that saved nothing hit sky or clipped-away areas.
-- The saved picks sit 120.6-157.4 m inside the nearest box face in the 0.25 run. The closest was
-  7.2 m, in the 0.40 run.
-- So no pick landed outside the box, but a scripted test with a box this large does not exercise
-  the box's edge. A tighter test needs a resized box (a drag the driver does not script).
+- The clicks that saved nothing hit sky or clipped-away areas.
+- So no pick landed outside the box, but a scripted test with a box this large does not exercise the
+  box's edge. A tighter test needs a resized box (a drag the driver does not script).
 
 **Verdict: pass** (20 clicks, 0 outside, 0 without a box, at spread 0.25). The spec's default grid
-(0.40) could make only 14 clicks, exit 1, recorded above. The test is weak for the reason above.
+(0.40) still makes only 14 clicks, exit 1, recorded above. The test is weak for the reason above.
 
 ## Criteria 7-8 Photo link
 
@@ -472,104 +496,99 @@ See `photo-link.md` for the full table and the operator's steps. I-FW has merged
 every `photolink-<k>-image.jpg` shows the images workspace with **I-FW's arrival ring** and the
 **Back to 3D** chip.
 
-- Criterion 7: `photolink` ran on the brief's 10 rim spots, with `measure photolink ok`.
-  - 8 of 10 picks list photos (6-11 each, all "In frame"). **Picks 4 and 6 list none.**
-  - Every first photo's spot is clamped to the top edge (`py = 0`). The flight stays below the rim
-    (camera z median 98.0 m, p99 160.7 m; rim ≈ 189.3 m), so the rim is above these photos' frames.
+- Criterion 7 (Task 11b): the flight stays below the rim (camera z median 98.0 m, p99 160.7 m; rim
+  ≈ 189.3 m), so the 10 spots were moved to the stack's wall **15-30 m below the rim** and derived
+  from the source LAS (the rule and the spots are in `photo-link.md`).
+  - `photolink` ran with `measure photolink ok`. **All 10 picks list photos** (the panel's heading
+    reads 19-113 photos; the list shows up to 50 rows).
+  - 7 picks landed on the wall at z 157.2-171.4 m (17.9-32.1 m below the rim). Picks 6 and 8 landed on
+    the upper stack (182.2 and 180.8 m), and pick 9 hit the ground 184 m north of the stack.
+  - For 8 of 10 picks the first photo's spot is inside the frame (py 379-1495). Only picks 6 and 8
+    (the upper-stack hits) are clamped to the top edge (py = 0), against every pick in Task 11.
   - The eye checks (does the ring contain the feature; is any listed photo from the far side) are
     **pending operator**.
-  - **Verdict: pending operator.** The automated part already shows 2 of 10 picks with no photo,
-    which the criterion does not allow. Recorded, not marked passed.
+  - Before the fixes (Task 11, spots on a 1.5 m circle at the rim): 8 of 10 picks listed photos,
+    and every first-photo spot was clamped to the top edge.
+  - **Verdict: pending operator.**
 - Criterion 8: the operator's hand-picked run is **pending operator** (steps in `photo-link.md`).
-  - An **automated self-consistency** round trip ran instead: 5 wall points projected with the app's
-    own pinhole model, then taken back through the image → cloud arrival.
-  - Result: **3 of 5 within 1 m** (0.09, 0.21, 0.25 m), with misses of 18.3 and 2.6 m, probably from
-    how the points were chosen.
-  - This is **not** the operator's eye check.
+  - Task 11's **automated self-consistency** round trip is kept (not re-run): 3 of 5 within 1 m
+    (0.09, 0.21, 0.25 m), misses of 18.3 and 2.6 m. This is **not** the operator's eye check.
   - **Verdict: pending operator.**
 
 ## Criterion 9 Performance
 
 Dev mode, Edge 154.0.4258.37, RTX 5070 Ti, budget 3 000 000 points. The chimney's framed view draws
 0.40 M points (`visiblePoints` 404 407). Per-pass times are **CPU-profile estimates, 100 µs sampling
-(G5)**; the app's own timers are shown beside them. Runs, all recorded in `perf/`:
+(G5)**; the app's own timers are shown beside them. The occlusion line is judged on the profiled
+whole settle pass (`runOcclusion@PinsLayer` per settle, controller ruling), with the hook's timer as
+a cross-check.
 
-| Run (file)                        | Pins | Effects | Orbit input | Note                                                                  |
-| --------------------------------- | ---- | ------- | ----------- | --------------------------------------------------------------------- |
-| `perf-full-500.json`              | 500  | Full    | mouse       | the controller's 500-pin run; the first run after creating 500 pins   |
-| `perf-full-200.json` (**Full**)   | 200  | Full    | mouse       | the table's Full column (it also deleted the 300 surplus driver pins) |
-| `perf-reduced.json` (**Reduced**) | 200  | Reduced | mouse       | the table's Reduced column                                            |
-| `perf-full-500-script.json`       | 500  | Full    | script      | a diagnostic: is the 500-pin run's 30 Hz from the input path?         |
-| `perf-full-200-repeat.json`       | 200  | Full    | mouse       | repeat, right after 300 pins were deleted                             |
-| `perf-full-200-third.json`        | 200  | Full    | mouse       | repeat, no pin changes                                                |
+Task 11b runs, in order (every run exited 0 with `problems: []`, mouse orbit at 60 Hz in all three):
 
-Every run exited 0 with `problems: []`.
+| Run (file)                        | Pins | Effects | Note                                                                     |
+| --------------------------------- | ---- | ------- | ------------------------------------------------------------------------ |
+| `perf-full-500.json`              | 500  | Full    | the 500-pin run; created the 500 driver pins on a cloud with no findings |
+| `perf-full-200.json` (**Full**)   | 200  | Full    | the table's Full column (it deleted the 300 surplus driver pins first)   |
+| `perf-reduced.json` (**Reduced**) | 200  | Reduced | the table's Reduced column                                               |
 
-| §13 metric (target)                                | Full (200)                                             | Reduced (200)             | Other runs                                                                                                              | Verdict                 |
-| -------------------------------------------------- | ------------------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Orbit render p50 ≤ 20 ms                           | 16.7 (607 frames, mouse)                               | 16.7 (606)                | 500 mouse **33.4**; 500 script 16.7; repeat 16.7; third 16.7                                                            | pass at 200             |
-| Orbit render p95 ≤ 33 ms                           | 16.9                                                   | 16.9                      | 500 mouse **41.9**; 500 script 25.5; repeat 17.2; third 16.9                                                            | pass at 200             |
-| Orbit rAF p50 / p95                                | 16.7 / 16.8                                            | 16.7 / 16.8               | 500 mouse 33.3 / 33.4 (the whole page at 30 Hz); 500 script 16.7 / 16.8                                                 | recorded                |
-| Pin pass ≤ 1 ms at 200                             | **0.112** ms/frame (305 frames); hook `passMs` p95 0.3 | 0.088; hook p95 0.3       | repeat 0.159, third 0.104                                                                                               | pass                    |
-| Pin pass ≤ 2.5 ms at 500                           | n/a                                                    | n/a                       | 500 mouse **0.414** (hook p95 1.0); 500 script 0.505 (hook p95 0.6)                                                     | pass                    |
-| Occlusion ≤ 40 ms once per settle                  | **45.4** ms (1 call); hook 10.9 ms over 200 pins       | **60.1** ms; hook 10.6 ms | repeat 84.7 (hook 15.6); third 59.9 (hook 11.0); 500: 88.6 / 47.6 (hook 17.0 / 12.9); 0 calls while moving in every run | **fail** (estimate)     |
-| Hover pick ≤ 10 Hz                                 | 9.18 Hz (median of 3 × 5 s)                            | 9.40 Hz                   | 500 mouse 5.58 Hz; 500 script 9.36 Hz; repeat 8.96; third 9.37                                                          | pass                    |
-| Hover pick ≤ 8 ms                                  | 1.18 ms/call (median)                                  | 1.24 ms (one window 7.62) | 1.05-1.91                                                                                                               | pass                    |
-| Idle: 0 frames 1 s after settle                    | 0 rAF calls, 0 renders, no animation                   | 0, 0, none                | 0, 0, none in every run; the orbit's own rAF calls (609) prove the counter worked                                       | pass                    |
-| First points ≤ 1 s (cold open, HTTP cache cleared) | 445 ms                                                 | 399 ms                    | 500 mouse **1 005**; 500 script 600; **repeat 4 660**; third 439                                                        | pass at 200 (see below) |
-| Settled ≤ 5 s                                      | 812 ms                                                 | 781 ms                    | 500 mouse 2 006; 500 script 1 049; **repeat 5 127**; third 806                                                          | pass at 200 (see below) |
-| Capture ≤ 3 s, trigger to upload (Step 4)          | **10 255-10 910 ms** (5 pins)                          | n/a                       | every view `render.complete: false` (`views.json`)                                                                      | **fail**                |
-| Webview memory ≤ 2.5 GB at 3 M (+ 50 MB)           | 1.61 GB (14 processes)                                 | 1.48 GB                   | 500 mouse 2.14; 500 script 1.69; repeat 1.60; third 1.48                                                                | pass                    |
-| Reduced meets p95 when Full fails                  | Full meets p95                                         | 16.9                      | both recorded                                                                                                           | n/a                     |
+| §13 metric (target)                                | Full (200)                                       | Reduced (200)       | 500 pins                             | Before the fixes (Task 11: Full / Reduced / 500) | Verdict  |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------- | ------------------------------------ | ------------------------------------------------ | -------- |
+| Orbit render p50 ≤ 20 ms                           | 16.7 (608 frames)                                | 16.7 (611)          | 16.7                                 | 16.7 / 16.7 / 33.4 (mouse at 30 Hz)              | pass     |
+| Orbit render p95 ≤ 33 ms                           | 17.0                                             | 17.0                | 26.0                                 | 16.9 / 16.9 / 41.9                               | pass     |
+| Orbit rAF p50 / p95                                | 16.7 / 16.8                                      | 16.7 / 16.8         | 16.7 / 16.8                          | 16.7 / 16.8; 500: 33.3 / 33.4                    | recorded |
+| Pin pass ≤ 1 ms at 200                             | **0.102** ms/frame (305 frames); hook p95 0.3    | 0.100; hook p95 0.3 | n/a                                  | 0.112 / 0.088                                    | pass     |
+| Pin pass ≤ 2.5 ms at 500                           | n/a                                              | n/a                 | **0.202** (292 frames); hook p95 0.8 | 0.414                                            | pass     |
+| Occlusion ≤ 40 ms once per settle (profiled pass)  | **13.95** ms (1 call); hook 8.8 ms over 200 pins | **10.05**; hook 8.3 | **11.20**; hook 8.4 over 500         | **45.4 / 60.1 / 88.6** (hook 10.9 / 10.6 / 17.0) | pass     |
+| Occlusion or hover while moving                    | 0 calls                                          | 0                   | 0                                    | 0                                                | pass     |
+| Hover pick ≤ 10 Hz                                 | 8.80 Hz (median of 3 × 5 s)                      | 8.76                | 8.99                                 | 9.18 / 9.40 / 5.58                               | pass     |
+| Hover pick ≤ 8 ms                                  | 2.08 ms/call (median)                            | 1.91                | 2.06                                 | 1.18 / 1.24 / 1.25                               | pass     |
+| Idle: 0 frames 1 s after settle                    | 0 rAF calls, 0 renders, no animation             | same                | same                                 | same                                             | pass     |
+| First points ≤ 1 s (cold open, HTTP cache cleared) | 556 ms                                           | 547                 | 515                                  | 445 / 399 / 1 005                                | pass     |
+| Settled ≤ 5 s                                      | 940 ms                                           | 947                 | 1 030                                | 812 / 781 / 2 006                                | pass     |
+| Capture ≤ 3 s, trigger to upload (criterion 2 run) | **221-874 ms** (5 pins)                          | n/a                 | n/a                                  | **10 255-10 910 ms**                             | pass     |
+| Webview memory ≤ 2.5 GB at 3 M (+ 50 MB)           | 1.61 GB (11 processes)                           | 1.51                | 1.78                                 | 1.61 / 1.48 / 2.14                               | pass     |
+| Reduced meets p95 when Full fails                  | Full meets p95                                   | 17.0                |                                      |                                                  | n/a      |
 
-Findings:
+Notes:
 
-- **Occlusion:** the profiled `runOcclusion@PinsLayer` estimate is 45-89 ms per settle, above 40 ms
-  in all 6 runs. The engine's `runOcclusion@viewer/occlusion` is nearly all of it (for example 44.9
-  of 45.4 ms). The hook's own timed occlusion over the same shown pins gives 10.6-17.0 ms.
-  - Each run records only **one** settle, and precise coverage plus the 100 µs profiler add
-    instrumentation cost.
-  - Judged literally on G5's estimate, this is a miss. Reported to C-P1 (the pins-layer occlusion
-    pass) and to the C-G controller: which number is authoritative for the ≤ 40 ms line has to be
-    decided, since the two differ by 3-5×.
-- **Capture:** each of the 5 pins took 10.3-10.9 s from Enter to the `PUT …/view3d` answer, and
-  every stored view has `render.complete: false`. `captureRun.ts` waits for the capture camera's
-  nodes up to `CAPTURE_TIMEOUT_MS` = 10 000 ms (`viewer/capture.ts`), and on the chimney it never
-  becomes "not busy", so every capture runs to the timeout. Presumably
-  `r.nodeLoadPromises.length > 0 || r.exceededMaxLoadsToGPU` stays true at the capture pose; this
-  was not instrumented. Reported to C-V2 (capture) with `pins/pins-full.json` and
-  `views.json`.
-- **30 Hz at 500 pins with the mouse:** the first 500-pin run orbited at 30 Hz (the page's rAF at
-  33.3 ms, render p95 41.9). The same 500 pins with the script orbit ran at 60 Hz (render p95 25.5),
-  and all four 200-pin mouse runs ran at 60 Hz. This matches Task 9's intermittent half rate under
-  CDP mouse input. It is recorded, not judged: the ≤ 33 ms p95 target applies to the 200-pin runs.
-- **First points after pin churn:** the repeat run started right after the driver deleted 300
-  findings. It opened in 4.66 s to first points and 5.13 s to settled (both over target). The third
-  run, with no pin changes, came back to 439 / 806 ms. The 500 run, right after creating 500 pins,
-  opened in 1 005 ms. So a cold open straight after bulk finding writes is slow on this backend.
-  Recorded; the Full/Reduced columns (no churn) pass.
+- **Occlusion:** the profiled pass fell from 45-89 ms to 10-14 ms per settle, now close to the hook's
+  8.3-8.8 ms: Task 17 stopped the pick running potree's `findHit` scan, which the profiler made cost
+  19-21 ms per window. Each run still records one settle.
+- **Hover:** the profiled cost per pick rose from about 1.2 ms to about 2.0 ms and the rate is
+  8.8-9.0 Hz. Both are well inside the targets. Nothing in the fixes adds work to the hover pick (it
+  now skips `findHit`), so this is recorded, not explained.
+- **Pins shown:** 97 of 200 pins are `visible` after the settle (Task 17 measured 38 → 94 with its fix).
+- Task 11's extra runs (`perf-full-500-script`, `perf-full-200-repeat`, `perf-full-200-third`) are
+  kept as before-the-fixes history. The repeat's slow cold open straight after 300 finding deletes
+  (4 660 ms to first points) was not re-run; the 11b Full run also deleted 300 findings first and
+  opened in 556 ms.
 
-**Verdict: fail**. The occlusion estimate is 45.4 ms (Full) and 60.1 ms (Reduced) against 40 ms, and
-the capture takes 10.3-10.9 s against 3 s. Reported to C-P1, C-V2 and the C-G controller. Everything
-else passes in both Full and Reduced at 200 pins, and the pin pass is 0.41 ms at 500.
+**Verdict: pass.** Every §13 target is met in Full at 200 pins, the pin pass is 0.20 ms at 500, and
+the capture is 221-874 ms. Before the fixes (Task 11): fail on occlusion (45.4 / 60.1 ms) and capture
+(10.3-10.9 s).
 
 ## Criterion 10 Report views
 
-`views.json` is read through the Step 6 backend after Steps 4-5. It covers 17 views: 5 findings and
-12 point measurements from the clip run.
+`views.json` is read through the Step 6 backend after the pins and clip runs. It covers **14 views**:
+the 5 findings of the criterion 2 run and 9 point measurements from the two clip runs (3 at spread
+0.40, 6 at 0.25). Every one was captured by the fixed app (the older findings and point measurements
+were deleted first, see the top of this section).
 
 | Check                                                | Result                                                                               |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Every view 1600 × 1000                               | 17 of 17                                                                             |
-| sha256 of `GET …/view3d` = `listCloudViews`'s sha256 | 17 of 17 (`ok == count`)                                                             |
+| Every view 1600 × 1000                               | 14 of 14                                                                             |
+| sha256 of `GET …/view3d` = `listCloudViews`'s sha256 | 14 of 14 (`ok == count`)                                                             |
 | After Move pin: re-captured, not stale               | `pins-full.json` `moved.stale: false`; `views.json` `stale` 0                        |
-| Capture within 3 s                                   | **no**: 10 255, 10 258, 10 310, 10 685, 10 910 ms (`pins-full.json` `captureMs`)     |
-| `render.complete`                                    | false for all 17 (the capture timed out waiting for nodes, see Criterion 9)          |
-| `render.edl`                                         | false for all 17 (a known potree-core 2.0.15 limit, C-V1 Ruling 3; see Task 8 above) |
+| Capture within 3 s                                   | **yes**: 874, 507, 611, 221, 331 ms (`pins-full.json` `captureMs`)                   |
+| `render.complete`                                    | **true for all 14** (`incomplete` 0)                                                 |
+| `render.edl`                                         | false for all 14 (a known potree-core 2.0.15 limit, C-V1 Ruling 3; see Task 8 above) |
 | "A report built by R shows the 3D figure"            | deferred to R's own acceptance (R9-C), per ruling G8; R is not in this wave          |
 
-**Verdict: fail** (capture 10.3-10.9 s > 3 s, and every view incomplete; reported to C-V2). Sizes,
-sha256 and staleness pass. The R-report sentence is deferred (G8).
+Before the fixes (Task 11): 17/17 views were the right size with sha256 ok and 0 stale, but the
+capture took 10 255-10 910 ms and every view had `render.complete: false`.
+
+**Verdict: pass** (sizes, sha256, staleness, every view complete, capture 221-874 ms ≤ 3 s). The
+R-report sentence is deferred (G8).
 
 ## Frame time on SwiftShader
 
@@ -603,59 +622,66 @@ In the Edge window:
 Then record:
 
 - the two lean results (criterion 4: "on the chimney, both methods are recorded", in `docs/progress.md`);
-- the hand thickness against `profile-chimney.json` `top_band.median_m` = 0.439 m, and the
-  crosscheck's 0.652 m (criterion 5: within 2 cm).
+- the hand thickness against `profile-chimney.json` `top_band.median_m` = **0.301 m** (the
+  crosscheck agrees exactly) for criterion 5 (within 2 cm).
 
-## Summary of §16 verdicts (Task 11)
+## Summary of §16 verdicts (Task 11b)
 
-| #   | Criterion     | Verdict                                                                                                                                                                                                          |
-| --- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Layout        | fail (horizontal scrollbar in the cloud panel, reported to C-L1); every panel position matches                                                                                                                   |
-| 2   | Pins          | fail (3 of 5 re-picks miss u: one is a driver artefact, two are 0.655/0.686 m against u 0.171/0.343 m; the near-side rim pin dims; reported to C-P1 and the C-G controller); anchors survive the restart exactly |
-| 3   | Area          | pass                                                                                                                                                                                                             |
-| 4   | Rings         | fail (azimuth 88.898°, 1.102° against ± 0.5°; G7's noise makes the target unreachable, reported to the C-G controller); chimney row pending operator                                                             |
-| 5   | Profile       | fail (top-band median 0.439 against 0.652 m, Δ 0.213 m; reported to C-B2 and the C-G controller); timings pass (1.07 s, 9.40 s); hand comparison pending operator                                                |
-| 6   | Clip box      | pass (20 clicks, 0 outside, 0 no box, at spread 0.25; weak test, since the box is 343 × 351 × 333 m)                                                                                                             |
-| 7   | Photo link    | pending operator (automated: 2 of 10 picks list no photo)                                                                                                                                                        |
-| 8   | Image → cloud | pending operator (automated self-consistency: 3 of 5 within 1 m)                                                                                                                                                 |
-| 9   | Performance   | fail (occlusion estimate 45.4 / 60.1 ms > 40, hook timer 10.6-10.9 ms; capture 10.3-10.9 s > 3 s; reported to C-P1, C-V2 and the C-G controller)                                                                 |
-| 10  | Report views  | fail (capture > 3 s, every view incomplete; reported to C-V2); sizes, sha256 and staleness pass; R-report part deferred (G8)                                                                                     |
+| #   | Criterion     | Verdict                                                                                                                                                                                                  | Before the fixes (Task 11)                                  |
+| --- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1   | Layout        | pass (every panel at its mockup position; cloud panel scrollWidth 280 = clientWidth 280)                                                                                                                 | fail (horizontal scrollbar)                                 |
+| 2   | Pins          | fail (3 of 5 `?finding=` re-picks beyond u: 0.442 / 0.655 / 0.686 m against 0.171 / 0.171 / 0.343 m; C-P1 and C-L1); anchors survive the restart exactly; far-side pins dim; no occlusion false positive | fail (also the driver artefacts and the rim false positive) |
+| 3   | Area          | pass (not re-run)                                                                                                                                                                                        | pass                                                        |
+| 4   | Rings         | fail by test design, as ruled (azimuth 1.102° against ± 0.5° under G7's noise); angle pass; rings beat two-point; chimney row pending operator                                                           | same                                                        |
+| 5   | Profile       | pending operator (hand thickness); automated parts pass: app = crosscheck 0.301 m, 2.56 s, 12.04 s                                                                                                       | fail (0.439 against 0.652 m)                                |
+| 6   | Clip box      | pass (20 clicks, 0 outside, 0 no box, at spread 0.25; the default 0.40 makes 14 clicks; weak test)                                                                                                       | pass (same shape)                                           |
+| 7   | Photo link    | pending operator (automated: 10 of 10 wall picks list photos, 8 of 10 first-photo spots inside the frame)                                                                                                | pending operator (2 of 10 rim picks listed nothing)         |
+| 8   | Image → cloud | pending operator (automated self-consistency, not re-run: 3 of 5 within 1 m)                                                                                                                             | same                                                        |
+| 9   | Performance   | pass (occlusion 13.95 / 10.05 / 11.20 ms, capture 221-874 ms, every other target met)                                                                                                                    | fail (occlusion 45.4 / 60.1 ms, capture 10.3-10.9 s)        |
+| 10  | Report views  | pass (14 of 14 views 1600 × 1000, sha256 ok, 0 stale, all complete, capture ≤ 874 ms); R-report part deferred (G8)                                                                                       | fail (capture > 3 s, every view incomplete)                 |
+
+§13 rows that changed from Task 11: occlusion (fail → pass), capture (fail → pass), pin pass at 500
+(0.414 → 0.202 ms), 500-pin orbit (30 Hz → 60 Hz, render p95 41.9 → 26.0 ms), hover cost (about 1.2 →
+2.0 ms, still pass).
 
 ## Files
 
-| File                                                                                                    | What it proves                                                                              |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `README.md`                                                                                             | this record                                                                                 |
-| `photo-link.md`                                                                                         | criteria 7-8: the operator's table (pending), the automated rows and the steps              |
-| `frame-time-swiftshader.json`                                                                           | Task 5: SwiftShader frame times, reported only                                              |
-| `layout/layout-side-by-side.jpg`                                                                        | criterion 1: the app beside the mockup at 1416 × 774                                        |
-| `layout/layout-app.png`, `layout/layout-mockup.jpg`                                                     | criterion 1: the two single shots                                                           |
-| `layout/layout-full.json`                                                                               | criterion 1: the measured panel boxes, viewport, GPU and user agent                         |
-| `layout/state.json`                                                                                     | the setup: project, cloud and source ids, and the import wall times (9.35 s; photos 77.6 s) |
-| `perf/perf-full-200.json`, `perf/perf-full-200.png`                                                     | criterion 9: the Full column (200 pins)                                                     |
-| `perf/perf-reduced.json`, `perf/perf-reduced.png`                                                       | criterion 9: the Reduced column (200 pins)                                                  |
-| `perf/perf-full-500.json`, `perf/perf-full-500.png`                                                     | §13 pin pass at 500 (0.414 ms); the 30 Hz mouse orbit                                       |
-| `perf/perf-full-500-script.json`, `perf/perf-full-500-script.png`                                       | the 500-pin diagnostic with the script orbit (60 Hz)                                        |
-| `perf/perf-full-200-repeat.json`, `perf/perf-full-200-repeat.png`                                       | a slow cold open straight after bulk finding deletes (4.66 s)                               |
-| `perf/perf-full-200-third.json`, `perf/perf-full-200-third.png`                                         | a repeat with no pin changes (back to 439 ms)                                               |
-| `pins/pins-full.json`                                                                                   | criteria 2 and 10: 5 anchors, capture times, `byView` states, Move pin not stale            |
-| `pins/pins-{top,front,side,iso}.{png,jpg}`                                                              | criterion 2: the pins in each view (dimming)                                                |
-| `pins/pins-check-full.json`, `pins/pins-after-restart.jpg`                                              | criterion 2: the restart comparison                                                         |
-| `clip/clip-full.json`, `clip/clip.jpg`                                                                  | criterion 6: 20 clicks, 0 outside (spread 0.25)                                             |
-| `clip/clip-full-spread040.json`, `clip/clip-spread040.jpg`                                              | criterion 6: the default-spread run, 14 clicks, exit 1                                      |
-| `shapes.json`                                                                                           | criteria 3-4: the server's area and rings results on the synthetic shapes                   |
-| `formulas-full.json`                                                                                    | criteria 3-4: the client's results, equal to the server's                                   |
-| `profile-chimney.json`                                                                                  | criterion 5: the chimney profile (1.07 s), top band and `profile_width_max_m`               |
-| `crosscheck-chimney.json`                                                                               | criterion 5: the independent top band from the source LAS                                   |
-| `profile-195m.json`, `import-195m.json`                                                                 | criterion 5: the 195 M LAZ import (55.97 s) and profile (9.40 s)                            |
-| `views.json`                                                                                            | criterion 10: 17 views, 1600 × 1000, sha256 ok, 0 stale, all incomplete                     |
-| `cameras.json`                                                                                          | criteria 7-8: 395 cameras, all posed; z median 98.0 m                                       |
-| `photolink/photolink-full.json`, `photolink/photolink-<k>.jpg`, `photolink/photolink-<k>-image.jpg`     | criterion 7: the 10 picks, their lists, and the opened photos with the arrival ring         |
-| `photolink/image2cloud-full.json`, `photolink/image2cloud-<k>.jpg`, `photolink/image-px-automated.json` | criterion 8: the automated self-consistency round trip (not the eye check)                  |
+| File                                                                                                    | What it proves                                                                                                      |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `README.md`                                                                                             | this record                                                                                                         |
+| `photo-link.md`                                                                                         | criteria 7-8: the operator's table (pending), the Task 11b wall spots, the automated rows and the steps             |
+| `frame-time-swiftshader.json`                                                                           | Task 5: SwiftShader frame times, reported only                                                                      |
+| `layout/layout-side-by-side.jpg`                                                                        | criterion 1 (11b): the app beside the mockup at 1416 × 774                                                          |
+| `layout/layout-app.png`, `layout/layout-mockup.jpg`                                                     | criterion 1 (11b): the two single shots, no scrollbar in the cloud panel                                            |
+| `layout/layout-full.json`                                                                               | criterion 1 (11b): the measured panel boxes, viewport, GPU and user agent                                           |
+| `layout/layout-panel-overflow.json`                                                                     | criterion 1 (11b): the cloud panel's box, scrollWidth = clientWidth, 0 descendants past its edge                    |
+| `layout/state.json`                                                                                     | the setup (Task 11): project, cloud and source ids, and the import wall times (9.35 s; photos 77.6 s)               |
+| `perf/perf-full-200.json`, `perf/perf-full-200.png`                                                     | criterion 9 (11b): the Full column (200 pins)                                                                       |
+| `perf/perf-reduced.json`, `perf/perf-reduced.png`                                                       | criterion 9 (11b): the Reduced column (200 pins)                                                                    |
+| `perf/perf-full-500.json`, `perf/perf-full-500.jpg`                                                     | criterion 9 (11b): pin pass at 500 (0.202 ms), occlusion 11.2 ms at 500                                             |
+| `perf/perf-full-500-script.json`, `perf/perf-full-500-script.png`                                       | before the fixes (Task 11): the 500-pin diagnostic with the script orbit (60 Hz)                                    |
+| `perf/perf-full-200-repeat.json`, `perf/perf-full-200-repeat.png`                                       | before the fixes (Task 11): a slow cold open straight after bulk finding deletes (4.66 s)                           |
+| `perf/perf-full-200-third.json`, `perf/perf-full-200-third.png`                                         | before the fixes (Task 11): a repeat with no pin changes (439 ms)                                                   |
+| `pins/pins-full.json`                                                                                   | criteria 2 and 10 (11b): 5 anchors (pin 1 post-Move), capture times 221-874 ms, `byView` states, Move pin not stale |
+| `pins/pins-{top,front,side,iso}.{png,jpg}`                                                              | criterion 2 (11b): the pins in each view (dimming)                                                                  |
+| `pins/pins-check-full.json`, `pins/pins-after-restart.jpg`                                              | criterion 2 (11b): the restart comparison, every anchor kept                                                        |
+| `clip/clip-full.json`, `clip/clip.jpg`                                                                  | criterion 6 (11b): 20 clicks, 0 outside (spread 0.25)                                                               |
+| `clip/clip-full-spread040.json`, `clip/clip-spread040.jpg`                                              | criterion 6 (11b): the default-spread run, 14 clicks, exit 1                                                        |
+| `shapes.json`                                                                                           | criteria 3-4 (Task 11): the server's area and rings results on the synthetic shapes                                 |
+| `formulas-full.json`                                                                                    | criteria 3-4 (Task 11): the client's results, equal to the server's                                                 |
+| `profile-chimney.json`                                                                                  | criterion 5 (11b): the chimney profile (2.56 s), top band 0.301 m and `profile_width_max_m`                         |
+| `crosscheck-chimney.json`                                                                               | criterion 5 (11b): the independent top band from the source LAS, equal to the app's                                 |
+| `profile-195m.json`, `import-195m.json`                                                                 | criterion 5: the 195 M LAZ profile (11b, 12.04 s) and import (Task 11, 55.97 s)                                     |
+| `views.json`                                                                                            | criterion 10 (11b): 14 views, 1600 × 1000, sha256 ok, 0 stale, all complete                                         |
+| `cameras.json`                                                                                          | criteria 7-8 (11b, unchanged from Task 11): 395 cameras, all posed; z median 98.0 m, p99 160.7 m                    |
+| `photolink/photolink-full.json`, `photolink/photolink-<k>.jpg`, `photolink/photolink-<k>-image.jpg`     | criterion 7 (11b): the 10 wall picks, their lists, and the opened photos with the arrival ring                      |
+| `photolink/image2cloud-full.json`, `photolink/image2cloud-<k>.jpg`, `photolink/image-px-automated.json` | criterion 8 (Task 11): the automated self-consistency round trip (not the eye check)                                |
 
 Screenshots over 400 KB were converted to JPEG (quality 85, full resolution) so that the committed
-evidence stays about 11 MB. The PNG originals are in `D:\kestrel-acceptance\clouds\out`.
+evidence stays about 12 MB. The PNG originals are in `D:\kestrel-acceptance\clouds\out` (Task 11's in
+`out-task11`).
 
-Credential check (Step 9): the brief's `Select-String` over `docs/evidence/clouds/*` and `*/*`,
-plus a search for the run's credential variable names. The result is recorded in the Task 11
-report.
+Credential check (Task 11 Step 9, repeated in Task 11b): the brief's `Select-String` over
+`docs/evidence/clouds/*` and `*/*` for `Bearer|APP_TOKEN|token`, plus a search for the run's
+credential variable names and for any 32-character alphanumeric run (the launcher's token shape). The
+result is recorded in the Task 11 and Task 11b reports.

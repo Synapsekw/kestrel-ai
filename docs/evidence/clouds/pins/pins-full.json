@@ -11,20 +11,20 @@
   "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
   "pins": [
     {
-      "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+      "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
       "anchor": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
-        "x": 243513.80299942225,
-        "y": 3178241.788998446,
-        "z": 189.5539990252819,
+        "x": 243514.86399929255,
+        "y": 3178241.330998263,
+        "z": 187.65099900020326,
         "uncertainty_m": 0.17125732446288566
       },
-      "captureMs": 10310,
+      "captureMs": 874,
       "viewStatus": 200
     },
     {
-      "id": "0f8075a9-7f23-4947-9e44-89cf12643ed2",
+      "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
       "anchor": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -33,11 +33,11 @@
         "z": 173.83599921623866,
         "uncertainty_m": 0.08562866223144283
       },
-      "captureMs": 10258,
+      "captureMs": 507,
       "viewStatus": 200
     },
     {
-      "id": "f074a8f8-6924-4d54-8f24-d85dd534e90a",
+      "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
       "anchor": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -46,11 +46,11 @@
         "z": -7.393001058551789,
         "uncertainty_m": 0.3425146489257713
       },
-      "captureMs": 10685,
+      "captureMs": 611,
       "viewStatus": 200
     },
     {
-      "id": "c841bad4-02b5-4b14-81f8-c66733dc39b9",
+      "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
       "anchor": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -59,11 +59,11 @@
         "z": 186.21799823204677,
         "uncertainty_m": 0.17125732446288566
       },
-      "captureMs": 10255,
+      "captureMs": 221,
       "viewStatus": 200
     },
     {
-      "id": "09119ca2-8080-4aea-a24e-49a10fed5070",
+      "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
       "anchor": {
         "kind": "cloud",
         "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
@@ -72,14 +72,14 @@
         "z": 3.498004737304683,
         "uncertainty_m": 0.3425146489257713
       },
-      "captureMs": 10910,
+      "captureMs": 331,
       "viewStatus": 200
     }
   ],
   "byView": {
     "Top": [
       {
-        "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
         "x": 724.5564809737349,
         "y": 430.5867678672969,
         "state": "visible",
@@ -89,56 +89,56 @@
           0.48905058434353166,
           0.8722284143997031
         ],
-        "passMs": 0
+        "passMs": 0.10000014305114746
       },
       {
-        "id": "0f8075a9-7f23-4947-9e44-89cf12643ed2",
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
         "x": 728.4434494968401,
         "y": 421.1503465260897,
         "state": "back",
         "occluded": true,
         "normal": null,
-        "passMs": 0
+        "passMs": 0.10000014305114746
       },
       {
-        "id": "f074a8f8-6924-4d54-8f24-d85dd534e90a",
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
         "x": 710.839936711828,
         "y": 326.122111033729,
         "state": "back",
         "occluded": true,
         "normal": null,
-        "passMs": 0
+        "passMs": 0.10000014305114746
       },
       {
-        "id": "c841bad4-02b5-4b14-81f8-c66733dc39b9",
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
         "x": 725.5658424200869,
         "y": 431.7313701037575,
-        "state": "back",
-        "occluded": true,
+        "state": "visible",
+        "occluded": false,
         "normal": [
           -0.8762289276574375,
           -0.34038221939518964,
           0.34111993646795596
         ],
-        "passMs": 0
+        "passMs": 0.10000014305114746
       },
       {
-        "id": "09119ca2-8080-4aea-a24e-49a10fed5070",
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
         "x": 721.4946960516033,
         "y": 302.6522732019619,
         "state": "back",
         "occluded": true,
         "normal": null,
-        "passMs": 0
+        "passMs": 0.10000014305114746
       }
     ],
     "Front": [
       {
-        "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
         "x": 726.7490947030634,
         "y": 322.8047998435178,
         "state": "back",
-        "occluded": true,
+        "occluded": false,
         "normal": [
           -0.00686433296322691,
           0.48905058434353166,
@@ -147,7 +147,7 @@
         "passMs": 0
       },
       {
-        "id": "0f8075a9-7f23-4947-9e44-89cf12643ed2",
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
         "x": 730.0495217804181,
         "y": 332.6289510582614,
         "state": "back",
@@ -156,7 +156,7 @@
         "passMs": 0
       },
       {
-        "id": "f074a8f8-6924-4d54-8f24-d85dd534e90a",
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
         "x": 714.2009364751332,
         "y": 430.05442013191254,
         "state": "back",
@@ -165,11 +165,11 @@
         "passMs": 0
       },
       {
-        "id": "c841bad4-02b5-4b14-81f8-c66733dc39b9",
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
         "x": 727.5513199560886,
         "y": 324.5144846393081,
-        "state": "back",
-        "occluded": true,
+        "state": "visible",
+        "occluded": false,
         "normal": [
           -0.8762289276574375,
           -0.34038221939518964,
@@ -178,7 +178,7 @@
         "passMs": 0
       },
       {
-        "id": "09119ca2-8080-4aea-a24e-49a10fed5070",
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
         "x": 724.2832213976253,
         "y": 424.55744520195276,
         "state": "back",
@@ -189,11 +189,11 @@
     ],
     "Side": [
       {
-        "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
         "x": 727.1666571513693,
         "y": 326.5916125687067,
         "state": "back",
-        "occluded": true,
+        "occluded": false,
         "normal": [
           -0.00686433296322691,
           0.48905058434353166,
@@ -202,7 +202,7 @@
         "passMs": 0
       },
       {
-        "id": "0f8075a9-7f23-4947-9e44-89cf12643ed2",
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
         "x": 734.8231607182938,
         "y": 334.60131316297105,
         "state": "back",
@@ -211,7 +211,7 @@
         "passMs": 0
       },
       {
-        "id": "f074a8f8-6924-4d54-8f24-d85dd534e90a",
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
         "x": 825.9376016783978,
         "y": 431.4524179782375,
         "state": "back",
@@ -220,11 +220,11 @@
         "passMs": 0
       },
       {
-        "id": "c841bad4-02b5-4b14-81f8-c66733dc39b9",
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
         "x": 726.1595280284089,
         "y": 328.2650073292615,
         "state": "back",
-        "occluded": true,
+        "occluded": false,
         "normal": [
           -0.8762289276574375,
           -0.34038221939518964,
@@ -233,7 +233,7 @@
         "passMs": 0
       },
       {
-        "id": "09119ca2-8080-4aea-a24e-49a10fed5070",
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
         "x": 849.4481931122089,
         "y": 425.96262247689924,
         "state": "back",
@@ -244,11 +244,11 @@
     ],
     "Iso": [
       {
-        "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
         "x": 719.886871418339,
         "y": 334.4020966406632,
-        "state": "back",
-        "occluded": true,
+        "state": "visible",
+        "occluded": false,
         "normal": [
           -0.00686433296322691,
           0.48905058434353166,
@@ -257,16 +257,16 @@
         "passMs": 0
       },
       {
-        "id": "0f8075a9-7f23-4947-9e44-89cf12643ed2",
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
         "x": 728.4868124553789,
         "y": 340.9678085262368,
-        "state": "back",
-        "occluded": true,
+        "state": "visible",
+        "occluded": false,
         "normal": null,
         "passMs": 0
       },
       {
-        "id": "f074a8f8-6924-4d54-8f24-d85dd534e90a",
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
         "x": 777.9410822923229,
         "y": 384.50910361356586,
         "state": "back",
@@ -275,11 +275,11 @@
         "passMs": 0
       },
       {
-        "id": "c841bad4-02b5-4b14-81f8-c66733dc39b9",
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
         "x": 719.728726209174,
         "y": 336.8315499300313,
         "state": "back",
-        "occluded": true,
+        "occluded": false,
         "normal": [
           -0.8762289276574375,
           -0.34038221939518964,
@@ -288,7 +288,7 @@
         "passMs": 0
       },
       {
-        "id": "09119ca2-8080-4aea-a24e-49a10fed5070",
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
         "x": 798.7745397864388,
         "y": 376.1575543099551,
         "state": "back",
@@ -299,7 +299,7 @@
     ]
   },
   "moved": {
-    "id": "533a056c-ddb9-4790-a686-0c1b75e09c70",
+    "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
     "stale": false
   },
   "problems": []
