@@ -147,6 +147,7 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
       store().setBulk({ done: 0, total: 0 });
       let done = 0;
       let failed = 0;
+      let skipped = 0;
       let total = 0;
       const startSeq = putSeq.current;
       touched.clear();
@@ -186,6 +187,7 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
           }
           if (outcome === "stopped") break; // the queue already reported it (or we left)
           if (outcome === "failed") failed += 1;
+          if (outcome === "skipped") skipped += 1;
           done += 1;
           if (run.cancelled === "no") store().setBulk({ done, total });
         }
@@ -196,7 +198,11 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
         else if (cancelledAt === "no" && done === total)
           toast(
             failed ? "info" : "ok",
-            failed ? `${failed} of ${total} report views were not saved` : `Saved ${total} report views`,
+            failed
+              ? `${failed} of ${total} report views were not saved`
+              : skipped
+                ? `Saved ${total - skipped} of ${total} report views (${skipped} skipped: no longer there)`
+                : `Saved ${total} report views`,
           );
       } catch (err) {
         if (run.cancelled === "no")

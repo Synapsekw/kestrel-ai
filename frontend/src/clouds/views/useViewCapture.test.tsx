@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode, RefObject } from "react";
 import type { ApiClient } from "@contract/client";
+import { ApiFailure } from "@/api/errors";
 import { TestApiProvider } from "@/test/render";
 import { exampleFinding } from "@/test/findingFixtures";
 import { measurementOf, POSE, viewOut } from "@/test/cloudViewFixtures";
@@ -10,7 +11,7 @@ import { useToastStore } from "@/ui";
 import type { CloudViewerHandle } from "../CloudViewer";
 import type { CaptureResult } from "../viewer/capture";
 import { setAnchorNormal } from "./normals";
-import { QUEUE_STOPPED, useViewCapture } from "./useViewCapture";
+import { NOT_SAVED, QUEUE_STOPPED, useViewCapture } from "./useViewCapture";
 import { useViewStore } from "./viewStore";
 
 const api = vi.hoisted(() => ({
@@ -255,6 +256,29 @@ describe("useViewCapture", () => {
     expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
       tone: "info",
       text: "1 of 2 report views were not saved",
+    });
+  });
+
+  it("counts a finding deleted mid-run (PUT 404) as skipped, not as not saved", async () => {
+    api.listFindings.mockResolvedValue({
+      items: [cloudFinding("f1"), cloudFinding("f2")],
+      next_cursor: null,
+    });
+    api.listCloudMeasurements.mockResolvedValue([]);
+    api.listCloudViews.mockResolvedValue({ items: [] });
+    api.putFindingView3d.mockImplementation(async (_a, _p, id: string) =>
+      id === "f2"
+        ? Promise.reject(new ApiFailure("not_found", "Finding not found", 404))
+        : viewOut({ subject_id: id, sha256: "new" }),
+    );
+    const { result: hook } = mount();
+    act(() => hook.current.captureMissing());
+    await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts.map((t) => t.text)).not.toContain(NOT_SAVED);
+    expect(toasts.at(-1)).toMatchObject({
+      tone: "ok",
+      text: "Saved 1 of 2 report views (1 skipped: no longer there)",
     });
   });
 
