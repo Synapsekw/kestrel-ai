@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { P, serveImages, syntheticFrames } from "./images/world";
 import { openImage, ws } from "./images/ui";
 import { evidencePath } from "./evidence";
@@ -18,18 +18,35 @@ import { evidencePath } from "./evidence";
 // cadence recorder: it says nothing about OpenLayers' internal draw calls, only whether the browser
 // keeps producing animation frames at a healthy rate while the operator pans/zooms.
 //
-// Observed (task 11a, this machine): the switch to Map is fast (~1.2 s, comfortably under the 5 s
-// budget below — `data-point-count` is a synchronous prop computed from the index, not gated on the
-// WebGL layer painting). But dragging to pan reproducibly locks the page up completely: no
-// Playwright command (not even `page.mouse.move`) answers again within 15 s. This is not a test
-// issue — it reproduced twice, including once under the default 60 s test timeout with the same
-// symptom. Left as `test.fixme` per the brief; hand off back to I-FB.
+// Observed (task 11a, controller-directed follow-up): switching to Map is always fast (~0.3-1.3s,
+// comfortably under the 5s budget below — `data-point-count` is a synchronous prop off the index,
+// not gated on the WebGL layer painting). Drag-pan is a different story **on this machine's headless
+// Chromium**, which renders WebGL on SwiftShader (a software rasterizer;
+// WEBGL_debug_renderer_info's UNMASKED_RENDERER_WEBGL reports "ANGLE (Google, Vulkan 1.3.0
+// (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)") rather than a real GPU — unlike
+// the shipped app, which runs in WebView2 with hardware acceleration. Bisecting the point count
+// (throwaway probes, not committed): 1,000 completes normally; 5,000 completes but already ~3x
+// slower than real time; 10,000 and up hard-locks the page (no Playwright command, not even
+// `page.mouse.move`, answers again for 15s+). A CDP CPU profile at 5,000 points puts 69.4% of
+// samples in `(program)` (native: GL driver / rasterizer / compositor, not attributable to JS) and
+// every named JS function — ours, React's, OpenLayers' — at <=0.1% self-time each; nothing in
+// `src/images/browser/*` stands out. Hover hit-testing is not the cause: `olCaptureMap.ts:157-159`
+// (`map.on("pointermove", (e) => { if (!e.dragging) hover(e.pixel); })`) already skips hover
+// whenever `e.dragging` is true, i.e. for the entire drag-pan interaction under test.
+//
+// Controller's ruling: this is a SwiftShader artefact until shown otherwise on real hardware — hand
+// off to I-FB/IMC-X to check on the installed WebView2 build. So this file gates on the renderer:
+// on software GL it skips only the drag-pan/zoom phase (and says so, loudly, in an annotation and in
+// the evidence) rather than asserting something that measures the rasterizer, not the app; on
+// hardware GL it runs the interaction with the watchdog and the perf-config frame budget as before.
 const READY_BUDGET_MS = 5_000;
 // Controller's ruling for this hand-off check (no map frame budget exists in the spec): no worse
 // than every other frame dropped at 60 Hz (2 x 16.7 ms), plus the same timer-jitter allowance
 // images-perf.spec.ts uses.
 const FRAME_BUDGET_MS = 33.4;
 const TIMER_JITTER_MS = 0.5;
+// Same heuristic as src/app/effects.ts's `isSoftwareRenderer`, plus "software" itself.
+const SOFTWARE_RENDERER_RE = /swiftshader|basic render|software/i;
 
 interface FrameStats {
   frames: number;
@@ -78,38 +95,66 @@ async function installFrameProbe(page: Page): Promise<void> {
   });
 }
 
+/** `WEBGL_debug_renderer_info`'s UNMASKED_RENDERER_WEBGL, or a placeholder if WebGL is unavailable. */
+async function rendererString(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const c = document.createElement("canvas");
+    const gl = (c.getContext("webgl2") ?? c.getContext("webgl")) as WebGLRenderingContext | null;
+    if (!gl) return "no WebGL context";
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  });
+}
+
 // The interaction phase (drag-pan + wheel-zoom) is raced against a watchdog: if the page never
 // answers `page.mouse.move`/`waitForTimeout` again (a hard main-thread lock, not just a slow one),
 // Playwright's own commands can block for the full test timeout. A watchdog lets a lock-up end the
-// test in seconds, as `test.fixme` with the evidence, instead of burning the shared machine's time.
+// test in seconds instead of burning the shared machine's time.
 const INTERACTION_BUDGET_MS = 15_000;
 
-test("capture map at 100,000 points switches in budget and pans/zooms without locking the page", async ({
-  page,
-}, info) => {
-  test.setTimeout(45_000);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  const frames = syntheticFrames(100_000);
-  await serveImages(page, { frames });
-  await openImage(page, P, frames[0].id, "4000x3000");
-  const w = ws(page);
+interface MapScaleOutcome {
+  readyMs: number;
+  renderer: string;
+  /** True when the renderer is software GL and the pan/zoom phase was skipped entirely. */
+  panSkipped: boolean;
+  /** True when the pan/zoom phase ran but never returned within INTERACTION_BUDGET_MS. */
+  locked: boolean;
+  stats: FrameStats | null;
+}
 
+/**
+ * Shared by the 20k and 100k tests below (controller's ruling on task 11a's review): switch to Map,
+ * wait for `expectedCount` points, read the WebGL renderer, and — only on hardware GL — run ~1s of
+ * drag-pan + ~1s of wheel-zoom while the frame probe records rAF cadence. On software GL (SwiftShader
+ * et al) the pan/zoom phase is skipped and annotated instead: that phase would measure the
+ * rasterizer, not the app (see the file header). Throws if the point count is never reached (the
+ * caller decides what that means for its own test); returns `{locked: true, stats: null}` if the
+ * interaction phase never comes back within `INTERACTION_BUDGET_MS` (a hard main-thread lock even on
+ * hardware GL, not just a slow one).
+ */
+async function measureCaptureMap(
+  page: Page,
+  w: ReturnType<typeof ws>,
+  expectedCount: string,
+): Promise<MapScaleOutcome> {
   const switchedAt = Date.now();
   await page.keyboard.press("Shift+M");
-  let readyMs: number;
-  try {
-    await expect(w.captureMap).toHaveAttribute("data-point-count", "100000", {
-      timeout: READY_BUDGET_MS + 5_000,
-    });
-    readyMs = Date.now() - switchedAt;
-  } catch {
-    const seen = await w.captureMap.getAttribute("data-point-count").catch(() => null);
-    test.fixme(true, `capture map never reached 100000 points (saw ${seen}); hand off back to I-FB`);
-    return;
-  }
-  await info.attach("map-ready.json", { body: JSON.stringify({ readyMs }), contentType: "application/json" });
+  await expect(w.captureMap).toHaveAttribute("data-point-count", expectedCount, {
+    timeout: READY_BUDGET_MS + 5_000,
+  });
+  const readyMs = Date.now() - switchedAt;
   await expect(w.browserView.getByRole("radio", { name: "Map" })).toHaveAttribute("aria-checked", "true");
-  expect(readyMs, "map ready (ms)").toBeLessThanOrEqual(READY_BUDGET_MS);
+
+  const renderer = await rendererString(page);
+  if (SOFTWARE_RENDERER_RE.test(renderer)) {
+    test.info().annotations.push({
+      type: "skip-pan",
+      description:
+        "software GL (SwiftShader) — pan frame time measures the rasterizer, not the app; " +
+        "check on the installed build (IMC-X walkthrough)",
+    });
+    return { readyMs, renderer, panSkipped: true, locked: false, stats: null };
+  }
 
   const box = (await w.captureMap.boundingBox())!;
   const cx = box.x + box.width / 2;
@@ -143,32 +188,79 @@ test("capture map at 100,000 points switches in budget and pans/zooms without lo
     setTimeout(() => resolve("timeout"), INTERACTION_BUDGET_MS),
   );
   const raced = await Promise.race([interact().then(() => "done" as const), watchdog]);
-  if (raced === "timeout") {
-    test.fixme(
-      true,
-      `capture map locked up during pan/zoom at 100000 points (ready in ${readyMs} ms; no more ` +
-        `commands answered within ${INTERACTION_BUDGET_MS} ms); hand off back to I-FB`,
-    );
-    return;
-  }
+  if (raced === "timeout") return { readyMs, renderer, panSkipped: false, locked: true, stats: null };
 
   const stats = await page.evaluate(() => (window as unknown as { __mapPerf: Probe }).__mapPerf.stop());
-  await info.attach("map-frame-stats.json", {
-    body: JSON.stringify({ readyMs, ...stats }, null, 2),
+  return { readyMs, renderer, panSkipped: false, locked: false, stats };
+}
+
+/** Appends one run to docs/evidence/images/map-scale.json when E2E_CAPTURE_EVIDENCE=1. */
+function recordEvidence(record: Record<string, unknown>): void {
+  if (process.env.E2E_CAPTURE_EVIDENCE !== "1") return;
+  const file = evidencePath("images", "map-scale.json");
+  const prior = existsSync(file)
+    ? (JSON.parse(readFileSync(file, "utf8")) as { runs: unknown[] })
+    : { runs: [] };
+  prior.runs.push({ at: new Date().toISOString(), ...record });
+  writeFileSync(file, JSON.stringify(prior, null, 2) + "\n");
+}
+
+/**
+ * The shared body for the 20k and 100k checks: open the workspace, switch to Map, and assert what
+ * the current renderer can honestly measure (point count and ready time always; pan/zoom frame
+ * health only on hardware GL — see `measureCaptureMap`).
+ */
+async function runScaleCheck(page: Page, info: TestInfo, points: number): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const frames = syntheticFrames(points);
+  await serveImages(page, { frames });
+  await openImage(page, P, frames[0].id, "4000x3000");
+  const w = ws(page);
+
+  let outcome: MapScaleOutcome;
+  try {
+    outcome = await measureCaptureMap(page, w, String(points));
+  } catch {
+    const seen = await w.captureMap.getAttribute("data-point-count").catch(() => null);
+    test.fixme(true, `capture map never reached ${points} points (saw ${seen}); hand off back to I-FB`);
+    return;
+  }
+  await info.attach(`map-${points}-outcome.json`, {
+    body: JSON.stringify(outcome, null, 2),
     contentType: "application/json",
   });
-  expect(stats.frames, "rAF samples recorded during pan/zoom").toBeGreaterThan(50);
+  expect(outcome.readyMs, "map ready (ms)").toBeLessThanOrEqual(READY_BUDGET_MS);
 
-  // The frame budget (controller's ruling), only in the perf config.
-  if (info.config.metadata.frameBudget) {
-    expect(stats.p95, "p95 rAF interval (ms)").toBeLessThanOrEqual(FRAME_BUDGET_MS + TIMER_JITTER_MS);
-    if (process.env.E2E_CAPTURE_EVIDENCE === "1") {
-      const file = evidencePath("images", "map-scale.json");
-      const prior = existsSync(file)
-        ? (JSON.parse(readFileSync(file, "utf8")) as { runs: unknown[] })
-        : { runs: [] };
-      prior.runs.push({ at: new Date().toISOString(), points: 100_000, readyMs, ...stats });
-      writeFileSync(file, JSON.stringify(prior, null, 2) + "\n");
+  if (!outcome.panSkipped) {
+    expect(outcome.locked, `capture map locked up during pan/zoom at ${points} points`).toBe(false);
+    const stats = outcome.stats!;
+    expect(stats.frames, "rAF samples recorded during pan/zoom").toBeGreaterThan(50);
+    // The frame budget (controller's ruling), only in the perf config, only on hardware GL.
+    if (info.config.metadata.frameBudget) {
+      expect(stats.p95, "p95 rAF interval (ms)").toBeLessThanOrEqual(FRAME_BUDGET_MS + TIMER_JITTER_MS);
     }
   }
+
+  recordEvidence({
+    points,
+    renderer: outcome.renderer,
+    readyMs: outcome.readyMs,
+    panSkipped: outcome.panSkipped,
+    locked: outcome.locked,
+    ...(outcome.stats ?? {}),
+  });
+}
+
+test("capture map at 20,000 points switches in budget and pans/zooms without locking the page", async ({
+  page,
+}, info) => {
+  test.setTimeout(45_000);
+  await runScaleCheck(page, info, 20_000);
+});
+
+test("capture map at 100,000 points switches in budget and pans/zooms without locking the page", async ({
+  page,
+}, info) => {
+  test.setTimeout(45_000);
+  await runScaleCheck(page, info, 100_000);
 });
