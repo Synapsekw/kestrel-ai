@@ -518,4 +518,11 @@ describe("ImagesWorkspace", () => {
     expect(browserSource).not.toMatch(/\buseImageIndex\(/);
     expect(h.ensureAiRegistered).toHaveBeenCalled();
   });
+
+  it("keeps the grid-mode wrapper a flex container, so BrowserGrid's own flex-1/min-h-0 can bind to a bounded height (regression: 20k images used to render un-virtualised, spec §17 flow 7)", () => {
+    const wrapperClass = browserSource.match(/<div className="([^"]*)">\s*<BrowserGrid/)?.[1];
+    expect(wrapperClass?.split(/\s+/)).toEqual(
+      expect.arrayContaining(["flex", "min-h-0", "flex-1", "flex-col"]),
+    );
+  });
 });
