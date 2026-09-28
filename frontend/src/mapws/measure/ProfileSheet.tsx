@@ -24,6 +24,12 @@ export function ProfileSheet({ title, stations, series, cursor, onCursor, onClos
       variant="float"
       role="dialog"
       aria-label={`${title}, expanded profile`}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        // Only the sheet closes: the workspace's own Esc would also drop the selection.
+        e.stopPropagation();
+        onClose();
+      }}
       className={cx(
         "z-20 flex flex-col gap-2 p-3 animate-rise reduce-motion:animate-none",
         stage ? "absolute inset-x-4 bottom-[88px]" : "fixed inset-x-4 bottom-4",
