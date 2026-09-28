@@ -43,7 +43,7 @@ import { FLY_EXIT_AHEAD_M, FlyControls } from "./flyControls";
 import { FrameRing, frameInterval } from "./frameRing";
 import { shouldKeepRendering } from "./idle";
 import { letterbox, photoFrame, photoToCanvas, type LookPose, type LookThrough } from "./lookThrough";
-import { makeMaterialOptions, type ColourMode } from "./materialOptions";
+import { makeMaterialOptions, usesNewFormat, type ColourMode } from "./materialOptions";
 import { mouseButtonsFor, resolveNavMode } from "./navMode";
 import { runOcclusion } from "./occlusion";
 import { overlayObject, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
@@ -264,6 +264,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   let tween: Tween | null = null;
   let orbitScript: { until: number; radPerMs: number; resolve: () => void } | null = null;
   let pco: PointCloudOctree | null = null;
+  let octreeV2 = false; // potree-core's material.newFormat as built at load: toggled per colour mode
   let raf = 0;
   let chained = false;
   let lastTickAt: number | null = null;
@@ -445,6 +446,11 @@ export function createEngine(o: EngineOptions): CloudEngine {
     pco.material.inputColorEncoding = m.inputColorEncoding as M["inputColorEncoding"];
     pco.material.outputColorEncoding = m.outputColorEncoding as M["outputColorEncoding"];
     pco.material.pointSizeType = m.pointSizeType as M["pointSizeType"];
+    const newFormat = usesNewFormat(colour, octreeV2);
+    if (pco.material.newFormat !== newFormat) {
+      pco.material.newFormat = newFormat; // not a shader-updating property in potree-core
+      pco.material.updateShaderSource();
+    }
     pco.material.pointColorType = m.pointColorType as M["pointColorType"];
     pco.material.size = m.size;
     pco.material.elevationRange = m.elevationRange;
@@ -724,6 +730,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
         return;
       }
       loaded.material.gradient = VIRIDIS;
+      octreeV2 = loaded.material.newFormat;
       scene.add(loaded);
       pco = loaded;
       availability = colourAvailability(attributeNames(loaded.pcoGeometry));

@@ -6,6 +6,7 @@ import {
   defaultColour,
   defaultElevationRange,
   makeMaterialOptions,
+  usesNewFormat,
 } from "./materialOptions";
 
 describe("material options", () => {
@@ -57,5 +58,13 @@ describe("colour modes (spec §7 Colour)", () => {
         intensityRange: [5, 900],
       }).intensityRange,
     ).toEqual([5, 900]);
+  });
+
+  it("keeps potree-core's new_format define only for RGB on a v2 octree (it forces vColor = rgba)", () => {
+    expect(usesNewFormat("rgb", true)).toBe(true);
+    expect(usesNewFormat("elevation", true)).toBe(false);
+    expect(usesNewFormat("intensity", true)).toBe(false);
+    expect(usesNewFormat("classification", true)).toBe(false);
+    expect(usesNewFormat("rgb", false)).toBe(false);
   });
 });

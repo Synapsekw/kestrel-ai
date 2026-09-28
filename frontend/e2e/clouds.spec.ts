@@ -552,7 +552,14 @@ test("colour modes: a cloud with intensity and classification draws in both", as
     await w.colour(mode).click();
     const c = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
     expect(c.total - c.background, `${mode} draws points`).toBeGreaterThan(0.01 * c.total);
-    expect(c.white, `${mode} is not blown out`).toBe(0);
+    // S1 spec §17 item 7: the white-colour trap paints every point white (~100 %); < 5 % is fine.
+    // Intensity is a grey ramp, so the points above the p98 of the range clamp to white by design.
+    const drawn = c.total - c.background;
+    if (mode === "Class") expect(c.white, `${mode} is not blown out`).toBe(0);
+    else {
+      expect(c.white, `${mode} is not blown out (${c.white} of ${drawn})`).toBeLessThan(0.05 * drawn);
+      expect(c.red + c.green, `${mode} draws grey, not RGB`).toBe(0);
+    }
   }
   expect((await page.evaluate(() => window.__kestrelCloudViewer!.stats())).errors).toEqual([]);
 });
@@ -575,4 +582,20 @@ test("colour modes: Class draws each half in its class colour, not RGB or the El
       return s && { west: redShare(s.left) > 0.9, east: redShare(s.right) > 0.9, eastGreen: s.right.green };
     })
     .toEqual({ west: true, east: true, eastGreen: 0 });
+});
+
+test("colour modes: Elevation draws the viridis ramp, not RGB", async ({ page }) => {
+  // Viridis is never red-dominant for `classifyPixels` (its reddest stop, yellow 253/231/37, is
+  // within 40 of green), while RGB draws the west half red: any red pixel means RGB is still drawn.
+  await classifiedCloud(page);
+  await ws(page).colour("Elevation").click();
+  await expect(ws(page).colour("Elevation")).toHaveAttribute("aria-checked", "true");
+  await expect
+    .poll(async () => {
+      const s = await page.evaluate(() => window.__kestrelCloudViewer!.topSnapshotSample(512));
+      if (!s) return null;
+      const drawn = s.left.total - s.left.background + s.right.total - s.right.background;
+      return { drawn: drawn > 0, red: s.left.red + s.right.red };
+    })
+    .toEqual({ drawn: true, red: 0 });
 });
