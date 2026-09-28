@@ -1,5 +1,5 @@
 import { deleteFinding } from "@/api/findings";
-import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { FindingBody } from "./FindingBody";
 import type { InspectorKind } from "./inspectorRegistry";
 
@@ -10,11 +10,11 @@ const finding: InspectorKind = {
   framed: false,
   Body: FindingBody,
   remove: {
-    confirm: () => "Delete this finding? This cannot be undone.",
+    // W1's dialog title already asks "Delete this finding?" (M-W3 P9).
+    confirm: () => "This cannot be undone.",
+    // Global Constraints §1 / M-W3 P10: an own finding write — one bump on success, its echo swallowed.
     run: async (sel, { api, projectId }) => {
-      // Global Constraints §1: changesOwnWrite.ts is not on main; keep the plain bump (I-FB not merged).
-      await deleteFinding(api, projectId, sel.id);
-      useChangesStore.getState().bumpFindings();
+      await ownFindingsWrite([sel.id], () => deleteFinding(api, projectId, sel.id));
     },
   },
 };
