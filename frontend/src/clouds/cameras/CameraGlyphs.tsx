@@ -166,11 +166,14 @@ export function CameraGlyphs({
     useCamerasStore.getState().setLookingThrough(false);
   }, []);
 
+  // Glyph clicks only with the switch on and orbit/pan armed (Ruling 6); the pointer-down that leaves
+  // a look stays live for as long as the look does, whatever the switch or the tool (Ruling 7).
+  const glyphsEnabled = shown && (tool === "orbit" || tool === "pan");
   useCanvasClicks(
-    shown && (tool === "orbit" || tool === "pan"),
+    glyphsEnabled || looking,
     (x, y) => {
       const v = viewer.current;
-      if (!v || !set) return;
+      if (!glyphsEnabled || !v || !set) return;
       const screen = set.image_id.map((_, i) =>
         v.project({ x: set.x[i], y: set.y[i], z: cameraZ(set, i, top) }),
       );
@@ -200,21 +203,31 @@ export function CameraGlyphs({
       lookRef.current = { pose: cur.pose, restore: took.restore };
       setFrame(took.frame);
     };
+    // window resize and the ResizeObserver both fire on one resize: one re-ask per animation frame
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        refit();
+      });
+    };
     window.addEventListener("keydown", onKey, true);
-    window.addEventListener("resize", refit);
+    window.addEventListener("resize", schedule);
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined" && host.current) {
       let first = true; // observe() reports the current size once: that is not a resize
       ro = new ResizeObserver(() => {
         if (first) first = false;
-        else refit();
+        else schedule();
       });
       ro.observe(host.current);
     }
     return () => {
       window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("resize", refit);
+      window.removeEventListener("resize", schedule);
       ro?.disconnect();
+      cancelAnimationFrame(raf);
     };
   }, [looking, leave, viewer]);
 

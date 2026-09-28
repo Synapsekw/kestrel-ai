@@ -57,13 +57,26 @@ function click(x: number, y: number, x2 = x, y2 = y) {
   });
 }
 
+/** The layer with W1's armed tool; "Arm distance" switches the tool as a hotkey would. */
+function Layer({ initial, viewer }: { initial: CloudToolId; viewer: { current: CloudViewerHandle | null } }) {
+  const [tool, setTool] = useState(initial);
+  return (
+    <>
+      <CameraGlyphs projectId={PROJECT_ID} cloud={exampleCloud} viewer={viewer} tool={tool} />
+      <button type="button" onClick={() => setTool("distance")}>
+        Arm distance
+      </button>
+    </>
+  );
+}
+
 function mount(tool: CloudToolId = "orbit") {
   const { v, ref, restore, at } = fakeViewer();
   const { api } = fakeClient([{ method: "GET", path: /\/images\/[^/]+$/, body: exampleImage }]);
   const r = renderWithProviders(
     <>
       <ReloadableCanvas />
-      <CameraGlyphs projectId={PROJECT_ID} cloud={exampleCloud} viewer={ref} tool={tool} />
+      <Layer initial={tool} viewer={ref} />
       <LocationProbe />
     </>,
     { api, route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}` },
@@ -167,8 +180,10 @@ describe("CameraGlyphs", () => {
     at.left = 50;
     act(() => {
       window.dispatchEvent(new Event("resize"));
+      window.dispatchEvent(new Event("resize"));
     });
-    expect(v.lookThrough).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.getByTestId("look-through-frame").style.left).toBe("50px"));
+    expect(v.lookThrough).toHaveBeenCalledTimes(2); // two resize events in one frame: one re-ask
     expect(v.lookThrough.mock.calls[1][0]).toEqual(v.lookThrough.mock.calls[0][0]);
     expect(screen.getByTestId("look-through-frame").style.left).toBe("50px");
     expect(useCamerasStore.getState().lookingThrough).toBe(true);
@@ -189,6 +204,21 @@ describe("CameraGlyphs", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Look through" }));
     click(100, 100, 160, 100);
     expect(screen.queryByTestId("look-through-frame")).toBeNull();
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the switch goes off", () => act(() => useCamerasStore.getState().setVisible(false))],
+    ["another tool is armed", () => fireEvent.click(screen.getByRole("button", { name: "Arm distance" }))],
+  ])("a pointer-down on the canvas still leaves the photo after %s", async (_, change) => {
+    const { restore } = mount();
+    click(400, 300);
+    fireEvent.click(await screen.findByRole("button", { name: "Look through" }));
+    change();
+    expect(screen.getByTestId("look-through-frame")).toBeInTheDocument();
+    click(100, 100, 160, 100);
+    expect(screen.queryByTestId("look-through-frame")).toBeNull();
+    expect(useCamerasStore.getState().lookingThrough).toBe(false);
     expect(restore).not.toHaveBeenCalled();
   });
 
