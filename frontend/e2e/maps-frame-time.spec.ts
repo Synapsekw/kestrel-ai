@@ -22,10 +22,18 @@ async function full(page: Page) {
   }, EFFECTS_KEY);
 }
 
+/**
+ * The evidence run (budget or capture) measures 2 s as recorded in frame-time.json. The gate only
+ * needs its ≥ 60-frame sample, so it measures 5 s: a loaded machine at ~15 fps still collects it.
+ */
+const EVIDENCE = process.env.E2E_FRAME_BUDGET === "1" || process.env.E2E_CAPTURE_EVIDENCE === "1";
+const SAMPLE_MS = EVIDENCE ? 2000 : 5000;
+const DRIVE_MS = SAMPLE_MS + 400;
+
 const divider = (page: Page) => page.getByRole("slider", { name: "Swipe divider" });
 
 /** Drives the mouse for about `ms`: drags (pan), wheel steps (zoom), or divider drags. */
-async function drive(page: Page, what: "pan-zoom" | "divider", ms = 2400) {
+async function drive(page: Page, what: "pan-zoom" | "divider", ms = DRIVE_MS) {
   const stage = (await page.getByTestId("site-map").boundingBox())!;
   const cx = stage.x + stage.width / 2;
   const cy = stage.y + stage.height / 2;
@@ -114,17 +122,19 @@ test("flow 7: frame time in Swipe with 4 layers, while panning, zooming and drag
   // Pan and zoom in Swipe (both sides' tiles, the hillshade and the vector drawing move together).
   await page.getByTestId("site-map").focus();
   await page.keyboard.press("h");
-  let sampling = measureFrames(page);
+  let sampling = measureFrames(page, { durationMs: SAMPLE_MS });
   await drive(page, "pan-zoom");
   record("swipe-pan-zoom", "Swipe, 4 layers, drag-pan + wheel zoom continuously", await sampling);
 
   // Divider drags (the clip re-renders every frame).
-  sampling = measureFrames(page);
+  sampling = measureFrames(page, { durationMs: SAMPLE_MS });
   await drive(page, "divider");
   record("swipe-divider", "Swipe, 4 layers, divider dragged side to side continuously", await sampling);
 
   expect(world.tiles.some((t) => t.startsWith("map/"))).toBe(true);
   expect(world.tiles.some((t) => t.startsWith("surface/"))).toBe(true);
+  // The fourth layer is drawn, not only listed: its vector tiles were fetched.
+  expect(world.calls.some((c) => /^\/drawings\/[^/]+\/vtiles\//.test(c.path))).toBe(true);
 
   const run = {
     at: new Date().toISOString(),

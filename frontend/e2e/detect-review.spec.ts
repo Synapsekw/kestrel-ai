@@ -62,7 +62,9 @@ test("a map run is reviewed in the workspace from the keyboard (A accept, X reje
   await expect(page).toHaveURL(new RegExp(`/p/${P}/maps\\?(.*&)?sel=run(:|%3A)${RUN}(&|$)`));
   await expect(page.getByTestId("run-inspector")).toBeVisible();
 
-  // Tab starts the review at the first pending detection.
+  // Tab starts the review at the first pending detection. Its shortcut is bound only once the run
+  // has loaded as succeeded, which is when "Start review" is shown, so wait for that before pressing.
+  await expect(page.getByRole("button", { name: /^Start review/ })).toBeEnabled();
   await page.keyboard.press("Tab");
   const current = page.getByTestId("review-current");
   await expect(current).toHaveAttribute("data-id", detection(1).id);

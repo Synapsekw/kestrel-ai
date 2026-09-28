@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { enableDiagnostics, sitePixel } from "./fixtures/mapWorkspace";
+import { drawSite, enableDiagnostics } from "./fixtures/mapWorkspace";
 
 // Spec 2026-09-26-map-workspace §15 "then one real-backend flow": the real site frame, real warped
 // site tiles for two orthos in different extents, Swipe, and a distance the server computes on the
@@ -71,23 +71,19 @@ test("real backend: two orthos in one frame, Swipe, and a server-computed distan
   await expect(page.getByRole("slider", { name: "Swipe divider" })).toBeVisible();
 
   // 30 m east + 40 m south of a point inside both orthos: 50 m grid; UTM 33N at its central
-  // meridian scales by 0.9996, so the ellipsoidal length is about 50.02 m. Tool keys are
-  // window-level (`site-map` is not focusable), so nothing is focused first.
+  // meridian scales by 0.9996, so the ellipsoidal length is about 50.02 m. `drawSite` presses `l`
+  // until the tool reads armed and paces the vertices past OpenLayers' double-click window; the
+  // save is awaited from before the first click, so a POST that comes early is not missed.
   const [e0, n0] = [data.origin[0] + 40, data.origin[1] - 30];
-  await page.keyboard.press("l");
-  for (const [e, n] of [
-    [e0, n0],
-    [e0 + 30, n0 - 40],
-  ]) {
-    const p = await sitePixel(page, e, n);
-    await page.mouse.click(p.x, p.y);
-  }
   const saved = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname.endsWith(`/projects/${pid}/map-measurements`) &&
       r.request().method() === "POST",
   );
-  await page.keyboard.press("Enter");
+  await drawSite(page, "l", [
+    [e0, n0],
+    [e0 + 30, n0 - 40],
+  ]);
   expect((await saved).status()).toBe(201);
   await expect(page.getByTestId("map-inspector").getByRole("region", { name: "Length" })).toContainText(
     /50\.0[0-4] m/,
