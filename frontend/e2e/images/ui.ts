@@ -66,7 +66,7 @@ export async function toScreen(page: Page, ix: number, iy: number) {
 
 /** "6,912 mm ± 278 mm", "6.91 m ± 0.28 m" or "691 cm" -> the first length, in millimetres. */
 export function parseLengthMm(text: string): number {
-  const m = /([\d.,]+)\s*(mm|cm|m)\b/.exec(text.replace(/ /g, " "));
+  const m = /([\d.,]+)\s*(mm|cm|m)\b/.exec(text.replace(/\u00a0/g, " "));
   if (!m) throw new Error(`no length in "${text}"`);
   const value = Number(m[1].replace(/,/g, ""));
   return m[2] === "m" ? value * 1000 : m[2] === "cm" ? value * 10 : value;
