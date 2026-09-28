@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudViewMeta, CloudViewOut, CloudViewPose } from "@contract/client";
 import { measurementOf, POSE, viewOut } from "@/test/cloudViewFixtures";
 import { VIEW_MAX_BYTES, type CaptureMark, type CaptureResult } from "../viewer/capture";
+import type { ViewSubject } from "../workspace/seams";
 import type { CaptureEngine } from "./captureEngine";
 import { setAnchorNormal } from "./normals";
 import { CaptureQueue, normalFor, poseFor, type QueueDeps, type SubjectGeometry } from "./queue";
@@ -145,12 +146,36 @@ describe("the capture queue", () => {
     await vi.waitFor(() => expect(engine.capture).toHaveBeenCalledTimes(1));
     queue.dispose();
     expect(await b).toBe("stopped");
+    // the running job's busy flag is cleared immediately at dispose, not left dangling
+    // until its capture eventually settles (it must not survive into a later queue's state).
+    expect(deps.onBusy).toHaveBeenCalledWith("finding:f1", false);
+    vi.mocked(deps.onBusy).mockClear();
     first.resolve(shot());
     expect(await a).toBe("stopped");
+    expect(deps.onBusy).not.toHaveBeenCalled();
     expect(deps.upload).not.toHaveBeenCalled();
     expect(deps.onFail).not.toHaveBeenCalled();
     expect(deps.onView).not.toHaveBeenCalled();
     expect(await queue.enqueue(F1, "refresh")).toBe("stopped");
+  });
+
+  it("dispose during an upload aborts the signal and ignores a late success", async () => {
+    const uploadDone = deferred<CloudViewOut>();
+    let signalSeen: AbortSignal | undefined;
+    const upload = vi.fn((_subject: ViewSubject, _image: Blob, _meta: CloudViewMeta, signal: AbortSignal) => {
+      signalSeen = signal;
+      return uploadDone.promise;
+    });
+    const { queue, deps } = harness({ upload });
+    const a = queue.enqueue(F1, "create");
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    queue.dispose();
+    expect(signalSeen?.aborted).toBe(true);
+    vi.mocked(deps.onBusy).mockClear();
+    uploadDone.resolve(viewOut({ subject_id: "f1" }));
+    expect(await a).toBe("stopped");
+    expect(deps.onView).not.toHaveBeenCalled();
+    expect(deps.onBusy).not.toHaveBeenCalled();
   });
 
   it("a capture failure stops the queue with one report and the queue recovers", async () => {

@@ -107,6 +107,10 @@ export class CaptureQueue {
     if (this.disposed) return;
     this.disposed = true;
     this.abort.abort();
+    // The running job's own settle (in `pump`) no longer clears busy once disposed (below), so
+    // clear it here instead of leaving it dangling until that capture/upload eventually finishes
+    // — otherwise a later queue over the same subject key would have its busy flag wiped by it.
+    if (this.running) this.deps.onBusy(this.running.key, false);
     this.drop();
   }
 
@@ -114,7 +118,7 @@ export class CaptureQueue {
     const dropped = this.pending;
     this.pending = [];
     for (const job of dropped) {
-      if (job.key !== this.running?.key) this.deps.onBusy(job.key, false);
+      if (this.disposed || job.key !== this.running?.key) this.deps.onBusy(job.key, false);
       for (const done of job.done) done("stopped");
     }
   }
@@ -142,7 +146,9 @@ export class CaptureQueue {
         );
       }
       this.running = null;
-      if (!this.pending.some((j) => j.key === job.key)) this.deps.onBusy(job.key, false);
+      // Once disposed, busy was already cleared for this job in `dispose()` — don't touch it
+      // again, since by the time this settles the key may belong to a different queue.
+      if (!this.disposed && !this.pending.some((j) => j.key === job.key)) this.deps.onBusy(job.key, false);
       for (const done of job.done) done(outcome);
     }
   }
