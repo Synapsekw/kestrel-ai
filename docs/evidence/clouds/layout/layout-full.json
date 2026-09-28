@@ -1,0 +1,50 @@
+{
+  "mode": "layout",
+  "effects": "full",
+  "budget": 3000000,
+  "cloud": {
+    "id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+    "points": 21697184
+  },
+  "build": "dev mode (Vite), Microsoft Edge over CDP",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "viewport": {
+    "width": 1416,
+    "height": 774
+  },
+  "panels": {
+    "palette": {
+      "x": 78,
+      "y": 70,
+      "width": 50,
+      "height": 499
+    },
+    "inspectorTabs": {
+      "x": 1081,
+      "y": 79,
+      "width": 280,
+      "height": 41
+    },
+    "minimap": {
+      "x": 1072,
+      "y": 582,
+      "width": 330,
+      "height": 178
+    },
+    "readout": {
+      "x": 494.046875,
+      "y": 726,
+      "width": 491.890625,
+      "height": 34
+    },
+    "viewport": {
+      "x": 64,
+      "y": 56,
+      "width": 1352,
+      "height": 718
+    }
+  },
+  "mockup": "E:\\Dev\\Yolo\\app\\.superpowers\\brainstorm\\1481982-1790403567\\content\\ws-clouds.html",
+  "problems": []
+}

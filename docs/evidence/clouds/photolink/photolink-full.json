@@ -1,0 +1,164 @@
+{
+  "mode": "photolink",
+  "effects": "full",
+  "budget": 3000000,
+  "cloud": {
+    "id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+    "points": 21697184
+  },
+  "build": "dev mode (Vite), Microsoft Edge over CDP",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "rows": [
+    {
+      "spot": [
+        243515.218,
+        3178242.151
+      ],
+      "hits": [
+        "Open photo 1, In frame, 85.6 m",
+        "Open photo 2, In frame, 103.5 m",
+        "Open photo 3, In frame, 115.4 m",
+        "Open photo 4, In frame, 118.2 m",
+        "Open photo 5, In frame, 118.3 m",
+        "Open photo 6, In frame, 118.7 m",
+        "Open photo 7, In frame, 130.3 m",
+        "Open photo 8, In frame, 144.0 m",
+        "Open photo 9, In frame, 144.2 m",
+        "Open photo 10, In frame, 144.5 m",
+        "Open photo 11, In frame, 144.6 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/12ac12d2-81f0-4402-92b3-e5e8ee0419df?at=905.9,0.0&r=328&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243514.932,
+        3178243.033
+      ],
+      "hits": [
+        "Open photo 1, In frame, 85.7 m",
+        "Open photo 2, In frame, 103.4 m",
+        "Open photo 3, In frame, 115.3 m",
+        "Open photo 4, In frame, 118.1 m",
+        "Open photo 5, In frame, 118.2 m",
+        "Open photo 6, In frame, 118.6 m",
+        "Open photo 7, In frame, 130.2 m",
+        "Open photo 8, In frame, 143.9 m",
+        "Open photo 9, In frame, 144.1 m",
+        "Open photo 10, In frame, 144.4 m",
+        "Open photo 11, In frame, 144.5 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/12ac12d2-81f0-4402-92b3-e5e8ee0419df?at=914.5,0.0&r=328&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243514.182,
+        3178243.578
+      ],
+      "hits": [
+        "Open photo 1, In frame, 115.6 m",
+        "Open photo 2, In frame, 118.9 m",
+        "Open photo 3, In frame, 119.0 m",
+        "Open photo 4, In frame, 131.0 m",
+        "Open photo 5, In frame, 144.6 m",
+        "Open photo 6, In frame, 144.9 m",
+        "Open photo 7, In frame, 145.2 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/e040f821-9fd9-41f2-bbc8-c0f6360aff4d?at=2501.6,0.0&r=285&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243513.254,
+        3178243.578
+      ],
+      "hits": [],
+      "url": null
+    },
+    {
+      "spot": [
+        243512.504,
+        3178243.033
+      ],
+      "hits": [
+        "Open photo 1, In frame, 115.8 m",
+        "Open photo 2, In frame, 120.6 m",
+        "Open photo 3, In frame, 120.8 m",
+        "Open photo 4, In frame, 132.8 m",
+        "Open photo 5, In frame, 146.2 m",
+        "Open photo 6, In frame, 146.5 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/e040f821-9fd9-41f2-bbc8-c0f6360aff4d?at=2577.3,0.0&r=285&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243512.218,
+        3178242.151
+      ],
+      "hits": [],
+      "url": null
+    },
+    {
+      "spot": [
+        243512.504,
+        3178241.269
+      ],
+      "hits": [
+        "Open photo 1, In frame, 116.9 m",
+        "Open photo 2, In frame, 120.3 m",
+        "Open photo 3, In frame, 120.4 m",
+        "Open photo 4, In frame, 132.7 m",
+        "Open photo 5, In frame, 146.6 m",
+        "Open photo 6, In frame, 146.8 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/e040f821-9fd9-41f2-bbc8-c0f6360aff4d?at=2568.0,0.0&r=284&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243513.254,
+        3178240.724
+      ],
+      "hits": [
+        "Open photo 1, In frame, 117.3 m",
+        "Open photo 2, In frame, 119.8 m",
+        "Open photo 3, In frame, 119.9 m",
+        "Open photo 4, In frame, 132.3 m",
+        "Open photo 5, In frame, 146.4 m",
+        "Open photo 6, In frame, 146.7 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/e040f821-9fd9-41f2-bbc8-c0f6360aff4d?at=2549.1,0.0&r=283&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243514.182,
+        3178240.724
+      ],
+      "hits": [
+        "Open photo 1, In frame, 115.6 m",
+        "Open photo 2, In frame, 118.9 m",
+        "Open photo 3, In frame, 119.0 m",
+        "Open photo 4, In frame, 131.0 m",
+        "Open photo 5, In frame, 144.6 m",
+        "Open photo 6, In frame, 144.9 m",
+        "Open photo 7, In frame, 145.2 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/e040f821-9fd9-41f2-bbc8-c0f6360aff4d?at=2501.6,0.0&r=285&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    },
+    {
+      "spot": [
+        243514.932,
+        3178241.269
+      ],
+      "hits": [
+        "Open photo 1, In frame, 117.0 m",
+        "Open photo 2, In frame, 118.2 m",
+        "Open photo 3, In frame, 118.3 m",
+        "Open photo 4, In frame, 130.7 m",
+        "Open photo 5, In frame, 144.9 m",
+        "Open photo 6, In frame, 145.1 m",
+        "Open photo 7, In frame, 145.4 m"
+      ],
+      "url": "http://127.0.0.1:63975/p/e7677a67-5f98-4455-aa89-e16348777182/images/e040f821-9fd9-41f2-bbc8-c0f6360aff4d?at=2479.6,0.0&r=284&from=cloud:4b8ed804-edaf-4df6-9b65-9c42c7b99ef4"
+    }
+  ],
+  "problems": []
+}

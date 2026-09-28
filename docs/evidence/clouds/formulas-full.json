@@ -1,0 +1,57 @@
+{
+  "mode": "formulas",
+  "effects": "full",
+  "budget": 3000000,
+  "cloud": {
+    "id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+    "points": 21697184
+  },
+  "build": "dev mode (Vite), Microsoft Edge over CDP",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "rows": [
+    {
+      "case": "area",
+      "key": "area_surface_m2",
+      "server": 3,
+      "client": 3,
+      "equal": true
+    },
+    {
+      "case": "area",
+      "key": "area_plan_m2",
+      "server": 1.5,
+      "client": 1.5,
+      "equal": true
+    },
+    {
+      "case": "rings",
+      "key": "lean_angle_deg",
+      "server": 0.9904439750279836,
+      "client": 0.9904439750279835,
+      "equal": true
+    },
+    {
+      "case": "rings",
+      "key": "lean_azimuth_deg",
+      "server": 88.89788513744918,
+      "client": 88.89788513744918,
+      "equal": true
+    },
+    {
+      "case": "twopoint",
+      "key": "lean_angle_deg",
+      "server": 0.9842612463008759,
+      "client": 0.9842612463008759,
+      "equal": true
+    },
+    {
+      "case": "twopoint",
+      "key": "lean_azimuth_deg",
+      "server": 93.57091422610819,
+      "client": 93.57091422610819,
+      "equal": true
+    }
+  ],
+  "problems": []
+}
