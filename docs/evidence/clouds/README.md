@@ -126,3 +126,28 @@ contract — no field renames were needed. The one behavioural change from the b
 decision — Prism's own `CloudCameraSet` example draws a frustum and a warn-point glyph, which can
 add a stray render frame or a stray drawn point to a spec that counts idle frames or samples
 colours without caring about cameras.
+
+## Task 3: `pointcloud-foundation.spec.ts` needs its own octree/camera fixtures (deviation)
+
+The brief's literal script for `pointcloud-foundation.spec.ts` opens `/p/${P}/clouds` with no
+routes stubbed at all, relying entirely on the Prism mock's own examples ("the Prism example cloud
+is not drawn, only the routes and the workspace shell are checked"). Run as written, this fails:
+Prism's `GET .../pointclouds` and `.../pointclouds/{id}` examples serve fine (`PointCloudOut`'s
+`example:` block, id `c0000000-8888-4000-8000-000000000001`), but the octree binary endpoint has no
+schema example, so Prism answers with its generic placeholder (`"string"`), which the viewer's
+octree loader cannot parse (`Unexpected token 's', "string" is not valid JSON`). That sends
+`CloudViewer` straight into its `loadError` state ("The 3D view could not be shown"), `hasView`
+never becomes `true`, and the palette/toolbar this test checks never renders — confirmed by running
+the brief's script unmodified and reading the failure's `error-context.md` snapshot.
+
+Fix (test-only, no app code touched): route `GET .../pointclouds/{CLOUD}/octree/*` with a real
+octree via `routeOctree`/`buildOctree`/`redGreenGrid` (`frontend/e2e/fixtures/potreeOctree.ts`,
+the same helpers `clouds-workspace.spec.ts` uses) and `GET .../cameras` with C-L1's `emptyCameras()`
+(`frontend/e2e/fixtures/cameras.ts`), both keyed on `CLOUD` from `frontend/e2e/fixtures/clouds.ts`
+— which happens to equal Prism's own example id, so the `/pointclouds` list and detail routes are
+still left unstubbed and served by Prism, keeping the spirit of "the routes are checked" while
+supplying the one thing Prism cannot: real octree bytes. The mismatch between the octree's own
+coordinate origin (`[243500, 3178000, 0]`, S1's fixture grid) and Prism's example `bounds_native`
+(a different site, `[553012.4, 2847210.9, -52.3, …]`) does not matter here since the test never
+asserts on visual framing or drawn content, only that the workspace shell (palette, tool state)
+renders.
