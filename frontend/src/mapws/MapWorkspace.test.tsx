@@ -92,6 +92,8 @@ describe("MapWorkspace", () => {
   it("steps the survey with [ and ], cycles the compare mode with C, and ignores keys typed in a field", async () => {
     renderWorkspace();
     await screen.findByTestId("site-map");
+    // The URL write proves the workspace has read the surveys and its keys are live.
+    await waitFor(() => expect(location()).toHaveTextContent("r=2026-05-20"));
     fireEvent.keyDown(window, { key: "[" });
     await waitFor(() => expect(location()).toHaveTextContent("r=2026-04-15"));
     fireEvent.keyDown(window, { key: "c" });
@@ -145,7 +147,9 @@ describe("MapWorkspace", () => {
   it("clears the selection on Esc when nothing is being drawn", async () => {
     renderWorkspace(undefined, `/p/${PROJECT_ID}/maps?sel=zone:z1`);
     await screen.findByTestId("site-map");
-    expect(location()).toHaveTextContent("sel=zone%3Az1");
+    // The route has the raw `sel=zone:z1`; the workspace's own (encoded) write proves it took the
+    // selection from the URL, so Esc has something to clear.
+    await waitFor(() => expect(location()).toHaveTextContent("sel=zone%3Az1"));
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(location()).not.toHaveTextContent("sel="));
   });

@@ -21,7 +21,10 @@ export function useUrlState(ready: boolean, onUncentredArrival?: () => void): vo
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const paramsRef = useRef(params);
-  const own = useRef<string | null>(null);
+  // Our own writes, oldest first, until the router shows the latest back. A second store change can
+  // land before the effect for the first write runs; with only the latest remembered, that first
+  // write would read as a foreign navigation and revert the store to it (a dropped [ ] or Esc).
+  const own = useRef<string[]>([]);
   const arriving = useRef(false);
   const uncentredRef = useRef(onUncentredArrival);
   useEffect(() => {
@@ -39,7 +42,8 @@ export function useUrlState(ready: boolean, onUncentredArrival?: () => void): vo
         selection: s.selection,
       });
       if (next.toString() === paramsRef.current.toString()) return;
-      own.current = next.toString();
+      own.current.push(next.toString());
+      if (own.current.length > 16) own.current.shift();
       paramsRef.current = next;
       setParams(next, { replace: true });
     },
@@ -57,7 +61,13 @@ export function useUrlState(ready: boolean, onUncentredArrival?: () => void): vo
 
   useEffect(() => {
     if (!ready) return;
-    if (params.toString() === own.current) return;
+    const shown = params.toString();
+    if (shown === own.current.at(-1)) {
+      own.current = [shown]; // the router has caught up with our latest write
+      return;
+    }
+    if (own.current.includes(shown)) return; // an older write of ours, already superseded
+    own.current = [];
     const s = workspace.getState();
     const req = arrivalRequest(params);
     if (req.kind === "none") {
