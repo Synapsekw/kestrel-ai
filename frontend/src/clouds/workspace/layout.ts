@@ -32,3 +32,16 @@ export const NOTICE_INSET = {
   right: EDGE + INSPECTOR_WIDTH + EDGE,
   top: EDGE + HINT_BAR_HEIGHT + READOUT_GAP,
 } as const;
+
+/** The readout pill's height (one line, spec §6); pinned by e2e/clouds-workspace.spec.ts. */
+export const READOUT_HEIGHT = 48;
+/**
+ * The profile panel (C-M1 §8.3): the free centre band, above the readout pill so it never covers
+ * it. Same left/right as `NOTICE_INSET` (between the cloud panel and the inspector).
+ */
+export const PROFILE_PANEL = {
+  left: NOTICE_INSET.left,
+  right: NOTICE_INSET.right,
+  bottom: EDGE + READOUT_HEIGHT + READOUT_GAP,
+  height: 220,
+} as const;
