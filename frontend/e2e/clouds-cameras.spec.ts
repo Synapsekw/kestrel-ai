@@ -85,6 +85,41 @@ test("cameras: the switch shows the glyphs, a glyph opens its popover, Look thro
   await expect(page.getByTestId("look-through-frame")).toHaveCount(0);
   expect(await looking(page)).toBe(false);
 
+  // a view command and a wheel leave the photo pose in the engine: the frame and the pill go too
+  const lookThroughNadir = async () => {
+    // the glyph's spot once the view has stopped moving (a view command tweens for 350 ms)
+    let last = "";
+    await expect
+      .poll(async () => {
+        const c = (await cams(page)).find((x) => x.imageId === NADIR);
+        const now = c ? `${Math.round(c.x)},${Math.round(c.y)}` : "";
+        const stable = now !== "" && now === last;
+        last = now;
+        return stable;
+      })
+      .toBe(true);
+    const [x, y] = last.split(",").map(Number);
+    await page.mouse.click(x, y);
+    await page
+      .getByRole("dialog", { name: "Drone photo" })
+      .getByRole("button", { name: "Look through" })
+      .click();
+    await expect(page.getByTestId("look-through-frame")).toBeVisible();
+    expect(await looking(page)).toBe(true);
+  };
+  await lookThroughNadir();
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(page.getByTestId("look-through-frame")).toHaveCount(0);
+  expect(await looking(page)).toBe(false);
+
+  await lookThroughNadir();
+  const box = (await page.getByTestId("cloud-canvas").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -200);
+  await expect(page.getByTestId("look-through-frame")).toHaveCount(0);
+  await expect(page.getByText("Looking through the drone photo · Esc goes back")).toHaveCount(0);
+  expect(await looking(page)).toBe(false);
+
   await page.getByRole("switch", { name: "Show camera positions" }).click();
   await expect.poll(() => overlays(page)).not.toContain("cameras");
 });

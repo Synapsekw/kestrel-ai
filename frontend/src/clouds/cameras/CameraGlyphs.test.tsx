@@ -18,7 +18,13 @@ const N = 3178050;
 function fakeViewer() {
   const restore = vi.fn();
   const at = { left: 10 };
+  /** The handle's onLeavePose listeners: call them to play "the engine left the photo pose". */
+  const leftPose = new Set<() => void>();
   const v = {
+    onLeavePose: vi.fn((cb: () => void) => {
+      leftPose.add(cb);
+      return () => leftPose.delete(cb);
+    }),
     project: vi.fn((p: { x: number; y: number }) => ({ x: p.x - E + 400, y: N - p.y + 300 })),
     setOverlay: vi.fn(),
     pickAtClient: vi.fn(() => null),
@@ -33,7 +39,7 @@ function fakeViewer() {
   };
   const ref = createRef<CloudViewerHandle | null>() as { current: CloudViewerHandle | null };
   ref.current = v as unknown as CloudViewerHandle;
-  return { v, ref, restore, at };
+  return { v, ref, restore, at, leftPose };
 }
 
 /** The viewer's canvas; "Reload view" re-creates the element, as `CloudViewer`'s `key={generation}` does. */
@@ -71,7 +77,7 @@ function Layer({ initial, viewer }: { initial: CloudToolId; viewer: { current: C
 }
 
 function mount(tool: CloudToolId = "orbit") {
-  const { v, ref, restore, at } = fakeViewer();
+  const { v, ref, restore, at, leftPose } = fakeViewer();
   const { api } = fakeClient([{ method: "GET", path: /\/images\/[^/]+$/, body: exampleImage }]);
   const r = renderWithProviders(
     <>
@@ -81,7 +87,7 @@ function mount(tool: CloudToolId = "orbit") {
     </>,
     { api, route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}` },
   );
-  return { v, restore, at, unmount: r.unmount };
+  return { v, restore, at, leftPose, unmount: r.unmount };
 }
 
 beforeEach(() => {
@@ -205,6 +211,21 @@ describe("CameraGlyphs", () => {
     click(100, 100, 160, 100);
     expect(screen.queryByTestId("look-through-frame")).toBeNull();
     expect(restore).not.toHaveBeenCalled();
+  });
+
+  it("the engine leaving the photo pose (a wheel, a view command) leaves the frame without restoring", async () => {
+    // A wheel dispatches the controls' start without a pointer-down, and fit/setView/lookAt leave
+    // the pose through frameDefault: the engine's onLeavePose covers them all (final review I2).
+    const { restore, leftPose } = mount();
+    expect(leftPose.size).toBe(0); // subscribed only while looking
+    click(400, 300);
+    fireEvent.click(await screen.findByRole("button", { name: "Look through" }));
+    expect(leftPose.size).toBe(1);
+    act(() => [...leftPose].forEach((cb) => cb()));
+    expect(screen.queryByTestId("look-through-frame")).toBeNull();
+    expect(useCamerasStore.getState().lookingThrough).toBe(false);
+    expect(restore).not.toHaveBeenCalled();
+    expect(leftPose.size).toBe(0);
   });
 
   it.each([

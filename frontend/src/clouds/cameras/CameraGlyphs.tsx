@@ -112,7 +112,8 @@ function GlyphCard({
  * A `LookThrough` handle is never kept across time (C-L1 Ruling 7): only the pose is, and a resize
  * asks the viewer again (the engine keeps the pre-photo snapshot, so `restore()` of the new handle
  * still returns to the view from before the first look). Unmounting (the view stopped running, so the
- * engine may be rebuilt) leaves the photo without restoring.
+ * engine may be rebuilt) leaves the photo without restoring, and so does any navigation or view
+ * command that moves the camera off the pose (the viewer's `onLeavePose`, or a canvas pointer-down).
  */
 export function CameraGlyphs({
   projectId,
@@ -186,6 +187,16 @@ export function CameraGlyphs({
       if (lookRef.current) leave(false);
     },
   );
+
+  // The engine left the photo pose by itself: a wheel (the controls' start with no pointer-down), a
+  // double-click, or a view command (fit, setView, lookAt, goToPose). Leave without restoring, as a
+  // drag does — the camera is already somewhere else (final review I2).
+  useEffect(() => {
+    if (!looking) return;
+    return viewer.current?.onLeavePose(() => {
+      if (lookRef.current) leave(false);
+    });
+  }, [looking, leave, viewer]);
 
   useEffect(() => {
     if (!looking) return;

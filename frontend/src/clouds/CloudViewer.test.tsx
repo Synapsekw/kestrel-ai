@@ -153,6 +153,9 @@ describe("CloudViewer C-V2 members without an engine", () => {
     const off = h.onSettle(() => {});
     expect(typeof off).toBe("function");
     off();
+    const offLeave = h.onLeavePose(() => {});
+    expect(typeof offLeave).toBe("function");
+    offLeave();
     await expect(h.sampleSlab([0, 0, 0], [1, 0, 0], 1)).rejects.toThrow("not running");
     await expect(
       h.capture({ position: [0, -1, 1], target: [0, 0, 0], up: [0, 0, 1], fov_deg: 50 }, []),
