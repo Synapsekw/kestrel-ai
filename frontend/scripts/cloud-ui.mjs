@@ -17,6 +17,13 @@ export function ui(page) {
   const hint = page.getByTestId("cloud-hintbar");
   const callout = page.getByTestId("cloud-callout");
   return {
+    viewport: page.getByTestId("cloud-centre"),
+    canvas: page.getByTestId("cloud-canvas"),
+    // Readout.tsx "cloud-readout" (spec: "pick-readout"); SiteMinimap.tsx "cloud-minimap" (spec: a
+    // "Site map" region) - the e2e fixture's names, docs/evidence/clouds/README.md "Deviations".
+    readout: page.getByTestId("cloud-readout"),
+    minimap: page.getByTestId("cloud-minimap"),
+    inspectorTabs: tabs,
     palette,
     tool: (name) => palette.getByRole("button", { name, exact: true }),
     edl: page.getByRole("switch", { name: "EDL shading" }),

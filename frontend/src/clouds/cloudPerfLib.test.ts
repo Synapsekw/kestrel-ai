@@ -9,6 +9,7 @@ import {
   pinGrid,
   pngSize,
   profileTotals,
+  ringTail,
 } from "../../scripts/cloud-perf-lib.mjs";
 
 describe("cloud-perf-lib (C-G drivers)", () => {
@@ -40,6 +41,27 @@ describe("cloud-perf-lib (C-G drivers)", () => {
     expect(t.absent).toBe(0);
   });
 
+  it("narrows a generic name to one script with name@url-part", () => {
+    // the pin pass is PinsLayerController.frame: "frame" alone would also count every other frame()
+    const profile = {
+      startTime: 0,
+      endTime: 1000,
+      samples: new Array(10).fill(1),
+      nodes: [
+        { id: 1, callFrame: { functionName: "(root)", url: "" }, hitCount: 2, children: [2, 3] },
+        {
+          id: 2,
+          callFrame: { functionName: "frame", url: "http://x/src/clouds/pins/pinsController.ts" },
+          hitCount: 3,
+        },
+        { id: 3, callFrame: { functionName: "frame", url: "http://x/src/other.ts" }, hitCount: 5 },
+      ],
+    };
+    const t = profileTotals(profile, ["frame@pinsController", "frame"]);
+    expect(t["frame@pinsController"]).toBeCloseTo(0.3, 6);
+    expect(t.frame).toBeCloseTo(0.8, 6);
+  });
+
   it("spreads n pins over the inner 80 % of the cloud's footprint", () => {
     const pins = pinGrid([100, 200, 0, 200, 300, 10], 200);
     expect(pins).toHaveLength(200);
@@ -58,6 +80,48 @@ describe("cloud-perf-lib (C-G drivers)", () => {
     expect(insideClipBox([11.9, 10, 5], box)).toBe(false); // the 2 m side east-west
     expect(insideClipBox([10, 10, 10.001], box, 0.01)).toBe(true);
     expect(insideClipBox([10, 10, 10.1], box, 0.01)).toBe(false);
+  });
+
+  it("turns a 30-degree box counter-clockwise from east, as the app's clip box does", () => {
+    // frontend/src/clouds/viewer/clipBox.ts insideClipBox and workspace/clip.ts: yaw counter-clockwise
+    // from grid east (V2 Ruling 3). The long side runs along (cos 30, sin 30), not its mirror.
+    const box = { centre: [0, 0, 0], size: [4, 1, 2], yaw_deg: 30 };
+    const c = Math.cos(Math.PI / 6);
+    const s = Math.sin(Math.PI / 6);
+    expect(insideClipBox([1.8 * c, 1.8 * s, 0], box)).toBe(true);
+    expect(insideClipBox([-1.8 * c, -1.8 * s, 0], box)).toBe(true);
+    expect(insideClipBox([1.8 * c, -1.8 * s, 0], box)).toBe(false); // the -30 degree diagonal
+    expect(insideClipBox([-0.4 * s, 0.4 * c, 0], box)).toBe(true); // across the short side
+    expect(insideClipBox([-0.6 * s, 0.6 * c, 0], box)).toBe(false);
+  });
+
+  it("finds the frames a ring gained between two reads, full or not", () => {
+    const cap = 600;
+    const seq = (from: number, n: number) =>
+      Array.from({ length: n }, (_, i) => 10 + ((from + i) % 997) / 100);
+    // not full: the length difference
+    expect(ringTail(seq(0, 100), seq(0, 250), 150, cap)).toMatchObject({
+      tail: seq(100, 150),
+      n: 150,
+      exact: true,
+    });
+    // full before and after: the overlap decides
+    const before = seq(0, cap);
+    const after = seq(200, cap);
+    expect(ringTail(before, after, 200, cap)).toMatchObject({ tail: seq(cap, 200), n: 200, exact: true });
+    // filling up across the read
+    expect(ringTail(seq(0, 500), seq(50, cap), 150, cap)).toMatchObject({ tail: seq(500, 150), n: 150 });
+    // nothing new
+    expect(ringTail(before, before, 0, cap)).toMatchObject({ tail: [], n: 0 });
+    // a steady ring (every value equal) matches any shift: the rAF count picks n, flagged inexact
+    const flat = Array.from({ length: cap }, () => 16.7);
+    const r = ringTail(flat, flat, 120, cap);
+    expect(r.n).toBe(120);
+    expect(r.exact).toBe(false);
+    expect(r.tail).toHaveLength(120);
+    // no overlap at all (the ring wrapped past the whole read): everything, inexact
+    const other = Array.from({ length: cap }, (_, i) => 100 + i);
+    expect(ringTail(seq(0, cap), other, 700, cap)).toMatchObject({ tail: other, n: cap, exact: false });
   });
 
   it("reads a PNG's IHDR size and refuses other bytes", () => {

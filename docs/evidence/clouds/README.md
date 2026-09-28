@@ -123,6 +123,12 @@ finding, above) and has been fixed.
   also exposed on the diagnostics hook as `occlusion(points, tolM)` (`diagnostics.ts:96`).
 - Hover pick: `pickAtClient` (`frontend/src/clouds/viewer/engine.ts:138,624`; also on
   `CloudViewerHandle` at `frontend/src/clouds/CloudViewer.tsx:42,384`).
+- Correction (Task 9): the app never calls `projectPins` (only its tests do); the per-frame pin pass
+  is `PinsLayerController.frame` (`frontend/src/clouds/pins/pinsController.ts`, the span its own
+  `lastPassMs` times). `measure-cloud-workspace.mjs` defaults to `frame@pinsController` (a
+  function name narrowed to scripts whose url contains `pinsController`; `profileTotals` in
+  `cloud-perf-lib.mjs`). The hover pick runs only while a picking tool is armed (engine.ts
+  `pointermove`: `events.isArmed()`), so the driver arms Point for the hover window.
 
 ## Fixture adaptations (`cloudWorld.ts` vs the brief, checked against `contract/openapi.yaml` /
 

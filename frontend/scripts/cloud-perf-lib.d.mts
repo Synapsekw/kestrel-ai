@@ -1,6 +1,6 @@
 export interface CpuProfileNode {
   id: number;
-  callFrame: { functionName: string };
+  callFrame: { functionName: string; url?: string };
   hitCount?: number;
   children?: number[];
 }
@@ -34,3 +34,9 @@ export function coverageCounts(
   },
   names: string[],
 ): Record<string, number>;
+export function ringTail(
+  before: number[],
+  after: number[],
+  expected?: number,
+  capacity?: number,
+): { tail: number[]; n: number; exact: boolean };

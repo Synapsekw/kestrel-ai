@@ -22,7 +22,7 @@ export function frameStats(values) {
 /**
  * Total time (ms) spent in each named function over a CDP CPU profile, callees included. A node
  * under an ancestor of the same name is not counted again (recursion). Sample time is the profile's
- * mean interval.
+ * mean interval. A name "fn@part" counts only fn in scripts whose url contains part.
  */
 export function profileTotals(profile, names) {
   const byId = new Map(profile.nodes.map((n) => [n.id, n]));
@@ -38,11 +38,18 @@ export function profileTotals(profile, names) {
     return sum;
   };
   const out = Object.fromEntries(names.map((n) => [n, 0]));
+  // "fn@part": functionName fn in a script whose url contains part (a generic method name like frame)
+  const specs = names.map((key) => {
+    const at = key.indexOf("@");
+    return { key, fn: at < 0 ? key : key.slice(0, at), url: at < 0 ? null : key.slice(at + 1) };
+  });
   const walk = (node, open) => {
-    const name = node.callFrame.functionName;
-    const counts = names.includes(name) && !open.has(name);
-    if (counts) out[name] += (hits(node) * interval) / 1000;
-    const next = counts ? new Set([...open, name]) : open;
+    const { functionName, url = "" } = node.callFrame;
+    const hit = specs.filter(
+      (s) => s.fn === functionName && (s.url === null || url.includes(s.url)) && !open.has(s.key),
+    );
+    for (const s of hit) out[s.key] += (hits(node) * interval) / 1000;
+    const next = hit.length ? new Set([...open, ...hit.map((s) => s.key)]) : open;
     for (const c of node.children ?? []) walk(byId.get(c), next);
   };
   const childIds = new Set(profile.nodes.flatMap((n) => n.children ?? []));
@@ -106,4 +113,28 @@ export function coverageCounts(coverage, names) {
     for (const fn of script.functions)
       if (names.includes(fn.functionName)) out[fn.functionName] += fn.ranges[0]?.count ?? 0;
   return out;
+}
+
+/**
+ * The values a fixed ring (`frameTimes()`, capacity 600, oldest first, never cleared) gained between
+ * two reads. The ring stops growing once full, so a length difference says nothing then: `n` is the
+ * shift for which `after` still holds `before`'s newest values in order. Rings of vsync-quantised
+ * frame times can match at more than one shift; `expected` (the browser frames counted over the same
+ * window) picks among them and `exact` says whether only one matched.
+ */
+export function ringTail(before, after, expected = 0, capacity = 600) {
+  const candidates = [];
+  for (let n = 0; n <= capacity; n++) {
+    if (after.length !== Math.min(capacity, before.length + n)) continue;
+    const dropped = Math.max(0, before.length + n - capacity);
+    const overlap = before.length - dropped;
+    if (overlap <= 0) continue;
+    let same = true;
+    for (let i = 0; i < overlap && same; i++) same = after[i] === before[dropped + i];
+    if (same) candidates.push(n);
+  }
+  // no overlap: the ring wrapped past the whole read, or it is a new ring (the viewer remounted)
+  if (candidates.length === 0) return { tail: [...after], n: after.length, exact: false };
+  const n = candidates.reduce((best, c) => (Math.abs(c - expected) < Math.abs(best - expected) ? c : best));
+  return { tail: after.slice(after.length - n), n, exact: candidates.length === 1 };
 }
