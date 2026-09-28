@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { Surface } from "@contract/client";
 import { exampleMeasurement, exampleSurface } from "@/test/volumeFixtures";
-import { baseCards } from "./baseCards";
-import { BaseCards } from "./BaseCards.tsx";
+import { baseCards } from "./baseCardsModel";
+import { BaseCards } from "./BaseCards";
 
 const design: Surface = {
   ...exampleSurface,

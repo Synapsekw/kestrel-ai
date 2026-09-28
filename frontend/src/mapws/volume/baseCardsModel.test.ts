@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Surface } from "@contract/client";
 import { exampleBaseSurface, exampleMeasurement, exampleSurface } from "@/test/volumeFixtures";
-import { baseCards, longDate, selectedCard } from "./baseCards";
+import { baseCards, longDate, selectedCard } from "./baseCardsModel";
 
 const design: Surface = {
   ...exampleSurface,

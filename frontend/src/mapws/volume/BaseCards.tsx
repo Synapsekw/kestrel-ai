@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { VolumeMeasurement, components } from "@contract/client";
 import { Disclosure, Field, Input, Select, cx, focusRing, transition } from "@/ui";
 import { BASE_KIND_TEXT } from "@/volumes/model";
-import type { BaseCard } from "./baseCards";
+import type { BaseCard } from "./baseCardsModel";
 
 type VolumeBase = components["schemas"]["VolumeBase"];
 
