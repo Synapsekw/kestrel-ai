@@ -1,9 +1,9 @@
 # Maps (M) unit X evidence
 
 Spec `docs/superpowers/specs/2026-09-26-map-workspace-design.md`; plans
-`docs/superpowers/plans/2026-09-27-maps-*.md`. Measured on `task/m-x` at f39485d (parent `main`
-7f28374 with every M unit merged: C0, B1–B5, W1–W6), 2026-09-28. The full gate runs once more after the
-final review (Task 16b); its lines below read "(pending final gate)" until then.
+`docs/superpowers/plans/2026-09-27-maps-*.md`. Measured on `task/m-x` at `333d68f` (parent `main`
+7f28374 with every M unit merged: C0, B1–B5, W1–W6), 2026-09-28. The full gate (Task 16b) ran once,
+after the final-review fix wave; its results are filled in below.
 
 ## Flows (spec §15, Playwright)
 
@@ -12,19 +12,20 @@ fake `frontend/e2e/fixtures/mapWorkspace.ts`); "gate" is the full `pnpm -C front
 
 | #    | Flow                                                                        | Spec file                                   | Result                                                                                                                                       |
 | ---- | --------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | Two orthos aligned → Swipe, drag → Side-by-side, mirrored crosshair → Blend | `frontend/e2e/maps.spec.ts` "flow 1"        | task run: 7 passed (2 runs); gate: (pending final gate)                                                                                      |
-| 2    | DXF by CRS, PDF by 3 control points, RMSE, save, overlay                    | `maps-drawings.spec.ts`                     | task run: 2 passed (3 clean runs); gate: (pending final gate)                                                                                |
-| 3    | Distance, area, profile → Measurements union                                | `maps-measure.spec.ts` "flow 3"             | task run: 2 passed (2 runs, and 6 with `--repeat-each=3`); gate: (pending final gate)                                                        |
-| 4    | Volume, base cards, numbers after the job, heatmap                          | `maps-volume.spec.ts`                       | task run: 1 passed (3 runs); gate: (pending final gate)                                                                                      |
-| 5    | Pending defect → A → finding pin, F's inspector                             | `maps-review.spec.ts`                       | task run: 2 passed with `detect-review` (2 runs); gate: (pending final gate)                                                                 |
-| 6    | Zone tool → site area with a category                                       | `maps-measure.spec.ts` "flow 6"             | task run: with flow 3 above; gate: (pending final gate)                                                                                      |
+| 1    | Two orthos aligned → Swipe, drag → Side-by-side, mirrored crosshair → Blend | `frontend/e2e/maps.spec.ts` "flow 1"        | task run: 7 passed (2 runs); gate: 7 passed (whole file, 16b)                                                                                |
+| 2    | DXF by CRS, PDF by 3 control points, RMSE, save, overlay                    | `maps-drawings.spec.ts`                     | task run: 2 passed (3 clean runs); gate: 2 passed (16b)                                                                                      |
+| 3    | Distance, area, profile → Measurements union                                | `maps-measure.spec.ts` "flow 3"             | task run: 2 passed (2 runs, and 6 with `--repeat-each=3`); gate: 2 passed with flow 6 (16b)                                                  |
+| 4    | Volume, base cards, numbers after the job, heatmap                          | `maps-volume.spec.ts`                       | task run: 1 passed (3 runs); gate: 1 passed (16b)                                                                                            |
+| 5    | Pending defect → A → finding pin, F's inspector                             | `maps-review.spec.ts`                       | task run: 2 passed with `detect-review` (2 runs); gate: 1 passed + `detect-review.spec.ts` 1 passed (16b)                                    |
+| 6    | Zone tool → site area with a category                                       | `maps-measure.spec.ts` "flow 6"             | task run: with flow 3 above; gate: with flow 3 above (16b)                                                                                   |
 | 7    | Frame time in Swipe, 4 layers                                               | `maps-frame-time.spec.ts`                   | see below                                                                                                                                    |
 | real | Real backend: two orthos in one frame, Swipe, server distance               | `maps-real-backend.spec.ts` (opt-in config) | 1 passed (11.1 s, web 5582 / API 5583); server `length_m` 50.020 m, grid 50.0 m, scale factor 0.9996; skipped in the gate config (1 skipped) |
 
 Also rewritten onto the workspace: `detect-review.spec.ts` (review keys A / X / Tab), the map steps of
-`clouds.spec.ts` (19 passed with `shell.spec.ts`, 2 runs, after the footprint fix), and the map test of
-`shell.spec.ts` (repointed at `/maps/:mapId/evaluate`); the evaluation view keeps the old viewer's
-label/zone/score/export test in `maps.spec.ts`.
+`clouds.spec.ts` (19 passed with `shell.spec.ts`, 2 runs, after the footprint fix; both files passed
+clean again in the 16b gate run), and the map test of `shell.spec.ts` (repointed at
+`/maps/:mapId/evaluate`); the evaluation view keeps the old viewer's label/zone/score/export test in
+`maps.spec.ts`.
 
 What the flows prove beyond the brief's list:
 
@@ -115,7 +116,7 @@ backend/tests` for each M-B merge).
 | 7   | Findings as point/polygon; accepted defect → finding with map-CRS anchor      | flow 5; W3 vitest `mapws/findings/FindingOverlay.test.tsx`, `actions.test.ts`, `FindingMeasure.test.tsx`, `mapws/annotations/plugins.test.ts`; B5 pytest `test_map_findings.py` (`test_the_finding_is_in_the_review_transaction`, `test_accepting_a_defect_creates_one_reviewed_finding_on_the_map`)                                                                                                                       |
 | 8   | A region run never changes a survey count                                     | B5 pytest `test_maps_timeline.py::test_a_region_run_is_never_the_basis_nor_a_surveys_run`, `test_detect_analytics.py::test_a_region_run_never_speaks_for_a_map`, `test_site_areas.py::test_the_area_recount_skips_region_runs`, `test_maps_detect.py::test_a_region_run_never_counts_site_areas`                                                                                                                           |
 | 9   | No request grows with data size; imports are jobs; UI never blocks            | Budget greps below; §13 bounded-read tests: B1 `test_workspace_tile_routes.py::test_one_read_per_surface_tile_within_258`; B3 `test_drawings_pdf.py::test_peak_python_memory_stays_under_the_strip_bound`, `test_drawings_vtiles.py::test_the_vertex_cap_drops_the_shortest_first`; B4 `test_measurements_union.py::test_a_page_is_one_bounded_statement_per_provider`, `test_mapmeasure_service.py::test_the_project_cap` |
-| 10  | Mockup layout, shortcuts (P for Play), motion; check-tokens passes            | W1 vitest `mapws/tools/keymap.test.ts` ("plays on P … and F's table has no collision"), `pnpm -C frontend lint` (pending final gate); flows' screenshots under `evidencePath("maps", …)`                                                                                                                                                                                                                                   |
+| 10  | Mockup layout, shortcuts (P for Play), motion; check-tokens passes            | W1 vitest `mapws/tools/keymap.test.ts` ("plays on P … and F's table has no collision"), `pnpm -C frontend lint` (0 errors, 21 pre-existing warnings, tokens ok — 16b); flows' screenshots under `evidencePath("maps", …)`                                                                                                                                                                                                  |
 
 ## Budget
 
@@ -172,16 +173,28 @@ read. **Verdict: holds** for the workspace.
 
 ## Gate
 
-(pending final gate) — Task 16b runs the full gate once after the final review and fills these lines:
+Full gate (AGENTS.md item 4), run once at `333d68f` (2026-09-28), Task 16b, one suite at a time from the
+worktree root:
 
-- `pnpm -C contract check`: (pending final gate)
-- `ruff check .` / `ruff format --check .`: (pending final gate)
-- `pytest`: (pending final gate)
-- `pnpm -C frontend lint`: (pending final gate)
-- `pnpm -C frontend test`: (pending final gate)
-- `pnpm -C frontend build`: (pending final gate)
-- `pnpm -C frontend e2e`: (pending final gate)
-- `cargo test`: (pending final gate)
+- `pnpm -C contract check`: clean — spectral `No results with a severity of 'error' found!`;
+  `openapi-typescript` regenerated `client/schema.d.ts` with no diff.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `730 files already formatted`
+- `pytest` (full suite): `3927 passed, 16 skipped, 15 deselected, 406 warnings in 1898.43s (0:31:38)`
+- `pnpm -C frontend lint`: `0 errors, 21 warnings` (pre-existing, unrelated files: `PinsLayer.tsx`,
+  `BrowserFilters.tsx`, `Filmstrip.tsx`, `InteractionLayer.tsx`, `ShapeLayer.tsx`, `testKonva.tsx`,
+  `MapView.tsx:94`); prettier and `check-tokens.mjs` both clean.
+- `pnpm -C frontend test` (full suite): `Test Files 522 passed (522)`, `Tests 3411 passed (3411)`.
+- `pnpm -C frontend build`: `tsc -b` clean, `vite build` — `✓ built in 6.80s`.
+- `pnpm -C frontend e2e` (full suite, ports 5580/5581): `160 passed (1.4m)`, `1 skipped`
+  (`maps-real-backend.spec.ts`, Ruling X6, as designed). Per file: `maps.spec.ts` 7 passed,
+  `maps-drawings.spec.ts` 2 passed, `maps-measure.spec.ts` 2 passed (flows 3 + 6), `maps-volume.spec.ts`
+  1 passed, `maps-review.spec.ts` 1 passed + `detect-review.spec.ts` 1 passed, `maps-frame-time.spec.ts`
+  1 passed (14.8 s — a real sample, ≥ 60 frames, no `E2E_FRAME_BUDGET` assertion), `maps-fixture.spec.ts`
+  3 passed, `clouds.spec.ts` and `shell.spec.ts` all passed.
+- `cargo test --manifest-path frontend/src-tauri/Cargo.toml`: skipped —
+  `frontend/src-tauri/binaries/` holds only `.gitkeep`, no frozen `kestrel-backend-*.exe` in this
+  worktree.
 
 ## Product fixes M-X made
 
@@ -198,14 +211,30 @@ Defects the flows found in earlier M units, fixed in M-X with a test each:
 - `c099097` a capped drawing name keeps its page suffix; `5e63a6a` Escape closes the expanded profile
   sheet; `2953913` a failed detection run shows its job's error; `dc62bda` the evaluation route gives each
   map a fresh screen.
+- `d4fb95a9` (final review I1) a `map=` arrival to a map with no coordinates now navigates straight to
+  its evaluation screen, instead of landing silently in the workspace — the old bookmarks
+  (`MapRedirect`), the palette's map items and DetectReview's "Review on the map" all go through the one
+  fixed `planMapArrival` function.
 
-Deferred minors (ledger `m-x.md`): a double-click finishes a line or polygon draft even when the two clicks
-land far apart (OpenLayers' 250 ms `dblclick`); the workspace fake does not publish `volumes.changed` after a
-volume job (flow 4 sends it itself); non-PDF drawings map to a DXF inspection in the fake; `frameTime.ts`
-duplicates `effects.spec.ts`'s inline sampler (R-X5); the real-backend config defaults to the dev machine's
-interpreter path (overridable); CloudWorkspace and AnchorSlot duplicate the map-jump URL line, and the
-AnchorSlot "Show on map" URL has no test; `detect-review` no longer checks the class name (covered by the
-inspector's type chip), and the T reclass key has no e2e.
+Deferred minors (ledger `m-x.md`; the final review found none of them merge-blocking): CloudWorkspace and
+AnchorSlot duplicate the map-jump URL one-liner, and the AnchorSlot "Show on map" URL has no test (T4); the
+fixture's similarity-fit inspection echoes the affine result, non-PDF drawings map to a DXF inspection, and
+the `polygon_px` variant stores an empty `polygon_site` (T6 #3/#5/#6); the R-HX arrival test hand-builds the
+workspace body inline, and the evaluation test dropped the brief's excavator/42 row assertion (T7); no test
+covers switching drawings A→B under the deferred discard, `DrawingInspector`'s `mountedBodies` stays
+module-global, `AlignOverlay`'s `startedFor` root cause stays (the inspector compensates), and
+`maps-drawings.spec.ts` clicks inside an `expect.poll` (T8); `armTool` is exported with no caller yet, and
+`pressUntilPressed`'s `toPass()` has no targeted timeout (T9); the base-patch filter drops PATCHes without a
+base, the synthetic `volumes.changed` can't catch a backend regression (flow 4 sends it itself), and heatmap
+on→off is not exercised (T10); `detect-review` no longer checks the class name (covered by the inspector's
+type chip), and the T reclass key has no e2e (T11); `clouds.spec.ts`'s settled-URL regex is unanchored at the
+start, and the spec renames the fixture's map id/name by hand (T12); tile assertions don't discriminate
+survey date, and the repeatable 150 ms pan-zoom frame was not investigated (T13); the real-backend config
+hardcodes the dev machine's python interpreter path, overridable by env (T14); `redact()` stops at the first
+space in an unescaped raw Windows path, reachable only in operator-mode error text (T15); a double-click
+finishes a line or polygon draft even when the two clicks land far apart — pre-existing W1 behaviour, not
+introduced by M-X; and the shared e2e fixture's bodies stay typed `Record<string, unknown>`, so a later
+contract change would not fail `tsc` here (final review m4, typing part).
 
 ## Rulings made while building M-X
 

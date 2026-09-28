@@ -20,18 +20,24 @@ Measurements tab; X (this entry).
 
 X: `MapsScreen` trimmed into `MapEvaluateScreen` (`maps/:mapId/evaluate`: labels, evaluation zones,
 score, and Results for maps without coordinates); `maps/:mapId` and `past/maps/:mapId` open the
-workspace (review links become `sel=run:`, draw links `tool=zone`); DetectReview, Site areas,
-Clouds "Show on map", the palette and every volume row link into the workspace; `SurveysScreen`
-deleted. E2E: the seven §15 flows on the Prism mock plus one opt-in real-backend flow; the frame-time
-scenario (p95 16.7–16.8 ms in three runs, SwiftShader); the acceptance run (synthetic stand-ins: frame
-EPSG:32633, DXF max offset 0.0052 m, PDF RMSE ≈ 1e-9 m, best-fit-plane volume +0.000 % against the
-analytic cone; the DSM-vs-cloud cross-check is an operator step). Product fixes found by the flows: the
-Z readout, the row menu's Align, a detection's Open in 3D footprint, `sel`/`tool` after a `map=`
-arrival, the instant minimap, and Import drawing opening the drawing import. Evidence:
-`docs/evidence/maps/README.md`.
+workspace (review links become `sel=run:`, draw links `tool=zone`); a map with no coordinates now
+navigates straight to its evaluation screen instead of landing in the workspace (final review I1);
+DetectReview, Site areas, Clouds "Show on map", the palette and every volume row link into the
+workspace; `SurveysScreen` deleted. E2E: the seven §15 flows on the Prism mock plus one opt-in
+real-backend flow; the frame-time scenario (p95 16.7–16.8 ms in three runs, SwiftShader); the
+acceptance run (synthetic stand-ins: frame EPSG:32633, DXF max offset 0.0052 m, PDF RMSE ≈ 1e-9 m,
+best-fit-plane volume +0.000 % against the analytic cone; the DSM-vs-cloud cross-check is an operator
+step). Product fixes found by the flows: the Z readout, the row menu's Align, a detection's Open in 3D
+footprint, `sel`/`tool` after a `map=` arrival, the instant minimap, Import drawing opening the drawing
+import, and the no-CRS arrival (I1). Evidence: `docs/evidence/maps/README.md`.
 
-**Gate at (pending final gate):** (pending final gate). No installer here (R9): IMC-X freezes the
-sidecar, runs the smoke, builds the installer and writes the combined walkthrough.
+**Gate at `333d68f` (Task 16b, full suites, one at a time):** contract check clean; backend ruff and
+`ruff format --check` clean, full `pytest` 3927 passed/16 skipped/15 deselected; frontend lint 0
+errors/21 pre-existing warnings, tokens ok; full vitest 522 files/3411 tests passed; build clean
+(`tsc -b` + `vite build`); full e2e 160 passed/1 skipped (`maps-real-backend.spec.ts`, opt-in, by
+design); `cargo test` skipped, no frozen sidecar in this worktree. Full tails in
+`docs/evidence/maps/README.md` "Gate". No installer here (R9): IMC-X freezes the sidecar, runs the
+smoke, builds the installer and writes the combined walkthrough.
 
 ## Foundation lands — 2026-09-27 (`task/f-x`, unit X evidence)
 
