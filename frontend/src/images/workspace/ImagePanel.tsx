@@ -116,7 +116,10 @@ export function ImagePanel({ projectId, detail, onDetail, distanceRef }: ImagePa
     >
       <InspectorSection title="Camera">
         <div className="flex flex-col gap-1">
-          <Row label="Captured" value={detail.capture_time ? dateTime.format(new Date(detail.capture_time)) : "—"} />
+          <Row
+            label="Captured"
+            value={detail.capture_time ? dateTime.format(new Date(detail.capture_time)) : "—"}
+          />
           <Row
             label="Location"
             value={

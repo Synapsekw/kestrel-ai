@@ -60,7 +60,10 @@ describe("ImagePanel", () => {
         path: new RegExp(`/images/${IMAGE_ID}$`),
         body: (r) => ({
           ...detail,
-          camera: { ...camera, subject_distance_m: (r.body as { subject_distance_m: number | null }).subject_distance_m },
+          camera: {
+            ...camera,
+            subject_distance_m: (r.body as { subject_distance_m: number | null }).subject_distance_m,
+          },
         }),
       },
     ]);
