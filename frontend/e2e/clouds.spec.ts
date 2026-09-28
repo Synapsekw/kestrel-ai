@@ -598,4 +598,13 @@ test("colour modes: Elevation draws the viridis ramp, not RGB", async ({ page })
       return { drawn: drawn > 0, red: s.left.red + s.right.red };
     })
     .toEqual({ drawn: true, red: 0 });
+  // And back: RGB after Elevation draws the grid's own colours again, west red and east green.
+  await ws(page).colour("RGB").click();
+  await expect(ws(page).colour("RGB")).toHaveAttribute("aria-checked", "true");
+  await expect
+    .poll(async () => {
+      const s = await page.evaluate(() => window.__kestrelCloudViewer!.topSnapshotSample(512));
+      return s && { westRed: s.left.red > s.left.green, eastGreen: s.right.green > s.right.red };
+    })
+    .toEqual({ westRed: true, eastGreen: true });
 });
