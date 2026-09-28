@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import {
   CLASS_ID,
   errorBody,
@@ -13,7 +14,8 @@ import {
   MAP_ID,
   PROJECT_ID,
 } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { TestApiProvider, renderWithProviders } from "@/test/render";
+import { projectRoutes } from "@/routes/projectRoutes";
 import { useJobsStore } from "@/store/jobs";
 import { useToastStore } from "@/ui";
 import type { LabelLayerOptions } from "@/maps/labelLayers";
@@ -265,5 +267,35 @@ describe("MapEvaluateScreen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("disk full");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(requests.filter((r) => /\/maps$/.test(r.url)).length).toBe(2));
+  });
+
+  it("starts fresh on another map of the same route (D6: keyed by mapId)", async () => {
+    const other = { ...plain, id: "map-b", name: "South pit" };
+    const { api } = fakeClient([
+      base[0],
+      { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap, other] } },
+      ...base.slice(3),
+    ]);
+    const element = projectRoutes.find((r) => r.path === "maps/:mapId/evaluate")?.element;
+    const GoToB = () => {
+      const navigate = useNavigate();
+      return <button onClick={() => navigate(`/p/${PROJECT_ID}/maps/map-b/evaluate`)}>go to B</button>;
+    };
+    render(
+      <TestApiProvider api={api}>
+        <MemoryRouter initialEntries={[ROUTE]}>
+          <Routes>
+            <Route path={PATH} element={element} />
+          </Routes>
+          <GoToB />
+        </MemoryRouter>
+      </TestApiProvider>,
+    );
+    expect(await screen.findByTestId("map-view")).toHaveTextContent("Site north ortho");
+    fireEvent.click(screen.getByRole("radio", { name: "Score" }));
+    fireEvent.click(screen.getByRole("button", { name: "go to B" }));
+    expect(await screen.findByTestId("map-view")).toHaveTextContent("South pit");
+    // B's own default tab (Results, it has no coordinates), not A's Score choice carried over.
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Results" })).toBeChecked());
   });
 });

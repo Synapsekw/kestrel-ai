@@ -115,6 +115,12 @@ function MapFacts({ m }: { m: GeoMap }) {
  * evaluation zones and the score of a run against them, plus Results for a map without coordinates,
  * which the map workspace cannot show. Everything else about a map lives in the workspace.
  */
+/** The route element: Router reuses it between two `maps/:mapId/evaluate` URLs, so the key gives each map a fresh screen. */
+export function MapEvaluateRoute() {
+  const { mapId } = useParams();
+  return <MapEvaluateScreen key={mapId} />;
+}
+
 export function MapEvaluateScreen() {
   const { projectId = "", mapId = "" } = useParams();
   const mapsBase = `/p/${projectId}/maps`;
