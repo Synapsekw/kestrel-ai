@@ -44,6 +44,37 @@ export async function routeCameras(
 }
 
 /**
+ * A `CloudCameraSet` with no photos: every parallel array empty, matching the schema
+ * (`contract/openapi.yaml`). For specs outside `clouds-cameras.spec.ts` that open a cloud without
+ * caring about cameras — without this, the request falls through to the Prism mock, whose
+ * `CloudCameraSet` example now draws a frustum and a warn-point glyph (C-L1), which can add a stray
+ * render frame or a stray drawn point to a test that samples colours or counts idle frames.
+ */
+export function emptyCameras(): Record<string, unknown> {
+  return {
+    image_id: [],
+    source_idx: [],
+    x: [],
+    y: [],
+    z: [],
+    yaw: [],
+    pitch: [],
+    roll: [],
+    hfov: [],
+    vfov: [],
+    fov_assumed: [],
+    width: [],
+    height: [],
+    sigma_m: [],
+    sources: [],
+    truncated: false,
+    z_p1: null,
+    z_p99: null,
+    without_gps: 0,
+  };
+}
+
+/**
  * A full `ImageDetail` row (GET /images/{id} answers `ImageDetail`, contract/openapi.yaml): `Image`'s
  * fields plus the required `finding_count`, `worst_severity`, `reviewed`, `camera`, `footprint` and
  * `footprint_kind` (the schema grew past the brief's `Image`-only fixture).
