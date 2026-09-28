@@ -8,6 +8,7 @@ import { callsTo, emitViewState, resetFake } from "@/test/fakeCloudViewer";
 import { exampleGeoMap, fakeClient, fakeFetch, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useToastStore } from "@/ui";
+import { useViewStore } from "@/clouds/views/viewStore";
 import { clipKey } from "./clip";
 import { CloudWorkspace } from "./CloudWorkspace";
 
@@ -583,4 +584,13 @@ describe("CloudWorkspace (spec §6)", () => {
       { timeout: 5000 },
     );
   }, 10_000);
+
+  it("shows R1's Capture missing views item and the Saving views progress (C-R1)", async () => {
+    open([exampleCloud]);
+    await userEvent.click(await screen.findByRole("tab", { name: /Findings/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Findings actions" }));
+    expect(await screen.findByRole("menuitem", { name: "Capture missing views" })).toBeInTheDocument();
+    act(() => useViewStore.getState().setBulk({ done: 1, total: 3 }));
+    expect(await screen.findByText("Saving views 1 / 3")).toBeInTheDocument();
+  });
 });
