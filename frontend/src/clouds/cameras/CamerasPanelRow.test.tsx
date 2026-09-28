@@ -104,7 +104,7 @@ describe("CamerasPanelRow", () => {
     expect(useCamerasStore.getState().reloadTick).toBe(0); // the refetch comes from pointclouds.changed
   });
 
-  it("a failed save toasts and asks for a refetch to drop the preview", async () => {
+  it("a failed save toasts, asks for a refetch, and the input then shows the server's value", async () => {
     const client = fakeClient([
       {
         method: "PUT",
@@ -119,6 +119,25 @@ describe("CamerasPanelRow", () => {
       timeout: OFFSET_SAVE_MS * 5,
     });
     expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("out of range");
+    const input = screen.getByRole("spinbutton", { name: "Height offset for Flight 14 Sep in metres" });
+    expect(input).toHaveValue(1); // the unsaved preview, until the refetch answers
+
+    // the reloaded payload: the server still has 0 m (final review I3)
+    act(() =>
+      useCamerasStore.getState().receive(
+        CLOUD_ID,
+        cameraSet([
+          { x: E, y: N, z: 30, yaw: 0, pitch: -90 },
+          { x: E, y: N, z: 32 },
+          { x: E, y: N, z: 31 },
+        ]),
+      ),
+    );
+    expect(input).toBeInTheDocument(); // the same row, not a remount
+    expect(input).toHaveValue(0);
+    // and the next nudge starts from the server's value, not the unsaved one
+    fireEvent.click(screen.getByRole("button", { name: "Raise Flight 14 Sep by 1 m" }));
+    expect(input).toHaveValue(1);
   });
 
   // jsdom sanitises an invalid `type="number"` value to "" before onChange ever sees it, so a

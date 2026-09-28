@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components --
    OFFSET_SAVE_MS and parseOffsetInput are exported next to the component that uses them (the
    brief's interface and the "-" parse-path test need them); not a fast-refresh boundary. */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CloudCameraSource } from "@contract/client";
 import type { PointCloud } from "@/api/clouds";
 import { setCloudCameraOffset } from "@/api/cloudCameras";
@@ -50,7 +50,26 @@ function OffsetRow({
   const api = useApi();
   const [draft, setDraft] = useState(String(source.height_offset_m));
   const value = useRef(source.height_offset_m);
+  /** Armed from a nudge or a keystroke until it fires; `undefined` when no save is waiting. */
   const timer = useRef<number | undefined>(undefined);
+  /** Saves sent and not yet answered. */
+  const inFlight = useRef(0);
+
+  // The server's offset replaces the input's (and the next nudge's base) whenever no save of this
+  // row is pending: after a failed save's reload, or an offset saved in another window (final
+  // review I3). A pending save owns the value, so a refetch landing meanwhile does not clobber it.
+  const sourceId = source.id;
+  useEffect(
+    () =>
+      useCamerasStore.subscribe((s) => {
+        const server = s.set?.sources.find((x) => x.id === sourceId)?.height_offset_m;
+        if (server === undefined || server === value.current) return;
+        if (timer.current !== undefined || inFlight.current > 0) return;
+        value.current = server;
+        setDraft(String(server));
+      }),
+    [sourceId],
+  );
 
   const apply = (raw: number, reformat: boolean) => {
     const v = clampOffset(raw);
@@ -59,11 +78,19 @@ function OffsetRow({
     useCamerasStore.getState().applyLocalOffset(index, v);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
+      timer.current = undefined;
+      inFlight.current += 1;
       // Success needs no refetch here: the PUT publishes pointclouds.changed (Ruling 4).
-      setCloudCameraOffset(api, projectId, cloudId, source.id, v).catch((e: unknown) => {
-        toast("danger", messageOf(e, "could not save the height offset"));
-        useCamerasStore.getState().reload();
-      });
+      setCloudCameraOffset(api, projectId, cloudId, source.id, v).then(
+        () => {
+          inFlight.current -= 1;
+        },
+        (e: unknown) => {
+          inFlight.current -= 1;
+          toast("danger", messageOf(e, "could not save the height offset"));
+          useCamerasStore.getState().reload();
+        },
+      );
     }, OFFSET_SAVE_MS);
   };
 
