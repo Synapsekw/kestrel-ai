@@ -19,12 +19,13 @@ export function makeViewApi(view: View, mapOf: () => OlMap | null = () => null):
       const c = mapOf()?.getCoordinateFromPixel(px);
       return c ? [c[0], c[1]] : null;
     },
-    centreOn: (c: Coord, resolution?: number) => {
+    centreOn: (c: Coord, resolution?: number, opts?: { instant?: boolean }) => {
       const current = view.getResolution();
       const res =
         resolution !== undefined && (current === undefined || resolution < current) ? resolution : undefined;
-      const d = duration();
+      const d = opts?.instant ? 0 : duration();
       if (d === 0) {
+        view.cancelAnimations(); // a jump (minimap drag) must not be pulled back by a running animation
         view.setCenter(c);
         if (res !== undefined) view.setResolution(res);
       } else

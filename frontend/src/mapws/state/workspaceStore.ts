@@ -31,7 +31,8 @@ export interface ViewInfo {
 
 /** Drives the OL View; SiteMap publishes it once the view exists (makeViewApi). */
 export interface ViewApi {
-  centreOn: (c: Coord, resolution?: number) => void;
+  /** Animates there, or jumps with `instant` (the minimap drag) or under reduced motion. */
+  centreOn: (c: Coord, resolution?: number, opts?: { instant?: boolean }) => void;
   fit: (extent: SiteExtent) => void;
   zoomBy: (delta: number) => void;
   resetNorth: () => void;

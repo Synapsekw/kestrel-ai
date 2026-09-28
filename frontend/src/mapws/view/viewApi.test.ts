@@ -1,5 +1,5 @@
 import View from "ol/View";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeViewApi, readView } from "./viewApi";
 
 afterEach(() => {
@@ -35,5 +35,20 @@ describe("the view API under reduced motion (jumps, no animation)", () => {
     const view = new View({ center: [0, 0], resolution: 0.01 });
     makeViewApi(view).centreOn([5, 5], 0.05);
     expect(view.getResolution()).toBe(0.01);
+  });
+});
+
+describe("an instant centreOn (the minimap drag)", () => {
+  it("sets the centre and resolution at once, cancelling a running animation, with motion on", () => {
+    const view = new View({ center: [0, 0], resolution: 1 });
+    const api = makeViewApi(view);
+    api.centreOn([50, 50]); // starts an animation
+    expect(view.getAnimating()).toBe(true);
+    const animate = vi.spyOn(view, "animate");
+    api.centreOn([100, 200], 0.5, { instant: true });
+    expect(animate).not.toHaveBeenCalled();
+    expect(view.getAnimating()).toBe(false);
+    expect(view.getCenter()).toEqual([100, 200]);
+    expect(view.getResolution()).toBe(0.5);
   });
 });
