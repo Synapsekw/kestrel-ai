@@ -393,9 +393,10 @@ always agree on which points fall exactly on a slab edge (the app is inclusive w
 `profile_cut.EPS`; this crosscheck now matches it, see run_crosscheck), so a bin whose count sits
 right at the cutoff can hold N points on one side and N-1 on the other. At the old cutoff of 5, a
 5-vs-4 split meant the bin was scored on one side and dropped on the other, changing which values
-the median is even taken over. 3 still drops truly sparse, noisy bins (the statistic is a wall
-thickness in a clean cross-section, where "real" bins hold many points) while no longer being
-fragile to that one-point split."""
+the median is even taken over. This does not make a bin's count immune to a one-point split - a
+3-vs-2 bin at this cutoff would flip exactly the same way - it only moves where that cutoff sits, to
+a count sparse enough that dropping the bin (rather than trusting a 3-point extent as a wall
+thickness) is the right call regardless of which side of it a boundary disagreement lands on."""
 
 
 def _summary(rows: list[dict]) -> dict:
@@ -540,6 +541,14 @@ def run_crosscheck(a) -> dict:
     here, a point right at the slab edge could be on the app's side of the line and not this script's,
     so a bin's point count (and, before MIN_BIN_POINTS, whether the bin counted towards the median at
     all) could differ between the two for no reason but the two boundary rules disagreeing.
+
+    It also binds `s` and `z` to float32 and clips `s` to `[0, length]` before binning, exactly as
+    `cut()` does before it writes the stored profile (`profile_cut.py`: `s_parts.append(np.clip(s[keep],
+    0.0, length).astype(np.float32))`, `z_parts.append(z.astype(np.float32))`). `run_profile`'s "app"
+    top-band comes from that stored (float32, clipped) profile; without the same rounding here, an
+    edge point sitting near a 0.1 m height-bin boundary could round into a different `band_widths` bin
+    on this script's (float64) side than on the app's (float32) side even though it is the same real
+    point and both sides already agree on whether to keep it (Task 18 follow-up).
     """
     import laspy
     import numpy as np
@@ -558,8 +567,9 @@ def run_crosscheck(a) -> dict:
             s = x * ux + y * uy
             t = -x * uy + y * ux
             keep = (np.abs(t) <= half + EPS) & (s >= -EPS) & (s <= length + EPS)
-            s_all.append(s[keep])
-            z_all.append(np.asarray(chunk.z, dtype=np.float64)[keep])
+            z = np.asarray(chunk.z, dtype=np.float64)[keep]
+            s_all.append(np.clip(s[keep], 0.0, length).astype(np.float32))
+            z_all.append(z.astype(np.float32))
     s = np.concatenate(s_all) if s_all else np.zeros(0)
     z = np.concatenate(z_all) if z_all else np.zeros(0)
     top = band_widths(s, z, rim_z - 10.0, rim_z + 0.5)

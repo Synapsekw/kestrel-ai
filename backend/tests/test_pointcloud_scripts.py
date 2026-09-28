@@ -175,10 +175,11 @@ def test_crosscheck_keeps_the_same_slab_edges_as_the_apps_profile_cut(tmp_path):
     # test_the_slab_keeps_its_edges_and_drops_one_step_outside (test_pointcloud_profile_cut.py):
     # exactly on the thickness/2, 0 and length edges is kept; 0.001 m beyond any of them is dropped.
     # The line here runs the other way (A = rim + outside_m -> B = rim), so s counts down from A to B,
-    # but the same four edges apply. Before Task 18, this script's own keep mask had no EPS margin, so
-    # it was only accidentally as inclusive as the app at these exact values (plain `<=`/`>=` already
-    # keeps an exact boundary); this test locks in that the two now share one formula, not two that
-    # happen to agree here.
+    # but the same four edges apply. Before Task 18, this script's own keep mask had no EPS margin; the
+    # RED run of this test (both boundary formulas reverted) kept 3 of these 4 points, not 4 - a real
+    # LAS round-trip (0.001 m storage scale) rounded one of the exactly-on-the-boundary points a
+    # fraction past a plain `<=`/`>=` comparison, the same class of float noise `profile_cut.EPS`
+    # exists to guard against. This test locks in that the two now share one formula.
     acc = _load("pointcloud_acceptance")
     inside = [(5.0, 0.1, 0.0), (5.0, -0.1, 0.0), (0.0, 0.0, 0.0), (10.0, 0.0, 0.0)]
     outside = [(5.0, 0.101, 0.0), (5.0, -0.101, 0.0), (10.001, 0.0, 0.0), (-0.001, 0.0, 0.0)]
@@ -186,6 +187,44 @@ def test_crosscheck_keeps_the_same_slab_edges_as_the_apps_profile_cut(tmp_path):
     args = type("A", (), {"source": str(src), "rim": "0,0,0", "outside_m": 10.0, "thickness": 0.2})()
     out = acc.run_crosscheck(args)
     assert out["slab_points"] == 4
+
+
+def test_crosscheck_bins_z_the_same_way_the_apps_stored_profile_would(monkeypatch):
+    # profile_cut.py's cut() stores s and z as float32 (and clips s to [0, length]) before the app's
+    # own profile is ever binned; run_crosscheck must apply the same rounding before its own
+    # band_widths call, or a point sitting within float32's rounding distance of a 0.1 m bin edge can
+    # land in bin N on one side and bin N-1 on the other, purely from float64-vs-float32 precision, not
+    # from any real disagreement about where the point is. A real LAS file cannot carry a value this
+    # close to a boundary once quantised to its own 0.001 m storage grid, so this bypasses LAS
+    # entirely (a fake laspy.open/chunk_iterator, one point) to give the exact float64 z where the
+    # effect is verified (empirically, via numpy) to flip the bin: z_lo + 1.6 m + 1e-6.
+    acc = _load("pointcloud_acceptance")
+
+    class _Chunk:
+        def __init__(self, x, y, z):
+            self.x, self.y, self.z = x, y, z
+
+    class _FakeReader:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def chunk_iterator(self, _size):
+            # One point at A itself (s=0, t=0): trivially inside the slab.
+            yield _Chunk(np.array([10.0]), np.array([0.0]), np.array([180.9 + 1e-6]))
+
+    # run_crosscheck does `import laspy` locally, which binds the same module object already in
+    # sys.modules as this file's own top-level `import laspy` - patching that one patches both.
+    monkeypatch.setattr(laspy, "open", lambda _source: _FakeReader())
+    args = type("A", (), {"source": "unused", "rim": "0,0,189.3", "outside_m": 10.0, "thickness": 0.2})()
+    out = acc.run_crosscheck(args)
+    assert out["slab_points"] == 1
+    (row,) = out["top_band_rows"]
+    # float64 alone would floor 1.600001 / 0.1 to bin 16 (z centre 180.95); cast to float32 first (as
+    # cut() does) rounds 180.900001 down to ~180.89999390, which floors to bin 15 (z centre 180.85).
+    assert row["z"] == pytest.approx(180.85)
 
 
 def _png(width: int, height: int) -> bytes:
