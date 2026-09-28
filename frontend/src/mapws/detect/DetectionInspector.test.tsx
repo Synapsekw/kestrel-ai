@@ -4,6 +4,8 @@ import { MAP_ID, MAP_RUN_ID, PROJECT_ID, exampleMapRun, fakeClient, type FakeRou
 import { TYPE_CRACK, typedProject } from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
+import { collectDiagnostics } from "@/app/diagnostics";
+import { useToastStore } from "@/ui";
 import { detectionHint } from "./detectionHint";
 import { useDetectStore } from "./detectStore";
 import { DetectionInspector } from "./DetectionInspector";
@@ -270,6 +272,29 @@ describe("DetectionInspector", () => {
     render(fakeClient(routes()).api);
     expect(await screen.findByText("No point cloud is linked to the 2026-09-14 survey.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open in 3D" })).toBeNull();
+  });
+
+  it("Tab reports a failed next-unreviewed with a toast and the log", async () => {
+    useToastStore.getState().clear();
+    const { api } = fakeClient(
+      routes([
+        {
+          method: "GET",
+          path: /\/next-unreviewed$/,
+          status: 500,
+          body: { error: { code: "internal", message: "tab broke", details: {} } },
+        },
+      ]),
+    );
+    render(api);
+    await screen.findByText(/machinery-v3/);
+    fireEvent.keyDown(window, { key: "Tab" });
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts).toContainEqual(
+        expect.objectContaining({ tone: "danger", text: "tab broke" }),
+      ),
+    );
+    expect(collectDiagnostics()).toContain("open the next detection failed: tab broke");
   });
 
   it("says so when the detection is not loaded", () => {

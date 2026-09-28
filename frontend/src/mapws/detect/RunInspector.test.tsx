@@ -75,6 +75,17 @@ describe("RunInspector", () => {
     expect(next?.url).toContain("frame=site");
   });
 
+  it("labels the run state in sentence case", async () => {
+    render([{ method: "GET", path: /\/map-runs\/[^/]+$/, body: { ...exampleMapRun, state: "cancelled" } }]);
+    expect(await screen.findByTestId("run-inspector")).toHaveTextContent("Cancelled");
+    expect(screen.getByTestId("run-inspector")).not.toHaveTextContent("cancelled");
+  });
+
+  it("labels a finished run Succeeded", async () => {
+    render([{ method: "GET", path: /\/map-runs\/[^/]+$/, body: exampleMapRun }]);
+    expect(await screen.findByTestId("run-inspector")).toHaveTextContent("Succeeded");
+  });
+
   it("shows a running region run's progress", async () => {
     const job = { ...runningJob, type: "map_detect" as const };
     render([

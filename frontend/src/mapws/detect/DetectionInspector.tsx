@@ -80,7 +80,8 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
       {
         shortcut: "Tab",
         action: "next-pending",
-        onTrigger: () => void review.advance(runId, d?.id ?? null),
+        // The handled path: a failure toasts and logs; ignored while a decision (or its finding wait) runs.
+        onTrigger: () => void review.next(runId, d?.id ?? null),
       },
       { shortcut: "Shift+Tab", action: "previous-pending", onTrigger: back },
     ],

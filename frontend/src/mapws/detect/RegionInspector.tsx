@@ -24,6 +24,10 @@ import {
 
 const LOAD_FAILED = "Could not load the orthomosaics of this site. Cancel and draw the box again.";
 const NO_MODEL = "No detection model is ready. Add one in Models → Library, then run the region.";
+const LIBRARY_UNAVAILABLE =
+  "The model library is not available, so no model can run. Restart the app, then draw the box again.";
+const libraryFailed = (message: string) =>
+  `Could not load the model library (${message}). Cancel and draw the box again.`;
 
 /** AI detect in a region (spec §5.1 D, §9.3): the drawn box, a model and a confidence → a map_detect run with scope=region. */
 export function RegionInspector({ projectId, onClose }: InspectorBodyProps) {
@@ -65,6 +69,9 @@ export function RegionInspector({ projectId, onClose }: InspectorBodyProps) {
     if (!data) return null;
     if (candidates.length > 0) {
       if (registry.loading) return null;
+      // A failed read is not "no model": the advice to add one would be wrong.
+      if (registry.unavailable) return LIBRARY_UNAVAILABLE;
+      if (registry.error) return libraryFailed(registry.error);
       if (ready.length === 0) return NO_MODEL;
     }
     return regionProblem({ maps: candidates, r, model }) ?? (sourceId ? null : NO_SOURCE);

@@ -96,7 +96,7 @@ function mount(map: ReturnType<typeof fakeMap>, opacity = 1) {
     />
   );
   const view = render(ui(opacity), { wrapper: workspaceWrapper(stores, { api }) });
-  return { rerender: (o: number) => view.rerender(ui(o)) };
+  return { stores, rerender: (o: number) => view.rerender(ui(o)) };
 }
 
 /** The build effect adds a region-outlines layer first, then each run's box and dot layers. */
@@ -119,6 +119,43 @@ describe("DetectionMount / RunLayer", () => {
       outlines: [],
       regionDraft: null,
     });
+  });
+
+  it("draws the region draft box while region:draft is selected, and drops it when the selection leaves", async () => {
+    const map = fakeMap();
+    const ring = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ];
+    const { stores } = mount(map);
+    await waitFor(() => expect(map.addLayer).toHaveBeenCalled());
+    const outlineLayer = map.addLayer.mock.calls[0][0] as VectorLayer<VectorSource>;
+    act(() => {
+      useDetectStore.getState().setRegionDraft(ring);
+      stores.workspace.getState().select({ kind: "region", id: "draft" });
+    });
+    await waitFor(() => expect(outlineLayer.getSource()!.getFeatures()).toHaveLength(1));
+    act(() => stores.workspace.getState().select(null));
+    await waitFor(() => expect(outlineLayer.getSource()!.getFeatures()).toHaveLength(0));
+    expect(useDetectStore.getState().regionDraft).toBeNull();
+  });
+
+  it("does not draw a stale draft when region:draft is not selected", async () => {
+    const map = fakeMap();
+    useDetectStore.setState({
+      regionDraft: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+      ],
+    });
+    mount(map);
+    await waitFor(() => expect(map.addLayer).toHaveBeenCalled());
+    const outlineLayer = map.addLayer.mock.calls[0][0] as VectorLayer<VectorSource>;
+    expect(outlineLayer.getSource()!.getFeatures()).toHaveLength(0);
   });
 
   it("shows density dots for a truncated wide view, then boxes once a narrower extent is not truncated", async () => {

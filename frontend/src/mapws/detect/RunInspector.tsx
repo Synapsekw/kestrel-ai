@@ -4,6 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { fetchMapRun } from "@/api/maps";
 import { pushLog } from "@/app/diagnostics";
+import { stateLabel } from "@/jobs/jobLabels";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import type { InspectorBodyProps } from "@/mapws/w4host";
@@ -16,7 +17,6 @@ import {
   KeyChord,
   Pill,
   Progress,
-  toast,
   useToolShortcuts,
 } from "@/ui";
 import { useDetectStore } from "./detectStore";
@@ -55,12 +55,7 @@ export function RunInspector({ selection, projectId, onClose }: InspectorBodyPro
 
   const done = run?.state === "succeeded";
   // User-initiated: a failure is a toast (and the log), never a silent rejection.
-  const startReview = (runId: string) =>
-    void review.advance(runId, null).catch((err: unknown) => {
-      const message = messageOf(err, "could not open the next detection");
-      pushLog(`start review failed: ${message}`);
-      toast("danger", message);
-    });
+  const startReview = (runId: string) => void review.next(runId, null);
   useToolShortcuts([
     {
       shortcut: "Tab",
@@ -99,7 +94,7 @@ export function RunInspector({ selection, projectId, onClose }: InspectorBodyPro
           )}
           <span className="flex-1" />
           <Pill size="sm" tone={done ? "ok" : run.state === "failed" ? "danger" : "neutral"} live={running}>
-            {run.state ?? "queued"}
+            {stateLabel(run.state ?? "queued")}
           </Pill>
         </div>
       }

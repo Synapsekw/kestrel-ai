@@ -38,14 +38,19 @@ const mapSource = {
   image_count: 0,
 };
 
-function routes(post: { status?: number; body: object }, sources: object[] = [mapSource]) {
+function routes(
+  post: { status?: number; body: object },
+  sources: object[] = [mapSource],
+  library?: { status: number; body: object },
+) {
   return [
     { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap] } },
     { method: "GET", path: /\/sources$/, body: { items: sources, next_cursor: null } },
     {
       method: "GET",
       path: /\/library\/models/,
-      body: {
+      status: library?.status ?? 200,
+      body: library?.body ?? {
         items: [{ ...exampleTrainedModel, state: "ready", train_gsd_cm: 2 }],
         next_cursor: null,
       },
@@ -122,5 +127,32 @@ describe("RegionInspector", () => {
     expect(run).toBeDisabled();
     fireEvent.click(run);
     expect(requests.some((r) => r.method === "POST")).toBe(false);
+  });
+
+  it("says the model library failed to load instead of advising to add a model", async () => {
+    const { api, requests } = fakeClient(
+      routes({ body: {} }, [mapSource], {
+        status: 500,
+        body: { error: { code: "internal", message: "db locked", details: {} } },
+      }),
+    );
+    render(api);
+    expect(await screen.findByText(/Could not load the model library \(db locked\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Add one in Models/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    expect(requests.some((r) => r.method === "POST")).toBe(false);
+  });
+
+  it("says the model library is unavailable when the app started without it", async () => {
+    render(
+      fakeClient(
+        routes({ body: {} }, [mapSource], {
+          status: 503,
+          body: { error: { code: "library_unavailable", message: "no library", details: {} } },
+        }),
+      ).api,
+    );
+    expect(await screen.findByText(/The model library is not available/)).toBeInTheDocument();
+    expect(screen.queryByText(/Add one in Models/)).toBeNull();
   });
 });

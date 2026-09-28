@@ -318,6 +318,8 @@ export function DetectionMount({ map, zIndex, opacity, projectId }: LayerMountPr
   const selection = useWorkspace((s) => s.selection);
   const allSurveys = useDetectStore((s) => s.filters.allSurveys);
   const outlines = useDetectStore((s) => s.outlines);
+  const regionDraft = useDetectStore((s) => s.regionDraft);
+  const { workspace } = useWorkspaceStores();
   const { types } = useProjectTypes(projectId);
   const [runs, setRuns] = useState<{ run: MapRun; date: string }[]>([]);
   const [tick, setTick] = useState(0);
@@ -374,10 +376,25 @@ export function DetectionMount({ map, zIndex, opacity, projectId }: LayerMountPr
       map.removeLayer(layer);
     };
   }, [map, outlineSource, zIndex]);
+  // The box being configured in the region inspector is drawn only while region:draft is selected.
+  const draftShown = selection?.kind === "region" && selection.id === "draft" ? regionDraft : null;
   useEffect(() => {
     outlineSource.clear();
-    outlineSource.addFeatures(outlines.map((o) => new Feature(new Polygon([[...o.ring, o.ring[0]]]))));
-  }, [outlineSource, outlines]);
+    const rings = [...outlines.map((o) => o.ring), ...(draftShown ? [draftShown] : [])];
+    outlineSource.addFeatures(rings.map((ring) => new Feature(new Polygon([[...ring, ring[0]]]))));
+  }, [outlineSource, outlines, draftShown]);
+  // Leaving region:draft (Esc, Cancel, another selection) drops the draft, so it never resurfaces.
+  // A transition, not a state check: the draft is stored a moment before region:draft is selected.
+  useEffect(
+    () =>
+      workspace.subscribe((s, prev) => {
+        const wasDraft = prev.selection?.kind === "region" && prev.selection.id === "draft";
+        const isDraft = s.selection?.kind === "region" && s.selection.id === "draft";
+        if (wasDraft && !isDraft && useDetectStore.getState().regionDraft)
+          useDetectStore.getState().setRegionDraft(null);
+      }),
+    [workspace],
+  );
 
   const selectedId =
     selection?.kind === "detection" ? (parseDetectionId(selection.id)?.detectionId ?? null) : null;

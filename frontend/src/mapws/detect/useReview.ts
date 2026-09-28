@@ -35,6 +35,19 @@ function fail(action: string, err: unknown) {
   toast("danger", message);
 }
 
+/** After a saved decision: the move on failed, not the decision (so the copy must not blame the review). */
+function moveFailed(err: unknown) {
+  const message = messageOf(err, "could not open the next detection");
+  pushLog(`move to the next detection failed: ${message}`);
+  toast(
+    "danger",
+    `The decision was saved, but moving to the next detection failed (${message}). Press Tab to try again.`,
+  );
+}
+
+/** Shift+X over detections with findings: F refuses the bulk write; the confirm is per detection. */
+export const BULK_HAS_FINDINGS = "Some of these detections have findings; reject them one by one to confirm.";
+
 const extentOf = (c: number[][]): [number, number, number, number] => {
   const xs = c.map((p) => p[0]);
   const ys = c.map((p) => p[1]);
@@ -103,7 +116,7 @@ export function useReview(projectId: string) {
         }
         toast("info", "The finding was created; open it from the Findings layer.");
       }
-      if (d) await advance(runId, d.id);
+      if (d) await advance(runId, d.id).catch(moveFailed);
     },
     [select, advance],
   );
@@ -131,12 +144,29 @@ export function useReview(projectId: string) {
   const decideMany = useCallback(
     (action: "accept" | "reject") =>
       run("review the detections in view", async () => {
-        for (const [runId, ids] of Object.entries(useDetectStore.getState().inView)) {
-          for (const part of chunk(ids, REVIEW_CHUNK)) {
-            if (part.length) await reviewDetections(api, projectId, runId, { detection_ids: part, action });
+        const store = useDetectStore.getState;
+        try {
+          for (const [runId, ids] of Object.entries(store().inView)) {
+            for (const part of chunk(ids, REVIEW_CHUNK)) {
+              if (!part.length) continue;
+              try {
+                await reviewDetections(api, projectId, runId, { detection_ids: part, action });
+              } catch (err) {
+                if (findingIdsToDelete(err) !== null) throw new Error(BULK_HAS_FINDINGS);
+                throw err;
+              }
+              // Saved: out of the view set, so a quick second Shift+A / Shift+X never resends them.
+              const sent = new Set(part);
+              store().setInView(
+                runId,
+                (store().inView[runId] ?? []).filter((id) => !sent.has(id)),
+              );
+            }
           }
+        } finally {
+          // Even after a partial failure: the chunks that were saved must stop showing as pending.
+          store().refresh();
         }
-        useDetectStore.getState().refresh();
       }),
     [api, projectId, run],
   );
@@ -151,11 +181,17 @@ export function useReview(projectId: string) {
         : { detection_ids: c.ids, action: c.action };
       await reviewDetections(api, projectId, c.runId, body, true);
       useDetectStore.getState().refresh();
-      if (c.detection) await advance(c.runId, c.detection.id);
+      if (c.detection) await advance(c.runId, c.detection.id).catch(moveFailed);
     });
   }, [api, projectId, confirm, run, advance]);
 
   const cancelConfirm = useCallback(() => setConfirm(null), []);
+
+  /** Tab / Start review: the handled path (toast + log), and refused while a decision is in flight. */
+  const next = useCallback(
+    (runId: string, afterId: string | null) => run("open the next detection", () => advance(runId, afterId)),
+    [run, advance],
+  );
 
   return {
     busy: busyState,
@@ -164,6 +200,6 @@ export function useReview(projectId: string) {
     decideMany,
     confirmDelete,
     cancelConfirm,
-    advance,
+    next,
   };
 }
