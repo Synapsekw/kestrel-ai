@@ -118,6 +118,9 @@ function RunLayer({
     boxes: VectorLayer<VectorSource>;
     dots: VectorLayer<VectorSource>;
   } | null>(null);
+  // Bumped by refresh() below so a fetch started before a refresh can't add stale features to
+  // the (now reloading) source once it resolves after the refresh (m1: refresh race).
+  const generationRef = useRef(0);
 
   // Build effect: keyed on [map, api, projectId, run.id] only — z/opacity are property updates below
   // (RasterMount.tsx pattern, ruling T11-3) so an opacity drag never re-fetches every bbox.
@@ -128,9 +131,40 @@ function RunLayer({
     const boxes = new VectorSource({
       strategy: bboxStrategy,
       loader: (extent, _res, _proj, success, failure) => {
+        const gen = generationRef.current;
         fetchSiteDetections(api, projectId, run.id, siteBbox(extent))
           .then((page) => {
-            if (stale) return;
+            if (stale || gen !== generationRef.current) return;
+            if (page.truncated) {
+              // Too many detections in this extent for boxes (budget: <= 5 000 per viewport) —
+              // show density dots instead, and don't leave this extent recorded as "loaded":
+              // OL's bbox strategy treats any later extent contained in a loaded one as already
+              // covered, so a wide truncated view would otherwise hide boxes forever even after
+              // zooming into a small enough area. Nor are these ids "in view" for bulk review.
+              boxes.removeLoadedExtent(extent);
+              boxLayer.setVisible(false);
+              dotLayer.setVisible(true);
+              store().setInView(run.id, []);
+              if (!densityRequested) {
+                densityRequested = true;
+                fetchSiteDensity(api, projectId, run.id)
+                  .then((d) => {
+                    if (stale || gen !== generationRef.current) return;
+                    dots.addFeatures(
+                      d.cells
+                        .filter((c) => c.center_site)
+                        .map((c) => {
+                          const f = new Feature(new Point(c.center_site!));
+                          f.setProperties({ classId: c.class_id, count: c.count });
+                          return f;
+                        }),
+                    );
+                  })
+                  .catch(() => pushLog(`Could not load detection density for run ${run.id}.`));
+              }
+              success?.([]);
+              return;
+            }
             store().remember(run.id, page.items);
             const feats = page.items
               .filter((d) => d.corners_site && d.corners_site.length >= 3)
@@ -147,31 +181,13 @@ function RunLayer({
                 return f;
               });
             boxes.addFeatures(feats);
-            boxLayer.setVisible(!page.truncated);
-            dotLayer.setVisible(page.truncated);
-            // Density is only worth its round trip once a page came back truncated (budget).
-            if (page.truncated && !densityRequested) {
-              densityRequested = true;
-              fetchSiteDensity(api, projectId, run.id)
-                .then((d) => {
-                  if (stale) return;
-                  dots.addFeatures(
-                    d.cells
-                      .filter((c) => c.center_site)
-                      .map((c) => {
-                        const f = new Feature(new Point(c.center_site!));
-                        f.setProperties({ classId: c.class_id, count: c.count });
-                        return f;
-                      }),
-                  );
-                })
-                .catch(() => pushLog(`Could not load detection density for run ${run.id}.`));
-            }
+            boxLayer.setVisible(true);
+            dotLayer.setVisible(false);
             success?.(feats);
             reportInView();
           })
           .catch(() => {
-            if (stale) return;
+            if (stale || gen !== generationRef.current) return;
             pushLog(`Could not load detections for run ${run.id}.`);
             boxes.removeLoadedExtent(extent);
             failure?.();
@@ -244,7 +260,15 @@ function RunLayer({
 
   // A map finding deleted in F's inspector rejects its detection and publishes only
   // findings.changed (M-B5 hand-off); refresh the box source so the box stops drawing accepted.
+  // Skip the first run (mount): the build effect above already loads fresh data, and bumping the
+  // generation here too would just make its own first load look stale to itself.
+  const mountedRefreshRef = useRef(false);
   useEffect(() => {
+    if (!mountedRefreshRef.current) {
+      mountedRefreshRef.current = true;
+      return;
+    }
+    generationRef.current++;
     layers.current?.boxes.getSource()?.refresh();
   }, [revision, findingsRevision]);
   useEffect(() => {

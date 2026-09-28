@@ -5,7 +5,8 @@ import { DEFAULT_FILTERS, type DetectFilters } from "./detectModel";
 
 /** Bounded cache of detections the panes have drawn, oldest evicted first (budget). */
 export const MAX_CACHED = 20000;
-const MAX_HISTORY = 200;
+/** Back-history cap for Shift+Tab (a session, not a database, doesn't need more). */
+export const MAX_HISTORY = 200;
 const same = (a: Selection | undefined, b: Selection) => !!a && a.kind === b.kind && a.id === b.id;
 
 export interface DetectOutline {
