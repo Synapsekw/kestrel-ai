@@ -156,12 +156,28 @@ test("500 annotations: at most one annotation draw per frame and no hit-graph re
   await probe("inputDone");
   await page.keyboard.up(" ");
   await settle();
-  // 1.5 s of wheel zoom in and back out.
+  // 1.5 s of wheel zoom in and back out, one notch per frame, dispatched from inside the page at
+  // the hand's cadence. Not page.mouse.wheel: each call waits a round trip for the renderer's ack,
+  // and on the 4-vCPU CI runner that took ~100 ms, so the notches landed 150-300 ms apart - past the
+  // 120 ms idle delay, i.e. 90 one-notch gestures, each ending in the idle rebuild spec §9.1 asks
+  // for (48,700 hit draws, CI run 36439794911). A real wheel's notches do not wait on the page.
+  // The events go through the same Konva stage handler; dispatchEvent returns once it has run. On a
+  // slow page (E2E_CPU_THROTTLE=6) this still caught a real bug: one notch's own handling outlasted
+  // the idle delay, so it ended mid-gesture - createIdleMarker now counts quiet from the work's end.
   await probe("inputStart");
-  for (let i = 0; i < 90; i++) {
-    await page.mouse.wheel(0, i < 45 ? -60 : 60);
-    await page.waitForTimeout(16);
-  }
+  await page.evaluate(
+    async ({ x, y }) => {
+      const target = document.elementFromPoint(x, y);
+      if (!target?.closest('[data-testid="image-canvas"]')) throw new Error("no canvas under the wheel");
+      for (let i = 0; i < 90; i++) {
+        const deltaY = i < 45 ? -60 : 60;
+        const init = { deltaY, clientX: x, clientY: y, bubbles: true, cancelable: true };
+        target.dispatchEvent(new WheelEvent("wheel", init));
+        await new Promise((r) => setTimeout(r, 16));
+      }
+    },
+    { x: cx, y: cy },
+  );
   await probe("inputDone");
   await settle(); // listening comes back (spec §9.1: 120 ms); outside the window
   const stats = await page.evaluate(() => (window as unknown as { __kPerf: Probe }).__kPerf.stop());
