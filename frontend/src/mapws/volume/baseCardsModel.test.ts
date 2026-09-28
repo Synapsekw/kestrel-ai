@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Surface } from "@contract/client";
 import { exampleBaseSurface, exampleMeasurement, exampleSurface } from "@/test/volumeFixtures";
-import { baseCards, longDate, selectedCard } from "./baseCardsModel";
+import { baseCards, longDate, otherSurfaceBase, selectedCard } from "./baseCardsModel";
 
 const design: Surface = {
   ...exampleSurface,
@@ -102,6 +102,59 @@ describe("baseCards", () => {
       sub: "DSM 20 Mar 2026",
       base: { kind: "surface", surface_id: "dem-aug" },
     });
+  });
+
+  it("selects the earlier card only when the stored base is that surface", () => {
+    const surfaces = [exampleSurface, exampleBaseSurface, earlierDem];
+    const m = {
+      ...exampleMeasurement,
+      base: { kind: "surface" as const, surface_id: "dem-aug", z: null },
+    };
+    const input = { measurement: m, top: exampleSurface, surfaces, l: null };
+    expect(selectedCard(baseCards(input))).toBe("earlier");
+    expect(otherSurfaceBase(input)).toBeNull();
+  });
+
+  it("names a stored surface base that is neither a design nor the earlier survey, and claims no card", () => {
+    // The earlier card is the 20 Mar DSM (newest before the top); the stored base is the 1 Mar one.
+    const surfaces = [exampleSurface, exampleBaseSurface, earlierDem];
+    const m = {
+      ...exampleMeasurement,
+      base: { kind: "surface" as const, surface_id: exampleBaseSurface.id, z: null },
+    };
+    const input = { measurement: m, top: exampleSurface, surfaces, l: null };
+    const cards = baseCards(input);
+    expect(selectedCard(cards)).toBeNull();
+    expect(byId(cards, "earlier").sub).toBe("DSM 20 Mar 2026");
+    expect(otherSurfaceBase(input)).toBe("Base: March survey · 1 Mar 2026");
+  });
+
+  it("says so when the stored surface base is no longer in the site", () => {
+    const m = {
+      ...exampleMeasurement,
+      base: { kind: "surface" as const, surface_id: "gone", z: null },
+    };
+    const input = { measurement: m, top: exampleSurface, surfaces: [exampleSurface], l: null };
+    expect(selectedCard(baseCards(input))).toBeNull();
+    expect(otherSurfaceBase(input)).toBe("Base: a surface that is no longer in this site");
+  });
+
+  it("names no other base for a design or a non-surface base", () => {
+    const d = {
+      ...exampleMeasurement,
+      base: { kind: "surface" as const, surface_id: "design-1", z: null },
+    };
+    expect(
+      otherSurfaceBase({ measurement: d, top: exampleSurface, surfaces: [exampleSurface, design], l: null }),
+    ).toBeNull();
+    expect(
+      otherSurfaceBase({
+        measurement: exampleMeasurement,
+        top: exampleSurface,
+        surfaces: [exampleSurface],
+        l: null,
+      }),
+    ).toBeNull();
   });
 
   it("says why the earlier card is off when the top has no date and no l is chosen", () => {

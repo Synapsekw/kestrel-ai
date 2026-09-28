@@ -40,7 +40,7 @@ import {
   viewIn3dHref,
 } from "@/volumes/model";
 import { BaseCards } from "./BaseCards";
-import { baseCards } from "./baseCardsModel";
+import { baseCards, otherSurfaceBase } from "./baseCardsModel";
 import { useVolume } from "./useVolume";
 import { volumeViewHref } from "./volumeActions";
 import { DIFF_CUT_HEX, DIFF_FILL_HEX, sameFrame } from "./volumeModel";
@@ -134,6 +134,7 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
   const r = m.results;
   const lab = labels(m.base.kind, r?.base_surface);
   const cards = baseCards({ measurement: m, top, surfaces, l });
+  const otherBase = otherSurfaceBase({ measurement: m, top, surfaces, l });
   const drawable = sameFrame(frame, top);
   const tons = tonnage(m);
   const mat = material ?? {
@@ -240,7 +241,7 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
       </InspectorSection>
 
       <InspectorSection key="base" title="Base surface">
-        <BaseCards cards={cards} busy={calculating} measurement={m} onBase={onBase} />
+        <BaseCards cards={cards} busy={calculating} measurement={m} otherBase={otherBase} onBase={onBase} />
       </InspectorSection>
 
       <InspectorSection key="numbers" title="Net volume">

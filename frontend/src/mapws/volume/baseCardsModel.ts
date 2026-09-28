@@ -47,21 +47,45 @@ function earlierSurvey(candidates: Surface[], top: Surface, l: string | null): S
   return before[0] ?? null;
 }
 
-/** The four base cards of the volume inspector (spec §10), with why a card is off. */
-export function baseCards(input: {
+export interface BaseCardsInput {
   measurement: VolumeMeasurement;
   top: Surface;
   surfaces: Surface[];
   l: string | null;
-}): BaseCard[] {
-  const { measurement: m, top, surfaces, l } = input;
+}
+
+function resolve({ measurement: m, top, surfaces, l }: BaseCardsInput) {
   const candidates = surfaces.filter(pairs(top));
   const designs = candidates.filter((s) => s.kind === "design").sort((a, b) => a.name.localeCompare(b.name));
   const storedId = m.base.kind === "surface" ? (m.base.surface_id ?? null) : null;
-  const design = designs.find((s) => s.id === storedId) ?? designs[0] ?? null;
   const earlier = earlierSurvey(candidates, top, l);
   const earlierSurface = earlier && earlier !== "no_date" ? earlier : null;
-  const storedIsDesign = designs.some((s) => s.id === storedId);
+  return {
+    designs,
+    storedId,
+    earlier,
+    earlierSurface,
+    storedIsDesign: designs.some((s) => s.id === storedId),
+    storedIsEarlier: storedId !== null && storedId === earlierSurface?.id,
+  };
+}
+
+/** A stored surface base that no card stands for (not a design, not today's earlier survey): named
+ * truthfully, so the inspector never passes it off as a different surface. Null otherwise. */
+export function otherSurfaceBase(input: BaseCardsInput): string | null {
+  const { storedId, storedIsDesign, storedIsEarlier } = resolve(input);
+  if (storedId === null || storedIsDesign || storedIsEarlier) return null;
+  const s = input.surfaces.find((x) => x.id === storedId);
+  return s
+    ? `Base: ${s.name} · ${longDate(s.captured_on)}`
+    : "Base: a surface that is no longer in this site";
+}
+
+/** The four base cards of the volume inspector (spec §10), with why a card is off. */
+export function baseCards(input: BaseCardsInput): BaseCard[] {
+  const m = input.measurement;
+  const { designs, storedId, earlier, earlierSurface, storedIsDesign, storedIsEarlier } = resolve(input);
+  const design = designs.find((s) => s.id === storedId) ?? designs[0] ?? null;
 
   return [
     {
@@ -103,7 +127,7 @@ export function baseCards(input: {
         : earlier === "no_date"
           ? "The top surface has no survey date"
           : "No earlier survey with a DSM",
-      selected: m.base.kind === "surface" && storedId !== null && !storedIsDesign,
+      selected: m.base.kind === "surface" && storedIsEarlier,
       options: [],
     },
   ];

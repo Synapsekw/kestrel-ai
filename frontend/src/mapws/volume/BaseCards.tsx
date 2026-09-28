@@ -11,15 +11,25 @@ export function BaseCards({
   cards,
   busy,
   measurement: m,
+  otherBase = null,
   onBase,
 }: {
   cards: BaseCard[];
   busy: boolean;
   measurement: VolumeMeasurement;
+  /** A stored surface base no card stands for (`otherSurfaceBase`). */
+  otherBase?: string | null;
   onBase: (base: VolumeBase) => void;
 }) {
   const designCard = cards.find((c) => c.id === "design");
-  const [flatZ, setFlatZ] = useState(m.base.z != null ? String(m.base.z) : "");
+  const seed = m.base.z != null ? String(m.base.z) : "";
+  const [flatZ, setFlatZ] = useState(seed);
+  // A saved level comes back as a new measurement: re-seed during render, as MasksSection does.
+  const [seenZ, setSeenZ] = useState(m.base.z);
+  if (seenZ !== m.base.z) {
+    setSeenZ(m.base.z);
+    setFlatZ(seed);
+  }
   const moreKinds = ["toe_surface", "flat"] as const;
   return (
     <div className="flex flex-col gap-2">
@@ -55,6 +65,11 @@ export function BaseCards({
           );
         })}
       </div>
+      {otherBase && (
+        <p data-testid="base-other" className="text-xs text-muted">
+          {otherBase}
+        </p>
+      )}
       {designCard && designCard.options.length > 0 && designCard.selected && (
         <Field label="Design surface" htmlFor="volume-design">
           <Select
