@@ -35,6 +35,14 @@ describe("palette commands", () => {
     expect(go).toHaveBeenCalledWith(`/p/${PROJECT_ID}/findings`);
   });
 
+  it("go to Review reaches the detection runs picker (I-FW I3)", () => {
+    const go = vi.fn();
+    goToCommands(routeInfo(`/p/${PROJECT_ID}/images`), [], go)
+      .find((c) => c.id === "go:page:review")
+      ?.run();
+    expect(go).toHaveBeenCalledWith(`/p/${PROJECT_ID}/review?view=runs`);
+  });
+
   it("go to Jobs keeps the project, like the rail", () => {
     const go = vi.fn();
     goToCommands(routeInfo(`/p/${PROJECT_ID}/images`), [], go)

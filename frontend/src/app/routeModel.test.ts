@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_TABS, RAIL_ENTRIES, RAIL_SETTINGS, layoutOf, routeInfo } from "./routeModel";
+import {
+  PROJECT_TABS,
+  RAIL_ENTRIES,
+  RAIL_SETTINGS,
+  SECONDARY_PAGES,
+  layoutOf,
+  routeInfo,
+  secondaryHref,
+} from "./routeModel";
 
 describe("routeInfo", () => {
   it.each([
@@ -31,6 +39,13 @@ describe("routeInfo", () => {
     expect(info.section).toBe(section);
     expect(info.tab).toBe(tab);
     expect(info.page).toBe(page);
+  });
+
+  it("a secondary page's href: Review opens the runs picker, the rest are bare (I-FW I3)", () => {
+    const page = (id: string) => SECONDARY_PAGES.find((p) => p.id === id)!;
+    expect(secondaryHref("abc", page("review"))).toBe("/p/abc/review?view=runs");
+    expect(secondaryHref("abc", page("analytics"))).toBe("/p/abc/analytics");
+    expect(routeInfo("/p/abc/review").page).toBe("Review");
   });
 
   it("reads the project id only inside a project", () => {

@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { MenuButton, Tabs } from "@/ui";
-import { PROJECT_TABS, SECONDARY_PAGES, routeInfo, type ProjectTabId } from "./routeModel";
+import { PROJECT_TABS, SECONDARY_PAGES, routeInfo, secondaryHref, type ProjectTabId } from "./routeModel";
 import { useProjectCounts, type ProjectCounts } from "./useProjectCounts";
 
 function countFor(id: ProjectTabId, counts: ProjectCounts | null): number | null {
@@ -38,7 +38,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
           id: p.id,
           label: p.label,
           icon: p.icon,
-          onSelect: () => void navigate(`/p/${projectId}/${p.id}`),
+          onSelect: () => void navigate(secondaryHref(projectId, p)),
         }))}
       />
     </div>
