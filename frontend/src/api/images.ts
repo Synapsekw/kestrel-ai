@@ -1,5 +1,6 @@
 import type { ApiClient, ImagePage, Image as ImageRow, components, paths } from "@contract/client";
 import { unwrap } from "./errors";
+import type { ImageDetail } from "./shapes";
 
 export type ListImagesQuery = NonNullable<
   paths["/api/v1/projects/{projectId}/images"]["get"]["parameters"]["query"]
@@ -55,6 +56,24 @@ export function setMarkedEmpty(
     api.PATCH("/api/v1/projects/{projectId}/images/{imageId}", {
       params: { path: { projectId, imageId } },
       body: { marked_empty: value },
+    }),
+  );
+}
+
+/** `GET /images/{imageId}` (I-C0, I-BK): FC declared these (and `fetchImageDetail`) in `./shapes`. */
+export type { ImageCamera, ImageDetail } from "./shapes";
+
+/** The operator's subject distance (§9.3 rule 1); `null` returns to the automatic rule. */
+export function setSubjectDistance(
+  api: ApiClient,
+  projectId: string,
+  imageId: string,
+  metres: number | null,
+): Promise<ImageDetail> {
+  return unwrap(
+    api.PATCH("/api/v1/projects/{projectId}/images/{imageId}", {
+      params: { path: { projectId, imageId } },
+      body: { subject_distance_m: metres },
     }),
   );
 }
