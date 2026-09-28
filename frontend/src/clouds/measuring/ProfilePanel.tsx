@@ -22,7 +22,7 @@ import {
   type SZ,
   type View2D,
 } from "./profileView";
-import type { SectionLine } from "./slab";
+import { lineKey, type SectionLine } from "./slab";
 
 export type ProfileStatus = "draft" | "computing" | "ready" | "failed";
 
@@ -87,7 +87,16 @@ export function ProfilePanel({
   const [aspectTrue, setAspectTrue] = useState(true);
   const [marks, setMarks] = useState<SZ[]>([]);
   const [retrying, setRetrying] = useState(false);
-  const fitKey = `${source}|${data?.count ?? 0}|${aspectTrue}`;
+  const currentLineKey = lineKey(line);
+  // A new section line invalidates the old marks (they belong to the old line, and "Save as
+  // distance" must not project them onto this one) and the fit (React's "adjust state when a
+  // prop changes" pattern, mirroring measureView.ts's tool re-arm).
+  const [trackedLineKey, setTrackedLineKey] = useState(currentLineKey);
+  if (currentLineKey !== trackedLineKey) {
+    setTrackedLineKey(currentLineKey);
+    setMarks([]);
+  }
+  const fitKey = `${currentLineKey}|${source}|${data?.count ?? 0}|${aspectTrue}`;
 
   const draw = useCallback(() => {
     const c = canvas.current;
@@ -187,7 +196,12 @@ export function ProfilePanel({
   const handleRetry = () => {
     if (!onRetry || retrying) return;
     setRetrying(true);
-    onRetry().finally(() => setRetrying(false));
+    // A synchronous throw or a rejection must still clear `retrying`, and never as an unhandled
+    // rejection: the caller already reports its own failure (a toast), this button just unlocks.
+    Promise.resolve()
+      .then(onRetry)
+      .catch(() => {})
+      .finally(() => setRetrying(false));
   };
 
   const helper = marks.length === 2 ? between(marks[0], marks[1]) : null;
