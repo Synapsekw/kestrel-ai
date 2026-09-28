@@ -83,12 +83,11 @@ test("flow 2: a DXF by CRS, a PDF by three control points, RMSE, save, overlay",
   const pdf = await importPdf(page, world);
   await expect(page.getByRole("button", { name: "Align drawing — Choose a drawing first" })).toBeDisabled();
   await alignFromRowMenu(page, pdf.row, pdf.id);
-  // Product finding (task-8-report.md F1, pinned by the test.fail below): the session the menu's
-  // "Align" starts is dropped at once in the dev build, so K is re-armed (H, then K) to start it.
-  await page.keyboard.press("h");
-  await page.keyboard.press("k");
+  // F1 (task-8-report.md): the menu's "Align" starts the session straight away, with no second K.
+  // Save placement shows only in a session, and stays disabled until the pairs fit.
   const inspector = page.getByTestId("map-inspector");
   await expect(inspector.getByRole("button", { name: "Save placement" })).toBeDisabled();
+  await expect(inspector.getByRole("button", { name: "Align · K" })).toHaveCount(0);
 
   // Three pairs: a click on the drawing (provisional, centred at 60% of the viewport), then the map.
   // The map points sit close to the drawing points, so each refit keeps the next drawing point on it.
@@ -136,22 +135,6 @@ test("flow 2: a DXF by CRS, a PDF by three control points, RMSE, save, overlay",
   expect(put.dst_frame).toBe("site");
   await retile;
   await expect(pdf.row).not.toContainText("not placed");
-});
-
-// F1 (task-8-report.md): after the row menu's "Align" the K tool is pressed, but the inspector still
-// offers "Align · K" and a click on the drawing starts no pair. Likely cause: under React StrictMode
-// DrawingInspector's unmount cleanup (`endFor(id)`) runs after AlignOverlay's `begin`, and the
-// overlay's `startedFor` ref then keeps it from starting again. Remove test.fail() once fixed.
-test("the row menu's Align starts the align session straight away", async ({ page }) => {
-  test.fail();
-  const world = await openWorkspace(page);
-  const pdf = await importPdf(page, world);
-  await alignFromRowMenu(page, pdf.row, pdf.id);
-  const inspector = page.getByTestId("map-inspector");
-  await expect(inspector.getByRole("button", { name: "Save placement" })).toBeVisible();
-  const stage = (await page.getByTestId("site-map").boundingBox())!;
-  await page.mouse.click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.5);
-  await expect(inspector.getByText(PENDING)).toBeVisible();
 });
 
 // R-HX: DXF linework carries the drawing's Selection (drawingTiles.ts vtileFeatures), and W1's
