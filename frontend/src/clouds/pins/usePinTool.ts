@@ -11,7 +11,7 @@ import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { useChangesStore } from "@/store/changes";
 import { toast } from "@/ui";
 import type { PinDraftInput } from "./PinCallout";
-import type { DraftPin } from "./types";
+import type { CloudPin, DraftPin } from "./types";
 
 export const LAST_TYPE_KEY = "kestrel.clouds.lastPinType";
 
@@ -45,8 +45,13 @@ export interface PinToolOptions {
   projectId: string;
   cloudId: string | null;
   viewer: RefObject<CloudViewerHandle | null>;
-  /** Called with the new finding's id after Create succeeds (select it, pulse it). */
-  onCreated: (id: string) => void;
+  /**
+   * Called with the new finding as a pin after Create succeeds (select it, show it at once until the
+   * refetched list holds it; final-review ruling).
+   */
+  onCreated: (pin: CloudPin) => void;
+  /** Called after Move pin's PATCH succeeds with the new anchor (show it there until the list catches up). */
+  onMoved?: (id: string, p: Vec3, u: number | null, normal: Vec3 | null) => void;
   /** The workspace seams, from `FeatureContext.seams`: this hook runs inside `usePinsFeature`, above
    * `WorkspaceSeamsContext.Provider` (T7-1), so `useWorkspaceSeams()` would return the no-op defaults. */
   seams: WorkspaceSeams;
@@ -70,7 +75,14 @@ export interface PinTool {
 }
 
 /** Spec §9.4: the draft flow, Create through F's POST, Move pin through F's PATCH, then the capture request. */
-export function usePinTool({ projectId, cloudId, viewer, onCreated, seams }: PinToolOptions): PinTool {
+export function usePinTool({
+  projectId,
+  cloudId,
+  viewer,
+  onCreated,
+  onMoved,
+  seams,
+}: PinToolOptions): PinTool {
   const api = useApi();
   // Keyed by cloud, so a cloud switch drops a draft or a pending move without an effect.
   const [draftState, setDraftState] = useState<{ cloudId: string; draft: DraftPin } | null>(null);
@@ -91,6 +103,7 @@ export function usePinTool({ projectId, cloudId, viewer, onCreated, seams }: Pin
             moveCloudFinding(api, projectId, id, { x: p.x, y: p.y, z: p.z, uncertainty_m: p.uncertainty_m }),
           { bumpOnError: true, onSaved: () => setAnchorNormal(id, normal) },
         );
+        onMoved?.(id, [p.x, p.y, p.z], p.uncertainty_m, normal);
         seams.requestViewCapture({ kind: "finding", id }, "move");
         toast("ok", "Pin moved");
       } catch (e) {
@@ -99,12 +112,13 @@ export function usePinTool({ projectId, cloudId, viewer, onCreated, seams }: Pin
         setBusy(false);
       }
     },
-    [api, projectId, seams],
+    [api, projectId, seams, onMoved],
   );
 
   const pick = useCallback(
     (p: CloudPick) => {
-      if (!cloudId) return;
+      // A create or move is in flight: a new draft would be wiped by its answer (final review).
+      if (!cloudId || busy) return;
       const normal = normalAt(viewer.current, p);
       if (moving) {
         setMovingState(null);
@@ -113,7 +127,7 @@ export function usePinTool({ projectId, cloudId, viewer, onCreated, seams }: Pin
       }
       setDraftState({ cloudId, draft: { p: [p.x, p.y, p.z], u: p.uncertainty_m, normal } });
     },
-    [cloudId, viewer, moving, move],
+    [cloudId, busy, viewer, moving, move],
   );
 
   const create = useCallback(
@@ -132,7 +146,17 @@ export function usePinTool({ projectId, cloudId, viewer, onCreated, seams }: Pin
         writeLastType(v.typeId);
         setDraftState(null);
         useChangesStore.getState().bumpFindings();
-        onCreated(f.id);
+        onCreated({
+          id: f.id,
+          number: f.number,
+          typeId: f.type_id,
+          severity: f.severity,
+          status: f.status,
+          note: f.note,
+          p: draft.p,
+          u: draft.u,
+          normal: draft.normal,
+        });
         toast("ok", `${formatFindingNumber(f.number)} created`);
         return f.id;
       } catch (e) {

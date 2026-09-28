@@ -36,16 +36,17 @@ function setup(routes: FakeRoute[], cloudId: string | null = CLOUD_ID) {
     LikelyViews: null,
   };
   const onCreated = vi.fn();
+  const onMoved = vi.fn();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <TestApiProvider api={api}>{children}</TestApiProvider>
   );
   const v = viewer();
   const hook = renderHook(
     ({ cid }: { cid: string | null }) =>
-      usePinTool({ projectId: PROJECT_ID, cloudId: cid, viewer: v, onCreated, seams }),
+      usePinTool({ projectId: PROJECT_ID, cloudId: cid, viewer: v, onCreated, onMoved, seams }),
     { wrapper, initialProps: { cid: cloudId } },
   );
-  return { ...hook, requests, seen, onCreated };
+  return { ...hook, requests, seen, onCreated, onMoved };
 }
 
 const created = { ...exampleFindingDetail, id: "f-new", number: 300 };
@@ -99,7 +100,9 @@ describe("usePinTool", () => {
     expect(seen[0][2]).toEqual(UP); // recorded before the capture was requested (R1 reads it at once)
     expect(result.current.draft).toBeNull();
     expect(readLastType()).toBe(TYPE_SPALLING);
-    expect(onCreated).toHaveBeenCalledWith("f-new");
+    expect(onCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "f-new", number: 300, p: at(0, 0, 0), u: 0.01, normal: UP }),
+    );
     expect(useChangesStore.getState().findingsRevision).toBe(1);
   });
 
@@ -121,7 +124,7 @@ describe("usePinTool", () => {
   });
 
   it("records the normal and requests a capture after a move", async () => {
-    const { result, requests, seen } = setup([
+    const { result, requests, seen, onMoved } = setup([
       { method: "PATCH", path: /\/findings\/f-9$/, body: { ...exampleFindingDetail, id: "f-9" } },
     ]);
     act(() => result.current.startMove("f-9"));
@@ -134,8 +137,27 @@ describe("usePinTool", () => {
     expect(seen[0][0]).toBe("f-9");
     expect(seen[0][1]).toBe("move");
     expect(seen[0][2]).toEqual(UP);
+    expect(onMoved).toHaveBeenCalledWith("f-9", at(1, 0, 0), 0.01, UP);
     expect(result.current.moving).toBeNull();
     expect(result.current.draft).toBeNull();
+  });
+
+  it("ignores picks while a create is in flight", async () => {
+    const { result } = setup([{ method: "POST", path: /\/findings$/, status: 201, body: created }]);
+    act(() => result.current.pick(pick(at(0, 0, 0))));
+    let done: Promise<string | null> = Promise.resolve(null);
+    act(() => {
+      done = result.current.create({ typeId: TYPE_SPALLING, severity: 3, note: "" });
+    });
+    expect(result.current.busy).toBe(true);
+    act(() => result.current.pick(pick(at(2, 0, 0))));
+    expect(result.current.draft?.p).toEqual(at(0, 0, 0)); // the in-flight draft, not a new one
+    await act(async () => {
+      await done;
+    });
+    expect(result.current.busy).toBe(false);
+    act(() => result.current.pick(pick(at(2, 0, 0))));
+    expect(result.current.draft?.p).toEqual(at(2, 0, 0));
   });
 
   it("cancels a draft or a move, and says when there was nothing", () => {

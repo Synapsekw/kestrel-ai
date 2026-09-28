@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApi } from "@/api/client";
+import { PIN_CAP } from "@/api/cloudFindings";
 import { messageOf } from "@/api/errors";
 import { deleteFinding, patchFinding, type FindingPatch } from "@/api/findings";
+import { pushLog } from "@/app/diagnostics";
 import type { CloudPick } from "@/clouds/CloudViewer";
 import { parseFinding } from "@/clouds/jump";
 import { reviewKeysLive } from "@/clouds/keys";
@@ -15,6 +17,7 @@ import { DRAFT_ID, type CloudPin } from "@/clouds/pins/types";
 import { useCloudPins } from "@/clouds/pins/useCloudPins";
 import { useFindingArrival } from "@/clouds/pins/useFindingArrival";
 import { readLastType, usePinTool } from "@/clouds/pins/usePinTool";
+import type { Vec3 } from "@/clouds/viewer/types";
 import { formatFindingNumber } from "@/findings/format";
 import { useInspectorCommands } from "@/findings/inspectorStore";
 import { useFindingKeys } from "@/findings/useFindingKeys";
@@ -31,6 +34,37 @@ import type { FeatureContext, MinimapMark, WorkspaceFeature, WorkspaceTool } fro
 const inOverlay = (t: EventTarget | null) =>
   t instanceof Element && t.closest('[role="dialog"],[role="menu"],[role="listbox"]') !== null;
 
+interface PendingMove {
+  p: Vec3;
+  u: number | null;
+  normal: Vec3 | null;
+}
+
+/**
+ * Final-review ruling (Important 2): what an own create or Move pin wrote, shown at once while the
+ * refetch runs. It applies only while the listed pins are still `seen` (the list when the write
+ * answered); the next list replaces it.
+ */
+interface Pending {
+  cloudId: string;
+  seen: CloudPin[];
+  created: CloudPin[];
+  moved: ReadonlyMap<string, PendingMove>;
+}
+
+const sameP = (a: Vec3, b: Vec3) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+/** The listed pins with the pending writes laid over them; the 500 cap still holds. */
+function withPending(listed: CloudPin[], pending: Pending | null): CloudPin[] {
+  if (!pending) return listed;
+  const moved = listed.map((p) => {
+    const m = pending.moved.get(p.id);
+    return m ? { ...p, p: m.p, u: m.u, normal: m.normal } : p;
+  });
+  const added = pending.created.filter((c) => !listed.some((p) => p.id === c.id));
+  return added.length === 0 ? moved : [...added, ...moved].slice(0, PIN_CAP);
+}
+
 /**
  * C-P1 (spec §9, W1 plan Ruling 1): the pin tool (M), the pins layer (z 5), the callout (z 12), the
  * Findings tab with F's inspector, the finding dots on the minimap, the `?finding=` arrival and the
@@ -42,11 +76,58 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   const navigate = useNavigate();
   const scale = useSeverityScale();
   const { types, defectTypes } = useProjectTypes(projectId);
-  const pins = useCloudPins(projectId, cloud.id);
+  const listedPins = useCloudPins(projectId, cloud.id);
+  const listed = listedPins.pins;
   const latest = useRef(ctx);
+  const listedRef = useRef(listed);
   useEffect(() => {
     latest.current = ctx;
+    listedRef.current = listed;
   });
+
+  // Own creates and moves, shown until the list catches up (final-review ruling, Important 2).
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [dropped, setDropped] = useState<{ entry: Pending; listed: CloudPin[]; error: string | null } | null>(
+    null,
+  );
+  const livePending = pending && pending.cloudId === cloud.id && pending.seen === listed ? pending : null;
+  if (pending && !livePending) {
+    // A newer list arrived (or the cloud changed): the optimistic entries go; the effect below
+    // logs any the list did not confirm (a failed refetch, a pin outside the 500 drawn).
+    setPending(null);
+    if (pending.cloudId === cloud.id) setDropped({ entry: pending, listed, error: listedPins.error });
+  }
+  useEffect(() => {
+    if (!dropped) return;
+    const { entry, listed: now, error } = dropped;
+    const err = error ? ` (${error})` : "";
+    for (const c of entry.created)
+      if (!now.some((p) => p.id === c.id))
+        pushLog(`pins: ${formatFindingNumber(c.number)} not in the refetched list${err}`);
+    for (const [id, m] of entry.moved) {
+      const p = now.find((q) => q.id === id);
+      if (!p || !sameP(p.p, m.p))
+        pushLog(`pins: moved pin ${id} not at its new spot after the refetch${err}`);
+    }
+  }, [dropped]);
+  const shown = useMemo(() => withPending(listed, livePending), [listed, livePending]);
+  const pins = useMemo(
+    () => (shown === listed ? listedPins : { ...listedPins, pins: shown }),
+    [shown, listed, listedPins],
+  );
+  const addPending = useCallback(
+    (f: (p: Pending) => Pending) => {
+      const seen = listedRef.current;
+      setPending((prev) =>
+        f(
+          prev && prev.cloudId === cloud.id && prev.seen === seen
+            ? prev
+            : { cloudId: cloud.id, seen, created: [], moved: new Map() },
+        ),
+      );
+    },
+    [cloud.id],
+  );
 
   // Keyed by cloud, so a cloud switch clears the selection without an effect.
   const [sel, setSel] = useState<{ cloudId: string; id: string } | null>(null);
@@ -60,7 +141,23 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
     [cloud.id],
   );
 
-  const tool = usePinTool({ projectId, cloudId: cloud.id, viewer, onCreated: select, seams: ctx.seams });
+  const { reload } = listedPins;
+  const onCreated = useCallback(
+    (pin: CloudPin) => {
+      addPending((p) => ({ ...p, created: [...p.created, pin] }));
+      select(pin.id);
+      reload();
+    },
+    [addPending, select, reload],
+  );
+  const onMoved = useCallback(
+    (id: string, p: Vec3, u: number | null, normal: Vec3 | null) => {
+      addPending((prev) => ({ ...prev, moved: new Map(prev.moved).set(id, { p, u, normal }) }));
+      reload();
+    },
+    [addPending, reload],
+  );
+  const tool = usePinTool({ projectId, cloudId: cloud.id, viewer, onCreated, onMoved, seams: ctx.seams });
   const submitRef = useRef<(() => void) | null>(null);
   const [calloutEl, setCalloutEl] = useState<HTMLDivElement | null>(null);
   const [confirming, setConfirming] = useState<CloudPin | null>(null);

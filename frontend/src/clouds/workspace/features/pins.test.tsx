@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { createApiClient } from "@contract/client";
 import type { CloudPick } from "@/clouds/CloudViewer";
 import type { Finding } from "@/api/findings";
 import type { NavMode } from "@/clouds/viewer/types";
@@ -10,11 +11,13 @@ import { at } from "@/clouds/pins/testCamera";
 import { LAST_TYPE_KEY } from "@/clouds/pins/usePinTool";
 import { DEFAULT_SEAMS, WorkspaceSeamsContext } from "@/clouds/workspace/seams";
 import { useChangesStore } from "@/store/changes";
-import { fakeClient, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
+import { fakeFetch, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
 import { baseRoutes, exampleFinding, exampleFindingDetail, TYPE_SPALLING } from "@/test/findingFixtures";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { TestApiProvider } from "@/test/render";
+import type { CloudToolId } from "../tools";
 import type { FeatureContext } from "../types";
+import { useWorkspaceTool } from "../useWorkspaceTool";
 import { usePinsFeature } from "./pins";
 
 const saved: Finding = {
@@ -39,6 +42,24 @@ const PICK: CloudPick = {
   level: 3,
   uncertainty_m: 0.01,
 };
+const PICK_ELSEWHERE: CloudPick = { ...PICK, x: at(3, 0, 0)[0], y: at(3, 0, 0)[1] };
+
+/** Holds `GET …/findings` (the pins list) while closed, so a test can look before the refetch answers. */
+function listGate() {
+  let open = true;
+  const waiting: (() => void)[] = [];
+  return {
+    close: () => {
+      open = false;
+    },
+    release: () => {
+      open = true;
+      waiting.splice(0).forEach((go) => go());
+    },
+    wait: () => (open ? Promise.resolve() : new Promise<void>((r) => waiting.push(r))),
+  };
+}
+type Gate = ReturnType<typeof listGate>;
 
 let nav: NavMode = "orbit";
 const viewer = () =>
@@ -51,6 +72,8 @@ const viewer = () =>
       pickWithNormal: () => ({ point: at(0, 0, 0), u: 0.01, normal: [0, 0, 1] }),
       stats: () => ({ numVisiblePoints: 0 }),
       navMode: () => nav,
+      setNavMode: vi.fn(),
+      setView: vi.fn(),
       goToPose: vi.fn(),
       lookAt: vi.fn(),
       requestRender: vi.fn(),
@@ -66,6 +89,9 @@ function Harness({ ctx }: { ctx: FeatureContext }) {
       <button type="button" onClick={() => tool.onPick!(PICK)}>
         pick
       </button>
+      <button type="button" onClick={() => tool.onPick!(PICK_ELSEWHERE)}>
+        pick elsewhere
+      </button>
       <button type="button" onClick={() => tool.onCommit!()}>
         commit
       </button>
@@ -76,6 +102,9 @@ function Harness({ ctx }: { ctx: FeatureContext }) {
       <span data-testid="tool">{`${tool.id} picks=${tool.picks} canCommit=${tool.canCommit}`}</span>
       <span data-testid="count">{f.findingsTab!.count}</span>
       <span data-testid="dots">{f.minimap!.length}</span>
+      <span data-testid="marks">
+        {JSON.stringify(f.minimap!.map((m) => (m.kind === "dot" ? [m.label, m.x, m.y] : null)))}
+      </span>
       <div>{f.layer}</div>
       <div>{f.floating}</div>
       <div>{f.findingsTab!.body}</div>
@@ -83,8 +112,31 @@ function Harness({ ctx }: { ctx: FeatureContext }) {
   );
 }
 
-function mount(over: Partial<FeatureContext> = {}) {
-  const { api, requests } = fakeClient(
+/** The pins feature under W1's real key routing (`useWorkspaceTool`), as CloudWorkspace wires it. */
+function RoutedHarness({ ctx }: { ctx: FeatureContext }) {
+  const [active, setActive] = useState<CloudToolId>(ctx.activeTool);
+  const f = usePinsFeature({ ...ctx, activeTool: active });
+  useWorkspaceTool({
+    active,
+    setActive,
+    tools: f.tools!,
+    viewer: ctx.viewer,
+    enabled: true,
+    isAvailable: () => true,
+  });
+  return (
+    <div>
+      <button type="button" onClick={() => f.tools![0].onPick!(PICK)}>
+        pick
+      </button>
+      <div>{f.layer}</div>
+      <div>{f.floating}</div>
+    </div>
+  );
+}
+
+function mount(over: Partial<FeatureContext> = {}, opts: { gate?: Gate; routed?: boolean } = {}) {
+  const { fetch: answer, requests } = fakeFetch(
     baseRoutes([
       // fakeFetch matches the pathname only (no query string).
       { method: "GET", path: /\/findings$/, body: { items: [saved], next_cursor: null } },
@@ -104,6 +156,13 @@ function mount(over: Partial<FeatureContext> = {}) {
       { method: "DELETE", path: /\/findings\/f-a$/, status: 204, body: null },
     ]),
   );
+  const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
+    const req = input instanceof Request ? input : new Request(input, init);
+    if (opts.gate && req.method === "GET" && new URL(req.url).pathname.endsWith("/findings"))
+      await opts.gate.wait();
+    return answer(req);
+  }) as typeof fetch;
+  const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
   const ctx: FeatureContext = {
     projectId: PROJECT_ID,
     cloud: exampleCloud,
@@ -124,7 +183,7 @@ function mount(over: Partial<FeatureContext> = {}) {
     <TestApiProvider api={api}>
       <MemoryRouter>
         <WorkspaceSeamsContext.Provider value={DEFAULT_SEAMS}>
-          <Harness ctx={ctx} />
+          {opts.routed ? <RoutedHarness ctx={ctx} /> : <Harness ctx={ctx} />}
         </WorkspaceSeamsContext.Provider>
       </MemoryRouter>
     </TestApiProvider>,
@@ -237,5 +296,71 @@ describe("usePinsFeature", () => {
     await userEvent.click(screen.getByRole("button", { name: "esc" }));
     expect(screen.getByTestId("cancelled")).toHaveTextContent("true");
     expect(screen.queryByTestId("pin-callout-create")).toBeNull();
+  });
+
+  it("after Create the new pin and its callout show, selected, before the refetch answers", async () => {
+    localStorage.setItem(LAST_TYPE_KEY, TYPE_SPALLING);
+    const gate = listGate();
+    const { requests } = mount({}, { gate });
+    await findRow();
+    await userEvent.click(screen.getByRole("button", { name: "pick" }));
+    await screen.findByTestId("pin-callout-create");
+    gate.close();
+    await userEvent.click(screen.getByRole("button", { name: "commit" }));
+    await waitFor(() => expect(count(requests, "POST")).toBe(1));
+    const head = await within(screen.getByTestId("cloud-pins")).findByRole("button", { name: /F-0300/ });
+    expect(head.closest("[data-selected]")).not.toBeNull();
+    expect(screen.getByRole("dialog", { name: "Finding F-0300" })).toBeInTheDocument();
+    expect(screen.queryByTestId("pin-callout-create")).toBeNull();
+    // the refetch the create started is still held: what shows is the optimistic pin
+    const posted = requests.findIndex((r) => r.method === "POST");
+    expect(requests.slice(posted).some((r) => r.method === "GET" && /\/findings\?/.test(r.url))).toBe(false);
+    await act(async () => gate.release());
+  });
+
+  it("after Move pin the pin shows at its new spot before the refetch answers", async () => {
+    const gate = listGate();
+    const { requests } = mount({ activeTool: "orbit" }, { gate });
+    await userEvent.click(await findRow());
+    await userEvent.click(await screen.findByRole("button", { name: "Move pin" }));
+    gate.close();
+    await userEvent.click(screen.getByRole("button", { name: "pick elsewhere" }));
+    await waitFor(() => expect(count(requests, "PATCH")).toBe(1));
+    await waitFor(() =>
+      expect(JSON.parse(screen.getByTestId("marks").textContent!)).toEqual([
+        ["F-0217", PICK_ELSEWHERE.x, PICK_ELSEWHERE.y],
+      ]),
+    );
+    const patched = requests.findIndex((r) => r.method === "PATCH");
+    expect(requests.slice(patched).some((r) => r.method === "GET" && /\/findings\?/.test(r.url))).toBe(false);
+    await act(async () => gate.release());
+  });
+
+  it("a real Enter with focus outside the form creates exactly once, through W1's routing", async () => {
+    localStorage.setItem(LAST_TYPE_KEY, TYPE_SPALLING);
+    const { requests } = mount({}, { routed: true });
+    await userEvent.click(screen.getByRole("button", { name: "pick" }));
+    await screen.findByTestId("pin-callout-create");
+    blur();
+    expect(document.activeElement).toBe(document.body);
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(count(requests, "POST")).toBe(1));
+    await waitFor(() => expect(screen.queryByTestId("pin-callout-create")).toBeNull());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(count(requests, "POST")).toBe(1);
+  });
+
+  it("a real Enter on a severity segment creates exactly once (the form's Enter; W1 stands aside)", async () => {
+    localStorage.setItem(LAST_TYPE_KEY, TYPE_SPALLING);
+    const { requests } = mount({}, { routed: true });
+    await userEvent.click(screen.getByRole("button", { name: "pick" }));
+    await screen.findByTestId("pin-callout-create");
+    await userEvent.click(
+      within(screen.getByRole("radiogroup", { name: "Severity" })).getAllByRole("radio")[0],
+    );
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(count(requests, "POST")).toBe(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(count(requests, "POST")).toBe(1);
   });
 });
