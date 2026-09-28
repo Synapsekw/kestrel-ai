@@ -130,7 +130,7 @@ export function dataHref(projectId: string, item: { id: string; type: string }):
   const base = `/p/${projectId}`;
   if (item.type === "map") return `${base}/maps/${item.id}`;
   if (item.type === "point_cloud") return `${base}/clouds/${item.id}`;
-  if (item.type === "elevation") return `${base}/measurements`;
+  if (item.type === "elevation") return `${base}/measurements/volumes`;
   if (item.type === "drawing") return `${base}/maps`;
   return `${base}/images`;
 }

@@ -46,7 +46,7 @@ import { letterbox, photoFrame, photoToCanvas, type LookPose, type LookThrough }
 import { makeMaterialOptions, type ColourMode } from "./materialOptions";
 import { mouseButtonsFor, resolveNavMode } from "./navMode";
 import { runOcclusion } from "./occlusion";
-import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
+import { localPositions, polygonMesh, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
 import { pcaNormal } from "./normal";
 import { pickAllPoints, type DrawnPoint } from "./pickAll";
 import { flipRows, splitHalves } from "./pixels";
@@ -910,6 +910,12 @@ export function createEngine(o: EngineOptions): CloudEngine {
       disposeChildren(overlay, (c) => c.userData.key === key);
       for (const s of shapes) {
         const color = tokenColor(tokenRgb(s.tone === "accent" ? "accent" : s.tone === "ok" ? "ok" : "warn"));
+        if (s.kind === "polygon") {
+          const mesh = polygonMesh(s.points, origin, color);
+          mesh.userData.key = key;
+          overlay.add(mesh);
+          continue;
+        }
         const geom = new THREE.BufferGeometry();
         const closed = s.kind === "line" && !!s.closed;
         geom.setAttribute("position", new THREE.BufferAttribute(localPositions(s.points, origin, closed), 3));

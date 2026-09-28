@@ -154,7 +154,7 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "volume_calc":
     case "volume_export":
     case "design_import":
-      return { label: "Open measurements", to: `${p}/measurements` };
+      return { label: "Open surfaces and volumes", to: `${p}/measurements/volumes` };
     case "elevation_import":
     case "drawing_import":
       return { label: "Open maps", to: `${p}/maps` };

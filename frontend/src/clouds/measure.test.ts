@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { exampleCloud } from "@/test/cloudFixtures";
@@ -9,6 +9,7 @@ import {
   FIELDS,
   MeasureRefusal,
   RING_FIELDS,
+  TOO_LARGE,
   areaResults,
   areaVertices,
   fitRing,
@@ -58,16 +59,9 @@ type CVectors = {
   ring_cases: CCase[];
   refusal_cases: CRefusal[];
 };
-/** X1's local copy of those keys (plan 2026-09-27-clouds-x1.md Ruling 3). C-M1 deletes the file and this
- * constant, and keeps only the shared set, once C-B1 is on main. */
-const LOCAL_C = JSON.parse(
-  readFileSync(resolve(__dirname, "../test/cloud-measure-vectors-c.json"), "utf8"),
-) as CVectors;
 const SHARED_C = VECTORS as unknown as Partial<CVectors>;
-const C_SETS: [string, CVectors][] = [
-  ["X1 copy", LOCAL_C],
-  ...(SHARED_C.area_cases ? [["shared", SHARED_C as CVectors] as [string, CVectors]] : []),
-];
+/** C-B1's area, rings and refusal cases, read from the shared file that pytest also reads. */
+const C_SETS: [string, CVectors][] = [["shared", SHARED_C as CVectors]];
 
 /** Every one of the 32 result fields: the listed ones within tolerance, all others null. */
 function expectResults(
@@ -204,6 +198,14 @@ describe("area edge cases (C-B1's pytest, mirrored)", () => {
     expect(refusedWith(() => areaResults(pts, null)).code).toBe("degenerate_polygon");
   });
 
+  it("mirrors C-B1's overflow guard: a triangle at ~1e160 refuses degenerate_polygon with TOO_LARGE", () => {
+    const big = 1e160;
+    const pts = [p(big, big, 0), p(-big, big, 0), p(0, -big, 1)];
+    const r = refusedWith(() => areaResults(pts, null));
+    expect(r.code).toBe("degenerate_polygon");
+    expect(r.message).toBe(TOO_LARGE);
+  });
+
   it("leaves every S1 and ring field null for an area, and notes non-coplanar vertices", () => {
     const r = areaResults([p(0, 0, 0), p(1, 0, 0), p(1, 1, 0)], null);
     for (const f of FIELDS) expect(r[f], f).toBeNull();
@@ -304,11 +306,32 @@ describe("rings edge cases (C-B1's pytest, mirrored)", () => {
     expect(measureRefusal("vertical", pts, { method: "rings" })?.code).toBe("collinear_ring");
   });
 
+  it("mirrors C-B1's overflow guard in fitRing: collinear_ring with TOO_LARGE, not the line message", () => {
+    const pts: MPoint[] = [
+      { x: 0, y: 0, z: 0, uncertainty_m: 0.01 },
+      { x: 1e80, y: 1, z: 0, uncertainty_m: 0.01 },
+      { x: 2e80, y: 0, z: 0, uncertainty_m: 0.01 },
+    ];
+    const r = refusedWith(() => fitRing(pts));
+    expect(r.code).toBe("collinear_ring");
+    expect(r.message).toBe(TOO_LARGE);
+  });
+
   it("gives the S1 kinds their S1 results through the dispatcher, with every new field null", () => {
     for (const c of VECTORS.cases) {
       const got = measureResults(c.kind as ComputableKind, c.points, null);
       expect(got).toEqual({ ...got, ...results(c.kind, c.points) });
       for (const f of ALL_FIELDS.slice(FIELDS.length)) expect(got[f], `${c.name} ${f}`).toBeNull();
     }
+  });
+});
+
+describe("the vectors come from one shared file (C-B1), not a local copy (C-X1 Ruling 3)", () => {
+  it("has C-B1's keys in the shared file and no local copy", () => {
+    for (const k of ["area_fields", "area_cases", "ring_fields", "ring_cases", "refusal_cases"] as const)
+      expect(SHARED_C[k], k).toBeDefined();
+    expect(SHARED_C.area_cases?.length ?? 0).toBeGreaterThan(0);
+    expect(C_SETS.map(([name]) => name)).toEqual(["shared"]);
+    expect(existsSync(resolve(__dirname, "../test/cloud-measure-vectors-c.json"))).toBe(false);
   });
 });

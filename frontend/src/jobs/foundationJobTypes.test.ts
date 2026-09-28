@@ -8,10 +8,10 @@ import { jobTitle, resultTarget } from "./jobLabels";
 const NEW: [Job["type"], string, string][] = [
   ["pointcloud_import", "Point cloud import", "/p/p/clouds"],
   ["pointcloud_export", "Point cloud export", "/p/p/clouds"],
-  ["surface_build", "Build surface", "/p/p/measurements"],
-  ["volume_calc", "Calculate volume", "/p/p/measurements"],
-  ["volume_export", "Export volumes", "/p/p/measurements"],
-  ["design_import", "Design surface import", "/p/p/measurements"],
+  ["surface_build", "Build surface", "/p/p/measurements/volumes"],
+  ["volume_calc", "Calculate volume", "/p/p/measurements/volumes"],
+  ["volume_export", "Export volumes", "/p/p/measurements/volumes"],
+  ["design_import", "Design surface import", "/p/p/measurements/volumes"],
 ];
 
 describe("the new job types", () => {
@@ -19,6 +19,11 @@ describe("the new job types", () => {
     const job = { ...runningJob, type, params: {} };
     expect(jobTitle(job)).toBe(label);
     expect(resultTarget({ ...job, state: "succeeded" }, "p")?.to).toBe(to);
+  });
+
+  it.each(NEW.slice(2))("%s names the surfaces and volumes view it opens", (type) => {
+    const job = { ...runningJob, type, params: {}, state: "succeeded" as const };
+    expect(resultTarget(job, "p")?.label).toBe("Open surfaces and volumes");
   });
 
   it.each(NEW)("%s has a failure toast that names it", (type, label) => {
