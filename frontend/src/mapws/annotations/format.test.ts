@@ -59,9 +59,7 @@ describe("measurement formatting", () => {
       [10, 10],
       [0, 10],
     ];
-    expect(liveLabel("area", square, "crs")).toBe(
-      "≈ 100.0 m² · perim 40.00 m grid",
-    );
+    expect(liveLabel("area", square, "crs")).toBe("≈ 100.0 m² · perim 40.00 m grid");
     expect(liveLabel("area", square.slice(0, 2), "crs")).toBeNull();
   });
 });

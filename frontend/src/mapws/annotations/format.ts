@@ -16,9 +16,7 @@ const grouped = (n: number) =>
 
 export function formatLength(m: number): string {
   if (!Number.isFinite(m)) return "–";
-  return Math.abs(m) >= 1000
-    ? `${(m / 1000).toFixed(3)} km`
-    : `${m.toFixed(2)} m`;
+  return Math.abs(m) >= 1000 ? `${(m / 1000).toFixed(3)} km` : `${m.toFixed(2)} m`;
 }
 
 export function formatArea(m2: number): string {

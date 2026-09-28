@@ -43,6 +43,10 @@ export function listMapFindingsInView(
 }
 
 /** F's `createFinding` (201 FindingDetail); no wrapper for this exists in `api/findings.ts` (M-W3 deviation 2). */
-export function createFinding(api: ApiClient, projectId: string, body: FindingCreate): Promise<FindingDetail> {
+export function createFinding(
+  api: ApiClient,
+  projectId: string,
+  body: FindingCreate,
+): Promise<FindingDetail> {
   return unwrap(api.POST(`${P}/findings`, { params: { path: { projectId } }, body }));
 }

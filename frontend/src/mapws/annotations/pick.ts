@@ -38,19 +38,15 @@ const visible = (l: PickLayer, shown: Shown) => isShown(l, shown.layerState);
 
 /** M-W3 P4: in the site frame, ready, and not dropped this session. */
 function usable(layers: readonly PickLayer[], shown?: Shown): PickLayer[] {
-  return layers.filter(
-    (l) => l.in_frame && l.status === "ready" && !shown?.gone?.has(layerKeyOf(l)),
-  );
+  return layers.filter((l) => l.in_frame && l.status === "ready" && !shown?.gone?.has(layerKeyOf(l)));
 }
 
 export const isDsm = (l: PickLayer) =>
   l.kind === "surface" &&
-  (surfaceKindOf(l) === "cloud_dsm" ||
-    (surfaceKindOf(l) === "dem" && elevationRoleOf(l) === "dsm"));
+  (surfaceKindOf(l) === "cloud_dsm" || (surfaceKindOf(l) === "dem" && elevationRoleOf(l) === "dsm"));
 export const hasElevation = (layers: readonly PickLayer[]) =>
   usable(layers).some((l) => l.kind === "surface");
-export const hasOrtho = (layers: readonly PickLayer[]) =>
-  usable(layers).some((l) => l.kind === "map");
+export const hasOrtho = (layers: readonly PickLayer[]) => usable(layers).some((l) => l.kind === "map");
 
 /** The group's usable layers as the layers panel shows them, top first (M-W3 P3). */
 function panel(layers: readonly PickLayer[], group: Group, shown: Shown): PickLayer[] {
@@ -74,30 +70,19 @@ export function pickAnchorMap(
   return (
     panel(layers, "base", shown).find(
       (l) =>
-        l.date === rDate &&
-        visible(l, shown) &&
-        l.footprint_site !== null &&
-        inExtent(p, l.footprint_site),
+        l.date === rDate && visible(l, shown) && l.footprint_site !== null && inExtent(p, l.footprint_site),
     ) ?? null
   );
 }
 
 /** A date's topmost ortho, visible or not: a measurement's context map (spec §9.1). */
-export function mapOfDate(
-  layers: readonly PickLayer[],
-  shown: Shown,
-  date: string | null,
-): PickLayer | null {
+export function mapOfDate(layers: readonly PickLayer[], shown: Shown, date: string | null): PickLayer | null {
   if (!date) return null;
   return panel(layers, "base", shown).find((l) => l.date === date) ?? null;
 }
 
 /** W3-7: a date's DSM — visible ones first, a cloud DSM before a dem, then panel order. */
-export function pickDsm(
-  layers: readonly PickLayer[],
-  shown: Shown,
-  date: string | null,
-): PickLayer | null {
+export function pickDsm(layers: readonly PickLayer[], shown: Shown, date: string | null): PickLayer | null {
   if (!date) return null;
   const dsms = elevationLayers(layers, shown).filter((l) => isDsm(l) && l.date === date);
   const seen = dsms.filter((l) => visible(l, shown));
@@ -106,11 +91,7 @@ export function pickDsm(
 }
 
 /** W3-6: [l's DSM in compare, the visible design, r's DSM], ≤ 3; else the topmost surface. */
-export function pickProfileSurfaces(
-  layers: readonly PickLayer[],
-  shown: Shown,
-  view: View,
-): PickLayer[] {
+export function pickProfileSurfaces(layers: readonly PickLayer[], shown: Shown, view: View): PickLayer[] {
   const out: PickLayer[] = [];
   if (view.mode !== "single" && view.l && view.l !== view.r) {
     const left = pickDsm(layers, shown, view.l);
@@ -128,11 +109,7 @@ export function pickProfileSurfaces(
   return out.slice(0, 3);
 }
 
-export function seriesRole(
-  surfaceId: string,
-  layers: readonly PickLayer[],
-  view: View,
-): SeriesRole {
+export function seriesRole(surfaceId: string, layers: readonly PickLayer[], view: View): SeriesRole {
   const l = layers.find((x) => x.kind === "surface" && x.id === surfaceId);
   if (!l) return "other";
   if (surfaceKindOf(l) === "design") return "design";
@@ -142,11 +119,7 @@ export function seriesRole(
 }
 
 /** W3-13: the maps whose findings one map pane shows under "selected surveys". */
-export function findingMapIds(
-  surveys: readonly Survey[],
-  view: View,
-  side: MapSide,
-): string[] {
+export function findingMapIds(surveys: readonly Survey[], view: View, side: MapSide): string[] {
   const of = (d: string | null) =>
     d ? (surveys.find((s) => s.date === d)?.maps.map((m) => m.id) ?? []) : [];
   if (side === "left") return of(view.l);
