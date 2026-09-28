@@ -1,4 +1,5 @@
 import type { RouteObject } from "react-router-dom";
+import { MapRedirect } from "./MapRedirect";
 import { Redirect } from "./Redirect";
 
 /** Old project addresses (spec 2026-09-26-foundation section 5.3), relative to `p/:projectId`. */
@@ -7,7 +8,8 @@ export const legacyProjectRedirects: RouteObject[] = [
   { path: "edit/:imageId", element: <Redirect to={(p) => `/p/${p.projectId}/images/${p.imageId}`} /> },
   { path: "label", element: <Redirect to={(p) => `/p/${p.projectId}/images?filter=unlabeled`} /> },
   { path: "past", element: <Redirect to={(p) => `/p/${p.projectId}/overview`} /> },
-  { path: "past/maps/:mapId", element: <Redirect to={(p) => `/p/${p.projectId}/maps/${p.mapId}`} /> },
+  { path: "past/maps/:mapId", element: <MapRedirect /> },
+  { path: "maps/:mapId", element: <MapRedirect /> },
   { path: "sources", element: <Redirect to={(p) => `/p/${p.projectId}/maps`} /> },
   { path: "surveys", element: <Redirect to={(p) => `/p/${p.projectId}/analytics`} /> },
   { path: "volumes", element: <Redirect to={(p) => `/p/${p.projectId}/measurements/volumes`} /> },

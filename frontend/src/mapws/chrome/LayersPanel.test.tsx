@@ -82,7 +82,7 @@ describe("LayersPanel (spec §5.2)", () => {
         name: "Scan.tif",
         unavailable: {
           reason: "no coordinates — open in evaluation view",
-          href: "/p/p1/maps/raw",
+          href: "/p/p1/maps/raw/evaluate",
           linkLabel: "Open in evaluation view",
         },
       }),
@@ -90,7 +90,7 @@ describe("LayersPanel (spec §5.2)", () => {
     expect(screen.getByText("no coordinates — open in evaluation view")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open in evaluation view" })).toHaveAttribute(
       "href",
-      "/p/p1/maps/raw",
+      "/p/p1/maps/raw/evaluate",
     );
     expect(screen.queryByRole("slider", { name: "Scan.tif opacity" })).toBeNull();
   });

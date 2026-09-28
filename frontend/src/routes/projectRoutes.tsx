@@ -9,7 +9,7 @@ import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
 import { DataManagerScreen } from "@/screens/DataManagerScreen";
 import { EditorScreen } from "@/screens/EditorScreen";
 import { ExportScreen } from "@/screens/ExportScreen";
-import { MapsScreen } from "@/screens/MapsScreen";
+import { MapEvaluateScreen } from "@/screens/MapEvaluateScreen";
 import { QueryScreen } from "@/screens/QueryScreen";
 import { ReviewScreen } from "@/screens/ReviewScreen";
 import { RunsScreen } from "@/screens/RunsScreen";
@@ -26,9 +26,11 @@ export const projectRoutes: RouteObject[] = [
   // Images: interim host, today's screens (I replaces them).
   { path: "images", element: <DataManagerScreen /> },
   { path: "images/:imageId", element: <EditorScreen /> },
-  // Maps: the map workspace (M-W1); `maps/:mapId` stays today's viewer until M-X redirects it.
+  // Maps: the map workspace (M-W1).
   { path: "maps", element: <MapWorkspace /> },
-  { path: "maps/:mapId", element: <MapsScreen /> },
+  // Maps: one map's labels, evaluation zones and score in pixels, and the maps without coordinates
+  // (spec 2026-09-26-map-workspace section 11). `maps/:mapId` is a redirect (legacyRedirects).
+  { path: "maps/:mapId/evaluate", element: <MapEvaluateScreen /> },
   // The 3D jump contract (spec 2026-09-23-point-clouds section 10), used unchanged by the
   // maps -> 3D jump, the 3D -> map jump and the Volumes screen's "View in 3D":
   //   /p/:projectId/clouds/:cloudId?at=x,y[&fp=x1,y1;x2,y2;x3,y3;x4,y4]

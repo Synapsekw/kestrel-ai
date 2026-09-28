@@ -38,7 +38,14 @@ const CASES: [string, string][] = [
   [`/p/${P}/edit/${I}?finding=f1`, `/p/${P}/images/${I}?finding=f1`],
   [`/p/${P}/label`, `/p/${P}/images?filter=unlabeled`],
   [`/p/${P}/past`, `/p/${P}/overview`],
-  [`/p/${P}/past/maps/m1`, `/p/${P}/maps/m1`],
+  [`/p/${P}/past/maps/m1`, `/p/${P}/maps?map=m1`],
+  // The retired pixel viewer's address opens the workspace on that map (spec M §5, §11).
+  [`/p/${P}/maps/m1`, `/p/${P}/maps?map=m1`],
+  [`/p/${P}/maps/m1?at=243550.000,3178050.000`, `/p/${P}/maps?at=243550.000%2C3178050.000&map=m1`],
+  // An old "Review on the map" link: review becomes a selection, never a compare `mode`.
+  [`/p/${P}/maps/m1?mode=review&run=r1`, `/p/${P}/maps?map=m1&sel=run%3Ar1`],
+  // An old "Draw an area" link: the workspace's zone tool.
+  [`/p/${P}/maps/m1?draw=site-area`, `/p/${P}/maps?map=m1&tool=zone`],
   [`/p/${P}/sources`, `/p/${P}/maps`],
   [`/p/${P}/surveys`, `/p/${P}/analytics`],
   [`/p/${P}/volumes`, `/p/${P}/measurements/volumes`],
@@ -123,6 +130,7 @@ describe("routes", () => {
     ...[...PROJECT_TABS, ...SECONDARY_PAGES].map((e) => `/p/${P}/${e.id}`),
     `/p/${P}/images/${I}`,
     `/p/${P}/maps/m1`,
+    `/p/${P}/maps/m1/evaluate`,
     `/p/${P}/clouds/c1`,
     `/p/${P}/findings/f1`,
     `/p/${P}/measurements/v1`,
