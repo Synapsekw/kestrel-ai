@@ -82,9 +82,14 @@ export function PhotoLinkTool({
         <Popover open onClose={() => setList(null)} anchorRef={anchor} label="Photo link" side="right">
           <div className="flex max-h-96 w-72 flex-col gap-2 p-3">
             <p className="text-sm text-ink">
-              {list.result.total === 0 ? "No photo saw this point" : `${photoCount(list.result.total)} saw this point`}
+              {list.result.total === 0
+                ? "No photo saw this point"
+                : `${photoCount(list.result.total)} saw this point`}
             </p>
-            <ul aria-label="Photos that saw this point" className="flex min-h-0 flex-col gap-1 overflow-y-auto">
+            <ul
+              aria-label="Photos that saw this point"
+              className="flex min-h-0 flex-col gap-1 overflow-y-auto"
+            >
               {list.result.hits.map((h, k) => {
                 const d = `${h.distanceM.toFixed(1)} m`;
                 const spot = spotOf(h);
@@ -93,7 +98,10 @@ export function PhotoLinkTool({
                     <button
                       type="button"
                       aria-label={`Open photo ${k + 1}, ${methodLabel(h.method)}, ${d}`}
-                      className={cx("flex w-full items-center gap-2 rounded-control p-1 text-left hover:bg-hover", focusRing)}
+                      className={cx(
+                        "flex w-full items-center gap-2 rounded-control p-1 text-left hover:bg-hover",
+                        focusRing,
+                      )}
                       onClick={() => navigate(imageJumpHref(projectId, h.imageId, cloud.id, spot))}
                     >
                       <img
@@ -115,7 +123,8 @@ export function PhotoLinkTool({
               })}
             </ul>
             <p className="text-2xs text-muted">
-              In frame: likely in the photo; the ring allows ±3 m GPS and 2° gimbal error. By distance: no spot.
+              In frame: likely in the photo; the ring allows ±3 m GPS and 2° gimbal error. By distance: no
+              spot.
             </p>
           </div>
         </Popover>

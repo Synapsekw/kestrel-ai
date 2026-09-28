@@ -5,9 +5,7 @@ const P = "/api/v1/projects/{projectId}" as const;
 
 /** The drone photos near a cloud as parallel arrays (C-B3; spec §10.1). 409 `needs_coordinates` without a CRS. */
 export function getCloudCameras(api: ApiClient, projectId: string, cloudId: string): Promise<CloudCameraSet> {
-  return unwrap(
-    api.GET(`${P}/pointclouds/{cloudId}/cameras`, { params: { path: { projectId, cloudId } } }),
-  );
+  return unwrap(api.GET(`${P}/pointclouds/{cloudId}/cameras`, { params: { path: { projectId, cloudId } } }));
 }
 
 /** One image set's camera height offset for this cloud, −500…500 m (spec §10.1, C8). */

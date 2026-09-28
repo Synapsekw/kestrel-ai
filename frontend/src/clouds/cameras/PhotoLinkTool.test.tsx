@@ -25,7 +25,9 @@ const SET = cameraSet([
 /** Wraps the tool with a real `active` state so a test can flip it without remounting the providers. */
 function Harness({ initialActive, v }: { initialActive: boolean; v: FakeViewer }) {
   const [active, setActive] = useState(initialActive);
-  const ref = useRef<CloudViewerHandle | null>(v as unknown as CloudViewerHandle) as RefObject<CloudViewerHandle | null>;
+  const ref = useRef<CloudViewerHandle | null>(
+    v as unknown as CloudViewerHandle,
+  ) as RefObject<CloudViewerHandle | null>;
   return (
     <>
       <canvas data-testid="cloud-canvas" />
@@ -95,7 +97,9 @@ describe("PhotoLinkTool", () => {
     click();
     fireEvent.click(await screen.findByRole("button", { name: /^Open photo 2/ }));
     await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent(imageJumpHref(PROJECT_ID, "img-plain", CLOUD_ID, null)),
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        imageJumpHref(PROJECT_ID, "img-plain", CLOUD_ID, null),
+      ),
     );
   });
 
@@ -144,7 +148,9 @@ describe("PhotoLinkTool", () => {
     await screen.findByRole("list", { name: "Photos that saw this point" });
 
     fireEvent.click(screen.getByTestId("toggle-active")); // disarm
-    await waitFor(() => expect(screen.queryByRole("list", { name: "Photos that saw this point" })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("list", { name: "Photos that saw this point" })).toBeNull(),
+    );
 
     fireEvent.click(screen.getByTestId("toggle-active")); // re-arm
     expect(screen.queryByRole("list", { name: "Photos that saw this point" })).toBeNull();

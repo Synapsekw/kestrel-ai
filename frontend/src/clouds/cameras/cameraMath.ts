@@ -1,5 +1,11 @@
 import type { CloudCameraSet } from "@contract/client";
-import { cameraBasis, NULL_Z_ABOVE_P99_M, type PhotoHit, type PhotoMethod, type V3 } from "@/clouds/photoLink";
+import {
+  cameraBasis,
+  NULL_Z_ABOVE_P99_M,
+  type PhotoHit,
+  type PhotoMethod,
+  type V3,
+} from "@/clouds/photoLink";
 import type { Vec3 } from "@/clouds/viewer/camera";
 import type { LookPose } from "@/clouds/viewer/lookThrough";
 import type { OverlayShape } from "@/clouds/viewer/overlay";
@@ -58,7 +64,12 @@ export function glyphShapes(set: CloudCameraSet, fallbackTop: number): OverlaySh
       const { f, r, up } = cameraBasis(set.yaw[i]!, set.pitch[i]!, set.roll[i] ?? 0);
       const a = GLYPH_DEPTH_M * Math.tan((set.hfov[i] * RAD) / 2);
       const b = GLYPH_DEPTH_M * Math.tan((set.vfov[i] * RAD) / 2);
-      const k = [at(c, f, r, up, -a, b), at(c, f, r, up, a, b), at(c, f, r, up, a, -b), at(c, f, r, up, -a, -b)];
+      const k = [
+        at(c, f, r, up, -a, b),
+        at(c, f, r, up, a, b),
+        at(c, f, r, up, a, -b),
+        at(c, f, r, up, -a, -b),
+      ];
       const apex: Vec3 = { x, y, z: c[2] };
       for (let j = 0; j < 4; j++) segs.push(apex, k[j]);
       for (let j = 0; j < 4; j++) segs.push(k[j], k[(j + 1) % 4]);
@@ -172,5 +183,7 @@ export function photoLinkMessage(total: number, fileName: string | null, distanc
 
 /** Controller ruling 6: the one place a `PhotoHit` becomes `imageJumpHref`'s spot; null for a distance hit. */
 export function spotOf(hit: PhotoHit): { px: number; py: number; rpx: number } | null {
-  return hit.px !== null && hit.py !== null && hit.rpx !== null ? { px: hit.px, py: hit.py, rpx: hit.rpx } : null;
+  return hit.px !== null && hit.py !== null && hit.rpx !== null
+    ? { px: hit.px, py: hit.py, rpx: hit.rpx }
+    : null;
 }

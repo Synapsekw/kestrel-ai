@@ -96,7 +96,9 @@ describe("useFromImageArrival", () => {
   it("a position-only photo falls back to the drone's XY with the S1 jump", () => {
     const v = mount("?from_image=img-plain&px=10,10");
     expect(toasts()).toContain(NO_POSE_TOAST);
-    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/${CLOUD_ID}?at=243560.000,3178050.000`);
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      `/p/${PROJECT_ID}/clouds/${CLOUD_ID}?at=243560.000,3178050.000`,
+    );
     tick(5);
     expect(v.lookThrough).not.toHaveBeenCalled();
   });
@@ -190,7 +192,9 @@ describe("useFromImageArrival", () => {
     ref.current = v as unknown as CloudViewerHandle;
     expect(() =>
       render(
-        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/clouds/${CLOUD_ID}?from_image=img-posed&px=1024,768`]}>
+        <MemoryRouter
+          initialEntries={[`/p/${PROJECT_ID}/clouds/${CLOUD_ID}?from_image=img-posed&px=1024,768`]}
+        >
           <Harness v={ref} />
         </MemoryRouter>,
       ),

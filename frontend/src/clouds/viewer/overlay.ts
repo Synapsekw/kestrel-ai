@@ -59,7 +59,10 @@ export function overlayObject(s: OverlayShape, origin: Vec3, color: Color): Line
   geom.setAttribute("position", new BufferAttribute(localPositions(s.points, origin, closed), 3));
   const obj =
     s.kind === "points"
-      ? new Points(geom, new PointsMaterial({ color, size: s.size ?? 8, sizeAttenuation: false, depthTest: false }))
+      ? new Points(
+          geom,
+          new PointsMaterial({ color, size: s.size ?? 8, sizeAttenuation: false, depthTest: false }),
+        )
       : s.kind === "segments"
         ? new LineSegments(
             geom,

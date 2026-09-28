@@ -89,7 +89,11 @@ describe("camera maths", () => {
   });
 
   it("warns when the median camera height is below p50 or far above p99", () => {
-    const low = cameraSet([{ x: E, y: N, z: -50 }, { x: E, y: N, z: -45 }, { x: E, y: N, z: 60 }]);
+    const low = cameraSet([
+      { x: E, y: N, z: -50 },
+      { x: E, y: N, z: -45 },
+      { x: E, y: N, z: 60 },
+    ]);
     expect(heightsLookOff(low, -40)).toBe(true);
     const fine = cameraSet([{ x: E, y: N, z: 30 }]);
     expect(heightsLookOff(fine, 1)).toBe(false);
@@ -136,7 +140,9 @@ describe("camera maths", () => {
   it("words the method and the toast", () => {
     expect(methodLabel("frustum")).toBe("In frame");
     expect(methodLabel("distance")).toBe("By distance");
-    expect(photoLinkMessage(14, "DJI_0712.JPG", 9.44)).toBe("14 photos saw this point · DJI_0712.JPG closest (9.4 m)");
+    expect(photoLinkMessage(14, "DJI_0712.JPG", 9.44)).toBe(
+      "14 photos saw this point · DJI_0712.JPG closest (9.4 m)",
+    );
     expect(photoLinkMessage(1, null, 3)).toBe("1 photo saw this point (3.0 m away)");
     expect(photoLinkMessage(0, null, null)).toBe("No photo saw this point");
   });
