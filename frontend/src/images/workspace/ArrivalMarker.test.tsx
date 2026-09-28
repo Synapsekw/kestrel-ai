@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ArrivalProbe, BackTo3DChip, markerSpec } from "./ArrivalMarker";
 import { useArrivalStore } from "./arrivalStore";
@@ -24,7 +24,9 @@ describe("arrival marker", () => {
     );
     expect(screen.getByTestId("arrival-marker")).toHaveAttribute("data-at", "100,50");
     expect(screen.getByRole("link", { name: "Back to 3D" })).toHaveAttribute("href", "/p/p1/clouds/c1");
-    useArrivalStore.getState().clearMarker();
+    act(() => useArrivalStore.getState().clearMarker());
+    expect(screen.queryByTestId("arrival-marker")).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to 3D" })).toHaveAttribute("href", "/p/p1/clouds/c1");
   });
   it("shows nothing for another image", () => {
     render(

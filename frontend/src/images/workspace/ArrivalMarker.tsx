@@ -12,7 +12,7 @@ const DOT_PX = 3;
 function accent(alpha = 1): string {
   const raw = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   const [r, g, b] = raw.split(/\s+/).map(Number);
-  return Number.isFinite(r) ? `rgba(${r}, ${g}, ${b}, ${alpha})` : `rgba(157, 139, 255, ${alpha})`;
+  return Number.isFinite(r) ? `rgba(${r}, ${g}, ${b}, ${alpha})` : `rgba(143, 123, 255, ${alpha})`;
 }
 
 /** Ruling 8: radius r in image px; stroke, dash and dot in screen px (divide by the zoom). */
