@@ -18,11 +18,15 @@ interface Stats {
   annotationDraws: number;
   maxAnnotationDrawsPerFrame: number;
   hitDrawsDuringInput: number;
+  inputWindows: number;
   sceneMsP95: number;
   layersFound: string[];
 }
 
-type Probe = { start(): void; inputDone(): void; stop(): Stats };
+// start()/stop() bracket the frame recording; inputStart()/inputDone() bracket each gesture, the
+// only time a hit-graph draw is a failure. Between gestures the canvas is idle and its layers
+// listen again (spec §9.1), so a hit rebuild there is the design, not a regression.
+type Probe = { start(): void; inputStart(): void; inputDone(): void; stop(): Stats };
 
 async function installProbe(page: Page): Promise<void> {
   await page.evaluate(
@@ -41,6 +45,7 @@ async function installProbe(page: Page): Promise<void> {
       const drawsPerFrame = new Map<number, number>();
       const sceneMs: number[] = [];
       let hitDuringInput = 0;
+      let windows = 0;
       const scene = K.Layer.prototype.drawScene;
       K.Layer.prototype.drawScene = function (this: Node, ...args: unknown[]) {
         if (!recording || this.name() !== ann) return scene.apply(this, args);
@@ -70,8 +75,11 @@ async function installProbe(page: Page): Promise<void> {
       const probe: Probe = {
         start() {
           recording = true;
-          inputWindow = true;
           requestAnimationFrame(tick);
+        },
+        inputStart() {
+          inputWindow = true;
+          windows++;
         },
         inputDone() {
           inputWindow = false;
@@ -91,6 +99,7 @@ async function installProbe(page: Page): Promise<void> {
             annotationDraws: counts.reduce((a, b) => a + b, 0),
             maxAnnotationDrawsPerFrame: Math.max(0, ...counts),
             hitDrawsDuringInput: hitDuringInput,
+            inputWindows: windows,
             sceneMsP95: round(pct(sceneMs, 0.95)),
             layersFound: names,
           };
@@ -113,12 +122,28 @@ test("500 annotations: at most one annotation draw per frame and no hit-graph re
   await expect(ws(page).canvas).toHaveAttribute("data-shape-count", "500");
   await page.waitForTimeout(500); // let the first full draw and the image load settle
   await installProbe(page);
+  // E2E_CPU_THROTTLE=6 slows the page the way a loaded 12-worker run does (how the race below
+  // was reproduced).
+  if (process.env.E2E_CPU_THROTTLE) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.E2E_CPU_THROTTLE) });
+  }
+  const probe = (fn: "start" | "inputStart" | "inputDone") =>
+    page.evaluate((f) => (window as unknown as { __kPerf: Probe }).__kPerf[f](), fn);
+  // Between gestures: wait out the idle delay (listening back, hit graph rebuilt) outside a window.
+  // Without this, a slow machine's gap between releasing Space and the first wheel exceeds the
+  // 120 ms idle delay and the legitimate idle rebuild (500 shapes) lands inside the window.
+  const settle = async () => {
+    await expect(ws(page).canvas).toHaveAttribute("data-interacting", "false");
+    await page.waitForTimeout(300);
+  };
 
   const box = (await canvas.boundingBox())!;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
-  await page.evaluate(() => (window as unknown as { __kPerf: Probe }).__kPerf.start());
+  await probe("start");
   // 1.5 s of drag-pan with Space held, a circle of radius 150 px, one move per frame.
+  await probe("inputStart");
   await page.keyboard.down(" ");
   await page.mouse.move(cx, cy);
   await page.mouse.down();
@@ -128,14 +153,17 @@ test("500 annotations: at most one annotation draw per frame and no hit-graph re
     await page.waitForTimeout(16);
   }
   await page.mouse.up();
+  await probe("inputDone");
   await page.keyboard.up(" ");
+  await settle();
   // 1.5 s of wheel zoom in and back out.
+  await probe("inputStart");
   for (let i = 0; i < 90; i++) {
     await page.mouse.wheel(0, i < 45 ? -60 : 60);
     await page.waitForTimeout(16);
   }
-  await page.evaluate(() => (window as unknown as { __kPerf: Probe }).__kPerf.inputDone());
-  await page.waitForTimeout(300); // listening comes back (spec §9.1: 120 ms); outside the window
+  await probe("inputDone");
+  await settle(); // listening comes back (spec §9.1: 120 ms); outside the window
   const stats = await page.evaluate(() => (window as unknown as { __kPerf: Probe }).__kPerf.stop());
 
   await info.attach("frame-stats.json", {
@@ -146,6 +174,7 @@ test("500 annotations: at most one annotation draw per frame and no hit-graph re
   expect(stats.layersFound).toEqual(expect.arrayContaining([ANNOTATION_LAYER, SUGGESTION_LAYER]));
   expect(stats.annotationDraws).toBeGreaterThan(10);
   expect(stats.frames).toBeGreaterThan(100);
+  expect(stats.inputWindows).toBe(2);
   // The structural proxy (ruling E4): CI-safe, independent of the machine's speed.
   expect(stats.maxAnnotationDrawsPerFrame).toBeLessThanOrEqual(1);
   expect(stats.hitDrawsDuringInput).toBe(0);
