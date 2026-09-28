@@ -59,6 +59,7 @@ const STATUS_TEXT = {
   calculating: "Calculating",
   failed: "Failed",
 } as const;
+const STABLE_NEEDS_SURFACE = "A stable area needs a base surface from another survey.";
 const swatch = (hex: string) => ({ "--c": hex }) as CSSProperties;
 
 /** The mockup's volume inspector (spec §5.3, §10). Numbers only ever come from a volume_calc job. */
@@ -148,14 +149,27 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
           ? { kind: "flat", z: top.stats?.z_p02 ?? top.z_min ?? 0 }
           : base,
     });
+  const matName = mat.name.trim();
+  const matDensity = Number(mat.density);
+  // An incomplete draft is kept and says what is missing instead of silently doing nothing.
+  const materialHint =
+    material === null || (!matName && !mat.density)
+      ? null
+      : !(matDensity > 0)
+        ? "Enter a density above 0 to save the material."
+        : !matName
+          ? "Enter a material name to save it."
+          : null;
   const saveMaterial = () => {
-    const density = Number(mat.density);
-    if (!mat.name.trim() && !mat.density) {
+    if (!matName && !mat.density) {
       if (m.material) save({ material: null });
+      setMaterial(null);
       return;
     }
-    if (!mat.name.trim() || !(density > 0)) return;
-    save({ material: { name: mat.name.trim(), density_t_m3: density } });
+    if (!matName || !(matDensity > 0)) return;
+    const same = m.material?.name === matName && m.material.density_t_m3 === matDensity;
+    if (!same) save({ material: { name: matName, density_t_m3: matDensity } });
+    setMaterial(null);
   };
   const exportCsv = () =>
     createVolumeExport(api, projectId, {
@@ -269,11 +283,11 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
         {m.status === "stale" && (
           <Alert tone="warn">
             {staleText(m.stale_reasons)}
-            {!autoRecalc && (
-              <Button size="sm" className="mt-2" onClick={recalc}>
-                Recalculate
-              </Button>
-            )}
+            {/* Always offered: staleness from outside (a rebuilt surface, a deleted masked finding)
+                is never recalculated on its own, auto-recalculate or not. */}
+            <Button size="sm" className="mt-2" onClick={recalc}>
+              Recalculate
+            </Button>
           </Alert>
         )}
         {m.status === "failed" && (
@@ -323,6 +337,7 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
             />
           </Field>
         </div>
+        {materialHint && <p className="mt-1 text-xs text-muted">{materialHint}</p>}
       </InspectorSection>
 
       <InspectorSection key="display" title="Display">
@@ -351,6 +366,7 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
               <Button
                 size="sm"
                 disabled={!drawable || m.base.kind !== "surface"}
+                title={m.base.kind !== "surface" ? STABLE_NEEDS_SURFACE : undefined}
                 aria-pressed={drawing === "stable"}
                 onClick={() => toggleMask("stable")}
               >
@@ -365,6 +381,9 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
                 Draw exclusion
               </Button>
             </div>
+            {drawable && m.base.kind !== "surface" && (
+              <p className="text-xs text-muted">{STABLE_NEEDS_SURFACE}</p>
+            )}
             {!drawable && (
               <p className="text-xs text-muted">
                 Draw masks in the Measurements view: this surface is in another CRS than the map.{" "}

@@ -200,4 +200,62 @@ describe("VolumeInspector", () => {
       `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
     );
   });
+
+  it("stale with autoRecalc on still offers Recalculate", async () => {
+    const { api, requests } = fakeClient(
+      routes({ ...withMaterial, status: "stale", stale_reasons: ["surface rebuilt"] }),
+    );
+    render(api);
+    fireEvent.click(await screen.findByRole("button", { name: "Recalculate" }));
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/calculate"))).toBe(true));
+    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("a stale measurement is not recalculated on its own", async () => {
+    const { api, requests } = fakeClient(
+      routes({ ...withMaterial, status: "stale", stale_reasons: ["surface rebuilt"] }),
+    );
+    render(api);
+    await screen.findByRole("button", { name: "Recalculate" });
+    expect(requests.some((r) => r.url.endsWith("/calculate"))).toBe(false);
+  });
+
+  it("a failed calculation offers Recalculate", async () => {
+    const { api, requests } = fakeClient(
+      routes({ ...withMaterial, status: "failed", error: "The surface has no data under the polygon." }),
+    );
+    render(api);
+    expect(await screen.findByText("The surface has no data under the polygon.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/calculate"))).toBe(true));
+  });
+
+  it("leaving the material fields unchanged sends nothing", async () => {
+    const { api, requests } = fakeClient(routes());
+    render(api);
+    const material = await screen.findByLabelText("Material");
+    fireEvent.change(material, { target: { value: "Gravel " } });
+    fireEvent.blur(material);
+    fireEvent.change(screen.getByLabelText("Density (t/m³)"), { target: { value: "1.80" } });
+    fireEvent.blur(screen.getByLabelText("Density (t/m³)"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("a material without a valid density says what is missing", async () => {
+    const { api, requests } = fakeClient(routes({ ...exampleMeasurement, material: null }));
+    render(api);
+    const material = await screen.findByLabelText("Material");
+    fireEvent.change(material, { target: { value: "Sand" } });
+    fireEvent.blur(material);
+    expect(screen.getByText("Enter a density above 0 to save the material.")).toBeInTheDocument();
+    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("says why Draw stable area is off when the base is not a surface", async () => {
+    render(fakeClient(routes()).api);
+    fireEvent.click(await screen.findByRole("button", { name: /Masks & alignment/ }));
+    expect(screen.getByRole("button", { name: "Draw stable area" })).toBeDisabled();
+    expect(screen.getByText("A stable area needs a base surface from another survey.")).toBeInTheDocument();
+  });
 });
