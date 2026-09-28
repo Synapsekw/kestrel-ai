@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import type { Source } from "@contract/client";
-import { exampleImagePage, exampleSource, fakeClient, MAP_ID, PROJECT_ID } from "@/test/fixtures";
+import { exampleSource, fakeClient, MAP_ID, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { RunSummary } from "@/api/review";
 import { useAddData } from "@/app/addDataStore";
-import { ReviewScreen } from "@/screens/ReviewScreen";
+import { ReviewRoute } from "@/routes/ReviewRoute";
 
 const photos: Source = {
   ...exampleSource,
@@ -45,7 +45,7 @@ function renderScreen(routes: Parameters<typeof fakeClient>[0], route = `/p/${PR
   const { api, requests } = fakeClient(routes);
   renderWithProviders(
     <Routes>
-      <Route path="/p/:projectId/review" element={<ReviewScreen />} />
+      <Route path="/p/:projectId/review" element={<ReviewRoute />} />
       <Route path="/p/:projectId/maps/:mapId" element={<p data-testid="map-route">map route</p>} />
     </Routes>,
     { api, route },
@@ -78,8 +78,8 @@ describe("Detection review", () => {
     await waitFor(() => expect(screen.getByTestId("map-route")).toBeInTheDocument());
   });
 
-  it("reviews a photo source's suggestions in the image queue", async () => {
-    const requests = renderScreen(
+  it("sends a photo source's suggestions to the Images workspace", async () => {
+    renderScreen(
       [
         { method: "GET", path: /\/sources$/, body: { items: [photos, map], next_cursor: null } },
         {
@@ -97,17 +97,14 @@ describe("Detection review", () => {
             next_cursor: null,
           },
         },
-        { method: "GET", path: /\/images$/, body: exampleImagePage },
       ],
-      `/p/${PROJECT_ID}/review?source=s-photos`,
+      `/p/${PROJECT_ID}/review?source=s-photos&view=runs`,
     );
     expect(await screen.findByText("12 of 40 reviewed")).toBeInTheDocument();
-    expect(await screen.findByText("81%")).toBeInTheDocument();
-    const images = new URL(`http://x${requests.find((r) => r.url.includes("/images?"))?.url}`);
-    expect(images.searchParams.get("source_id")).toBe("s-photos");
-    expect(images.searchParams.get("has_pending")).toBe("true");
-    const runs = new URL(`http://x${requests.find((r) => r.url.includes("/runs?"))?.url}`);
-    expect(runs.searchParams.get("source_id")).toBe("s-photos");
+    expect(await screen.findByRole("link", { name: "Review in Images" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/images?filter=suggestions`,
+    );
     expect(screen.getByRole("button", { name: "Accept all at or above" })).toBeInTheDocument();
   });
 

@@ -69,6 +69,23 @@ async function serveBackend(page: Page): Promise<World> {
     pending_count: world.boxState === "unreviewed" ? 1 : 0,
     max_pending_confidence: world.boxState === "unreviewed" ? 0.87 : null,
     labeled: world.boxState === "accepted",
+    camera: {
+      rel_alt: null,
+      gimbal_pitch: null,
+      gimbal_yaw: null,
+      focal_mm: null,
+      focal_px: null,
+      sensor_w_mm: null,
+      lrf_distance_m: null,
+      subject_distance_m: null,
+      distance_m: null,
+      distance_sigma_m: null,
+      distance_source: "none",
+      gsd_mm: null,
+      camera_model: null,
+    },
+    footprint: null,
+    footprint_kind: "none",
   });
   const projectJson = () => ({
     ...world.project,
@@ -224,6 +241,17 @@ async function serveBackend(page: Page): Promise<World> {
           : [],
         next_cursor: null,
       });
+    if (sub === "/images/index" && method === "GET")
+      return reply({
+        total: 1,
+        ids: [IMG],
+        sev: [0],
+        count: [0],
+        flags: [world.finding ? 1 : 2],
+        lon: [null],
+        lat: [null],
+      });
+    if (sub === "/pointclouds" && method === "GET") return reply({ items: [] });
     if (sub === "/images" && method === "GET") {
       const q = new URL(req.url()).searchParams;
       const items = !world.imported
@@ -540,10 +568,8 @@ test("one project from creation to a training run: every Foundation unit reads w
   // 4. Accept the proposed Crack box on the imported photo; the backend makes it a finding.
   await page.goto(`/p/${P}/images`);
   await expect(page.getByRole("tab", { name: "Images 1" })).toBeVisible();
-  await expect(page.getByText("1 of 1 images")).toBeVisible();
-  await page.getByRole("button", { name: "Label next" }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
+  await expect(page.getByTestId("ai-hint-bar")).toContainText(/1 AI suggestion/);
   // The response, not the request: the handler has run (and made the finding) once it answered.
   const accepted = page.waitForResponse(
     (r) => r.request().method() === "POST" && r.url().endsWith("/boxes/review"),

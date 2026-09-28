@@ -53,7 +53,7 @@ test("a project opens on Overview; the tabs switch pages and the entrance finish
     new RegExp(String(overview.data.images).replace(/\B(?=(\d{3})+(?!\d))/g, ",?")),
   );
   await tabs.getByRole("tab", { name: /^Images/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/images$`));
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/images(/[^/?]+)?$`));
   await expect(tabs.getByRole("tab", { name: /^Images/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("banner")).toContainText("Images");
   await settled(page);
@@ -65,7 +65,10 @@ test("Ctrl K goes to a tab and finds a finding or a data item", async ({ page })
     `/api/v1/projects/${P}/search?q=cr&limit=8`,
   );
   await page.goto(`/p/${P}/images`);
-  await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible({ timeout: 15_000 });
+  // The workspace's sr-only <h1>; the browser pane has its own "Images" <h2>.
+  await expect(page.getByRole("heading", { name: "Images", exact: true, level: 1 })).toBeVisible({
+    timeout: 15_000,
+  });
   const input = page.getByRole("combobox", { name: "Command" });
   // The heading paints a few ms before React attaches the window listeners (passive effects run
   // after paint), so the first chord is retried until the palette has focus.
@@ -89,11 +92,11 @@ test("Ctrl K goes to a tab and finds a finding or a data item", async ({ page })
 
 test("old addresses land on the new tabs", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/images$`));
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/images(/[^/?]+)?$`));
   await page.goto(`/p/${P}/edit/${IMG}`);
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
   // A bare workspace under the tabs fills the window and never pushes the shell past it.
-  await expect(page.getByTestId("editor-canvas")).toHaveAttribute("data-image", /x/);
+  await expect(page.getByTestId("image-canvas")).toHaveAttribute("data-image", /x/);
   const rail = await page.getByRole("navigation", { name: "Main navigation" }).boundingBox();
   expect(rail?.height).toBe(page.viewportSize()?.height);
   await page.goto(`/p/${P}/volumes`);

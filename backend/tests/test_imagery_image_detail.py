@@ -28,6 +28,10 @@ def test_get_returns_image_detail(client, project_id, image_id):
     assert body["footprint_kind"] == "trapezoid"
     ring = body["footprint"]["coordinates"][0]
     assert body["footprint"]["type"] == "Polygon" and len(ring) == 5 and ring[0] == ring[-1]
+    # I-BK hand-off: a fresh import has no boxes and no findings.
+    assert body["finding_count"] == 0
+    assert body["worst_severity"] is None
+    assert body["reviewed"] is False
 
 
 def test_patch_distance_sets_and_clears(client, project_id, image_id):

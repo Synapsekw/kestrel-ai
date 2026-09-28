@@ -1,10 +1,10 @@
 import type { ApiClient, ImagePage, Image as ImageRow, components, paths } from "@contract/client";
 import { unwrap } from "./errors";
+import type { ImageDetail } from "./shapes";
 
 export type ListImagesQuery = NonNullable<
   paths["/api/v1/projects/{projectId}/images"]["get"]["parameters"]["query"]
 >;
-export type PreannotateResult = components["schemas"]["PreannotateResult"];
 
 export const IMAGE_PAGE_SIZE = 200;
 
@@ -60,6 +60,24 @@ export function setMarkedEmpty(
   );
 }
 
+/** `GET /images/{imageId}` (I-C0, I-BK): FC declared these (and `fetchImageDetail`) in `./shapes`. */
+export type { ImageCamera, ImageDetail } from "./shapes";
+
+/** The operator's subject distance (§9.3 rule 1); `null` returns to the automatic rule. */
+export function setSubjectDistance(
+  api: ApiClient,
+  projectId: string,
+  imageId: string,
+  metres: number | null,
+): Promise<ImageDetail> {
+  return unwrap(
+    api.PATCH("/api/v1/projects/{projectId}/images/{imageId}", {
+      params: { path: { projectId, imageId } },
+      body: { subject_distance_m: metres },
+    }),
+  );
+}
+
 export function bulkMarkEmpty(
   api: ApiClient,
   projectId: string,
@@ -70,19 +88,6 @@ export function bulkMarkEmpty(
     api.POST("/api/v1/projects/{projectId}/images/bulk-mark-empty", {
       params: { path: { projectId } },
       body: { image_ids: imageIds, marked_empty: value },
-    }),
-  );
-}
-
-/** No body: the backend uses the project's pre-annotation model and its defaults. */
-export function preannotateImage(
-  api: ApiClient,
-  projectId: string,
-  imageId: string,
-): Promise<PreannotateResult> {
-  return unwrap(
-    api.POST("/api/v1/projects/{projectId}/images/{imageId}/preannotate", {
-      params: { path: { projectId, imageId } },
     }),
   );
 }

@@ -59,7 +59,7 @@ const DEFAULT_SELECTED: Record<ResultsExportFormat, boolean> = {
   yolo_seg: false,
 };
 
-/** "1 image" / "3 images" — the app's usual inline pluralisation (see e.g. data/importNotice.ts). */
+/** "1 image" / "3 images" — the app's usual inline pluralisation. */
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }

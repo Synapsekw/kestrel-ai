@@ -1,20 +1,18 @@
 import type { RouteObject } from "react-router-dom";
 import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { FindingsScreen } from "@/findings/FindingsScreen";
+import { ImagesWorkspace } from "@/images/workspace/ImagesWorkspace";
 import { MapWorkspace } from "@/mapws/MapWorkspace";
 import { MeasurementsScreen } from "@/measurements/MeasurementsScreen";
 import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
-import { DataManagerScreen } from "@/screens/DataManagerScreen";
-import { EditorScreen } from "@/screens/EditorScreen";
 import { ExportScreen } from "@/screens/ExportScreen";
 import { MapsScreen } from "@/screens/MapsScreen";
-import { QueryScreen } from "@/screens/QueryScreen";
-import { ReviewScreen } from "@/screens/ReviewScreen";
 import { RunsScreen } from "@/screens/RunsScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { SiteAreasScreen } from "@/screens/SiteAreasScreen";
+import { ReviewRoute } from "./ReviewRoute";
 
 /**
  * The project routes, relative to `p/:projectId` (spec 2026-09-26-foundation section 5.3). S1, I,
@@ -23,9 +21,11 @@ import { SiteAreasScreen } from "@/screens/SiteAreasScreen";
 export const projectRoutes: RouteObject[] = [
   // F §9.1: the project opens here.
   { path: "overview", element: <OverviewScreen /> },
-  // Images: interim host, today's screens (I replaces them).
-  { path: "images", element: <DataManagerScreen /> },
-  { path: "images/:imageId", element: <EditorScreen /> },
+  // Images (I §6): one entry for the tab and every image, so the workspace never remounts.
+  // Arrival parameters (I §6.5; C's cloud jump depends on these names):
+  //   /p/:projectId/images/:imageId?finding=<fid>
+  //   /p/:projectId/images/:imageId?at=px,py&r=rpx&from=cloud:<cloudId>   (stored-image pixels)
+  { path: "images/:imageId?", element: <ImagesWorkspace /> },
   // Maps: the map workspace (M-W1); `maps/:mapId` stays today's viewer until M-X redirects it.
   { path: "maps", element: <MapWorkspace /> },
   { path: "maps/:mapId", element: <MapsScreen /> },
@@ -82,9 +82,8 @@ export const projectRoutes: RouteObject[] = [
   { path: "settings", element: <SettingsScreen /> },
   // Secondary routes without a tab: the tab strip's More menu and the palette reach them.
   { path: "runs", element: <RunsScreen /> },
-  { path: "review", element: <ReviewScreen /> },
+  { path: "review", element: <ReviewRoute /> },
   { path: "analytics", element: <AnalyticsScreen /> },
   { path: "site-areas", element: <SiteAreasScreen /> },
-  { path: "query", element: <QueryScreen /> },
   { path: "export", element: <ExportScreen /> },
 ];

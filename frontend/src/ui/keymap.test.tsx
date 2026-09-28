@@ -177,6 +177,47 @@ describe("useToolShortcuts", () => {
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 
+  it("does not fire and does not prevent default when the keydown comes from inside a modal dialog", () => {
+    const onTrigger = vi.fn();
+    renderHook(() => useToolShortcuts([{ shortcut: "B", onTrigger }]));
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const button = document.createElement("button");
+    dialog.append(button);
+    document.body.append(dialog);
+    const notPrevented = fireEvent.keyDown(button, { key: "b" });
+    expect(onTrigger).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(true);
+    dialog.remove();
+  });
+
+  it("fires a tool's key from a button outside any modal (control case)", () => {
+    const onTrigger = vi.fn();
+    renderHook(() => useToolShortcuts([{ shortcut: "B", onTrigger }]));
+    const button = document.createElement("button");
+    document.body.append(button);
+    const notPrevented = fireEvent.keyDown(button, { key: "b" });
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+    expect(notPrevented).toBe(false);
+    button.remove();
+  });
+
+  it("does not prevent default on Tab from inside a modal dialog even when a tool is bound to Tab", () => {
+    const onTrigger = vi.fn();
+    renderHook(() => useToolShortcuts([{ shortcut: "Tab", action: "next-pending", onTrigger }]));
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const button = document.createElement("button");
+    dialog.append(button);
+    document.body.append(dialog);
+    const notPrevented = fireEvent.keyDown(button, { key: "Tab" });
+    expect(onTrigger).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(true);
+    dialog.remove();
+  });
+
   it("refuses a global or review key unless the tool is that key's action", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const area = vi.fn();

@@ -34,8 +34,8 @@ test("Import images posts the folder with the project's defaults and shows the j
     site: "ahmadia",
     settings: { max_side: 3000, quality: 95, dedupe_threshold: 4, group_regex: REGEX },
   });
-  // The banner reports the import; the running pill leads to the Jobs section.
-  await expect(page.getByTestId("import-notice")).toContainText("Importing");
+  // The running pill leads to the Jobs section. (The Data Manager's import banner went with that
+  // screen, I-FW Ruling 16; the pill is where the workspace reports the import.)
   await page
     .getByRole("banner")
     .getByRole("link", { name: /^Importing/ })
