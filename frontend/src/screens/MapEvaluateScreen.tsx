@@ -52,7 +52,7 @@ import { RunDialog } from "@/runs/RunDialog";
 import { Alert, Button, EmptyState, Segmented, buttonClass, toast } from "@/ui";
 import { isTypingTarget } from "@/ui/keymap";
 
-/** Logs and toasts an async failure once, where it happens (see the old MapsScreen's note). */
+/** Logs and toasts an async failure once, where it happens. */
 function reportFailure(action: string, err: unknown): string {
   const message = messageOf(err, `could not ${action}`);
   pushLog(`${action} failed: ${message}`);

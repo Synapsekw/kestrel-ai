@@ -31,7 +31,7 @@ describe("ScorePanel", () => {
   it("scores the run the operator ticked first, not whichever comes first in `runs`", () => {
     // `runs` lists `second` before `exampleMapRun`, but the operator ticked `exampleMapRun` first:
     // the primary column, the mistake count and the stepper must all follow tick order, matching
-    // what the map overlay colours (MapsScreen derives its `matchOf` the same way).
+    // what the map overlay colours (MapEvaluateScreen derives its `matchOf` the same way).
     const onStep = vi.fn();
     const secondScore = {
       ...exampleMapScore,

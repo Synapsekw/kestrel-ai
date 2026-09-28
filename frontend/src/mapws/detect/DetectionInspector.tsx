@@ -25,7 +25,7 @@ import { useDetectStore } from "./detectStore";
 import { useReview, type KindOf, type ReviewAction } from "./useReview";
 
 /** The detection inspector (spec §5.3): type, confidence, model, map date, review state, the accept /
- * reject / type buttons of MapReviewPanel on F's review keys, and the 3D jump (R-W4-13). */
+ * reject / type buttons on F's review keys, and the 3D jump (R-W4-13). */
 export function DetectionInspector({ selection, projectId }: InspectorBodyProps) {
   const api = useApi();
   const navigate = useNavigate();

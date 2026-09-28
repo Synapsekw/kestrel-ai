@@ -18,7 +18,7 @@ const METRICS: [string, (r: Row) => string][] = [
 /**
  * Precision/recall/F1/count-error per selected run, a per-class breakdown, the overlay toggle and
  * mistake stepping. `selected` (tick order) is the single source of truth for which run is primary
- * — the same array `MapsScreen` derives its overlay's `matchOf` from — so the panel can never
+ * — the same array `MapEvaluateScreen` derives its overlay's `matchOf` from — so the panel can never
  * describe a different run than the map is colouring; `runs` is only consulted to look up a ticked
  * id's display name. The primary is always `selected[0]`, whether or not its score has arrived yet:
  * while it is still loading, its column reads "scoring…"; if the request failed, `scoreErrors`
