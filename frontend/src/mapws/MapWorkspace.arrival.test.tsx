@@ -145,3 +145,23 @@ describe("the ?finding= arrival (spec §5, §9.4, §15)", () => {
     expect(screen.getByTestId("site-map")).toHaveAttribute("data-mode", "single");
   });
 });
+
+describe("sel and tool survive a ?map= arrival (R-P1)", () => {
+  it("applies ?sel=run:<id> after the map arrival settles", async () => {
+    arrive(base(onMap), `map=${MAP_ID}&sel=run:r1`);
+    await waitFor(() => expect(screen.getByTestId("map-inspector")).toHaveAttribute("data-sel", "run:r1"));
+    await waitFor(() => expect(screen.getByTestId("location")).not.toHaveTextContent("map="));
+    const loc = screen.getByTestId("location").textContent ?? "";
+    expect(loc).toContain("sel=run%3Ar1");
+    expect(loc).toContain("r=2026-04-15");
+  });
+
+  it("arms ?tool=zone after the map arrival settles", async () => {
+    arrive(base(onMap), `map=${MAP_ID}&tool=zone`);
+    await waitFor(() => expect(screen.getByTestId("location")).not.toHaveTextContent("map="));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Zone/ })).toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("tool=");
+  });
+});
