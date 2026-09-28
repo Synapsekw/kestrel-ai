@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useEffect } from "react";
+import { StrictMode, useEffect, type ReactNode } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import type { Box } from "@contract/client";
@@ -57,19 +57,22 @@ function Page({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-function mount(url: string, routes: Parameters<typeof fakeClient>[0] = []) {
+function mount(url: string, routes: Parameters<typeof fakeClient>[0] = [], strict = false) {
   const { api } = fakeClient(routes);
   const onOpen = vi.fn();
+  const Wrap = strict ? StrictMode : ({ children }: { children: ReactNode }) => <>{children}</>;
   render(
-    <TestApiProvider api={api}>
-      <MemoryRouter initialEntries={[url]}>
-        <Nav />
-        <Routes>
-          <Route path="/p/:projectId/images/:imageId" element={<Page onOpen={onOpen} />} />
-        </Routes>
-        <LocationProbe />
-      </MemoryRouter>
-    </TestApiProvider>,
+    <Wrap>
+      <TestApiProvider api={api}>
+        <MemoryRouter initialEntries={[url]}>
+          <Nav />
+          <Routes>
+            <Route path="/p/:projectId/images/:imageId" element={<Page onOpen={onOpen} />} />
+          </Routes>
+          <LocationProbe />
+        </MemoryRouter>
+      </TestApiProvider>
+    </Wrap>,
   );
   return { onOpen };
 }
@@ -124,6 +127,17 @@ describe("useArrival (§6.5)", () => {
     await waitFor(() => expect(fake.select).toHaveBeenCalledWith(ANNOTATION_ID));
     expect(onOpen).toHaveBeenCalled();
     expect(fake.panIntoView).toHaveBeenCalledWith({ x: 3000, y: 2000, w: 100, h: 100 }, { animate: false }); // reduced motion in this test
+    await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+  });
+
+  it("?finding= still selects under StrictMode's double effect (I2)", async () => {
+    const { onOpen } = mount(
+      `/p/${PROJECT_ID}/images/${IMAGE_ID}?finding=${FINDING_ID}`,
+      [{ method: "GET", path: new RegExp(`/findings/${FINDING_ID}$`), body: exampleFinding }],
+      true,
+    );
+    await waitFor(() => expect(fake.select).toHaveBeenCalledWith(ANNOTATION_ID));
+    expect(onOpen).toHaveBeenCalled();
     await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
   });
 

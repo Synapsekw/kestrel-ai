@@ -6,8 +6,9 @@ import type { ReactNode } from "react";
 import { create } from "zustand";
 import type { ImageDetail } from "@/api/images";
 import type { SelectionState } from "@/data/selection";
-import { typedProject } from "@/test/findingFixtures";
-import { exampleImage, fakeClient, IMAGE_ID, IMAGE_ID_2, PROJECT_ID } from "@/test/fixtures";
+import type { Box } from "@contract/client";
+import { ANNOTATION_ID, exampleFinding, FINDING_ID, typedProject } from "@/test/findingFixtures";
+import { exampleImage, fakeClient, IMAGE_ID, IMAGE_ID_2, personBox, PROJECT_ID } from "@/test/fixtures";
 import { LocationProbe, TestApiProvider } from "@/test/render";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import { useArrivalStore } from "./arrivalStore";
@@ -27,6 +28,8 @@ const h = vi.hoisted(() => ({
   layers: [] as Record<string, ((chord: string) => unknown) | undefined>[],
   keymapOpts: null as { enabled?: boolean } | null,
   loadError: null as string | null,
+  /** Stands in for FC's fetch-then-`loadImage` (I2); null = the frame never reloads. */
+  onLoad: null as ((id: string) => void) | null,
 }));
 
 function makeIndex(ids: string[], flags: number[]): ImageIndexState {
@@ -58,71 +61,81 @@ vi.mock("@/ui", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/ui")>()),
   toast: (...a: unknown[]) => h.toast(...a),
 }));
-vi.mock("./seams", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./seams")>()),
-  useImageIndex: (_p: string, f: unknown) => {
-    h.lastFilters(f);
-    return useIndex((s) => s.index);
-  },
-  useImageData: (p: string, id: string) => {
-    h.imageData(p, id);
-    return { loading: false, error: h.loadError };
-  },
-  useCommandContext: () => ({}),
-  useCanvasKeyHandlers: () => ({}),
-  useImagesKeymap: (l: typeof h.layers, o: typeof h.keymapOpts) => {
-    h.layers = l;
-    h.keymapOpts = o;
-  },
-  useHeldKeys: () => {},
-  useAiWorkspace: (o: unknown) => {
-    h.aiOptions(o);
-    return { keyHandlers: h.aiLayer };
-  },
-  ensureAiRegistered: () => h.ensureAiRegistered(),
-  ImageCanvas: (p: { children?: ReactNode; suggestions?: ReactNode; overlay?: ReactNode }) => (
-    <div data-testid="image-canvas">
-      <div data-testid="canvas-suggestions">{p.suggestions ? "suggestions" : ""}</div>
-      {p.children}
-    </div>
-  ),
-  ToolPalette: (p: { children?: ReactNode }) => <div data-testid="tool-palette">{p.children}</div>,
-  ZoomCluster: () => null,
-  BrowserFilters: (p: { onChange: (f: unknown) => void; value: object }) => (
-    <button type="button" onClick={() => p.onChange({ ...p.value, hasFindings: true })}>
-      Filter stub
-    </button>
-  ),
-  BrowserGrid: (p: { onSelectionChange: (s: SelectionState) => void }) => (
-    <div data-testid="grid-stub">
+vi.mock("./seams", async (importOriginal) => {
+  const { useEffect } = await import("react");
+  return {
+    ...(await importOriginal<typeof import("./seams")>()),
+    useImageIndex: (_p: string, f: unknown) => {
+      h.lastFilters(f);
+      return useIndex((s) => s.index);
+    },
+    useImageData: (p: string, id: string) => {
+      h.imageData(p, id);
+      useEffect(() => h.onLoad?.(id), [id]);
+      return { loading: false, error: h.loadError };
+    },
+    useCommandContext: () => ({}),
+    useCanvasKeyHandlers: () => ({}),
+    useImagesKeymap: (l: typeof h.layers, o: typeof h.keymapOpts) => {
+      h.layers = l;
+      h.keymapOpts = o;
+    },
+    useHeldKeys: () => {},
+    useAiWorkspace: (o: unknown) => {
+      h.aiOptions(o);
+      return { keyHandlers: h.aiLayer };
+    },
+    ensureAiRegistered: () => h.ensureAiRegistered(),
+    ImageCanvas: (p: { children?: ReactNode; suggestions?: ReactNode; overlay?: ReactNode }) => (
+      <div data-testid="image-canvas">
+        <div data-testid="canvas-suggestions">{p.suggestions ? "suggestions" : ""}</div>
+        {p.children}
+      </div>
+    ),
+    ToolPalette: (p: { children?: ReactNode }) => <div data-testid="tool-palette">{p.children}</div>,
+    ZoomCluster: () => null,
+    BrowserFilters: (p: { onChange: (f: unknown) => void; value: object }) => (
+      <button type="button" onClick={() => p.onChange({ ...p.value, hasFindings: true })}>
+        Filter stub
+      </button>
+    ),
+    BrowserGrid: (p: { onSelectionChange: (s: SelectionState) => void }) => (
+      <div data-testid="grid-stub">
+        <button
+          type="button"
+          onClick={() =>
+            p.onSelectionChange({ selected: new Set([IMAGE_ID, IMAGE_ID_2]), anchor: IMAGE_ID_2 })
+          }
+        >
+          Select both
+        </button>
+      </div>
+    ),
+    BrowserSelectionBar: (p: { selection: SelectionState; onDetect?: (ids: string[]) => void }) => (
       <button
         type="button"
-        onClick={() => p.onSelectionChange({ selected: new Set([IMAGE_ID, IMAGE_ID_2]), anchor: IMAGE_ID_2 })}
+        data-testid="selection-bar"
+        onClick={() => p.onDetect?.([...p.selection.selected])}
       >
-        Select both
+        {p.selection.selected.size} selected
       </button>
-    </div>
-  ),
-  BrowserSelectionBar: (p: { selection: SelectionState; onDetect?: (ids: string[]) => void }) => (
-    <button type="button" data-testid="selection-bar" onClick={() => p.onDetect?.([...p.selection.selected])}>
-      {p.selection.selected.size} selected
-    </button>
-  ),
-  CaptureMap: () => <div data-testid="map-stub" />,
-  MiniMap: () => null,
-  Filmstrip: () => null,
-  AiHosts: () => <span data-testid="ai-hosts" />,
-  AiBar: () => <span data-testid="ai-bar" />,
-  AiDetectButton: () => <span data-testid="ai-detect-button" />,
-  HintBar: () => <span data-testid="hint-bar" />,
-  SuggestionChip: () => <span data-testid="suggestion-chip" />,
-  SmartPolygonPanel: () => <span data-testid="smart-polygon-panel" />,
-  SamWarmEdge: () => <span data-testid="sam-warm-edge" />,
-  SuggestionsLayer: () => null,
-  BatchDetectDialog: (p: { open: boolean; scopeLabel: string }) =>
-    p.open ? <div role="dialog" aria-label="Detect on many images" data-scope={p.scopeLabel} /> : null,
-  BatchDetectWatch: () => <span data-testid="batch-watch" />,
-}));
+    ),
+    CaptureMap: () => <div data-testid="map-stub" />,
+    MiniMap: () => null,
+    Filmstrip: () => null,
+    AiHosts: () => <span data-testid="ai-hosts" />,
+    AiBar: () => <span data-testid="ai-bar" />,
+    AiDetectButton: () => <span data-testid="ai-detect-button" />,
+    HintBar: () => <span data-testid="hint-bar" />,
+    SuggestionChip: () => <span data-testid="suggestion-chip" />,
+    SmartPolygonPanel: () => <span data-testid="smart-polygon-panel" />,
+    SamWarmEdge: () => <span data-testid="sam-warm-edge" />,
+    SuggestionsLayer: () => null,
+    BatchDetectDialog: (p: { open: boolean; scopeLabel: string }) =>
+      p.open ? <div role="dialog" aria-label="Detect on many images" data-scope={p.scopeLabel} /> : null,
+    BatchDetectWatch: () => <span data-testid="batch-watch" />,
+  };
+});
 
 const camera = {
   rel_alt: 38.4,
@@ -146,8 +159,9 @@ const detail = {
   footprint_kind: "point",
 } as unknown as ImageDetail;
 
-function mount(url: string) {
+function mount(url: string, routes: Parameters<typeof fakeClient>[0] = []) {
   const { api, requests } = fakeClient([
+    ...routes,
     { method: "GET", path: /\/projects\/[^/]+$/, body: typedProject },
     { method: "PATCH", path: /\/images\/[^/]+$/, body: (r) => ({ ...detail, ...(r.body as object) }) },
     { method: "GET", path: /\/findings$/, body: { items: [], next_cursor: null } },
@@ -175,6 +189,7 @@ beforeEach(() => {
   h.imageData.mockClear();
   h.aiOptions.mockClear();
   h.loadError = null;
+  h.onLoad = null;
   h.layers = [];
   useIndex.setState({ index: makeIndex([IMAGE_ID, IMAGE_ID_2], [5, 0]) });
   useImagesWorkspace.getState().reset();
@@ -355,6 +370,41 @@ describe("ImagesWorkspace", () => {
       "data-scope",
       "1 selected",
     );
+  });
+
+  describe("an arrival on the frame FC's store already holds (I2)", () => {
+    // beforeEach leaves IMAGE_ID in FC's store, as a previous workspace mount would.
+    const defect = { ...personBox, id: ANNOTATION_ID } as Box;
+    let loaded = false;
+    beforeEach(() => {
+      loaded = false;
+      useImagesWorkspace.setState({
+        viewport: { width: 900, height: 600 },
+        boxes: { [ANNOTATION_ID]: defect },
+      });
+      h.onLoad = () =>
+        void setTimeout(() => {
+          act(() => useImagesWorkspace.getState().loadImage({ ...detail }, [defect], []));
+          loaded = true;
+        }, 30);
+    });
+
+    it("?finding= selects after this mount's load, so the load does not wipe it", async () => {
+      mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}?finding=${FINDING_ID}`, [
+        { method: "GET", path: new RegExp(`/findings/${FINDING_ID}$`), body: exampleFinding },
+      ]);
+      await waitFor(() => expect(loaded).toBe(true));
+      await waitFor(() => expect(useImagesWorkspace.getState().selectedIds).toEqual([ANNOTATION_ID]));
+      await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+    });
+
+    it("?at= keeps its zoom over this mount's fit", async () => {
+      mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}?at=2000,1300&r=40`);
+      await waitFor(() => expect(loaded).toBe(true));
+      // FC sizes the r = 40 circle to a third of the shorter side: 600 / 3 / 80 = 2.5.
+      await waitFor(() => expect(useImagesWorkspace.getState().view.scale).toBeCloseTo(2.5));
+      await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+    });
   });
 
   it("reads the image index exactly once for the whole workspace (budget)", () => {

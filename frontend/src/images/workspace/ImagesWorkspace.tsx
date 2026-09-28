@@ -63,6 +63,7 @@ import {
   useImagesKeymap,
   useImagesWorkspace,
   useImageUrl,
+  useLoadedFrame,
   useSaveState,
   useScale,
   useSelection,
@@ -146,6 +147,7 @@ export function ImagesWorkspace() {
   const index = useImageIndex(projectId, filters);
   const ready = index.status === "ready";
   const detail = useDetail();
+  const frame = useLoadedFrame(imageId);
   const model = useInspectorModel(projectId, imageId);
   const ctx = useCommandContext(projectId);
   const imageUrl = useImageUrl(projectId);
@@ -194,7 +196,8 @@ export function ImagesWorkspace() {
     imageId,
     width: detail?.width ?? 0,
     height: detail?.height ?? 0,
-    ready: !!detail && detail.id === imageId && boxesLoaded,
+    // I2: THIS mount's load of the frame, not a copy FC's store kept from an earlier visit.
+    ready: frame !== null && boxesLoaded,
     onOpenInspector: () => setInspectorOpen(true),
   });
   // A filter change re-queries the index (status "loading", so null here), which resets the guard:

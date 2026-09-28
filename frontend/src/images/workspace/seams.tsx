@@ -19,7 +19,7 @@
  * - FC draws a Konva length label (`lengthLabel`) on the L draft and saved lengths, but no HTML
  *   readout or info chip, so `FC_RENDERS` stays all false.
  */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { components } from "@contract/client";
 import { imageFileUrl, type Box } from "@contract/client";
 import { useBackend } from "@/api/client";
@@ -110,6 +110,22 @@ export function useSelection(): {
 
 export function useDetail(): ImageDetail | null {
   return useImagesWorkspace((s) => (s.image && s.image.id === s.imageId ? s.image : null));
+}
+
+/**
+ * I2: the frame FC's store holds for `imageId`, but only once a load that began after `imageId`
+ * became current (in this mount) has landed. FC's store outlives the workspace, so on a remount or
+ * a return to the last frame it already holds `imageId`; `useImageData`'s `loadImage` then still
+ * lands and resets `view` and the selection, so an arrival must wait for it. The snapshot is the
+ * store's frame object when `imageId` became current; every `loadImage` sets a new object.
+ */
+export function useLoadedFrame(imageId: string | null): ImageDetail | null {
+  const detail = useDetail();
+  const [before, setBefore] = useState(() => ({ id: imageId, image: useImagesWorkspace.getState().image }));
+  if (before.id !== imageId) setBefore({ id: imageId, image: useImagesWorkspace.getState().image });
+  return before.id === imageId && detail !== null && detail.id === imageId && detail !== before.image
+    ? detail
+    : null;
 }
 
 export function useSaveState(): { state: "saved" | "saving" | "failed"; retry: () => void } {

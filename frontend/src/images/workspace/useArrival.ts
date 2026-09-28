@@ -66,9 +66,13 @@ export function useArrival(o: ArrivalOptions): void {
       useArrivalStore.getState().arrive(imageId, null, arrival.cloudId);
       return drop();
     }
+    // I2: until the finding is in, this arrival is not handled: a cleanup (StrictMode's double
+    // effect, a dep change) forgets the key, so the next run of the same key fetches again.
     let live = true;
+    let settled = false;
     fetchFinding(api, o.projectId, arrival.findingId)
       .then((f) => {
+        settled = true;
         if (!live) return;
         const a = f.anchor;
         if (a.kind !== "image") return drop();
@@ -85,9 +89,13 @@ export function useArrival(o: ArrivalOptions): void {
         opts.onOpenInspector();
         drop();
       })
-      .catch(() => live && drop());
+      .catch(() => {
+        settled = true;
+        if (live) drop();
+      });
     return () => {
       live = false;
+      if (!settled && handled.current === key) handled.current = null;
     };
   }, [api, navigate, o.projectId, o.imageId, o.ready, search, setParams]);
 }
