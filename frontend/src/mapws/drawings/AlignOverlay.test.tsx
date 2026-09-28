@@ -105,9 +105,9 @@ describe("the align-drawing tool (spec §8.3)", () => {
     const row = drawingRowOf(pdfDrawing).layer!;
     const ctx = { frame: SITE_FRAME, selection: null, surveys: [], layers: [row], r: null };
     const selection = { kind: "drawing", id: DRAWING_ID };
-    expect(alignDrawing.disabledReason!(ctx)).toBe("Select a drawing first");
+    expect(alignDrawing.disabledReason!(ctx)).toBe("Choose a drawing first");
     expect(alignDrawing.disabledReason!({ ...ctx, selection: { kind: "finding", id: "f1" } })).toBe(
-      "Select a drawing first",
+      "Choose a drawing first",
     );
     expect(alignDrawing.disabledReason!({ ...ctx, selection })).toBeNull();
     expect(
