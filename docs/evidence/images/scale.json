@@ -1,0 +1,11 @@
+{
+  "at": "2026-09-28T10:00:44.786Z",
+  "images": 20000,
+  "indexMs": 78,
+  "maxThumbsGrid": 24,
+  "maxThumbsFilmstrip": 8,
+  "maxThumbs": 32,
+  "maxLoaderInFlight": 8,
+  "maxThumbsInFlightNetwork": 16,
+  "maxIdsPerList": 24
+}
