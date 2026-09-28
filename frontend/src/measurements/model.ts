@@ -81,7 +81,8 @@ export function filtersToSearch(f: MeasurementFilters): URLSearchParams {
 export function filtersToQuery(f: MeasurementFilters): MeasurementListQuery {
   if (f.kind === "all") return {};
   const query: MeasurementListQuery = { kind: [f.kind] };
-  if (f.subKind) {
+  // A kind without types (volume) never sends one, so a bogus `?sub_kind=` cannot 422 the list.
+  if (f.subKind && subKindOptions(f.kind, null).length > 0) {
     // The sub-kind is a real enum server-side, but the URL (and this filter) may carry an
     // unknown value the client doesn't recognise yet — cast only this string, not the kind.
     query.sub_kind = [f.subKind] as MeasurementListQuery["sub_kind"];

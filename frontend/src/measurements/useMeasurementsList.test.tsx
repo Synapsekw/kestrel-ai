@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { createApiClient } from "@contract/client";
 import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { measurementItem } from "@/test/measurementFixtures";
 import { TestApiProvider } from "@/test/render";
@@ -109,5 +110,58 @@ describe("useMeasurementsList", () => {
     act(() => result.current.reload());
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.items).toHaveLength(1);
+  });
+
+  it("surfaces a failed next page as an error and keeps the rows shown", async () => {
+    const { wrapper } = setup([
+      {
+        method: "GET",
+        path: LIST,
+        status: (req) => (params(req.url).get("cursor") ? 500 : 200),
+        body: (req) =>
+          params(req.url).get("cursor")
+            ? errorBody("internal", "Database locked")
+            : { items: many(1, 2), next_cursor: "c1" },
+      },
+    ]);
+    const { result } = renderHook(() => useMeasurementsList(PROJECT_ID, DEFAULT_FILTERS), { wrapper });
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.error).toMatch(/Database locked/);
+    expect(result.current.items).toHaveLength(2);
+  });
+
+  it("drops a refresh response that lands after a newer one", async () => {
+    const pending: ((items: number) => void)[] = [];
+    let calls = 0;
+    const respond = (n: number) =>
+      new Response(JSON.stringify({ items: many(1, n), next_cursor: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    const fetchImpl = (() => {
+      calls += 1;
+      if (calls === 1) return Promise.resolve(respond(1));
+      return new Promise<Response>((resolve) => pending.push((n) => resolve(respond(n))));
+    }) as unknown as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={api}>{children}</TestApiProvider>
+    );
+    const { result } = renderHook(() => useMeasurementsList(PROJECT_ID, DEFAULT_FILTERS), { wrapper });
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    act(() => useChangesStore.setState({ measurementsRevision: 1 }));
+    await waitFor(() => expect(pending).toHaveLength(1));
+    act(() => useChangesStore.setState({ measurementsRevision: 2 }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    // The newer refresh answers first, then the older one arrives late.
+    await act(async () => pending[1](3));
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    await act(async () => {
+      pending[0](2);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(result.current.items).toHaveLength(3);
   });
 });

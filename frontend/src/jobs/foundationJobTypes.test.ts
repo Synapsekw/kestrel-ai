@@ -21,6 +21,11 @@ describe("the new job types", () => {
     expect(resultTarget({ ...job, state: "succeeded" }, "p")?.to).toBe(to);
   });
 
+  it.each(NEW.slice(2))("%s names the surfaces and volumes view it opens", (type) => {
+    const job = { ...runningJob, type, params: {}, state: "succeeded" as const };
+    expect(resultTarget(job, "p")?.label).toBe("Open surfaces and volumes");
+  });
+
   it.each(NEW)("%s has a failure toast that names it", (type, label) => {
     const job = { ...runningJob, type, state: "failed" as const, error: "not implemented" };
     expect(jobToastText(job)).toBe(`${label} failed: not implemented`);

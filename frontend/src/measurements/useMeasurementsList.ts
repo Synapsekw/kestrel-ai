@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { listMeasurements, type MeasurementItem, type MeasurementListQuery } from "@/api/measurements";
@@ -46,8 +46,11 @@ export function useMeasurementsList(projectId: string, filters: MeasurementFilte
   const loadedRef = useRef<Loaded | null>(null);
   const fetchingMore = useRef(false);
   const handledRevision = useRef(revision);
+  const refreshSeq = useRef(0);
 
-  useEffect(() => {
+  // A layout effect, so a child's passive effect (DataTable's `onEndReached`) in the same commit
+  // already sees this render's state, not the previous one.
+  useLayoutEffect(() => {
     loadedRef.current = loaded;
   });
 
@@ -75,12 +78,15 @@ export function useMeasurementsList(projectId: string, filters: MeasurementFilte
       const cur = loadedRef.current;
       const shown = cur && cur.key === key ? cur.items.length : 0;
       const limit = Math.min(MEASUREMENTS_REFRESH_MAX, Math.max(MEASUREMENTS_PAGE, shown));
+      // Only the latest refresh may land: an older response arriving late would roll the rows back.
+      const seq = ++refreshSeq.current;
       listMeasurements(api, projectId, { ...query, limit })
-        .then((page) =>
+        .then((page) => {
+          if (seq !== refreshSeq.current) return;
           setLoaded((s) =>
             s && s.key === key ? { key, items: page.items, cursor: page.next_cursor, error: null } : s,
-          ),
-        )
+          );
+        })
         .catch((e: unknown) => pushLog(`measurements refresh failed: ${messageOf(e, String(e))}`));
     }, REFRESH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
@@ -105,7 +111,12 @@ export function useMeasurementsList(projectId: string, filters: MeasurementFilte
           };
         }),
       )
-      .catch((e: unknown) => pushLog(`measurements page failed: ${messageOf(e, String(e))}`))
+      .catch((e: unknown) => {
+        const msg = messageOf(e, "could not load more measurements");
+        pushLog(`measurements page failed: ${msg}`);
+        // Shown above the rows kept so far; Retry reloads from the first page.
+        setLoaded((s) => (s && s.key === key ? { ...s, error: msg } : s));
+      })
       .finally(() => {
         fetchingMore.current = false;
       });

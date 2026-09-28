@@ -51,6 +51,10 @@ describe("filters", () => {
     });
   });
 
+  it("drops a sub-kind the kind has no types for (a bogus volume sub_kind from the URL)", () => {
+    expect(filtersToQuery({ kind: "volume", subKind: "bogus" })).toEqual({ kind: ["volume"] });
+  });
+
   it("says whether anything is filtered", () => {
     expect(isFiltered(DEFAULT_FILTERS)).toBe(false);
     expect(isFiltered({ kind: "volume", subKind: null })).toBe(true);
