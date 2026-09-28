@@ -390,6 +390,9 @@ export function createEngine(o: EngineOptions): CloudEngine {
     }
   }
 
+  /** A view command (fit, topView, lookAt, setView, goToPose) ran: the load keeps it (C-V1 hand-off M3). */
+  let viewRequested = false;
+
   function applyView(v: View): void {
     camera.position.set(v.position.x, v.position.y, v.position.z);
     controls.target.set(v.target.x, v.target.y, v.target.z);
@@ -402,6 +405,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
 
   /** Instant (S1 fit/topView/lookAt, plan Ruling 5). */
   function jump(v: View): void {
+    viewRequested = true;
     tween = null;
     frameDefault();
     applyView(v);
@@ -411,6 +415,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
 
   /** Tweened; synchronous under reduced motion. */
   function go(to: View): void {
+    viewRequested = true;
     tween = startTween(currentView(), to, performance.now(), isReducedMotion());
     if (tween.ms === 0) {
       applyView(to);
@@ -734,7 +739,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
       scene.add(loaded);
       pco = loaded;
       availability = colourAvailability(attributeNames(loaded.pcoGeometry));
-      if (bounds) applyView(wholeSiteView(bounds));
+      // A view requested before the load (a deep link, a report view's pose) is not overwritten.
+      if (bounds && !viewRequested) applyView(wholeSiteView(bounds));
       reseatFly(); // a rebuild restores fly before the octree loads: look on from the loaded view
       applyMaterial();
       applyClipToMaterial(loaded.material, clip);

@@ -103,6 +103,38 @@ test("setView tweens to the named view in about 350 ms; a drag stops it; reduced
   expect(Math.abs(side.position[2] - side.target[2])).toBeLessThan(1e-3);
 });
 
+test("a view requested before the octree loads survives the load (B8)", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" }); // setView jumps at once
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
+  await routeCameras(page, P, emptyCameras());
+  await routeOctree(
+    page,
+    CLOUD,
+    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 })),
+  );
+  // Hold the octree's metadata back until the view is requested (registered last: it runs first).
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(
+    (u) => u.pathname.endsWith(`/pointclouds/${CLOUD}/octree/metadata.json`),
+    async (route) => {
+      await held;
+      await route.fallback();
+    },
+  );
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await expect.poll(() => page.evaluate(() => window.__kestrelCloudViewer !== undefined)).toBe(true);
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.stats().settledMs)).toBeNull();
+  await page.evaluate(() => window.__kestrelCloudViewer!.setView("side"));
+  release();
+  await viewerSettled(page);
+  const p = await pose(page);
+  expect(p.position[0]).toBeGreaterThan(p.target[0]); // still the side view, not the whole-site view
+  expect(Math.abs(p.position[1] - p.target[1])).toBeLessThan(1e-3);
+  expect(Math.abs(p.position[2] - p.target[2])).toBeLessThan(1e-3);
+});
+
 test("orbit keeps the target on a left drag; pan moves it; fly applies", async ({ page }) => {
   await openGrid(page);
   await edlOn(page);
