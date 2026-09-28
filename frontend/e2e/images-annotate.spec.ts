@@ -61,7 +61,9 @@ test("box, rbox, polygon and point persist across a reload, 3 grades, undo cover
   expect(posts(world, "/boxes")[1]).toMatchObject({ shape: "rbox" });
   expect(Math.abs(posts(world, "/boxes")[1].angle as number)).toBeGreaterThan(1);
 
-  // Polygon: four clicks, Enter. (x shifted right of the brief by 100, same reason as the box.)
+  // Polygon: four clicks, Enter. Shifted +100 (vs. the box's +50 above) for the same reason: both
+  // offsets land past the tool-palette's right edge (image-x ≈106 at this fit scale), so either is
+  // enough to clear it.
   await page.keyboard.press("Escape");
   await page.keyboard.press("p");
   for (const [x, y] of [

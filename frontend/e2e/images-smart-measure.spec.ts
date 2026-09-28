@@ -53,25 +53,25 @@ test("L measures a length in mm with its uncertainty and saves it", async ({ pag
   // x shifted right of the brief's [100,500]/[200,500]: the floating tool-palette overlays image
   // x < ~110 at this fit scale and swallows the click there (see the task report). Both points
   // shift by the same +150 so the measured length (100 image px) is unchanged from the brief.
-  const px = 100;
   const a = await toScreen(page, 250, 500);
   const b = await toScreen(page, 350, 500);
   await page.mouse.click(a.x, a.y);
   await page.mouse.move(b.x, b.y, { steps: 4 });
 
   // The readout exists only while the L draft has its second point, and disappears once the
-  // measurement saves and is left unselected (ruling): read and assert it here, after the move and
-  // before the second (committing) click.
+  // measurement saves and is left unselected (ruling): capture it here, after the move and before
+  // the second (committing) click, then assert it against the length the app actually saved.
   const readout = ws(page).measureReadout;
   await expect(readout).toContainText("±");
-  const mm = parseLengthMm((await readout.textContent()) ?? "");
-  expect(Math.abs(mm - px * gsd) / (px * gsd)).toBeLessThan(0.02);
+  const readoutText = (await readout.textContent()) ?? "";
   // The distance behind the mm is always shown (spec §9.3: "from GSD … · ±… at 38.4 m", or "nadir approx.").
   await expect(readout).toContainText(/38\.4\s*m|nadir approx/i);
 
   await page.mouse.click(b.x, b.y);
   await expect.poll(() => world.requests.filter((r) => r.path.endsWith("/measurements")).length).toBe(1);
   const saved = world.requests.find((r) => r.path.endsWith("/measurements"))!.body as Record<string, number>;
-  const savedPx = Math.hypot(saved.x2 - saved.x1, saved.y2 - saved.y1);
-  expect(Math.abs(savedPx - px)).toBeLessThan(3);
+  const px = Math.hypot(saved.x2 - saved.x1, saved.y2 - saved.y1);
+  expect(Math.abs(px - 100)).toBeLessThan(3);
+  const mm = parseLengthMm(readoutText);
+  expect(Math.abs(mm - px * gsd) / (px * gsd)).toBeLessThan(0.02);
 });
