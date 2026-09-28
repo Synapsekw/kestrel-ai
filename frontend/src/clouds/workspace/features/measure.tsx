@@ -37,6 +37,7 @@ import {
 import { useCloudMeasurements } from "@/clouds/measuring/useCloudMeasurements";
 import {
   DEFAULT_THICKNESS_M,
+  INITIAL_TOOL,
   canCloseArea,
   cloudToolReducer,
   isComplete,
@@ -45,6 +46,7 @@ import {
   useCloudTool,
   type CloudToolAction,
 } from "@/clouds/useCloudTool";
+import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import type { ClipBox } from "@/clouds/viewer/clipBox";
 import { useJobsStore } from "@/store/jobs";
 import { toast } from "@/ui";
@@ -114,29 +116,31 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
     });
   }, [viewer, viewState, cloud.id]);
 
-  // The overlay: the armed tool's picks, else the chosen measurement (Ruling 9).
+  // The overlay: the armed tool's picks while it has any, else the chosen measurement (Ruling 9). An
+  // armed tool with no picks (after a Save, or while choosing rows) must not hide the chosen row.
+  const selState = useMemo(() => (sel ? stateOf(sel) : null), [sel]);
+  const drawing = state.picks.length > 0;
   const shapes = useMemo(
-    () => (state.kind ? toolShapes(state) : sel ? toolShapes(stateOf(sel)) : []),
-    [state, sel],
+    () => (drawing ? toolShapes(state) : selState ? toolShapes(selState) : toolShapes(state)),
+    [drawing, state, selState],
   );
   useEffect(() => {
     viewer.current?.setOverlay(OVERLAY_KEY, shapes);
   }, [viewer, shapes, viewState]);
 
   // The section slab as a highlighted clip box while a line is shown; W1 re-applies the operator's box.
+  // Re-applied when the view (re)starts: W1 re-applies the operator's box after "Reload view".
   useEffect(() => {
     const v = viewer.current;
-    if (!v || !boxJson) return;
+    if (!v || !boxJson || viewState !== "running") return;
     v.setClipBox(JSON.parse(boxJson) as ClipBox, "highlight_inside");
     return () => restoreClipBox();
-  }, [viewer, boxJson, restoreClipBox]);
+  }, [viewer, boxJson, viewState, restoreClipBox]);
 
   // While C-R1 captures a view, V2's sampleSlab waits for it: a slow answer is pending, never a
   // failure (only a rejection toasts), and answers are keyed by the line they echo (hand-off f).
   // Plain functions where the viewer ref is read: the tools are rebuilt every render anyway.
-  const samplePreview = (l: SectionLine) => {
-    const v = viewer.current;
-    if (!v) return;
+  const sampleWith = useCallback((v: CloudViewerHandle, l: SectionLine) => {
     wantedPreview.current = lineKey(l);
     void previewSlab(v, l)
       .then((r) => {
@@ -144,6 +148,10 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
         if (r.key === wantedPreview.current) setPreview(r);
       })
       .catch((e: unknown) => toast("danger", messageOf(e, "could not sample the section")));
+  }, []);
+  const samplePreview = (l: SectionLine) => {
+    const v = viewer.current;
+    if (v) sampleWith(v, l);
   };
 
   // The stored profile once its row is ready; keyed, so a late answer never paints another row.
@@ -152,6 +160,8 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
     sel && sel.kind === "profile" && sel.status === "ready"
       ? `${cloud.id}|${sel.id}|${sel.updated_at}`
       : null;
+  const selLine = savedLine(sel);
+  const selLineJson = selLine ? JSON.stringify(selLine) : null;
   useEffect(() => {
     if (!readyKey || !selId) return;
     let current = true;
@@ -160,25 +170,29 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
         if (current) setFull({ key: readyKey, data: profileData(p) });
       })
       .catch((e: unknown) => {
-        if (current) toast("danger", messageOf(e, "could not load the profile"));
+        if (!current) return;
+        toast("danger", messageOf(e, "could not load the profile"));
+        // Rather than an empty chart for good: the display points' preview of the same line.
+        const v = viewer.current;
+        if (v && selLineJson) sampleWith(v, JSON.parse(selLineJson) as SectionLine);
       });
     return () => {
       current = false;
     };
-  }, [api, projectId, cloud.id, selId, readyKey]);
+  }, [api, projectId, cloud.id, selId, readyKey, selLineJson, viewer, sampleWith]);
 
   const persist = useCallback(
-    async (body: CloudMeasurementCreate): Promise<boolean> => {
+    async (body: CloudMeasurementCreate, { select = true }: { select?: boolean } = {}): Promise<boolean> => {
       if (inFlight.current) return false;
       inFlight.current = true;
       setSaving(true);
+      let saved: CloudMeasurement;
       try {
         const r = await createCloudMeasurement(api, projectId, cloud.id, body);
+        saved = r.measurement;
         list.upsert(r.measurement);
         if (r.job) useJobsStore.getState().upsert(r.job);
-        seams.requestViewCapture({ kind: "cloud_measurement", id: r.measurement.id }, "save");
-        list.select(r.measurement.id);
-        return true;
+        if (select) list.select(r.measurement.id);
       } catch (e) {
         toast("danger", messageOf(e, "could not save the measurement"));
         return false;
@@ -186,6 +200,13 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
         inFlight.current = false;
         setSaving(false);
       }
+      // Outside the save's try: a failing capture must not read as a failed save (and keep the picks).
+      try {
+        seams.requestViewCapture({ kind: "cloud_measurement", id: saved.id }, "save");
+      } catch (e) {
+        toast("danger", messageOf(e, "could not capture the view of the measurement"));
+      }
+      return true;
     },
     [api, projectId, cloud.id, list, seams],
   );
@@ -194,6 +215,13 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
     let s = state;
     if (canCloseArea(s)) {
       s = cloudToolReducer(s, { type: "close" });
+      // An outline the server would refuse once closed (a bow-tie) stays open, so the next click
+      // corrects it rather than starting a new outline.
+      const why = liveResult(s, geographic).refusal;
+      if (why) {
+        toast("danger", why);
+        return;
+      }
       dispatch({ type: "close" });
     }
     if (!s.kind || !isComplete(s) || list.full || liveResult(s, geographic).refusal) return;
@@ -248,15 +276,28 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
       else v.lookAt(centroidOf(m.points), 30);
     }
     const l = savedLine(m);
-    if (l && m.status !== "ready") samplePreview(l);
+    // A draft section line owns the panel and its preview; a chosen row does not take it over.
+    if (l && m.status !== "ready" && !draftLine) samplePreview(l);
   };
 
-  const anchor = useMemo(() => labelAnchor(state), [state]);
-  const labelText = useMemo(
+  // The label follows the overlay's rule; memoised on the picks, not the hover, so it does not
+  // re-subscribe to frames on every mouse move.
+  const { kind: toolKind, method, picks } = state;
+  const anchor = useMemo(
     () =>
-      state.kind && live.results ? headline(state.kind, paramsOf(state), live.results, state.picks) : null,
-    [state, live],
+      picks.length > 0
+        ? labelAnchor({ ...INITIAL_TOOL, kind: toolKind, method, picks })
+        : selState
+          ? labelAnchor(selState)
+          : null,
+    [toolKind, method, picks, selState],
   );
+  const labelText =
+    drawing && state.kind && live.results
+      ? headline(state.kind, paramsOf(state), live.results, state.picks)
+      : !drawing && sel
+        ? headline(sel.kind, sel.params, sel.results, sel.points)
+        : null;
   const fullData = !draftLine && full && full.key === readyKey ? full.data : null;
   const previewData = preview && key && preview.key === key ? preview.data : null;
   const status: ProfileStatus = draftLine ? "draft" : (sel?.status ?? "draft");
@@ -309,7 +350,10 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
           status={status}
           error={draftLine ? null : (sel?.error ?? null)}
           onRetry={!draftLine && sel?.status === "failed" ? () => retry(sel) : undefined}
-          onSaveDistance={(a, b) => void persist({ kind: "distance", points: [a, b] })}
+          onSaveDistance={(a, b) =>
+            // From a saved profile the new distance is not selected, so the panel stays on it.
+            void persist({ kind: "distance", points: [a, b] }, { select: !!draftLine })
+          }
         />
       ) : undefined,
     minimap: line ? [{ kind: "line", a: [line.a.x, line.a.y], b: [line.b.x, line.b.y] }] : undefined,

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +15,7 @@ import { useToastStore } from "@/ui";
 import { HintBar } from "../HintBar";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "../seams";
 import { ENTRY, type CloudToolId } from "../tools";
-import type { FeatureContext, WorkspaceFeature } from "../types";
+import type { FeatureContext, WorkspaceFeature, WorkspaceViewState } from "../types";
 import type { ProfilePanelProps } from "@/clouds/measuring/ProfilePanel";
 import { useMeasureFeature } from "./measure";
 
@@ -81,13 +81,16 @@ function mount(active: CloudToolId, routes: FakeRoute[], wrap: (api: ApiClient) 
   const showTab = vi.fn();
   const restoreClipBox = vi.fn();
   let feature: WorkspaceFeature | null = null;
+  let setViewState: (v: WorkspaceViewState) => void = () => undefined;
   function Harness() {
+    const [viewState, setVs] = useState<WorkspaceViewState>("running");
+    setViewState = setVs;
     const ctx: FeatureContext = {
       projectId: PROJECT_ID,
       cloud: exampleCloud,
       maps: [],
       viewer: viewer.ref,
-      viewState: "running",
+      viewState,
       activeTool: active,
       search: "",
       seams,
@@ -114,7 +117,17 @@ function mount(active: CloudToolId, routes: FakeRoute[], wrap: (api: ApiClient) 
   renderWithProviders(<Harness />, { api: wrap(api) });
   const tool = () => feature!.tools!.find((x) => x.id === active)!;
   const tap = (pts: ReturnType<typeof pick>[]) => pts.forEach((p) => act(() => tool().onPick!(p)));
-  return { requests, viewer, seams, showTab, restoreClipBox, tool, tap, feature: () => feature! };
+  return {
+    requests,
+    viewer,
+    seams,
+    showTab,
+    restoreClipBox,
+    tool,
+    tap,
+    feature: () => feature!,
+    setViewState: (v: WorkspaceViewState) => setViewState(v),
+  };
 }
 
 const listRoute = (rows: () => unknown[]): FakeRoute => ({
@@ -123,6 +136,23 @@ const listRoute = (rows: () => unknown[]): FakeRoute => ({
   body: () => ({ items: rows() }),
 });
 const posts = (requests: { method: string }[]) => requests.filter((r) => r.method === "POST");
+const lastOverlay = (h: { setOverlay: { mock: { calls: unknown[][] } } }) =>
+  h.setOverlay.mock.calls.at(-1)![1] as { kind: string; points: { x: number; y: number }[] }[];
+const sectionAt = (y: number) => [
+  { x: E, y, z: 5, uncertainty_m: 0.02 },
+  { x: E + 12, y, z: 5, uncertainty_m: 0.02 },
+];
+const savedProfile = (id: string, status: string, y = N) => ({
+  ...base,
+  id,
+  kind: "profile",
+  name: `Section ${id}`,
+  status,
+  points: sectionAt(y),
+  params: { thickness_m: 0.2 },
+  results: {},
+});
+const profileBody = { s: [0, 1, 2], z: [5, 6, 5], rgb: null, count: 3, thickness_m: 0.2, length_m: 12 };
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
@@ -509,6 +539,164 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
       dropped = m.tool().onCancel!();
     });
     expect(dropped).toBe(false);
+  });
+
+  it("an armed tool with no picks shows the saved row: after Save the outline and its label stay", async () => {
+    const rows: unknown[] = [];
+    const m = mount("area", [
+      listRoute(() => rows),
+      {
+        method: "POST",
+        path: /\/measurements$/,
+        status: 201,
+        body: (r) => {
+          const b = r.body as object;
+          const row = {
+            ...base,
+            id: "a2",
+            kind: "area",
+            name: "Area 2",
+            status: "ready",
+            ...b,
+            results: { area_m2: 4 },
+          };
+          rows.push(row);
+          return row;
+        },
+      },
+    ]);
+    await screen.findByTestId("measure-hint");
+    m.tap([pick(E, N), pick(E + 2, N), pick(E + 2, N + 2), pick(E, N + 2)]);
+    act(() => m.tool().onCommit!());
+    await waitFor(() => expect(screen.getByTestId("measure-hint")).toHaveTextContent("0 vertices"));
+    await waitFor(() => expect(lastOverlay(m.viewer.h).map((x) => x.kind)).toContain("polygon"));
+    expect(screen.getByTestId("measure-label")).toHaveTextContent("4.00 m²");
+  });
+
+  it("choosing a row while a tool is armed draws that row", async () => {
+    const row = {
+      ...base,
+      id: "d5",
+      kind: "distance",
+      name: "Distance 5",
+      status: "ready",
+      points: [
+        { x: E, y: N, z: 0, uncertainty_m: 0.02 },
+        { x: E + 3, y: N + 4, z: 0, uncertainty_m: 0.02 },
+      ],
+      params: null,
+      results: { distance_3d: 5, distance_vertical: 0 },
+    };
+    const m = mount("distance", [listRoute(() => [row])]);
+    await userEvent.click(await screen.findByRole("button", { name: /Distance 5/ }));
+    await waitFor(() =>
+      expect(
+        lastOverlay(m.viewer.h)
+          .flatMap((x) => x.points)
+          .some((p) => p.x === E + 3 && p.y === N + 4),
+      ).toBe(true),
+    );
+    expect(screen.getByTestId("measure-label")).toBeInTheDocument();
+  });
+
+  it("Save as distance from a saved profile keeps the panel on that profile", async () => {
+    const m = mount("orbit", [
+      listRoute(() => [savedProfile("r1", "ready")]),
+      { method: "GET", path: /\/measurements\/r1\/profile$/, body: profileBody },
+      {
+        method: "POST",
+        path: /\/measurements$/,
+        status: 201,
+        body: {
+          ...base,
+          id: "d7",
+          kind: "distance",
+          name: "Distance 7",
+          status: "ready",
+          points: [],
+          params: null,
+          results: {},
+        },
+      },
+    ]);
+    await userEvent.click(await screen.findByRole("button", { name: /Section r1/ }));
+    await waitFor(() =>
+      expect(screen.getByTestId("profile-caption")).toHaveTextContent("Full resolution · 3 points"),
+    );
+    act(() =>
+      panelProps.last!.onSaveDistance(
+        { x: E + 1, y: N, z: 5, uncertainty_m: 0.1 },
+        { x: E + 4, y: N, z: 6, uncertainty_m: 0.1 },
+      ),
+    );
+    await waitFor(() =>
+      expect(m.seams.requestViewCapture).toHaveBeenCalledWith(
+        { kind: "cloud_measurement", id: "d7" },
+        "save",
+      ),
+    );
+    expect(screen.getByTestId("profile-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("profile-caption")).toHaveTextContent("Full resolution · 3 points");
+    expect(screen.getByRole("button", { name: /Section r1/ })).toHaveAttribute("aria-pressed", "true");
+    expect(m.restoreClipBox).not.toHaveBeenCalled();
+  });
+
+  it("puts the section slab back when the view restarts", async () => {
+    const m = mount("section", [listRoute(() => [])]);
+    await screen.findByTestId("measure-hint");
+    m.tap([pick(E, N, 5), pick(E + 12, N, 5)]);
+    await waitFor(() => expect(m.viewer.h.setClipBox).toHaveBeenCalledTimes(1));
+    act(() => m.setViewState("lost"));
+    expect(m.restoreClipBox).toHaveBeenCalledTimes(1);
+    act(() => m.setViewState("running"));
+    expect(m.viewer.h.setClipBox).toHaveBeenCalledTimes(2);
+    expect(m.viewer.h.setClipBox).toHaveBeenLastCalledWith(
+      expect.objectContaining({ yawDeg: 0 }),
+      "highlight_inside",
+    );
+  });
+
+  it("choosing a computing profile row while a section is drawn keeps the draft's preview", async () => {
+    const m = mount("section", [listRoute(() => [savedProfile("c1", "computing", N + 50)])]);
+    await screen.findByTestId("measure-hint");
+    m.tap([pick(E, N, 5), pick(E + 12, N, 5)]);
+    await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
+    await userEvent.click(screen.getByRole("button", { name: /Section c1/ }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(m.viewer.h.sampleSlab).toHaveBeenCalledTimes(1);
+    expect(panelProps.last?.line.a.y).toBe(N);
+    expect(panelProps.last?.data?.count).toBe(3);
+  });
+
+  it("a ready row whose stored profile cannot be read falls back to the preview", async () => {
+    const m = mount("orbit", [
+      listRoute(() => [savedProfile("r3", "ready", N + 20)]),
+      {
+        method: "GET",
+        path: /\/measurements\/r3\/profile$/,
+        status: 500,
+        body: errorBody("internal", "profile file missing"),
+      },
+    ]);
+    await userEvent.click(await screen.findByRole("button", { name: /Section r3/ }));
+    await waitFor(() =>
+      expect(m.viewer.h.sampleSlab).toHaveBeenCalledWith([E, N + 20, 5], [E + 12, N + 20, 5], 0.2, 300_000),
+    );
+    await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
+    expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("profile file missing");
+  });
+
+  it("Enter on an open bow-tie refuses without closing it, so the next click corrects it", async () => {
+    const m = mount("area", [listRoute(() => [])]);
+    await screen.findByTestId("measure-hint");
+    m.tap([pick(E, N), pick(E + 2, N + 2), pick(E + 2, N), pick(E, N + 2)]);
+    act(() => m.tool().onCommit!());
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0));
+    expect(screen.getByTestId("measure-hint")).toHaveTextContent("4 vertices");
+    expect(screen.getByTestId("measure-hint")).not.toHaveTextContent("closed");
+    expect(posts(m.requests)).toHaveLength(0);
+    m.tap([pick(E - 3, N + 5)]);
+    expect(screen.getByTestId("measure-hint")).toHaveTextContent("5 vertices");
   });
 
   it("arms nothing and draws no label outside the measure tools", async () => {
