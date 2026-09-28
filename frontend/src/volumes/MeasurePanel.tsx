@@ -1,26 +1,14 @@
-import { useEffect, useState } from "react";
-import type { GeoMap, MapRun, Surface, VolumeMeasurement } from "@contract/client";
+import { useState } from "react";
+import type { Surface, VolumeMeasurement } from "@contract/client";
 import { useApi } from "@/api/client";
-import { listMapRuns, listMaps } from "@/api/maps";
 import { calculateVolume, type VolumeMeasurementPatch } from "@/api/volumes";
 import { messageOf } from "@/api/errors";
-import { useProject } from "@/api/project";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
-import {
-  Button,
-  Checkbox,
-  Disclosure,
-  Field,
-  IconButton,
-  Input,
-  Pill,
-  Progress,
-  Select,
-  Switch,
-  toast,
-} from "@/ui";
-import { BASE_KIND_TEXT, PANEL_BASE_KINDS, groupRuns, type BaseKind } from "./model";
+import { Button, Field, Input, Pill, Progress, Select, toast } from "@/ui";
+import { AlignmentSection } from "./AlignmentSection";
+import { MasksSection } from "./MasksSection";
+import { BASE_KIND_TEXT, PANEL_BASE_KINDS, type BaseKind } from "./model";
 
 /**
  * The Measure tab (spec section 9): name, top surface, base, clutter masks and Calculate. Every
@@ -47,41 +35,19 @@ export function MeasurePanel({
   onChanged: () => void;
 }) {
   const api = useApi();
-  const { project } = useProject(projectId);
   const { job } = useTrackedJob(projectId, m.status === "calculating" ? m.job_id : null);
   const [name, setName] = useState(m.name);
   const [flatZ, setFlatZ] = useState(m.base.z != null ? String(m.base.z) : "");
-  const [buffer, setBuffer] = useState(String(m.masks.buffer_m));
-  const [maps, setMaps] = useState<GeoMap[]>([]);
-  const [runs, setRuns] = useState<MapRun[]>([]);
   // A saved change comes back as a new measurement: re-seed the drafts during render (not in an
   // effect) so the fields follow the stored values.
   // (Revert to last calculated inputs is such a change too.)
-  const stored = { name: m.name, z: m.base.z, buffer: m.masks.buffer_m };
+  const stored = { name: m.name, z: m.base.z };
   const [seen, setSeen] = useState(stored);
-  if (seen.name !== stored.name || seen.z !== stored.z || seen.buffer !== stored.buffer) {
+  if (seen.name !== stored.name || seen.z !== stored.z) {
     setSeen(stored);
     setName(stored.name);
     setFlatZ(stored.z != null ? String(stored.z) : "");
-    setBuffer(String(stored.buffer));
   }
-
-  useEffect(() => {
-    let cancelled = false;
-    listMaps(api, projectId)
-      .then(async (all) => {
-        const ready = all.filter((x) => x.status === "ready" && x.crs_wkt);
-        const perMap = await Promise.all(ready.map((x) => listMapRuns(api, projectId, x.id)));
-        if (!cancelled) {
-          setMaps(ready);
-          setRuns(perMap.flat());
-        }
-      })
-      .catch(() => undefined); // masking is optional: without maps the list is simply empty
-    return () => {
-      cancelled = true;
-    };
-  }, [api, projectId]);
 
   // The top must stay in the polygon's CRS; the server refuses a top in another one.
   const sameCrs = surfaces.filter((s) => s.epsg === top.epsg && s.crs_wkt === top.crs_wkt);
@@ -91,18 +57,12 @@ export function MeasurePanel({
     .filter((s) => s.id !== top.id && (s.crs_wkt == null) === (top.crs_wkt == null))
     .sort((a, b) => (b.captured_on ?? "").localeCompare(a.captured_on ?? ""));
   const baseSurface = surfaces.find((s) => s.id === m.base.surface_id) ?? null;
-  const groups = groupRuns(runs, top.map_id, baseSurface?.map_id ?? null);
-  const mapName = (id: string) => maps.find((x) => x.id === id)?.name ?? "map";
   const calculating = m.status === "calculating";
 
   const setBase = (kind: BaseKind) => {
     if (kind === "flat") onSave({ base: { kind, z: m.base.z ?? top.z_min ?? 0 } });
     else if (kind === "surface") onSave({ base: { kind, surface_id: bases[0]?.id ?? null } });
     else onSave({ base: { kind } });
-  };
-  const toggleRun = (id: string) => {
-    const ids = m.masks.detection_run_ids;
-    onSave({ masks: { detection_run_ids: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id] } });
   };
   const calculate = () =>
     calculateVolume(api, projectId, m.id)
@@ -142,6 +102,11 @@ export function MeasurePanel({
               {BASE_KIND_TEXT[k]}
             </option>
           ))}
+          {!PANEL_BASE_KINDS.includes(m.base.kind) && (
+            <option value={m.base.kind} disabled>
+              {BASE_KIND_TEXT[m.base.kind]}
+            </option>
+          )}
         </Select>
       </Field>
       {m.base.kind === "flat" && (
@@ -185,127 +150,16 @@ export function MeasurePanel({
               ))}
             </Select>
           </Field>
-          <p className="text-sm text-muted">
-            {m.alignment.stable_polygon
-              ? "Stable area drawn: it checks that the surveys agree on ground that did not change."
-              : "Draw a stable area (S) on ground that did not change between the surveys."}
-          </p>
-          {m.alignment.measured && (
-            <p className="text-xs tabular-nums text-muted">
-              Median dZ {m.alignment.measured.median_dz.toFixed(3)} m · σ{" "}
-              {m.alignment.measured.sigma.toFixed(3)} m · tilt {m.alignment.measured.tilt_mm_per_m.toFixed(2)}{" "}
-              mm/m
-            </p>
-          )}
-          <Switch
-            label="Correct vertical shift"
-            checked={m.alignment.apply_shift}
-            disabled={!m.alignment.stable_polygon}
-            onChange={(on) => onSave({ alignment: { apply_shift: on } })}
-          />
+          <AlignmentSection measurement={m} onSave={onSave} />
         </div>
       )}
-      <Disclosure
-        label={`Machines and exclusions (${m.masks.detection_run_ids.length + m.masks.exclusion_polygons.length})`}
-        defaultOpen
-      >
-        <div className="flex flex-col gap-3 pt-2">
-          {groups.length === 0 && (
-            <p className="text-sm text-muted">No finished detection runs on maps with coordinates.</p>
-          )}
-          {groups.map((g) => (
-            <fieldset key={g.title} className="flex flex-col gap-1.5">
-              <legend className="mb-1 text-xs font-medium text-muted">{g.title}</legend>
-              {g.runs.map((r) => (
-                <Checkbox
-                  key={r.id}
-                  checked={m.masks.detection_run_ids.includes(r.id)}
-                  onChange={() => toggleRun(r.id)}
-                  label={`${mapName(r.map_id)} · ${r.model_name ?? r.provider ?? "run"} · ${r.created_at.slice(0, 10)} · ${r.detection_count}`}
-                />
-              ))}
-            </fieldset>
-          ))}
-          <Field label="Buffer around machines (m)" htmlFor="volume-buffer">
-            <Input
-              id="volume-buffer"
-              type="number"
-              min={0}
-              max={5}
-              step={0.1}
-              value={buffer}
-              onChange={(e) => setBuffer(e.target.value)}
-              onBlur={() =>
-                buffer !== "" &&
-                Number(buffer) !== m.masks.buffer_m &&
-                onSave({ masks: { buffer_m: Number(buffer) } })
-              }
-            />
-          </Field>
-          {project && (
-            <Disclosure label="Classes to mask">
-              <div className="flex flex-col gap-1.5 pt-2">
-                {project.classes.map((c) => {
-                  const on = m.masks.class_ids === null || m.masks.class_ids.includes(c.id);
-                  const all = project.classes.map((x) => x.id);
-                  const next = (checked: boolean) => {
-                    const current = m.masks.class_ids ?? all;
-                    const ids = checked ? [...current, c.id] : current.filter((x) => x !== c.id);
-                    return ids.length === all.length ? null : ids;
-                  };
-                  return (
-                    <Checkbox
-                      key={c.id}
-                      label={c.name}
-                      checked={on}
-                      onChange={(e) => onSave({ masks: { class_ids: next(e.target.checked) } })}
-                    />
-                  );
-                })}
-              </div>
-            </Disclosure>
-          )}
-          {m.masks.exclusion_polygons.length > 0 && (
-            <ul className="flex flex-col gap-1.5" aria-label="Exclusions">
-              {m.masks.exclusion_polygons.map((e, i) => (
-                <li key={e.id} className="flex items-center gap-2 text-sm">
-                  <span className="flex-1">Exclusion {i + 1}</span>
-                  <Select
-                    dense
-                    aria-label={`Exclusion ${i + 1} mode`}
-                    wrapperClassName="w-28"
-                    value={e.mode}
-                    onChange={(ev) =>
-                      onSave({
-                        masks: {
-                          exclusion_polygons: m.masks.exclusion_polygons.map((x) =>
-                            x.id === e.id ? { ...x, mode: ev.target.value as "patch" | "exclude" } : x,
-                          ),
-                        },
-                      })
-                    }
-                  >
-                    <option value="patch">Patch</option>
-                    <option value="exclude">Exclude</option>
-                  </Select>
-                  <IconButton
-                    size="sm"
-                    icon="trash"
-                    label={`Delete exclusion ${i + 1}`}
-                    onClick={() =>
-                      onSave({
-                        masks: {
-                          exclusion_polygons: m.masks.exclusion_polygons.filter((x) => x.id !== e.id),
-                        },
-                      })
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Disclosure>
+      <MasksSection
+        projectId={projectId}
+        measurement={m}
+        top={top}
+        baseSurface={baseSurface}
+        onSave={onSave}
+      />
       {calculating ? (
         <div className="flex flex-col gap-1.5">
           <Pill tone="neutral" live>
