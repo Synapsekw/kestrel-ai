@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { PIN_CAP } from "@/api/cloudFindings";
-import { messageOf } from "@/api/errors";
-import { deleteFinding, patchFinding, type Finding, type FindingPatch } from "@/api/findings";
+import { codeOf, messageOf } from "@/api/errors";
+import { deleteFinding, fetchFinding, patchFinding, type Finding, type FindingPatch } from "@/api/findings";
 import { pushLog } from "@/app/diagnostics";
 import type { CloudPick } from "@/clouds/CloudViewer";
 import { parseFinding } from "@/clouds/jump";
@@ -22,6 +22,7 @@ import { formatFindingNumber } from "@/findings/format";
 import { useInspectorCommands } from "@/findings/inspectorStore";
 import { useFindingKeys } from "@/findings/useFindingKeys";
 import { useProjectTypes } from "@/findings/useProjectTypes";
+import { useChangesStore } from "@/store/changes";
 import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { Button, Dialog, severityOf, toast, useSeverityScale } from "@/ui";
 import { isTypingTarget } from "@/ui/keymap";
@@ -111,8 +112,13 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
     }
   }, [dropped]);
   // A `?finding=` arrival outside the loaded (capped) pins: its pin is added, so it is drawn and its
-  // callout shows (C-G Task 6 finding). Dropped on delete; keyed by cloud.
-  const [arrived, setArrived] = useState<{ cloudId: string; pin: CloudPin } | null>(null);
+  // callout shows (C-G Task 6 finding). Keyed by cloud. Once a ready list holds it, the list owns it
+  // (dropped here); otherwise each findings revision re-reads it, so edits reach it and a delete by
+  // any path drops it (the effect below).
+  const [arrived, setArrived] = useState<{ cloudId: string; pin: CloudPin; rev: number } | null>(null);
+  const findingsRevision = useChangesStore((s) => s.findingsRevision);
+  if (arrived && listedPins.status === "ready" && listed.some((p) => p.id === arrived.pin.id))
+    setArrived(null);
   const arrivedPin = arrived && arrived.cloudId === cloud.id ? arrived.pin : null;
   const shown = useMemo(() => {
     const over = withPending(listed, livePending);
@@ -160,6 +166,8 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   const onMoved = useCallback(
     (id: string, p: Vec3, u: number | null, normal: Vec3 | null) => {
       addPending((prev) => ({ ...prev, moved: new Map(prev.moved).set(id, { p, u, normal }) }));
+      // The added arrival is not in `listed`, so `withPending` does not move it.
+      setArrived((a) => (a && a.pin.id === id ? { ...a, pin: { ...a.pin, p, u, normal } } : a));
       reload();
     },
     [addPending, reload],
@@ -177,11 +185,37 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   const onArrive = useCallback(
     (id: string, f: Finding) => {
       const pin = toCloudPin(f, viewsRef.current.get(id));
-      if (pin) setArrived({ cloudId: cloud.id, pin });
+      if (pin) setArrived({ cloudId: cloud.id, pin, rev: useChangesStore.getState().findingsRevision });
       select(id);
     },
     [cloud.id, select],
   );
+  const arrivedId = arrived?.pin.id ?? null;
+  const arrivedRev = arrived?.rev ?? null;
+  useEffect(() => {
+    if (!arrivedId || arrivedRev === null || findingsRevision === arrivedRev) return;
+    let cancelled = false;
+    const keep = (pin: CloudPin | null) =>
+      setArrived((a) =>
+        a && a.pin.id === arrivedId ? (pin ? { ...a, pin, rev: findingsRevision } : null) : a,
+      );
+    fetchFinding(api, projectId, arrivedId)
+      .then((f) => {
+        if (cancelled) return;
+        const a = f.anchor;
+        keep(
+          a.kind === "cloud" && a.cloud_id === cloud.id ? toCloudPin(f, viewsRef.current.get(f.id)) : null,
+        );
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        if (codeOf(e) === "not_found") keep(null);
+        else pushLog(`pins: could not re-read ${arrivedId}: ${messageOf(e, String(e))}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, cloud.id, arrivedId, arrivedRev, findingsRevision]);
   useFindingArrival({
     projectId,
     routeCloudId: cloud.id,
@@ -219,17 +253,12 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
       const id = selectedPin.id;
       try {
         // G5/T10-1: a known-id write registers its echo and bumps `findingsRevision` itself.
-        const f = await ownFindingsWrite([id], () => patchFinding(api, projectId, id, patch), {
-          bumpOnError: true,
-        });
-        // An arrived pin outside the list is not refetched: take the answer.
-        const pin = arrivedPin?.id === id ? toCloudPin(f, viewsRef.current.get(id)) : null;
-        if (pin) setArrived({ cloudId: cloud.id, pin });
+        await ownFindingsWrite([id], () => patchFinding(api, projectId, id, patch), { bumpOnError: true });
       } catch (e) {
         toast("danger", messageOf(e, "could not update the finding"));
       }
     },
-    [api, projectId, selectedPin, arrivedPin, cloud.id],
+    [api, projectId, selectedPin],
   );
   const live = () => reviewKeysLive(viewer.current?.navMode() ?? "orbit");
   useFindingKeys(selectedPin !== null && !tool.draft && !tool.moving, scale.length, {
