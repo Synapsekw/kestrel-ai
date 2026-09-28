@@ -236,6 +236,13 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 
 ### I/M/C wave (opened 2026-09-27)
 
+- **CI on `main` is red intermittently** (about 15 of 27 pushes, docs-only commits included). These are flakes on the slow runner, not code:
+  - schemathesis `ReadTimeout` 10 s on two new routes;
+  - `test_project_agent_e2e` `PermissionError`;
+  - `MapWorkspace.test` key cases;
+  - `e2e/query.spec.ts:30` `selectOption`.
+  The local full gate on `7c1200b` is green. Fix first next session (details in `imc-common/HANDOVER.md`).
+
 - **12 units not built yet:**
   - Images: I-FW, I-E.
   - Maps: M-W3, M-W4, M-W5, M-W6, M-X.
