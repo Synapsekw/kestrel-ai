@@ -61,7 +61,7 @@ export function LayersPanel({ rows, notInCompare, projectId }: LayersPanelProps)
         id: "drawing",
         label: "Import drawing",
         icon: "drawing",
-        onSelect: () => openAddData(),
+        onSelect: () => openAddData("drawing"),
       },
     ] satisfies MenuItem[]
   ).map((item) => ({

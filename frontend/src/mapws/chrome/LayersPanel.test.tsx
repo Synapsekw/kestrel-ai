@@ -1,5 +1,6 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { useAddData } from "@/app/addDataStore";
 import { registerLayerKind, type LayerRow } from "../layers/layerRegistry";
 import { renderInWorkspace } from "../test/harness";
 import { LayersPanel } from "./LayersPanel";
@@ -100,5 +101,17 @@ describe("LayersPanel (spec §5.2)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Collapse layers" }));
     expect(stores.workspace.getState().layersCollapsed).toBe(true);
     expect(screen.queryByText("Orthomosaic sep")).toBeNull();
+  });
+
+  it("opens Add data straight on the Drawing import from Import drawing (R-P5.3)", () => {
+    useAddData.setState({ projectId: "p1", open: false, tile: null });
+    try {
+      setup([row("a", "2026-04-15")]);
+      fireEvent.click(screen.getByRole("button", { name: "Add a layer" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Import drawing/ }));
+      expect(useAddData.getState()).toMatchObject({ open: true, tile: "drawing" });
+    } finally {
+      useAddData.setState({ projectId: null, open: false, tile: null });
+    }
   });
 });
