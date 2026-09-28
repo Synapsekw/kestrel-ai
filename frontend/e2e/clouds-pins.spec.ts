@@ -286,3 +286,53 @@ test("idle: 0 animation frames and no running animation 1 s after settle with 50
   console.info(`pins pass with 50 pins: ${pass.toFixed(3)} ms`);
   expect(rows).toHaveLength(50);
 });
+
+// C-G final review m7: findings that answer after the view has settled are placed without a camera
+// move (the layer asks for one frame), and the loop idles again after it.
+test("findings that answer after settle get their pin without a camera move, then the loop idles", async ({
+  page,
+}) => {
+  await routeProjectWithType(page);
+  const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 });
+  await routeCloud(page, grid, [243500, 3178000, 0, 243600, 3178100, 2]);
+  const late = "f0000000-0000-4000-8000-000000000077";
+  await routeFindings(page, [finding(late, 77, { x: 243550, y: 3178050, z: 1 })]);
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(
+    (u) => u.pathname === `/api/v1/projects/${P}/findings`,
+    async (route) => {
+      if (route.request().method() === "GET") await held;
+      return route.fallback();
+    },
+  );
+  await page.addInitScript(() => {
+    const w = window as unknown as { __frames: number };
+    const raf = window.requestAnimationFrame.bind(window);
+    w.__frames = 0;
+    window.requestAnimationFrame = (cb) => {
+      w.__frames++;
+      return raf(cb);
+    };
+  });
+  const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await engineIdle(page);
+  expect(await pinsDiag(page)).toEqual([]);
+  const pose = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose());
+  release();
+  await expect
+    .poll(async () =>
+      (await pinsDiag(page)).map((p) => ({
+        id: p.id,
+        placed: p.state !== "hidden" && Number.isFinite(p.x) && Number.isFinite(p.y),
+      })),
+    )
+    .toEqual([{ id: late, placed: true }]);
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose())).toEqual(pose);
+  await engineIdle(page);
+  const before = await frames();
+  await page.waitForTimeout(1_000);
+  expect(await frames()).toBe(before);
+});

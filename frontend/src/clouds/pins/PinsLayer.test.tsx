@@ -89,7 +89,9 @@ describe("PinsLayer", () => {
   it("follows frames by DOM writes, without a React render per frame", () => {
     const v = fakeViewer();
     const { onRender } = mount(v, [pin("a", at(0, 0, 0))]);
-    expect(v.requestRender).toHaveBeenCalledTimes(1);
+    // the mount's own request and the arriving pins' (m7), in one commit: the engine schedules one
+    // frame for both (a requestRender while a frame is pending is a no-op)
+    expect(v.requestRender).toHaveBeenCalledTimes(2);
     const renders = onRender.mock.calls.length;
     for (let i = 0; i < 30; i++) v.emit(frameCamera(at(i, -100, 30)));
     expect(onRender.mock.calls.length).toBe(renders);
@@ -117,6 +119,22 @@ describe("PinsLayer", () => {
     update({ pins: [pin("a", at(0, 0, 0)), pin("b", at(1, 0, 0))] });
     expect(v.occlusion).toHaveBeenCalledTimes(1);
     expect(pinEl("b").dataset.state).toBe("back");
+  });
+
+  // C-G final review m7: findings that answer after settle were set but never projected, since no
+  // frame came until the camera moved; the layer now asks for one (never from the settle listener).
+  it("asks for a frame when pins arrive or move while settled, and not when nothing changed", () => {
+    const v = fakeViewer();
+    const { update } = mount(v, []);
+    v.emit(south);
+    v.requestRender.mockClear();
+    update({ pins: [pin("late", at(0, 0, 0))] });
+    expect(v.requestRender).toHaveBeenCalledTimes(1);
+    v.requestRender.mockClear();
+    update({ pins: [pin("late", at(0, 0, 0))] });
+    expect(v.requestRender).not.toHaveBeenCalled();
+    v.settle();
+    expect(v.requestRender).not.toHaveBeenCalled();
   });
 
   it("runs occlusion again for a pin moved while settled, at its new position", () => {
