@@ -1,49 +1,56 @@
-import { test, expect, type Page } from "@playwright/test";
-import { emptyCameras, routeCameras } from "./fixtures/cameras";
+import { test, expect, type Page, type Request } from "@playwright/test";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
+import {
+  P,
+  SWIFTSHADER,
+  clickCanvas,
+  countFrames,
+  diagnosticsOn,
+  runningAnimations,
+  viewerSettled,
+  ws,
+} from "./fixtures/cloudWorkspace";
+import { serveCloudWorld } from "./fixtures/cloudWorld";
 
-const P = "7f1c2e3a-1111-4000-8000-000000000001";
+// S1's point-cloud flows on C's full-bleed workspace (C-G Task 2). WebGL runs on SwiftShader for
+// WebGL only (vault/decisions/2026-09-26-gotcha-swiftshader-compositing.md); every wait that needs
+// the viewer allows 20 s, the time its code took to arrive through the dev server on the CI runner.
+// Cameras are always routed empty (C-L1's `emptyCameras`, through `serveCloudWorld`) wherever a test
+// opens a cloud without caring about cameras: the Prism example set draws a frustum and a warn-point
+// glyph that can land a stray frame in an idle check or a stray point in a colour sample.
+test.use(SWIFTSHADER);
+test.beforeEach(async ({ page }) => diagnosticsOn(page));
 
-// WebGL in headless Chromium needs SwiftShader asked for explicitly (plan decision 13), and for
-// WebGL only: `swiftshader-webgl`, not `swiftshader`, which also moves the compositor and raster onto
-// SwiftShader and starved the CI runner's 4 vCPUs (vault/decisions/2026-09-26-gotcha-swiftshader-compositing.md).
-test.use({ launchOptions: { args: ["--use-angle=swiftshader-webgl", "--enable-unsafe-swiftshader"] } });
-
-async function viewerStats(page: Page) {
-  return page.evaluate(() => window.__kestrelCloudViewer?.stats() ?? null);
-}
+const CORS = { "Access-Control-Allow-Origin": "*" };
+const grid = (step = 1) => buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step }));
 
 /**
- * The viewer's code has loaded (CloudsScreen -> CloudViewer -> three, potree-core) and it has drawn
- * the cloud with nothing left loading. On the CI runner that code alone took over 5 s to arrive
- * through the dev server, so every wait that needs the viewer allows 20 s. `nodesLoading === 0` on
- * its own is no such signal: the hook reports 0 from the first frame, before the octree is even asked
- * for, and a pick made then hits nothing.
+ * The page's network: requests sent and not yet answered, and when that last changed. A workspace
+ * fetch that answers late wakes the render loop (C-L1's cameras layer calls setOverlay, which asks
+ * for a frame, even for an empty set), so an idle window may start only once the network is quiet.
  */
-async function viewerSettled(page: Page) {
-  await expect
-    .poll(async () => (await viewerStats(page))?.settledMs ?? null, { timeout: 20_000 })
-    .not.toBeNull();
-  await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
-  // Spec §18: EDL moves the cloud to layer 1; the S1 picks must still work with it on. SwiftShader
-  // makes F's Auto effects reduced, so it is forced on here (plan Ruling 14).
-  await page.evaluate(() => window.__kestrelCloudViewer?.setEdl(true));
+function trackNetwork(page: Page) {
+  const net = { open: new Set<Request>(), lastChange: Date.now() };
+  const on = (r: Request) => {
+    net.open.add(r);
+    net.lastChange = Date.now();
+  };
+  const off = (r: Request) => {
+    net.open.delete(r);
+    net.lastChange = Date.now();
+  };
+  page.on("request", on);
+  page.on("requestfinished", off);
+  page.on("requestfailed", off);
+  return net;
 }
 
-/** The fixture cloud, and a list holding only it: the mock's example cloud has other bounds. Cameras
- * are routed empty (C-L1): without this, the always-mounted cameras feature falls through to the
- * Prism mock's example `CloudCameraSet`, which draws a frustum and a warn-point glyph that can land
- * a stray render frame inside this file's idle-frame checks. */
-async function routeCloud(page: Page) {
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
-  await routeCameras(page, P, emptyCameras());
+/** Spec §18: EDL moves the cloud to layer 1 and S1's picks must still work with it on. SwiftShader
+ * makes Auto effects reduced, so it is forced on (plan Ruling 14), as S1's own settle helper did. */
+async function edlOn(page: Page) {
+  await page.evaluate(() => window.__kestrelCloudViewer!.setEdl(true));
 }
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("kestrel.diagnostics", "1"));
-});
 
 test("WebGL runs on SwiftShader, but the page's own compositing and raster do not", async ({ browser }) => {
   // `--use-angle=swiftshader` moved Chromium's compositor and raster onto SwiftShader as well: every
@@ -65,33 +72,31 @@ test("WebGL runs on SwiftShader, but the page's own compositing and raster do no
   ).not.toEqual({ glRenderer: expect.stringContaining("SwiftShader"), gpuCompositing: "enabled" });
 });
 
-test("the viewer renders the cloud and its canvas fills the centre", async ({ page }) => {
-  const files = buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 }));
-  await routeCloud(page);
-  const served = await routeOctree(page, CLOUD, files);
-  await page.addInitScript(() => {
-    const w = window as unknown as { __frames: number };
-    const raf = window.requestAnimationFrame.bind(window);
-    w.__frames = 0;
-    window.requestAnimationFrame = (cb) => {
-      w.__frames++;
-      return raf(cb);
-    };
-  });
+test("the workspace draws the cloud full-bleed, picks it, and stops rendering once settled", async ({
+  page,
+}) => {
+  const frames = await countFrames(page);
+  const net = trackNetwork(page);
+  await serveCloudWorld(page);
+  // routed again (the later route wins) only to read back the requests it served
+  const served = await routeOctree(page, CLOUD, grid());
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
-  await expect
-    .poll(async () => (await viewerStats(page))?.numVisiblePoints ?? 0, { timeout: 20_000 })
-    .toBeGreaterThan(0);
-  await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
-  await page.evaluate(() => window.__kestrelCloudViewer!.setEdl(true));
+  await viewerSettled(page);
+  expect(await frames(), "frames were counted while the cloud loaded").toBeGreaterThan(0);
+  await edlOn(page);
   expect(await page.evaluate(() => window.__kestrelCloudViewer!.edl())).toEqual({
     on: true,
     rendersToTarget: false,
   });
-  expect(served).toContain("hierarchy.bin bytes=0-21");
-  const centre = await page.getByTestId("cloud-centre").boundingBox();
-  const canvas = await page.getByTestId("cloud-canvas").boundingBox();
-  expect(canvas).toEqual(centre);
+  expect(served).toContain("hierarchy.bin bytes=0-21"); // S1's Range read of the hierarchy is unchanged
+  const w = ws(page);
+  expect(await w.canvas.boundingBox()).toEqual(await w.viewport.boundingBox());
+  // full-bleed (spec §6): the viewport runs from the app's side rail to the window's right and bottom
+  // edges, and the project tabs hide here (F §5.2)
+  const vp = (await w.viewport.boundingBox())!;
+  const win = page.viewportSize()!;
+  expect([vp.x + vp.width, vp.y + vp.height]).toEqual([win.width, win.height]);
+  await expect(page.getByRole("tab", { name: /^Point clouds/ })).toHaveCount(0);
   const colours = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
   expect(colours.red / colours.total).toBeGreaterThan(0.01);
   expect(colours.green / colours.total).toBeGreaterThan(0.01);
@@ -100,23 +105,33 @@ test("the viewer renders the cloud and its canvas fills the centre", async ({ pa
   expect(pick).not.toBeNull();
   expect(pick!.x).toBeGreaterThan(243500);
   expect(pick!.uncertainty_m).toBeGreaterThan(0);
-  // settled and untouched, the render loop stops (idle.ts): no frame is asked for a second later
-  const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
-  await page.waitForTimeout(1_200); // IDLE_AFTER_MS past the last pick's render
+  await page.mouse.move(0, 0); // no hover pick keeps the loop alive
+  // Settled and untouched: the loop stops (idle.ts) and no CSS animation runs, the pins layer
+  // included. S1 waited a fixed 1.2 s here and flaked once under batch load: a workspace fetch that
+  // answers late wakes the loop for IDLE_AFTER_MS (1 s) — a cameras answer held back into that window
+  // put 44 frames in it. So the window opens on a real condition instead: nothing in flight and no
+  // request sent or answered for IDLE_AFTER_MS plus a margin, so every wake-up has run its course.
+  await expect
+    .poll(() => net.open.size === 0 && Date.now() - net.lastChange >= 1_200, {
+      message: "the network is quiet for IDLE_AFTER_MS + 200 ms",
+      timeout: 20_000,
+    })
+    .toBe(true);
   const before = await frames();
   await page.waitForTimeout(1_000);
   expect(await frames()).toBe(before);
+  expect(await runningAnimations(page)).toEqual([]);
 });
 
 test("a missing 3D view copy says so instead of a blank canvas", async ({ page }) => {
-  await routeCloud(page);
+  await serveCloudWorld(page);
   await page.route(
     (u) => u.pathname.includes(`/pointclouds/${CLOUD}/octree/`),
     (route) =>
       route.fulfill({
         status: 404,
         contentType: "application/json",
-        headers: { "Access-Control-Allow-Origin": "*" },
+        headers: CORS,
         body: JSON.stringify({
           error: {
             code: "octree_missing",
@@ -134,7 +149,6 @@ test("a missing 3D view copy says so instead of a blank canvas", async ({ page }
   });
 });
 
-const CORS = { "Access-Control-Allow-Origin": "*" };
 const job = (state: string, type = "pointcloud_import", result: unknown = null) => ({
   id: "j0000000-9999-4000-8000-000000000001",
   project_id: P,
@@ -161,9 +175,11 @@ const admission = (ok: boolean) => ({
     : "This cloud needs about 9.9 GB of free memory; 4.0 GB is free. Close other programs and try again.",
 });
 
-test("import: inspect, a refusal, then an admissible file goes importing then ready", async ({ page }) => {
+test("import from the empty workspace: a refusal, then an admissible file goes importing then ready", async ({
+  page,
+}) => {
   let list: unknown[] = [];
-  // The job finishes only after the test has seen the row importing: finishing on a poll count let
+  // The job finishes only after the test has seen the card importing: finishing on a poll count let
   // a slow page fetch the list after the job had already succeeded, so "importing" was never shown.
   let importingSeen = false;
   await page.route(
@@ -223,14 +239,11 @@ test("import: inspect, a refusal, then an admissible file goes importing then re
     },
   );
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
-  await routeOctree(
-    page,
-    CLOUD,
-    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
-  );
+  await routeOctree(page, CLOUD, grid(2));
 
   await page.goto(`/p/${P}/clouds`);
-  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page.getByText("Import a LAS or LAZ point cloud")).toBeVisible(); // S1's empty-state copy
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("LAS or LAZ file").fill("D:\\clouds\\huge.las");
   await expect(dialog).toContainText(
@@ -240,40 +253,36 @@ test("import: inspect, a refusal, then an admissible file goes importing then re
   await dialog.getByLabel("LAS or LAZ file").fill("D:\\clouds\\site.laz");
   await expect(dialog).toContainText("10 201 points");
   await dialog.getByRole("button", { name: "Import" }).click();
+  // the importing cloud is a centred glass card with the job's progress (spec §6, non-ready states)
   await expect(page.getByTestId("cloud-importing")).toContainText("Building the 3D view copy…");
   importingSeen = true;
-  await expect(page.getByRole("toolbar", { name: "Point cloud tools" })).toBeVisible({ timeout: 20_000 });
+  await expect(ws(page).palette).toBeVisible({ timeout: 20_000 });
+  await expect(ws(page).picker()).toBeVisible();
 });
 
-test("view: budget and colour switches", async ({ page }) => {
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
-  await routeOctree(
-    page,
-    CLOUD,
-    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
-  );
+test("cloud panel: the point budget is remembered and Elevation shows its range", async ({ page }) => {
+  await serveCloudWorld(page, { octree: grid(2) });
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
-  const budget = page.getByRole("slider", { name: "Point budget" });
-  await budget.focus();
-  await budget.press("End");
+  const w = ws(page);
+  await w.budget.focus();
+  await w.budget.press("End"); // the last stop: 8 M
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("kestrel.clouds.pointBudget")))
     .toBe("8000000");
-  await page.getByRole("radio", { name: "Elevation" }).click();
-  await expect(page.getByLabel("Lowest")).toHaveValue("0.02");
+  await w.colour("Elevation").click();
+  await expect(w.colour("Elevation")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel("Lowest")).toHaveValue("0.02"); // the cloud's p1
+  await expect(page.getByText("0.0 m", { exact: true })).toBeVisible(); // the ramp's range in metres
+  await expect(page.getByText("2.0 m", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.getByLabel("Lowest")).toHaveValue("0.02");
+  await w.colour("RGB").click();
+  await expect(page.getByText("True colour")).toBeVisible();
 });
 
-test("export LAZ ends with a toast that reveals the folder", async ({ page }) => {
+test("export LAZ from the Details dialog ends with a toast that reveals the folder", async ({ page }) => {
   const posts: unknown[] = [];
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
-  await routeOctree(
-    page,
-    CLOUD,
-    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
-  );
+  await serveCloudWorld(page, { octree: grid(2) });
   const done = job("succeeded", "pointcloud_export", {
     folder: "exports/2026-09-24_101500",
     laz: "cloud-fixture-cloud.laz",
@@ -298,14 +307,41 @@ test("export LAZ ends with a toast that reveals the folder", async ({ page }) =>
     (route) => route.fulfill({ contentType: "application/json", headers: CORS, body: JSON.stringify(done) }),
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
-  await page.getByRole("button", { name: /^Point cloud: / }).click();
+  await ws(page).picker().click();
   await page.getByRole("button", { name: "Details…" }).click();
-  await page.getByRole("button", { name: "Export LAZ" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Export LAZ" }).click();
   await expect.poll(() => posts.length).toBe(1);
   expect(posts[0]).toEqual({ format: "laz", include_measurements: true });
   await expect(page.getByText("LAZ export finished")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("button", { name: "Show folder" })).toBeVisible();
 });
+
+test("measure a distance with two picks, save it with Enter, copy the CSV", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const world = await serveCloudWorld(page);
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  const w = ws(page);
+  await page.keyboard.press("l");
+  await expect(w.tool("Distance")).toHaveAttribute("aria-pressed", "true");
+  await clickCanvas(page, 0, 0);
+  await clickCanvas(page, 80, 0);
+  await expect(w.hint).toContainText(/\d+(\.\d+)?\s*(m|cm|mm)\b/); // the live result
+  await expect(w.readout).toContainText("EPSG:32639");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => world.measurementPosts.length).toBe(1);
+  expect(world.measurementPosts[0]).toMatchObject({ kind: "distance" });
+  expect((world.measurementPosts[0] as { points: unknown[] }).points).toHaveLength(2);
+  await w.measurementsTab.click();
+  await expect(w.inspectorPanel).toContainText("Distance 1");
+  await w.inspectorPanel.getByRole("button", { name: "Copy all as CSV" }).click();
+  const header = (await page.evaluate(() => navigator.clipboard.readText())).split("\r\n")[0];
+  expect(header.startsWith("id,name,kind,note,")).toBe(true);
+  expect(header.split(",")).toEqual(expect.arrayContaining(["vertex_count", "geometry_wkt", "area_m2"]));
+});
+
+// --- the map <-> 3D jumps (S1). M-X owns `mapRoutes` and the two tests that start on the map (IMC
+// reconciliation item 8): this block is S1's, copied verbatim from main; M-X edits it by name. ---
 
 const MAP = "a0000000-6666-4000-8000-000000000009";
 const RUN = "r0000000-7777-4000-8000-000000000009";
@@ -455,6 +491,7 @@ test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor 
     .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
     .toContain("pin");
   await viewerSettled(page);
+  await edlOn(page);
   const down = await page.evaluate(
     ([x, y]) => window.__kestrelCloudViewer!.pickDown(x, y, 2),
     [spot.x, spot.y],
@@ -475,40 +512,67 @@ test("right-click on the map opens that spot in 3D; a spot outside the cloud say
   await expect(page.getByText("This spot is outside the cloud")).toBeVisible({ timeout: 20_000 });
 });
 
+// --- colour modes (C-V1) ---
+
 test("colour modes: Intensity and Class are off for a cloud without those attributes", async ({ page }) => {
-  await routeCloud(page);
-  await routeOctree(
-    page,
-    CLOUD,
-    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
-  );
+  await serveCloudWorld(page, { octree: grid(2) });
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
-  await expect(page.getByRole("radio", { name: "RGB" })).toBeEnabled();
-  await expect(page.getByRole("radio", { name: "Elevation" })).toBeEnabled();
-  await expect(page.getByRole("radio", { name: "Intensity" })).toBeDisabled();
-  await expect(page.getByRole("radio", { name: "Class" })).toBeDisabled();
+  await edlOn(page);
+  const w = ws(page);
+  await expect(w.colour("RGB")).toBeEnabled();
+  await expect(w.colour("Elevation")).toBeEnabled();
+  await expect(w.colour("Intensity")).toBeDisabled();
+  await expect(w.colour("Class")).toBeDisabled();
   await expect(page.getByText("This cloud has no intensity or classification.")).toBeVisible();
 });
 
-test("colour modes: a cloud with intensity and classification draws in both", async ({ page }) => {
-  await routeCloud(page);
-  const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 }).map((p, i) => ({
+/** The fixture grid with intensity, and Ground (2) west of x = 243550, Building (6) east of it. */
+async function classifiedCloud(page: Page) {
+  const points = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 }).map((p, i) => ({
     ...p,
     intensity: (i * 977) % 65536,
     classification: p.x < 243550 ? 2 : 6,
   }));
-  await routeOctree(page, CLOUD, buildOctree(grid, 0.001, { intensity: true, classification: true }));
+  await serveCloudWorld(page, {
+    octree: buildOctree(points, 0.001, { intensity: true, classification: true }),
+  });
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
-  await expect(page.getByRole("radio", { name: "Intensity" })).toBeEnabled();
-  await expect(page.getByRole("radio", { name: "Class" })).toBeEnabled();
+  await edlOn(page);
+}
+
+test("colour modes: a cloud with intensity and classification draws in both", async ({ page }) => {
+  await classifiedCloud(page);
+  const w = ws(page);
+  await expect(w.colour("Intensity")).toBeEnabled();
+  await expect(w.colour("Class")).toBeEnabled();
   await expect(page.getByText(/This cloud has no/)).toHaveCount(0);
-  for (const mode of ["Intensity", "Class"]) {
-    await page.getByRole("radio", { name: mode }).click();
+  for (const mode of ["Intensity", "Class"] as const) {
+    await w.colour(mode).click();
     const c = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
     expect(c.total - c.background, `${mode} draws points`).toBeGreaterThan(0.01 * c.total);
     expect(c.white, `${mode} is not blown out`).toBe(0);
   }
   expect((await page.evaluate(() => window.__kestrelCloudViewer!.stats())).errors).toEqual([]);
+});
+
+test("colour modes: Class draws each half in its class colour, not RGB or the Elevation fallback", async ({
+  page,
+}) => {
+  // "draws points, not white" (above) holds for RGB and Elevation too. The top snapshot's halves tell
+  // them apart: in Class the west half is Ground (161, 82, 46) and the east half Building
+  // (240, 170, 40), both "red" to `classifyPixels`; RGB's east half is green, and the Elevation ramp
+  // it would fall back to (viridis, z rising eastwards on this grid) is red in neither half.
+  await classifiedCloud(page);
+  await ws(page).colour("Class").click();
+  await expect(ws(page).colour("Class")).toHaveAttribute("aria-checked", "true");
+  const redShare = (s: { total: number; background: number; red: number }) =>
+    s.red / Math.max(1, s.total - s.background);
+  await expect
+    .poll(async () => {
+      const s = await page.evaluate(() => window.__kestrelCloudViewer!.topSnapshotSample(512));
+      return s && { west: redShare(s.left) > 0.9, east: redShare(s.right) > 0.9, eastGreen: s.right.green };
+    })
+    .toEqual({ west: true, east: true, eastGreen: 0 });
 });

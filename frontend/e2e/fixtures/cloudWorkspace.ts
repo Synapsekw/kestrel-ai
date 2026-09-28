@@ -131,12 +131,24 @@ export async function countFrames(page: Page): Promise<() => Promise<number>> {
   return () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
 }
 
-/** CSS/WAAPI animations still running, as "tag.class: name" (none may run 1 s after settle). */
+/**
+ * CSS/WAAPI animations still running, as "tag.class: name" (none may run 1 s after settle). Two kinds
+ * are left out on purpose (C-G hand-off): looping indicators (`iterations: Infinity`, e.g. the
+ * project's "Jobs running" dot or a running progress bar's shimmer, the same exclusion
+ * `e2e/evidence.ts` and `clouds-pins.spec.ts` make), and C-W1's hint-bar fade — the Orbit/Pan/Fly hint
+ * fades once, HINT_FADE_MS (2.4 s) after the tool is armed (`workspace/HintBar.tsx`), a finite opacity
+ * transition on a timer unrelated to the render loop that can land inside a 1 s idle window.
+ */
 export async function runningAnimations(page: Page): Promise<string[]> {
   return page.evaluate(() =>
     document
       .getAnimations()
       .filter((a) => a.playState === "running")
+      .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+      .filter((a) => {
+        const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
+        return !t?.closest('[data-testid="cloud-hintbar"]');
+      })
       .map((a) => {
         const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
         const name = (a as CSSAnimation).animationName ?? a.id ?? "animation";
