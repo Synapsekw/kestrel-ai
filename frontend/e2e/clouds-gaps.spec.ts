@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { CLOUD } from "./fixtures/clouds";
 import { cloudFinding, gridPins, serveCloudWorld } from "./fixtures/cloudWorld";
-import { API, P, SWIFTSHADER, diagnosticsOn, viewerSettled, ws } from "./fixtures/cloudWorkspace";
+import { API, P, SWIFTSHADER, diagnosticsOn, pinStates, viewerSettled, ws } from "./fixtures/cloudWorkspace";
 import { jsonReply } from "./mock";
 
 // C-G Task 6: the one §15 item no unit spec covered (docs/evidence/clouds/README.md, coverage) — the
@@ -34,16 +34,14 @@ test("item 10: ?finding= selects the finding and frames its pin", async ({ page 
  * (`fetchFinding`, one document), not from the capped pins list, so it always selects a finding that
  * exists, even one the 500-pin cap (`PIN_CAP`, `frontend/src/api/cloudFindings.ts`) left off the
  * loaded page. `flyToPin` also flies to the finding's own anchor coordinates, not to anything read
- * from the pins array, so the camera still moves there. But the callout and the pin glyph both come
- * from `PinsLayerController`'s own map, built only from the pins `usePinsFeature` actually loaded
- * (`frontend/src/clouds/workspace/features/pins.tsx`): `placeCallout` bails out silently when
- * `this.pins.get(this.selected)` has no entry (`frontend/src/clouds/pins/pinsController.ts`). Today's
- * behaviour, asserted here: the camera still flies to the anchor, but no callout ever appears and the
- * pin is not drawn. Reported to the controller as a real gap, not just a scoring technicality — a
- * user who follows a `?finding=` link to a finding outside the cap gets no visible confirmation that
- * they arrived anywhere.
+ * from the pins array, so the camera still moves there. The callout and the pin glyph come from the
+ * pins `usePinsFeature` holds; since C-G Task 14 the arrived finding is added to them when the capped
+ * list lacks it (`frontend/src/clouds/workspace/features/pins.tsx`), so the pin is drawn and its
+ * callout shows.
  */
-test("item 10: ?finding= for a finding outside the loaded 500 pins — today's behaviour", async ({ page }) => {
+test("item 10: ?finding= for a finding outside the loaded 500 pins shows its pin and callout", async ({
+  page,
+}) => {
   const overflow = cloudFinding(500, [243521, 3178031, 0.4]); // the 501st: past PIN_CAP
   const world = await serveCloudWorld(page, { findings: [...gridPins(500), overflow] });
   // serveCloudWorld's fake findings-list route answers every finding it was given, ignoring
@@ -69,7 +67,9 @@ test("item 10: ?finding= for a finding outside the loaded 500 pins — today's b
       { timeout: 20_000 },
     )
     .toBeLessThan(3);
-  // But no callout shows: the pin has no entry in the loaded (capped) pins map.
-  await page.waitForTimeout(1_000);
-  await expect(ws(page).callout).toBeHidden();
+  // The arrived finding joins the pins: its callout shows and its pin is drawn.
+  await expect(ws(page).callout).toBeVisible({ timeout: 20_000 });
+  await expect
+    .poll(async () => (await pinStates(page)).find((p) => p.id === overflow.id)?.state ?? "absent")
+    .toBe("visible");
 });

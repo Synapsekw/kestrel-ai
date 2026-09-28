@@ -11,7 +11,7 @@ import { at } from "@/clouds/pins/testCamera";
 import { LAST_TYPE_KEY } from "@/clouds/pins/usePinTool";
 import { DEFAULT_SEAMS, WorkspaceSeamsContext } from "@/clouds/workspace/seams";
 import { useChangesStore } from "@/store/changes";
-import { fakeFetch, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
+import { fakeFetch, PROJECT_ID, type FakeRoute, type RecordedRequest } from "@/test/fixtures";
 import { baseRoutes, exampleFinding, exampleFindingDetail, TYPE_SPALLING } from "@/test/findingFixtures";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { TestApiProvider } from "@/test/render";
@@ -136,9 +136,13 @@ function RoutedHarness({ ctx }: { ctx: FeatureContext }) {
   );
 }
 
-function mount(over: Partial<FeatureContext> = {}, opts: { gate?: Gate; routed?: boolean } = {}) {
+function mount(
+  over: Partial<FeatureContext> = {},
+  opts: { gate?: Gate; routed?: boolean; routes?: FakeRoute[] } = {},
+) {
   const { fetch: answer, requests } = fakeFetch(
     baseRoutes([
+      ...(opts.routes ?? []),
       // fakeFetch matches the pathname only (no query string).
       { method: "GET", path: /\/findings$/, body: { items: [saved], next_cursor: null } },
       { method: "GET", path: /\/pointclouds\/[^/]+\/views$/, body: { items: [] } },
@@ -338,6 +342,46 @@ describe("usePinsFeature", () => {
     const patched = requests.findIndex((r) => r.method === "PATCH");
     expect(requests.slice(patched).some((r) => r.method === "GET" && /\/findings\?/.test(r.url))).toBe(false);
     await act(async () => gate.release());
+  });
+
+  it("?finding= for a finding outside the loaded pins adds its pin and opens its callout (PIN_CAP)", async () => {
+    const far: Finding = {
+      ...saved,
+      id: "f-far",
+      number: 901,
+      anchor: { ...(saved.anchor as Extract<Finding["anchor"], { kind: "cloud" }>), x: at(2, 0, 0)[0] },
+    };
+    mount(
+      { search: "?finding=f-far" },
+      {
+        routes: [
+          { method: "GET", path: /\/findings\/f-far$/, body: { ...exampleFindingDetail, ...far } },
+          {
+            method: "PATCH",
+            path: /\/findings\/f-far$/,
+            body: { ...exampleFindingDetail, ...far, severity: 3 },
+          },
+          { method: "GET", path: /\/findings\/f-far\/attachments$/, body: { items: [] } },
+          { method: "GET", path: /\/findings\/f-far\/comments/, body: { items: [], next_cursor: null } },
+        ],
+      },
+    );
+    await findRow(); // the loaded list (f-a only) has answered
+    const head = await within(screen.getByTestId("cloud-pins")).findByRole("button", { name: /F-0901/ });
+    expect(head.closest("[data-selected]")).not.toBeNull();
+    expect(await screen.findByRole("dialog", { name: "Finding F-0901" })).toBeInTheDocument();
+    // the count stays the list's (the server's total), not the list plus the arrival
+    expect(screen.getByTestId("count")).toHaveTextContent("1");
+    // a severity key's answer updates the added pin (it is not in any refetched list)
+    blur();
+    await userEvent.keyboard("3");
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("dialog", { name: "Finding F-0901" })).getByText(/./, {
+          selector: "[data-level]",
+        }),
+      ).toHaveAttribute("data-level", "3"),
+    );
   });
 
   it("a real Enter with focus outside the form creates exactly once, through W1's routing", async () => {

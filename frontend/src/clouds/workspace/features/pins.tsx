@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { PIN_CAP } from "@/api/cloudFindings";
 import { messageOf } from "@/api/errors";
-import { deleteFinding, patchFinding, type FindingPatch } from "@/api/findings";
+import { deleteFinding, patchFinding, type Finding, type FindingPatch } from "@/api/findings";
 import { pushLog } from "@/app/diagnostics";
 import type { CloudPick } from "@/clouds/CloudViewer";
 import { parseFinding } from "@/clouds/jump";
@@ -14,7 +14,7 @@ import { PinCalloutCreate, PinCalloutView } from "@/clouds/pins/PinCallout";
 import { PinsLayer } from "@/clouds/pins/PinsLayer";
 import { NEUTRAL_PIN_COLOUR } from "@/clouds/pins/pinView";
 import { DRAFT_ID, type CloudPin } from "@/clouds/pins/types";
-import { useCloudPins } from "@/clouds/pins/useCloudPins";
+import { toCloudPin, useCloudPins } from "@/clouds/pins/useCloudPins";
 import { useFindingArrival } from "@/clouds/pins/useFindingArrival";
 import { readLastType, usePinTool } from "@/clouds/pins/usePinTool";
 import type { Vec3 } from "@/clouds/viewer/types";
@@ -110,7 +110,14 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
         pushLog(`pins: moved pin ${id} not at its new spot after the refetch${err}`);
     }
   }, [dropped]);
-  const shown = useMemo(() => withPending(listed, livePending), [listed, livePending]);
+  // A `?finding=` arrival outside the loaded (capped) pins: its pin is added, so it is drawn and its
+  // callout shows (C-G Task 6 finding). Dropped on delete; keyed by cloud.
+  const [arrived, setArrived] = useState<{ cloudId: string; pin: CloudPin } | null>(null);
+  const arrivedPin = arrived && arrived.cloudId === cloud.id ? arrived.pin : null;
+  const shown = useMemo(() => {
+    const over = withPending(listed, livePending);
+    return arrivedPin && !over.some((p) => p.id === arrivedPin.id) ? [...over, arrivedPin] : over;
+  }, [listed, livePending, arrivedPin]);
   const pins = useMemo(
     () => (shown === listed ? listedPins : { ...listedPins, pins: shown }),
     [shown, listed, listedPins],
@@ -163,13 +170,25 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   const [confirming, setConfirming] = useState<CloudPin | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const viewsRef = useRef(listedPins.views);
+  useEffect(() => {
+    viewsRef.current = listedPins.views;
+  });
+  const onArrive = useCallback(
+    (id: string, f: Finding) => {
+      const pin = toCloudPin(f, viewsRef.current.get(id));
+      if (pin) setArrived({ cloudId: cloud.id, pin });
+      select(id);
+    },
+    [cloud.id, select],
+  );
   useFindingArrival({
     projectId,
     routeCloudId: cloud.id,
     search: ctx.search,
     viewer,
     pins,
-    onArrive: select,
+    onArrive,
   });
 
   // Delete, and Esc-to-deselect in Orbit (plan Ruling 9); W1 routes Enter/Esc to the armed tool.
@@ -200,12 +219,17 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
       const id = selectedPin.id;
       try {
         // G5/T10-1: a known-id write registers its echo and bumps `findingsRevision` itself.
-        await ownFindingsWrite([id], () => patchFinding(api, projectId, id, patch), { bumpOnError: true });
+        const f = await ownFindingsWrite([id], () => patchFinding(api, projectId, id, patch), {
+          bumpOnError: true,
+        });
+        // An arrived pin outside the list is not refetched: take the answer.
+        const pin = arrivedPin?.id === id ? toCloudPin(f, viewsRef.current.get(id)) : null;
+        if (pin) setArrived({ cloudId: cloud.id, pin });
       } catch (e) {
         toast("danger", messageOf(e, "could not update the finding"));
       }
     },
-    [api, projectId, selectedPin],
+    [api, projectId, selectedPin, arrivedPin, cloud.id],
   );
   const live = () => reviewKeysLive(viewer.current?.navMode() ?? "orbit");
   useFindingKeys(selectedPin !== null && !tool.draft && !tool.moving, scale.length, {
@@ -270,6 +294,7 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
       // G5/T10-2: as `patchSelected`; the pin goes on the refetch the bump triggers.
       await ownFindingsWrite([id], () => deleteFinding(api, projectId, id), { bumpOnError: true });
       toast("ok", `${formatFindingNumber(confirming.number)} deleted`);
+      if (arrivedPin?.id === id) setArrived(null);
       if (selectedId === confirming.id) select(null);
       setConfirming(null);
     } catch (e) {

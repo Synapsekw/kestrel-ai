@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { codeOf, messageOf } from "@/api/errors";
-import { fetchFinding } from "@/api/findings";
+import { fetchFinding, type Finding } from "@/api/findings";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import { parseFinding } from "@/clouds/jump";
 import { findingHref } from "@/findings/links";
@@ -21,8 +21,8 @@ export interface FindingArrivalOptions {
   search: string;
   viewer: RefObject<CloudViewerHandle | null>;
   pins: CloudPinsState;
-  /** Select the finding (Findings tab + callout). */
-  onArrive: (id: string) => void;
+  /** Select the finding (Findings tab + callout); `finding` lets the caller draw a pin the capped list lacks. */
+  onArrive: (id: string, finding: Finding) => void;
 }
 
 /**
@@ -67,7 +67,7 @@ export function useFindingArrival({
           });
           return;
         }
-        onArriveRef.current(findingId);
+        onArriveRef.current(findingId, f);
         // T9-3: same first gate as `useJumpArrival` (numVisiblePoints > 0), not a real "cloud ready" signal.
         let ticks = 0;
         timer = window.setInterval(() => {
