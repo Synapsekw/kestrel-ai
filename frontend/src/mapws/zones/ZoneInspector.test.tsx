@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type { SiteArea } from "@/api/siteAreas";
-import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
+import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
+import { toast } from "@/ui";
 import { AUG, MAP_AUG, UTM38, renderInWorkspace, w3Stores } from "@/mapws/test/w3Fixtures";
 import { useZonesStore } from "./store";
 import { ZoneInspector } from "./ZoneInspector";
+
+vi.mock("@/ui", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ui")>()),
+  toast: vi.fn(),
+}));
 
 const ZONE = "5a000000-aaaa-4000-8000-000000000001";
 const SQUARE = [
@@ -78,7 +84,10 @@ function renderInspector(routes: FakeRoute[] = []) {
 }
 
 describe("ZoneInspector", () => {
-  beforeEach(() => useZonesStore.setState({ items: [area], revision: 0 }));
+  beforeEach(() => {
+    useZonesStore.setState({ items: [area], revision: 0 });
+    vi.mocked(toast).mockClear();
+  });
 
   it("shows name, category, the approximate area and the objects per survey", async () => {
     renderInspector();
@@ -128,5 +137,19 @@ describe("ZoneInspector", () => {
     useZonesStore.setState({ items: [] });
     renderInspector([{ method: "GET", path: LIST, body: { items: [] } }]);
     expect(await screen.findByText(/This zone is not loaded/)).toBeInTheDocument();
+  });
+
+  it("toasts a failed object-count read and says so instead of 'no survey' (W3-16)", async () => {
+    renderInspector([
+      {
+        method: "GET",
+        path: /\/analytics\/areas$/,
+        status: 500,
+        body: errorBody("internal", "Analytics broke"),
+      },
+    ]);
+    expect(await screen.findByText("Object counts could not be loaded.")).toBeInTheDocument();
+    expect(screen.queryByText("No survey covers this zone yet.")).not.toBeInTheDocument();
+    expect(toast).toHaveBeenCalledWith("danger", expect.stringContaining("Analytics broke"));
   });
 });

@@ -31,8 +31,10 @@ export function ZoneInspector({ selection, projectId, frame, onClose }: Inspecto
       .then((data) => {
         if (live) setAnalytics({ id, data });
       })
-      .catch(() => {
-        if (live) setAnalytics({ id, data: null });
+      .catch((e: unknown) => {
+        if (!live) return; // a stale selection's failure is not this zone's
+        toast("danger", messageOf(e, "could not load the object counts"));
+        setAnalytics({ id, data: null });
       });
     return () => {
       live = false;
@@ -73,7 +75,9 @@ export function ZoneInspector({ selection, projectId, frame, onClose }: Inspecto
   }
 
   const category = categoryOf(area);
-  const rows = analytics?.id === id ? surveyCounts(analytics.data, id) : null;
+  const current = analytics?.id === id ? analytics : null;
+  const rows = current?.data ? surveyCounts(current.data, id) : null;
+  const countsFailed = current !== null && current.data === null;
 
   async function patch(body: SiteAreaPatch) {
     setBusy(true);
@@ -149,7 +153,9 @@ export function ZoneInspector({ selection, projectId, frame, onClose }: Inspecto
         </p>
       </InspectorSection>
       <InspectorSection title="Objects per survey">
-        {rows === null ? (
+        {countsFailed ? (
+          <p className="text-sm text-muted">Object counts could not be loaded.</p>
+        ) : rows === null ? (
           <SkeletonRows rows={2} columns={1} />
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted">No survey covers this zone yet.</p>
