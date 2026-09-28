@@ -5,7 +5,6 @@ import { messageOf } from "@/api/errors";
 import { updateMapDate } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { AddDataButton } from "@/data/AddDataButton";
-import { volumeViewPath } from "@/measurements/links";
 import { SurveyDateCell } from "@/sources/SurveyDateCell";
 import { useChangesStore } from "@/store/changes";
 import { Alert, Button, EmptyState, Pill, SkeletonRows, type PillTone } from "@/ui";
@@ -127,7 +126,7 @@ export function MapDataList() {
                 item.type === "map"
                   ? `/p/${projectId}/maps/${item.id}`
                   : item.type === "elevation"
-                    ? volumeViewPath(projectId)
+                    ? `/p/${projectId}/measurements`
                     : null;
               return (
                 <tr key={item.id} className="border-t border-line">
