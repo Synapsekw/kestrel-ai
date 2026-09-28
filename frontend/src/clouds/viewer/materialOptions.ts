@@ -46,6 +46,16 @@ export function makeMaterialOptions(o: {
   };
 }
 
+/**
+ * potree-core 2.0.15 builds a v2 (metadata.json) octree's material with `newFormat`, and its vertex
+ * shader then does `#ifdef new_format vColor = rgba;` ahead of every `color_type_*` branch: the
+ * colour type is ignored and every mode draws RGB. Only RGB reads `rgba`; every other mode needs
+ * the define off (it reads position, intensity or classification, which both formats name alike).
+ */
+export function usesNewFormat(colour: ColourMode, octreeV2: boolean): boolean {
+  return octreeV2 && colour === "rgb";
+}
+
 export function defaultColour(hasRgb: boolean | null | undefined): ColourMode {
   return hasRgb ? "rgb" : "elevation";
 }

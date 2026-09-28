@@ -3,7 +3,7 @@
 import threading
 
 import pytest
-from pointclouds import insert_cloud, make_las
+from pointclouds import ORIGIN, insert_cloud, make_las
 from profile_helpers import cloud_from_las, insert_profile, line_points, wall_section
 
 from app.findings import service
@@ -124,6 +124,39 @@ def test_create_refusals_carry_their_codes(client, project_id, handle):
     assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
     bad = {"kind": "profile", "points": line_points(), "params": {"thickness_m": 9}}
     assert client.post(_meas(project_id, cloud_id), json=bad).status_code == 422
+
+
+def test_delete_cloud_refused_while_its_profile_job_is_live_then_allowed(
+    client, project_id, handle, wait_job, monkeypatch
+):
+    """A1: `service.delete_cloud` must refuse (409 `job_running`, same as import/export) while a
+    `pointcloud_profile` job for one of the cloud's measurements is queued/running, and allow the
+    delete once that job has settled."""
+    gate = threading.Event()
+
+    def held(cloud):  # keeps the profile job running until the test releases it
+        gate.wait(10)
+        raise JobFailure("stopped by the test")
+
+    monkeypatch.setattr("app.pointclouds.export.check_source", held)
+    x0, y0, z0 = ORIGIN
+    cloud_id = insert_cloud(
+        handle, bounds_native=[x0 - 20.0, y0 - 20.0, z0 - 20.0, x0 + 20.0, y0 + 20.0, z0 + 20.0]
+    )
+    created = _post_profile(client, project_id, cloud_id)
+    assert created.status_code == 202, created.text
+    job_id = created.json()["job"]["id"]
+
+    busy = client.delete(f"{BASE}/{project_id}/pointclouds/{cloud_id}")
+    assert busy.status_code == 409 and busy.json()["error"]["code"] == "job_running"
+    # the message names every kind of job that holds the cloud (C-G final review m5)
+    assert busy.json()["error"]["message"] == (
+        "the point cloud has an import, export or cross-section running; cancel it first"
+    )
+
+    gate.set()
+    assert wait_job(project_id, job_id)["state"] == "failed"
+    assert client.delete(f"{BASE}/{project_id}/pointclouds/{cloud_id}").status_code == 204
 
 
 def _pin(handle, crack, cloud_id) -> str:

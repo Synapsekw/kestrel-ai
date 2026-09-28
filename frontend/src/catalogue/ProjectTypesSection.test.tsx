@@ -28,6 +28,14 @@ function renderSection(routes: FakeRoute[], types: FakeRoute = TYPES) {
 }
 
 describe("ProjectTypesSection", () => {
+  it("sizes the hotkey select through its wrapper, so the select fills it (C-G final review I4)", async () => {
+    renderSection([]);
+    const select = await screen.findByLabelText("Hotkey of Excavator");
+    expect(select.className.split(/\s+/)).toContain("w-full");
+    expect(select.className.split(/\s+/)).not.toContain("w-32");
+    expect(select.parentElement!.className.split(/\s+/)).toContain("w-32");
+  });
+
   it("adds a catalogue type from the one field and saves the ordered list", async () => {
     const { requests, onSaved } = renderSection([
       { method: "PUT", path: /\/projects\/[^/]+\/types$/, body: project },

@@ -1,5 +1,6 @@
 import type { CloudViewMeta, CloudViewOut, CloudViewPose, CloudViewRender } from "@contract/client";
 import type { CloudMeasurement } from "@/api/cloudMeasurements";
+import { ApiFailure } from "@/api/errors";
 import { VIEW_MAX_BYTES, type CaptureResult } from "../viewer/capture";
 import type { Vec3 } from "../viewer/types";
 import type { ViewSubject } from "../workspace/seams";
@@ -12,7 +13,8 @@ import { subjectKey, type QueueReason } from "./viewStore";
 export type SubjectGeometry =
   { kind: "finding"; anchor: Vec3 } | { kind: "cloud_measurement"; measurement: CloudMeasurement };
 
-export type JobOutcome = "saved" | "failed" | "stopped";
+/** `skipped`: a bulk "missing" job whose subject was deleted meanwhile (`not_found`) — no report. */
+export type JobOutcome = "saved" | "failed" | "stopped" | "skipped";
 
 export interface QueueDeps {
   engine(): CaptureEngine | null;
@@ -65,6 +67,10 @@ export function normalFor(
   return fresh ?? (n ? [n[0], n[1], n[2]] : null);
 }
 
+/** A bulk "missing" is the weakest reason: merged onto a waiting create/move/save/refresh it must
+ * not downgrade that job to the stored pose. Among the others the later request wins. */
+const reasonRank = (r: QueueReason): number => (r === "missing" ? 0 : 1);
+
 interface Job {
   subject: ViewSubject;
   key: string;
@@ -92,7 +98,7 @@ export class CaptureQueue {
     return new Promise<JobOutcome>((resolve) => {
       const waiting = this.pending.find((j) => j.key === key);
       if (waiting) {
-        waiting.reason = reason;
+        if (reasonRank(reason) >= reasonRank(waiting.reason)) waiting.reason = reason;
         waiting.quiet = waiting.quiet && quiet;
         waiting.done.push(resolve);
       } else {
@@ -137,7 +143,9 @@ export class CaptureQueue {
           outcome = "stopped";
           this.drop();
           this.deps.onFail(job.subject, err, true);
-        } else {
+        } else if (job.reason === "missing" && err instanceof ApiFailure && err.code === "not_found")
+          outcome = "skipped"; // an explicit capture of a deleted subject still says "not saved"
+        else {
           outcome = "failed";
           if (!job.quiet) this.deps.onFail(job.subject, err, false);
         }

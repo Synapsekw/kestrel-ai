@@ -96,6 +96,20 @@ describe("Slider", () => {
     window.removeEventListener("keydown", onWindow);
   });
 
+  it("positions the thumb with a left percentage of the track, not a track-wide transform (task-18-brief item 1)", () => {
+    // A translateX(pct%) wrapper sized to the whole track (inset-0) moves by a percentage of its
+    // OWN width, i.e. the track's width again, so its box lands up to a full track-width past the
+    // track's right edge — invisible, but still "ink overflow" that forced the cloud panel (which
+    // has overflow-y-auto, and so computes overflow-x as auto too, CSS 11.1.1) into a horizontal
+    // scrollbar whenever a slider sat above 0%. `left: pct%` is an offset within the track itself
+    // and cannot do that.
+    render(<Host />); // min 0, max 4, value 1 -> pct 25
+    const thumb = document.querySelector('[data-part="thumb"]') as HTMLElement;
+    expect(thumb.style.left).toBe("25%");
+    expect(thumb.style.transform).toBe("");
+    expect(document.querySelector(".pointer-events-none.absolute.inset-0")).toBeNull();
+  });
+
   it("does nothing while disabled", () => {
     const onChange = vi.fn();
     render(<Slider label="Blend" min={0} max={1} step={0.1} value={0.5} onChange={onChange} disabled />);

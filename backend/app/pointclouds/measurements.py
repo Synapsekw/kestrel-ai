@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import CloudMeasurement, Finding, PointCloud
 from app.errors import AppError, not_found
+from app.jobs.runner import JobRunner
 from app.pointclouds import measure, rows, views
 from app.pointclouds.schemas import CloudMeasurementCreate, CloudMeasurementUpdate
 from app.projects.service import ProjectHandle
@@ -52,7 +53,8 @@ def list_for(handle: ProjectHandle, cloud_id: str) -> list[CloudMeasurement]:
     return items
 
 
-def _next_name(s, cloud_id: str, kind: str) -> str:
+def next_name(s, cloud_id: str, kind: str) -> str:
+    """The next free default name for `kind` on the cloud ("Distance 3"); profile.py uses it too."""
     label = LABELS[kind]
     pattern = re.compile(rf"^{re.escape(label)} (\d+)$")
     names = s.execute(
@@ -64,13 +66,28 @@ def _next_name(s, cloud_id: str, kind: str) -> str:
     return f"{label} {max(numbers, default=0) + 1}"
 
 
-def check_crs(cloud: PointCloud, kind: str) -> None:
-    """Everything but a single point needs metres: a cloud in degrees is refused (S1 rule)."""
+def require_projected_crs(cloud: PointCloud, kind: str) -> None:
+    """Everything but a single point needs metres: a cloud in degrees is refused (S1 rule).
+
+    Shared by both create paths (non-profile kinds here, `profile` via `profile.py`; B1 dedupe)."""
     if kind != "point" and cloud.crs_wkt and CRS.from_wkt(cloud.crs_wkt).is_geographic:
         raise AppError(
             "needs_projected_crs",
             "distances need a projected coordinate system; this cloud is in degrees",
             422,
+        )
+
+
+def check_capacity(s: Session, cloud_id: str) -> None:
+    """422 `measurement_limit` when this cloud is already at the 1 000-row cap.
+
+    Shared by both create paths (`insert` here, `profile.create_profile_measurement`; B1 dedupe)."""
+    count = s.execute(
+        select(func.count()).select_from(CloudMeasurement).where(CloudMeasurement.point_cloud_id == cloud_id)
+    ).scalar_one()
+    if count >= MAX_PER_CLOUD:
+        raise AppError(
+            "measurement_limit", "this cloud already has 1 000 measurements; delete some first", 422
         )
 
 
@@ -151,20 +168,12 @@ def insert(
 ) -> CloudMeasurement:
     """One new row under the 1 000 cap, named "<Label> n" when unnamed, in one transaction."""
     with handle.session() as s:
-        count = s.execute(
-            select(func.count())
-            .select_from(CloudMeasurement)
-            .where(CloudMeasurement.point_cloud_id == cloud_id)
-        ).scalar_one()
-        if count >= MAX_PER_CLOUD:
-            raise AppError(
-                "measurement_limit", "this cloud already has 1 000 measurements; delete some first", 422
-            )
+        check_capacity(s, cloud_id)
         check_finding(s, cloud_id, finding_id)
         row = CloudMeasurement(
             point_cloud_id=cloud_id,
             kind=kind,
-            name=name or _next_name(s, cloud_id, kind),
+            name=name or next_name(s, cloud_id, kind),
             note=note,
             points=points,
             results=results,
@@ -181,7 +190,7 @@ def insert(
 
 def create(handle: ProjectHandle, cloud_id: str, body: CloudMeasurementCreate) -> CloudMeasurement:
     cloud = rows.require_ready(handle, cloud_id)
-    check_crs(cloud, body.kind)
+    require_projected_crs(cloud, body.kind)
     params = _params(body)
     points, results = measure_points(
         body.kind, [p.model_dump(exclude_none=True) for p in body.points], params
@@ -227,8 +236,14 @@ def update(
     return row
 
 
-def delete(handle: ProjectHandle, cloud_id: str, measurement_id: str) -> None:
+def delete(handle: ProjectHandle, runner: JobRunner, cloud_id: str, measurement_id: str) -> None:
+    """Delete the row; a live profile job for it is cancelled first (its own settle check already
+    tolerates a row that vanishes out from under it — see `profile._settleable`)."""
     rows.get_cloud(handle, cloud_id)
     with handle.session() as s:
-        s.delete(_get(s, cloud_id, measurement_id))
+        row = _get(s, cloud_id, measurement_id)
+        live_job_id = row.job_id if row.status == "computing" else None
+        s.delete(row)
+    if live_job_id:
+        runner.cancel(handle, live_job_id)
     views.remove_files(handle, cloud_id, "cloud_measurement", measurement_id)

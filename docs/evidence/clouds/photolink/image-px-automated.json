@@ -1,0 +1,72 @@
+[
+  {
+    "image_id": "e040f821-9fd9-41f2-bbc8-c0f6360aff4d",
+    "u": 2504,
+    "v": 407,
+    "expected": [
+      243514.333,
+      3178247.742,
+      173.713
+    ],
+    "sector_deg": 0,
+    "wall_radius_m": 5.625,
+    "camera_distance_m": 109.95,
+    "candidates": 4
+  },
+  {
+    "image_id": "12ac12d2-81f0-4402-92b3-e5e8ee0419df",
+    "u": 1245,
+    "v": 538,
+    "expected": [
+      243519.269,
+      3178245.08,
+      172.527
+    ],
+    "sector_deg": 72,
+    "wall_radius_m": 6.276,
+    "camera_distance_m": 85.02,
+    "candidates": 10
+  },
+  {
+    "image_id": "a9d0946a-07f4-4c4a-80c8-1376b90c81de",
+    "u": 3067,
+    "v": 386,
+    "expected": [
+      243514.737,
+      3178249.068,
+      167.663
+    ],
+    "sector_deg": 0,
+    "wall_radius_m": 6.992,
+    "camera_distance_m": 81.03,
+    "candidates": 10
+  },
+  {
+    "image_id": "12ac12d2-81f0-4402-92b3-e5e8ee0419df",
+    "u": 1310,
+    "v": 746,
+    "expected": [
+      243521.191,
+      3178243.763,
+      169.083
+    ],
+    "sector_deg": 72,
+    "wall_radius_m": 7.645,
+    "camera_distance_m": 83.17,
+    "candidates": 17
+  },
+  {
+    "image_id": "95a2a966-46bf-4829-95bf-36f8d69d7a49",
+    "u": 2744,
+    "v": 1171,
+    "expected": [
+      243512.817,
+      3178250.09,
+      157.765
+    ],
+    "sector_deg": 0,
+    "wall_radius_m": 7.99,
+    "camera_distance_m": 70.0,
+    "candidates": 21
+  }
+]

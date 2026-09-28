@@ -96,16 +96,38 @@ export function captureCameraParams(
 
 export interface WaitClock {
   now(): number;
-  sleep(ms: number): Promise<void>;
+  /** Resolves after `ms`, or at once when `signal` aborts (its timer cleared). */
+  sleep(ms: number, signal?: AbortSignal): Promise<void>;
 }
 
 const realClock: WaitClock = {
   now: () => performance.now(),
-  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  sleep: (ms, signal) =>
+    new Promise((r) => {
+      const t = setTimeout(r, ms);
+      signal?.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(t);
+          r();
+        },
+        { once: true },
+      );
+    }),
 };
 
+/** The longest wait between two `waitForNodes` steps: about a frame, as the screen loop polls. */
+export const WAIT_STEP_MS = 16;
+/** The shortest: loads that settle at once (potree-core's are often already settled) must not
+ * turn the frozen wait into hundreds of `updatePointClouds` a second (C-G final review m8). */
+export const MIN_STEP_MS = 4;
+
 /** Calls `step` (one `updatePointClouds` for the capture camera) until it is not busy (true) or the
- * timeout passes (false), waiting on its loads or 50 ms between calls. */
+ * timeout passes (false), waiting between calls until one of its loads settles or `WAIT_STEP_MS`
+ * passes, and never less than `MIN_STEP_MS`. Every wait goes through a timer, never the microtask
+ * queue alone: potree-core 2.0.15's `OctreeGeometryNode.load()` returns undefined, so `loads` may be
+ * settled already, and a loop that never yields starves the fetches and workers that finish the
+ * loads (C-G Task 16). The `WAIT_STEP_MS` timer that loses to the loads is cleared. */
 export async function waitForNodes(
   step: () => { busy: boolean; loads: Promise<unknown>[] },
   timeoutMs: number,
@@ -116,7 +138,12 @@ export async function waitForNodes(
     const s = step();
     if (!s.busy) return true;
     if (clock.now() >= deadline) return false;
-    await Promise.race([Promise.allSettled(s.loads), clock.sleep(50)]);
+    const began = clock.now();
+    const lost = new AbortController();
+    await Promise.race([Promise.allSettled(s.loads), clock.sleep(WAIT_STEP_MS, lost.signal)]);
+    lost.abort();
+    const spent = clock.now() - began;
+    if (spent < MIN_STEP_MS) await clock.sleep(MIN_STEP_MS - spent);
   }
 }
 

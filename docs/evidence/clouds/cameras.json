@@ -1,0 +1,1 @@
+{"scenario": "cameras", "status": 200, "cameras": 395, "posed": 395, "fov_assumed": 0, "without_gps": 0, "truncated": false, "sources": [{"id": "185593d6-a5f4-4f23-bbf2-575ebe36c5b3", "label": "raw_data", "count": 395, "height_offset_m": 0.0, "posed_count": 395}], "z_median": 97.995, "z_p1": -44.665, "z_p99": 160.747}

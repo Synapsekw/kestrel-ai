@@ -45,10 +45,11 @@ interface Spy {
 }
 
 /**
- * Runs `pco.pick` with potree's statics wrapped for the length of the call: the raw pixels are copied
- * before `findHit` zeroes their alpha, the rendered nodes are kept, and, when `nodes` is given, they
- * are rendered instead of only the nodes on the ray. Null when this potree-core no longer has the
- * statics or the pick throws (potree refuses more than 255 nodes).
+ * Runs `pco.pick` with potree's statics wrapped for the length of the call: the raw pixels are taken
+ * in place of potree's `findHit` (which is not run, so `pco.pick` answers null), the rendered nodes
+ * are kept, and, when `nodes` is given, they are rendered instead of only the nodes on the ray. Null
+ * when this potree-core no longer has the statics or the pick throws (potree refuses more than 255
+ * nodes).
  */
 function withPickerSpy(
   pco: PointCloudOctree,
@@ -65,10 +66,13 @@ function withPickerSpy(
   if (typeof findHit !== "function" || typeof getPickPoint !== "function") return null;
   if (nodes && typeof nodesOnRay !== "function") return null;
   const spy: Spy = { pixels: null, size: 0, nodes: [] };
+  // potree's own findHit is not run: its hit is never used here, and its scan of every pixel (which
+  // zeroes each alpha) cost ~2 ms per window, ~20 ms under the CPU profiler (Task 17). The read-back
+  // is allocated per pick, so it is kept without a copy.
   statics.findHit = (pixels, size) => {
-    spy.pixels = pixels.slice();
+    spy.pixels = pixels;
     spy.size = size;
-    return findHit.call(statics, pixels, size);
+    return null;
   };
   statics.getPickPoint = (hit, rendered) => {
     spy.nodes = rendered;

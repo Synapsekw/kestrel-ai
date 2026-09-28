@@ -70,6 +70,6 @@ def delete_cloud_measurement(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> Response:
-    measurements.delete(handle, cloudId, cloudMeasurementId)
+    measurements.delete(handle, request.app.state.jobs, cloudId, cloudMeasurementId)
     publish_pointclouds_changed(request, handle, [cloudId])
     return Response(status_code=204)

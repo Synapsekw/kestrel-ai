@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 from pyproj import CRS, Proj, Transformer
 from sqlalchemy import func, select
+from sqlalchemy.sql.elements import ColumnElement, Label
 
 from app.db.models import CloudCameraOffset, Image, PointCloud, Source
 from app.errors import AppError, not_found
@@ -81,7 +82,7 @@ def _positive_int(value: Any) -> int | None:
     return int(f) if f is not None and f > 0 else None
 
 
-def pose_select() -> list:
+def pose_select() -> list[Label]:
     """The pose columns to SELECT, labelled with their canonical names. A column the `image` table
     lacks is skipped, so the payload degrades to position-only instead of failing (spec section 14)."""
     return [
@@ -186,6 +187,12 @@ def _label(folder: str | None, site: str | None, label: str | None, source_id: s
     return label or site or (PureWindowsPath(folder).name if folder else "") or source_id
 
 
+def _images_source() -> ColumnElement[bool]:
+    """A source of drone photos (never a map tile source); the join filter every camera query shares
+    (A8 dedupe)."""
+    return func.coalesce(Source.kind, "images") == "images"
+
+
 def _select(s, cloud, crs: CRS) -> tuple[list, bool]:
     """ONE column-only query: the photos with GPS in the buffered box, at most CAP, by capture time."""
     minlon, minlat, maxlon, maxlat = search_box(cloud.bounds_wgs84, cloud.bounds_native, crs)
@@ -202,7 +209,7 @@ def _select(s, cloud, crs: CRS) -> tuple[list, bool]:
         )
         .join(Source, Source.id == Image.source_id)
         .where(
-            func.coalesce(Source.kind, "images") == "images",
+            _images_source(),
             Image.lat.is_not(None),
             Image.lon.is_not(None),
             Image.lat.between(minlat, maxlat),
@@ -253,7 +260,7 @@ def camera_set(handle: ProjectHandle, cloud_id: str) -> CloudCameraSet:
                 .select_from(Image)
                 .join(Source, Source.id == Image.source_id)
                 .where(
-                    func.coalesce(Source.kind, "images") == "images",
+                    _images_source(),
                     Image.lat.is_(None) | Image.lon.is_(None),
                 )
             )

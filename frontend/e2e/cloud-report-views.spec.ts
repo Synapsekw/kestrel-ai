@@ -184,8 +184,9 @@ test("Capture missing views saves a 1600 x 1000 PNG with its pose for each of 3 
     expect(up.png.subarray(0, 4).toString("hex")).toBe("89504e47");
     expect([up.png.readUInt32BE(16), up.png.readUInt32BE(20)]).toEqual([1600, 1000]);
     expect(up.meta.pose.fov_deg).toBe(50);
+    // every node at the pose loaded before the timeout (C-G Task 16: the wait once starved the loads)
     expect(up.meta.render).toMatchObject({
-      complete: expect.any(Boolean),
+      complete: true,
       edl: expect.any(Boolean),
       clip_box: null,
     });
@@ -193,6 +194,47 @@ test("Capture missing views saves a 1600 x 1000 PNG with its pose for each of 3 
   expect(uploads[0].meta.pose.target).toEqual([243530, 3178050, 1]);
   // a blank read-back would be one colour
   expect(await distinctColours(page, uploads[0].png)).toBeGreaterThan(1);
+});
+
+// C-G Task 16: the capture waited on potree's node loads in a loop that never left the microtask
+// queue, so a node still loading when the capture began could never finish (the chimney: 10 s, then
+// `complete: false` on every view). Here the root's points are held until the capture is waiting.
+test("a capture that starts while a node is loading waits for it and saves a complete view", async ({
+  page,
+}) => {
+  await routeOctree(
+    page,
+    CLOUD,
+    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 })),
+  );
+  let release!: () => void;
+  const points = new Promise<void>((r) => (release = r));
+  await page.route(
+    (u) => u.pathname.endsWith(`/pointclouds/${CLOUD}/octree/octree.bin`),
+    async (route) => {
+      if (route.request().method() !== "OPTIONS") await points;
+      return route.fallback();
+    },
+  );
+  const uploads = await routeWorkspace(page);
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await expect
+    .poll(async () => page.evaluate(() => window.__kestrelCloudViewer?.stats().nodesLoading ?? 0), {
+      timeout: 20_000,
+    })
+    .toBeGreaterThan(0);
+  await startCaptureMissing(page);
+  // the first capture holds the loop and waits on the held root (the page may not paint during it,
+  // so the engine's own state is the signal, not the UI)
+  await expect
+    .poll(async () => page.evaluate(() => window.__kestrelCloudViewer?.stats().frozen ?? false), {
+      timeout: 20_000,
+    })
+    .toBe(true);
+  release();
+  await expect.poll(() => uploads.length, { timeout: 30_000 }).toBe(3);
+  // the wait ended on the load, not on CAPTURE_TIMEOUT_MS: every view is complete
+  expect(uploads.map((u) => u.meta.render.complete)).toEqual([true, true, true]);
 });
 
 test("Cancel stops Capture missing views after the capture in flight", async ({ page }) => {

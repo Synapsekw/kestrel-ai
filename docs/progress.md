@@ -9,6 +9,72 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Point clouds lands — 2026-09-28 (`task/c-g`, unit G evidence)
+
+Sub-project C (spec `docs/superpowers/specs/2026-09-26-point-cloud-workspace-design.md`, index
+`docs/superpowers/plans/2026-09-27-clouds-index.md`) is built, gated and evidenced in dev mode. Units:
+
+- **C0 contract + migration `0013`**; **B1** area (Newell) and rings (Kåsa), CRUD, CSV; **B2** the
+  `pointcloud_profile` job; **B3** cameras and the delete guard; **B4** stored report views;
+- **X1** pure TS (measure, photo link, pins, callout, jumps, keys); **V1** engine split, views, colour
+  modes, EDL, `frameTimes()`; **V2** clip box, fly, look-through, slab, occlusion, capture;
+- **W1** the full-bleed workspace; **R1** report-view capture; **M1** measure tools; **P1** pins and
+  the Findings tab; **L1** cameras, photo link and jumps;
+- **G (this entry):** the rewritten S1 e2e, the cross-unit journey, the frame-time harness, the gap
+  tests (`clouds-gaps.spec.ts`: the two `?finding=` arrival cases, §15 item 10), the `check:webview`
+  code for EDL + 50 pins + one capture (IMC-X runs it), the dev-mode launcher and driver, and the
+  acceptance below.
+
+G's fixes to other units' code (the acceptance runs found them; each with its own test, listed in
+`docs/evidence/clouds/README.md` → "Changes to other units' code"): **Colour by drew RGB in every
+mode** (potree-core's `new_format` define, `ca2173c7`); **report-view captures never completed** on
+real data (the wait starved potree's loads, `7ddd9036`); near-side pins dimmed by points beside them,
+and a 45-89 ms occlusion pass (line-of-sight rule, no `findHit`, `53736c91`); the cloud panel's
+horizontal scrollbar (shared `ui/Input` and `ui/Slider`, `063ae702`: IMC-X to eyeball Images and
+Maps); and the C-B2/B3/R1/W1/M1/V1/P1 hand-offs (a cloud delete is refused while a profile job runs,
+deleting a profile measurement cancels its job, the view queue keeps the stronger reason, no duplicate
+Create/Cancel, a view requested before the load survives it, a `?finding=` beyond the 500 loaded pins
+shows its pin and callout). The potree-core traps are an ADR:
+`vault/decisions/2026-09-28-gotcha-potree-core-2-0-15-traps.md`.
+
+**Acceptance (dev mode: venv backend + Vite + Edge 154.0.4258.37 on an RTX 5070 Ti; ruling G1)** —
+one line per §16 criterion with its verdict and number, from `docs/evidence/clouds/README.md`:
+1 layout pass (every panel at its mockup position, no scrollbar) · 2 pins **fail** (anchors survive
+the restart exactly; 3 of 5 `?finding=` re-picks land 0.44 / 0.66 / 0.69 m away against u 0.17 / 0.17
+/ 0.34 m) · 3 area 3.000 / 1.500 m² pass · 4 rings 0.990° vs two-point 0.984° (angle error 0.0096° vs
+0.0157°: pass), azimuth 88.9° **fail by test design** (G7's noise gives σ 1.28° against ± 0.5°);
+chimney rows pending operator · 5 profile 2.56 s, top band 0.301 m = crosscheck 0.301 m, hand
+thickness pending operator, 195 M 12.04 s · 6 clip 0 of 20 outside (6 saved; weak test) · 7-8 photo
+link pending operator (automated: 10 of 10 wall picks list photos; round trip 3 of 5 within 1 m) ·
+9 performance pass (occlusion 10-14 ms, capture 221-874 ms, pin pass 0.10 ms at 200 and 0.20 ms at
+500, render p95 17.0 ms; table in the README; Full and Reduced) · 10 views 14/14 at 1600 × 1000, all
+complete, capture ≤ 874 ms; the R report part deferred to R (G8) · 11 gate below.
+
+**Gate on `task/c-g`:** contract clean; ruff clean (check + format); pytest 3935 passed, 16 skipped,
+15 deselected; lint clean (0 errors, 22 pre-existing warnings); vitest 3541 passed (529 files); build
+ok; e2e 134 passed (ports 5600/5601), 0 failed, 0 flaky; cargo test skipped (no frozen sidecar in this
+worktree). `main` (`95441bbd`) is not an ancestor of `HEAD` — two later merges landed after the cut;
+not rebased, per the coordinator-merges instruction.
+Changes since the cut: pytest +14 (`test_pointcloud_scripts.py` 6 → 18, Task 10; +1 each in
+`test_pointcloud_profile_api.py` and `test_pointcloud_measurements_api.py`, Task 13); vitest +37 tests
+(net) in 15 files, 1 new (`cloudPerfLib.test.ts`, Task 7); e2e +13 (121 → 134): 3 new files
+(`clouds-journey.spec.ts`, `clouds-frame-time.spec.ts`, `clouds-gaps.spec.ts`), 3 rewritten
+(`clouds.spec.ts`, `clouds-no-webgl.spec.ts`, `pointcloud-foundation.spec.ts`), plus new cases in
+`cloud-report-views.spec.ts`, `clouds-cameras.spec.ts`, `clouds-engine.spec.ts` and
+`clouds-pins.spec.ts` (sources in the README's "Gate" section).
+
+**Open items:** criterion 2's re-pick misses (C-P1 / C-L1 follow-up); criterion 4's azimuth, where
+plan G7's noise and spec §16.4's ± 0.5° conflict (coordinator); the operator's checks (criteria 4
+chimney rows, 5 hand thickness, 7-8 eye checks; commands in `docs/evidence/clouds/walkthrough.md`);
+criterion 6's weak clip test; the driver's exit crash after a good `pins` run (Node 24.11 libuv) and
+the launcher's lack of port parameters (C-G follow-up); the occlusion cone's trade-off for far-side
+pins without a normal, and the spec §7 wording (coordinator); IMC-X: eyeball the shared `Input` and
+`Slider` in Images and Maps, and the sized fields that now keep their own width (Catalogue types
+search, Sources survey date, Site areas rename, Map layers contour interval, Map drawings EPSG and
+PDF page, the project types hotkey select; list in the README's "Changes to other units' code"), run `pnpm -C frontend check:webview` on the packaged exe (it expects
+`edl=on pins=50 capture=1600x1000`), and webview memory at a real 3 M points (measured at about 404 k);
+deferred minors B2-B7 and B9-B13 (`minors-triage.md` in the C-G SDD workspace).
+
 ## Maps (M) lands — 2026-09-28 (`task/m-x`, unit M-X evidence)
 
 Sub-project M (spec `docs/superpowers/specs/2026-09-26-map-workspace-design.md`, index

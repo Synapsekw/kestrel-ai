@@ -47,7 +47,7 @@ export function HintBar({
       <span className="min-w-0 truncate text-muted">{entry.hint}</span>
       <KeyChord chord={entry.shortcut} />
       {tool?.hint && <span className="flex items-center gap-2 border-l border-line pl-2">{tool.hint}</span>}
-      {tool?.onCommit && (
+      {tool?.onCommit && tool.hintActions !== false && (
         <span className="flex items-center gap-1.5 border-l border-line pl-2">
           <Button size="sm" variant="primary" disabled={tool.canCommit === false} onClick={tool.onCommit}>
             {tool.commitLabel ?? "Save"} <KeyChord chord={cloudShortcut("commit")} />

@@ -45,4 +45,17 @@ describe("the hint bar's Save and Cancel", () => {
     expect(screen.getByRole("button", { name: /Save area/ }).querySelector("kbd")).toHaveTextContent("Enter");
     expect(screen.getByRole("button", { name: /Cancel/ }).querySelector("kbd")).toHaveTextContent("Esc");
   });
+
+  it("stay hidden when the tool shows its own (hintActions: false)", () => {
+    render(
+      <HintBar
+        entry={ENTRY.pin}
+        tool={{ id: "pin", picks: true, onCommit: () => {}, commitLabel: "Create", hintActions: false }}
+        progress={null}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Create/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Cancel/ })).toBeNull();
+  });
 });

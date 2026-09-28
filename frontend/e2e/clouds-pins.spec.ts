@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, redGreenGrid, routeOctree, type FixturePoint } from "./fixtures/potreeOctree";
+import { engineIdle } from "./fixtures/cloudWorkspace";
 import { SWIFTSHADER_ARGS, viewerSettled } from "./fixtures/viewer";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -193,6 +194,45 @@ test("occlusion: a pin behind the wall gets back after settle, a pin in front st
     .toEqual({ "1": "back", "2": "visible" });
 });
 
+/** A flat 200 × 200 m ground (2 m grid, z = 0) with a 20 × 20 m roof (1 m grid) at z = 15 over its
+ * centre: the whole site in view puts about 0.6 m on a pixel. */
+function groundAndRoof(): FixturePoint[] {
+  const out: FixturePoint[] = [];
+  for (let x = -100; x <= 100; x += 2)
+    for (let y = -100; y <= 100; y += 2)
+      out.push({ x: 243550 + x, y: 3178050 + y, z: 0, r: 60, g: 200, b: 60 });
+  for (let x = -10; x <= 10; x += 1)
+    for (let y = -10; y <= 10; y += 1)
+      out.push({ x: 243550 + x, y: 3178050 + y, z: 15, r: 200, g: 60, b: 60 });
+  return out;
+}
+
+test("occlusion, whole site in view: a pin on open ground stays visible, a pin under the roof gets back", async ({
+  page,
+}) => {
+  // Task 17 (the chimney's rim pin): with the whole cloud in view the 3 px disk around a pin spans
+  // metres, and the pin's own surface seen obliquely has drawn points in it nearer than the pin by
+  // more than the tolerance. Only points on the line of sight may occlude.
+  await routeProjectWithType(page);
+  await routeCloud(page, groundAndRoof(), [243450, 3177950, 0, 243650, 3178150, 15]);
+  await routeFindings(page, [
+    finding("f0000000-0000-4000-8000-000000000001", 1, { x: 243600, y: 3178000, z: 0 }), // open ground
+    finding("f0000000-0000-4000-8000-000000000002", 2, { x: 243550, y: 3178050, z: 0 }), // under the roof
+  ]);
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await expect.poll(async () => (await pinsDiag(page)).length, { timeout: 10_000 }).toBe(2);
+  for (const view of ["iso", "top"] as const) {
+    await page.evaluate((v) => window.__kestrelCloudViewer!.setView(v), view);
+    await viewerSettled(page);
+    await expect
+      .poll(async () => Object.fromEntries((await pinsDiag(page)).map((p) => [p.id.slice(-1), p.state])), {
+        timeout: 10_000,
+      })
+      .toEqual({ "1": "visible", "2": "back" });
+  }
+});
+
 test("idle: 0 animation frames and no running animation 1 s after settle with 50 pins", async ({ page }) => {
   await routeProjectWithType(page);
   const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 });
@@ -224,6 +264,8 @@ test("idle: 0 animation frames and no running animation 1 s after settle with 50
   const pastHintFade = 2_400 + 500 - (Date.now() - navStart);
   if (pastHintFade > 0) await page.waitForTimeout(pastHintFade);
   await page.waitForTimeout(1_200);
+  // and the loop has stopped (C-G final review C1: a fixed wait can open on the loop's own tail)
+  await engineIdle(page);
   const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
   const before = await frames();
   await page.waitForTimeout(1_000);
@@ -243,4 +285,54 @@ test("idle: 0 animation frames and no running animation 1 s after settle with 50
   const pass = rows[0]?.passMs ?? -1;
   console.info(`pins pass with 50 pins: ${pass.toFixed(3)} ms`);
   expect(rows).toHaveLength(50);
+});
+
+// C-G final review m7: findings that answer after the view has settled are placed without a camera
+// move (the layer asks for one frame), and the loop idles again after it.
+test("findings that answer after settle get their pin without a camera move, then the loop idles", async ({
+  page,
+}) => {
+  await routeProjectWithType(page);
+  const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 });
+  await routeCloud(page, grid, [243500, 3178000, 0, 243600, 3178100, 2]);
+  const late = "f0000000-0000-4000-8000-000000000077";
+  await routeFindings(page, [finding(late, 77, { x: 243550, y: 3178050, z: 1 })]);
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route(
+    (u) => u.pathname === `/api/v1/projects/${P}/findings`,
+    async (route) => {
+      if (route.request().method() === "GET") await held;
+      return route.fallback();
+    },
+  );
+  await page.addInitScript(() => {
+    const w = window as unknown as { __frames: number };
+    const raf = window.requestAnimationFrame.bind(window);
+    w.__frames = 0;
+    window.requestAnimationFrame = (cb) => {
+      w.__frames++;
+      return raf(cb);
+    };
+  });
+  const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await engineIdle(page);
+  expect(await pinsDiag(page)).toEqual([]);
+  const pose = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose());
+  release();
+  await expect
+    .poll(async () =>
+      (await pinsDiag(page)).map((p) => ({
+        id: p.id,
+        placed: p.state !== "hidden" && Number.isFinite(p.x) && Number.isFinite(p.y),
+      })),
+    )
+    .toEqual([{ id: late, placed: true }]);
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose())).toEqual(pose);
+  await engineIdle(page);
+  const before = await frames();
+  await page.waitForTimeout(1_000);
+  expect(await frames()).toBe(before);
 });

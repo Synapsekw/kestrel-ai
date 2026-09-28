@@ -98,12 +98,32 @@ export function hitsNear(
   return out;
 }
 
-const dist = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+/**
+ * How far off the pin's line of sight a drawn point may lie per metre it is nearer (Task 17). A visible
+ * surface through the pin, seen at an angle θ from its normal, has neighbours nearer by about their
+ * distance from the line × tan θ; 2 lets surfaces seen up to atan 2 ≈ 63° from their normal never
+ * occlude their own pin. With the whole chimney in view the 3 px disk is about 5 m across, so the
+ * rim beside a pin, not in front of it, read as occluding it.
+ */
+export const OCCLUSION_CONE_SLOPE = 2;
 
-/** Occluded when a drawn point is nearer the camera than the pin by more than `tolM`. */
+/** Occluded when a drawn point is in front of the pin: nearer along the line of sight by more than
+ * `tolM` plus `OCCLUSION_CONE_SLOPE` × its distance from that line. */
 export function isOccluded(camera: Vec3, pin: Vec3, near: readonly Vec3[], tolM: number): boolean {
-  const dPin = dist(camera, pin);
-  return near.some((q) => dist(camera, q) < dPin - tolM);
+  const dx = pin[0] - camera[0];
+  const dy = pin[1] - camera[1];
+  const dz = pin[2] - camera[2];
+  const dPin = Math.hypot(dx, dy, dz);
+  if (dPin === 0) return false;
+  const [ux, uy, uz] = [dx / dPin, dy / dPin, dz / dPin];
+  return near.some((q) => {
+    const sx = q[0] - camera[0];
+    const sy = q[1] - camera[1];
+    const sz = q[2] - camera[2];
+    const along = sx * ux + sy * uy + sz * uz;
+    const off = Math.hypot(sx - along * ux, sy - along * uy, sz - along * uz);
+    return dPin - along - tolM > OCCLUSION_CONE_SLOPE * off;
+  });
 }
 
 /** The visible nodes nearest the camera first, at most `max` (plan Ruling 11). */

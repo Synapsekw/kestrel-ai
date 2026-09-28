@@ -111,7 +111,9 @@ describe("useFindingArrival", () => {
       `/p/${PROJECT_ID}/clouds/${CLOUD_ID}?finding=f-1`,
       pinsState([["f-1", view]]),
     );
-    await waitFor(() => expect(m.onArrive).toHaveBeenCalledWith("f-1"));
+    await waitFor(() =>
+      expect(m.onArrive).toHaveBeenCalledWith("f-1", expect.objectContaining({ id: "f-1" })),
+    );
     expect(m.viewer.current!.goToPose).not.toHaveBeenCalled();
     m.showPoints();
     await waitFor(() => expect(m.viewer.current!.goToPose).toHaveBeenCalledTimes(1));
@@ -138,7 +140,9 @@ describe("useFindingArrival", () => {
     );
     await waitFor(() => expect(location()).toBe(`/p/${PROJECT_ID}/clouds/${OTHER}?finding=f-1`));
     // the same route now names the anchor's cloud: the hook reads the finding again and selects it
-    await waitFor(() => expect(m.onArrive).toHaveBeenCalledWith("f-1"));
+    await waitFor(() =>
+      expect(m.onArrive).toHaveBeenCalledWith("f-1", expect.objectContaining({ id: "f-1" })),
+    );
     expect(m.requests.filter((r) => r.method === "GET")).toHaveLength(2);
   });
 

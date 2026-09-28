@@ -11,7 +11,7 @@ import { at } from "@/clouds/pins/testCamera";
 import { LAST_TYPE_KEY } from "@/clouds/pins/usePinTool";
 import { DEFAULT_SEAMS, WorkspaceSeamsContext } from "@/clouds/workspace/seams";
 import { useChangesStore } from "@/store/changes";
-import { fakeFetch, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
+import { errorBody, fakeFetch, PROJECT_ID, type FakeRoute, type RecordedRequest } from "@/test/fixtures";
 import { baseRoutes, exampleFinding, exampleFindingDetail, TYPE_SPALLING } from "@/test/findingFixtures";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { TestApiProvider } from "@/test/render";
@@ -100,6 +100,7 @@ function Harness({ ctx }: { ctx: FeatureContext }) {
       </button>
       <span data-testid="cancelled">{cancelled}</span>
       <span data-testid="tool">{`${tool.id} picks=${tool.picks} canCommit=${tool.canCommit}`}</span>
+      <span data-testid="hint-actions">{String(tool.hintActions !== false)}</span>
       <span data-testid="count">{f.findingsTab!.count}</span>
       <span data-testid="dots">{f.minimap!.length}</span>
       <span data-testid="marks">
@@ -135,9 +136,13 @@ function RoutedHarness({ ctx }: { ctx: FeatureContext }) {
   );
 }
 
-function mount(over: Partial<FeatureContext> = {}, opts: { gate?: Gate; routed?: boolean } = {}) {
+function mount(
+  over: Partial<FeatureContext> = {},
+  opts: { gate?: Gate; routed?: boolean; routes?: FakeRoute[] } = {},
+) {
   const { fetch: answer, requests } = fakeFetch(
     baseRoutes([
+      ...(opts.routes ?? []),
       // fakeFetch matches the pathname only (no query string).
       { method: "GET", path: /\/findings$/, body: { items: [saved], next_cursor: null } },
       { method: "GET", path: /\/pointclouds\/[^/]+\/views$/, body: { items: [] } },
@@ -221,9 +226,12 @@ describe("usePinsFeature", () => {
   it("a pick opens the draft; commit creates it once; cancel drops a draft", async () => {
     localStorage.setItem(LAST_TYPE_KEY, TYPE_SPALLING);
     const { requests } = mount();
+    expect(screen.getByTestId("hint-actions")).toHaveTextContent("true"); // no draft: the hint bar's Cancel
     await userEvent.click(screen.getByRole("button", { name: "pick" }));
     expect(await screen.findByTestId("pin-callout-create")).toBeInTheDocument();
     expect(screen.getByTestId("tool")).toHaveTextContent("canCommit=true");
+    // A5: the callout owns Create/Cancel for a draft; the hint bar does not repeat them.
+    expect(screen.getByTestId("hint-actions")).toHaveTextContent("false");
     await userEvent.click(screen.getByRole("button", { name: "commit" }));
     await waitFor(() => expect(count(requests, "POST")).toBe(1));
     await waitFor(() => expect(screen.queryByTestId("pin-callout-create")).toBeNull());
@@ -334,6 +342,149 @@ describe("usePinsFeature", () => {
     const patched = requests.findIndex((r) => r.method === "PATCH");
     expect(requests.slice(patched).some((r) => r.method === "GET" && /\/findings\?/.test(r.url))).toBe(false);
     await act(async () => gate.release());
+  });
+
+  describe("a ?finding= arrival outside the loaded pins (PIN_CAP)", () => {
+    const far: Finding = {
+      ...saved,
+      id: "f-far",
+      number: 901,
+      anchor: { ...(saved.anchor as Extract<Finding["anchor"], { kind: "cloud" }>), x: at(2, 0, 0)[0] },
+    };
+    /** The server's copy of f-far: PATCH writes it, DELETE removes it, GET reads it (404 once gone). */
+    function farServer() {
+      const state = { f: { ...exampleFindingDetail, ...far } as Record<string, unknown> | null };
+      const routes: FakeRoute[] = [
+        {
+          method: "GET",
+          path: /\/findings\/f-far$/,
+          status: () => (state.f ? 200 : 404),
+          body: () => state.f ?? errorBody("not_found", "Finding not found"),
+        },
+        {
+          method: "PATCH",
+          path: /\/findings\/f-far$/,
+          body: (r) => {
+            const patch = r.body as Record<string, unknown>;
+            const anchor = patch.anchor
+              ? { ...(state.f!.anchor as object), ...(patch.anchor as object) }
+              : state.f!.anchor;
+            state.f = { ...state.f!, ...patch, anchor };
+            return state.f;
+          },
+        },
+        {
+          method: "DELETE",
+          path: /\/findings\/f-far$/,
+          status: 204,
+          body: () => {
+            state.f = null;
+            return null;
+          },
+        },
+        { method: "GET", path: /\/findings\/f-far\/attachments$/, body: { items: [] } },
+        { method: "GET", path: /\/findings\/f-far\/comments/, body: { items: [], next_cursor: null } },
+      ];
+      return { state, routes };
+    }
+    const farHead = () => within(screen.getByTestId("cloud-pins")).queryByRole("button", { name: /F-0901/ });
+    const marks = () => JSON.parse(screen.getByTestId("marks").textContent!) as [string, number, number][];
+
+    it("adds its pin and opens its callout; a severity key updates it", async () => {
+      const server = farServer();
+      mount({ search: "?finding=f-far" }, { routes: server.routes });
+      await findRow(); // the loaded list (f-a only) has answered
+      await waitFor(() => expect(farHead()).not.toBeNull());
+      expect(farHead()!.closest("[data-selected]")).not.toBeNull();
+      expect(await screen.findByRole("dialog", { name: "Finding F-0901" })).toBeInTheDocument();
+      // the count stays the list's (the server's total), not the list plus the arrival
+      expect(screen.getByTestId("count")).toHaveTextContent("1");
+      blur();
+      await userEvent.keyboard("3");
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole("dialog", { name: "Finding F-0901" })).getByText(/./, {
+            selector: "[data-level]",
+          }),
+        ).toHaveAttribute("data-level", "3"),
+      );
+    });
+
+    it("an edit made elsewhere (the inspector, another window) reaches the added pin", async () => {
+      const server = farServer();
+      mount({ search: "?finding=f-far" }, { routes: server.routes });
+      await waitFor(() => expect(farHead()).not.toBeNull());
+      server.state.f = { ...server.state.f!, severity: 2 };
+      act(() => useChangesStore.getState().bumpFindings());
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole("dialog", { name: "Finding F-0901" })).getByText(/./, {
+            selector: "[data-level]",
+          }),
+        ).toHaveAttribute("data-level", "2"),
+      );
+    });
+
+    it("a delete from the inspector removes the added pin", async () => {
+      const server = farServer();
+      const { requests } = mount({ search: "?finding=f-far" }, { routes: server.routes });
+      await waitFor(() => expect(farHead()).not.toBeNull());
+      await userEvent.click(await screen.findByRole("button", { name: "Finding actions" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: /Delete/ }));
+      await userEvent.click(await screen.findByRole("button", { name: "Delete F-0901" }));
+      await waitFor(() => expect(count(requests, "DELETE")).toBe(1));
+      await waitFor(() => expect(farHead()).toBeNull());
+      expect(marks().map((m) => m[0])).toEqual(["F-0217"]);
+    });
+
+    it("Move pin moves the added pin, not back to its old spot", async () => {
+      const server = farServer();
+      const { requests } = mount(
+        { search: "?finding=f-far", activeTool: "orbit" },
+        { routes: server.routes },
+      );
+      await waitFor(() => expect(farHead()).not.toBeNull());
+      await userEvent.click(await screen.findByRole("button", { name: "Move pin" }));
+      await userEvent.click(screen.getByRole("button", { name: "pick elsewhere" }));
+      await waitFor(() => expect(count(requests, "PATCH")).toBe(1));
+      await waitFor(() =>
+        expect(marks().find((m) => m[0] === "F-0901")).toEqual([
+          "F-0901",
+          PICK_ELSEWHERE.x,
+          PICK_ELSEWHERE.y,
+        ]),
+      );
+    });
+  });
+
+  it("an in-cap ?finding= arrival leaves no ghost pin once the finding is deleted elsewhere", async () => {
+    let gone = false;
+    mount(
+      { search: "?finding=f-a" },
+      {
+        routes: [
+          {
+            method: "GET",
+            path: /\/findings$/,
+            body: () => ({ items: gone ? [] : [saved], next_cursor: null }),
+          },
+          {
+            method: "GET",
+            path: /\/findings\/f-a$/,
+            status: () => (gone ? 404 : 200),
+            body: () =>
+              gone ? errorBody("not_found", "Finding not found") : { ...exampleFindingDetail, ...saved },
+          },
+        ],
+      },
+    );
+    const head = () => within(screen.getByTestId("cloud-pins")).queryByRole("button", { name: /F-0217/ });
+    await waitFor(() => expect(head()!.closest("[data-selected]")).not.toBeNull()); // arrived and selected
+    gone = true;
+    act(() => useChangesStore.getState().bumpFindings());
+    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("0"));
+    expect(head()).toBeNull();
+    expect(screen.getByTestId("marks")).toHaveTextContent("[]");
   });
 
   it("a real Enter with focus outside the form creates exactly once, through W1's routing", async () => {

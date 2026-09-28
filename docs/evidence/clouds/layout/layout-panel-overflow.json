@@ -1,0 +1,25 @@
+{
+  "viewport": {
+    "w": 1416,
+    "h": 774
+  },
+  "panelBox": {
+    "x": 136,
+    "y": 70,
+    "w": 282,
+    "h": 364
+  },
+  "elementsPastRightEdge": 0,
+  "scrollers": [
+    {
+      "tag": "section",
+      "testid": "cloud-panel",
+      "cls": "glass-float rounded-panel stagger absolute left-[72px] top-3.5 z-10 flex max-h-[",
+      "overflowX": "auto",
+      "overflowY": "auto",
+      "scrollWidth": 280,
+      "clientWidth": 280,
+      "overflowPx": 0
+    }
+  ]
+}

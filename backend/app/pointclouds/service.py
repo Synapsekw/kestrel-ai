@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import func, select, update
 
-from app.db.models import Finding, GeoMap, Job, PointCloud, Surface
+from app.db.models import CloudMeasurement, Finding, GeoMap, Job, PointCloud, Surface
 from app.errors import AppError, not_found
 from app.findings import service as findings_service
 from app.findings import trash as findings_trash
@@ -232,10 +232,23 @@ def delete_cloud(
         exports = s.execute(
             select(Job.id, Job.params).where(Job.type == "pointcloud_export", Job.state.in_(LIVE))
         ).all()
-        job_ids = [row.job_id, *(j for j, params in exports if (params or {}).get("cloud_id") == cloud_id)]
+        profile_jobs = s.execute(
+            select(CloudMeasurement.job_id).where(
+                CloudMeasurement.point_cloud_id == cloud_id,
+                CloudMeasurement.kind == "profile",
+                CloudMeasurement.status == "computing",
+            )
+        ).scalars()
+        job_ids = [
+            row.job_id,
+            *(j for j, params in exports if (params or {}).get("cloud_id") == cloud_id),
+            *profile_jobs,
+        ]
         if any(j and is_live(j) for j in job_ids):
             raise AppError(
-                "job_running", "the point cloud has an import or export running; cancel it first", 409
+                "job_running",
+                "the point cloud has an import, export or cross-section running; cancel it first",
+                409,
             )
         n = s.execute(
             select(func.count())

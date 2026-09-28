@@ -10,13 +10,11 @@ from __future__ import annotations
 import json
 import math
 import os
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
-from pyproj import CRS
-from sqlalchemy import func, select, update
+from sqlalchemy import update
 
 from app.db.models import CloudMeasurement, Job, PointCloud
 from app.errors import AppError
@@ -27,7 +25,6 @@ from app.pointclouds.profile_cut import ProfileCut
 from app.pointclouds.schemas import CloudMeasurementCreate, CloudMeasurementOut, CloudMeasurementWithJob
 from app.projects.service import ProjectHandle
 
-LABEL = "Cross-section"
 DEFAULT_THICKNESS_M = 0.20
 DEFAULT_MAX_POINTS = 200_000
 MIN_LENGTH_M, MAX_LENGTH_M = 0.1, 2000.0
@@ -72,17 +69,6 @@ def _check_line(cloud, a: dict, b: dict, thickness: float) -> float:
     return length
 
 
-def _next_name(s, cloud_id: str) -> str:
-    pattern = re.compile(rf"^{re.escape(LABEL)} (\d+)$")
-    names = s.execute(
-        select(CloudMeasurement.name).where(
-            CloudMeasurement.point_cloud_id == cloud_id, CloudMeasurement.kind == "profile"
-        )
-    ).scalars()
-    numbers = [int(m.group(1)) for n in names if (m := pattern.match(n))]
-    return f"{LABEL} {max(numbers, default=0) + 1}"
-
-
 def _write_job_id(handle: ProjectHandle, measurement_id: str, job_id: str) -> None:
     with handle.session() as s:
         row = s.get(CloudMeasurement, measurement_id)
@@ -106,12 +92,7 @@ def create_profile_measurement(
     cloud = rows.require_ready(handle, cloud_id)
     if len(body.points) != 2:
         raise AppError("wrong_point_count", "a cross-section needs 2 points (the line A, B)", 422)
-    if cloud.crs_wkt and CRS.from_wkt(cloud.crs_wkt).is_geographic:
-        raise AppError(
-            "needs_projected_crs",
-            "distances need a projected coordinate system; this cloud is in degrees",
-            422,
-        )
+    measurements.require_projected_crs(cloud, "profile")
     a, b = (p.model_dump() for p in body.points)
     b["z"] = a["z"]  # the section line is horizontal (section 8.3, plan Ruling 3)
     given = body.params.model_dump(exclude_none=True) if body.params else {}
@@ -121,19 +102,11 @@ def create_profile_measurement(
     }
     _check_line(cloud, a, b, params["thickness_m"])
     with handle.session() as s:
-        count = s.execute(
-            select(func.count())
-            .select_from(CloudMeasurement)
-            .where(CloudMeasurement.point_cloud_id == cloud_id)
-        ).scalar_one()
-        if count >= measurements.MAX_PER_CLOUD:
-            raise AppError(
-                "measurement_limit", "this cloud already has 1 000 measurements; delete some first", 422
-            )
+        measurements.check_capacity(s, cloud_id)
         row = CloudMeasurement(
             point_cloud_id=cloud_id,
             kind="profile",
-            name=body.name or _next_name(s, cloud_id),
+            name=body.name or measurements.next_name(s, cloud_id, "profile"),
             note=body.note,
             points=[a, b],
             results={},

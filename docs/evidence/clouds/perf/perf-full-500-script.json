@@ -1,0 +1,119 @@
+{
+  "mode": "perf",
+  "effects": "full",
+  "budget": 3000000,
+  "cloud": {
+    "id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+    "points": 21697184
+  },
+  "build": "dev mode (Vite), Microsoft Edge over CDP",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "pinCount": 500,
+  "open": {
+    "warm": false,
+    "httpCacheCleared": true
+  },
+  "firstPointsMs": 600.4000000953674,
+  "settledMs": 1049.0999999046326,
+  "visiblePoints": 404407,
+  "pins": 500,
+  "pinsVisible": 86,
+  "edl": true,
+  "orbitRafCalls": 606,
+  "orbitInput": "script",
+  "orbitStart": null,
+  "orbitCameraMoved": 47.868,
+  "orbitRaf": {
+    "samples": 1811,
+    "p50": 16.7,
+    "p95": 16.8,
+    "max": 16.9
+  },
+  "orbitRender": {
+    "samples": 1081,
+    "p50": 16.7,
+    "p95": 25.5,
+    "max": 29.9
+  },
+  "orbitRenderRingExact": false,
+  "pinPass": {
+    "measured": true,
+    "totalMs": 143.775,
+    "framesRan": 285,
+    "ringFrames": 283,
+    "msPerFrame": 0.5045,
+    "hookPassMs": {
+      "samples": 83,
+      "p50": 0.5,
+      "p95": 0.6,
+      "max": 0.7
+    }
+  },
+  "duringOrbit": {
+    "occlusionMs": 0,
+    "occlusionCalls": 0,
+    "hoverPickCalls": 0
+  },
+  "occlusion": {
+    "measured": true,
+    "totalMs": 47.606,
+    "calls": 1,
+    "msPerSettle": 47.606,
+    "engineMs": 47.059,
+    "hook": {
+      "pins": 500,
+      "ms": 12.9,
+      "settled": true
+    }
+  },
+  "idle": {
+    "rafCalls": 0,
+    "renders": 0,
+    "rendersExact": true,
+    "animations": []
+  },
+  "hoverPathPoints": 86,
+  "hoverRuns": [
+    {
+      "seconds": 5.021,
+      "calls": 47,
+      "totalMs": 54.528,
+      "hz": 9.36,
+      "msPerCall": 1.16
+    },
+    {
+      "seconds": 5.013,
+      "calls": 46,
+      "totalMs": 47.97,
+      "hz": 9.18,
+      "msPerCall": 1.043
+    },
+    {
+      "seconds": 5.005,
+      "calls": 47,
+      "totalMs": 49.539,
+      "hz": 9.39,
+      "msPerCall": 1.054
+    }
+  ],
+  "hoverPickHz": 9.36,
+  "hoverPickMsPerCall": 1.054,
+  "fnNames": {
+    "pins": [
+      "frame@pinsController"
+    ],
+    "occlusion": [
+      "runOcclusion@PinsLayer"
+    ],
+    "hover": [
+      "pickAtClient"
+    ],
+    "occlusionEngine": "runOcclusion@viewer/occlusion"
+  },
+  "timingNote": "pin pass, occlusion and hover pick: CPU-profile estimates, 100 us sampling, with precise-coverage call counting on (ruling G5)",
+  "webviewPeakGB": 1.69,
+  "webviewSamples": 64,
+  "webviewProcesses": 11,
+  "problems": []
+}

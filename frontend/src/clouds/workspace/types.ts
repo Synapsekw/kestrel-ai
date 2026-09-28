@@ -35,6 +35,9 @@ export interface WorkspaceTool {
   onCommit?(): void;
   canCommit?: boolean;
   commitLabel?: string;
+  /** False hides the hint bar's Save/Cancel pair while the feature shows its own (Enter/Esc still
+   * route to `onCommit`/`onCancel`). Default true. */
+  hintActions?: boolean;
   /** Backspace: remove the last vertex. */
   onRemoveVertex?(): void;
   /** The first Esc. True when something was dropped (the tool stays armed); false returns to Orbit. */

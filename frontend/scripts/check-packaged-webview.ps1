@@ -68,7 +68,14 @@ try {
     $written = & $backendExe pointcloud-selftest --write-fixture $Cloud 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "could not write the fixture: $written" }
   }
-  $project = Invoke-Api POST "/projects" @{ name = "Webview check"; folder = (Join-Path $T "project"); classes = @(@{ name = "excavator"; colour = "#f97316" }); kind = "detect" }
+  # C-G: a defect type, so the driver can pin 50 cloud findings (spec section 15 "Packaged")
+  try {
+    $crackId = (Invoke-Api POST "/catalogue/types" @{ name = "Crack"; colour = "#ef4444"; kind = "defect" }).id
+  } catch {
+    $crackId = ((Invoke-Api GET "/catalogue/types" $null).items | Where-Object { $_.name -eq "Crack" } | Select-Object -First 1).id
+  }
+  if (-not $crackId) { throw "no Crack catalogue type" }
+  $project = Invoke-Api POST "/projects" @{ name = "Webview check"; folder = (Join-Path $T "project"); type_ids = @($crackId) }
   $created = Invoke-Api POST "/projects/$($project.id)/pointclouds" @{ path = $Cloud }
   $deadline = (Get-Date).AddMinutes(30)
   do {
@@ -90,6 +97,7 @@ try {
   if (-not $cdpUp) { throw "the packaged app opened no CDP endpoint on $cdp within 60 s" }
 
   $env:KESTREL_CDP_PORT = "$cdp"; $env:KESTREL_PROJECT_ID = $project.id; $env:KESTREL_CLOUD_ID = $created.cloud.id
+  $env:KESTREL_CRACK_TYPE = $crackId
   $env:KESTREL_BACKEND_URL = $script:Base; $env:KESTREL_TOKEN = $token; $env:KESTREL_BUDGET = "$Budget"
   $env:KESTREL_WEBVIEW_DIR = Join-Path $T "webview"; $env:KESTREL_WORK_DIR = $T
   $ErrorActionPreference = "Continue"
@@ -101,7 +109,7 @@ try {
   foreach ($p in @($app, $backend)) {
     if ($p -and -not $p.HasExited) { & taskkill /T /F /PID $p.Id 2>&1 | Out-Null }
   }
-  foreach ($n in "APP_TOKEN", "APP_PORT", "APP_DATA_DIR", "APP_BACKEND_URL", "APP_BACKEND_TOKEN", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "WEBVIEW2_USER_DATA_FOLDER", "KESTREL_CDP_PORT", "KESTREL_PROJECT_ID", "KESTREL_CLOUD_ID", "KESTREL_BACKEND_URL", "KESTREL_TOKEN", "KESTREL_BUDGET", "KESTREL_WEBVIEW_DIR", "KESTREL_WORK_DIR") {
+  foreach ($n in "APP_TOKEN", "APP_PORT", "APP_DATA_DIR", "APP_BACKEND_URL", "APP_BACKEND_TOKEN", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "WEBVIEW2_USER_DATA_FOLDER", "KESTREL_CDP_PORT", "KESTREL_PROJECT_ID", "KESTREL_CLOUD_ID", "KESTREL_BACKEND_URL", "KESTREL_TOKEN", "KESTREL_BUDGET", "KESTREL_WEBVIEW_DIR", "KESTREL_WORK_DIR", "KESTREL_CRACK_TYPE") {
     Remove-Item "Env:$n" -ErrorAction SilentlyContinue
   }
   if ($Keep) { Write-Host "work dir kept: $T" } else { Start-Sleep -Seconds 1; Remove-Item $T -Recurse -Force -ErrorAction SilentlyContinue }

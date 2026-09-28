@@ -5,20 +5,39 @@
   cancel  start an import, cancel it once the converter runs, report how long until no
           PotreeConverter.exe is left, and the cloud's final state
   export  export --cloud-id (in --project-id) as LAZ, report wall time and size ratio
+  setup      create a project (excavator + Crack types), import --source, and --photos when given;
+             print the ids the dev-mode launcher keeps (C-G)
+  shapes     write the synthetic 60-degree patch and 1-degree leaning cylinder, import them, and
+             post area / rings / two-point measurements (spec 2026-09-26 point-cloud workspace §16.3-4)
+  profile    post a cross-section across the stack at --rim, time the job, and report
+             profile_width_max_m and the top-band widths (§16.5)
+  crosscheck the same top-band widths straight from the source LAS, streamed in chunks (§16.5)
+  views      every stored report view: bytes, sha256 against listCloudViews, size, stale (§16.10)
+  cameras    the cameras payload's counts (§16.7 context)
 
-Each prints one JSON line. The backend's pid (--backend-pid) is needed for the RSS figures.
+Each prints one JSON line. The backend's pid (--backend-pid) is needed for the RSS figures. The token is
+--token, else KESTREL_TOKEN, else APP_TOKEN (the launcher keeps it off the command line).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
+import sys
 import threading
 import time
 from pathlib import Path
 
 import httpx
 import psutil
+
+# Run as a file (`python scripts\pointcloud_acceptance.py`), Python puts scripts/ on the path, not
+# backend/ (same as scripts/design_acceptance.py).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.pointclouds.profile_cut import EPS  # noqa: E402
 
 CONVERTER = "potreeconverter.exe"
 
@@ -89,9 +108,19 @@ class PeakSampler:
         return self.peak_tree
 
 
-def client(base: str, token: str) -> httpx.Client:
+def resolve_token(cli: str | None, environ) -> str | None:
+    """--token when given, else KESTREL_TOKEN, else APP_TOKEN: the dev-mode launcher passes the token
+    through the environment so it never appears on a process command line (C-G). None when there is
+    none: main() reports that as a usage error."""
+    return cli or environ.get("KESTREL_TOKEN") or environ.get("APP_TOKEN") or None
+
+
+def client(base: str, token: str, transport: httpx.BaseTransport | None = None) -> httpx.Client:
     return httpx.Client(
-        base_url=f"{base.rstrip('/')}/api/v1", headers={"Authorization": f"Bearer {token}"}, timeout=120
+        base_url=f"{base.rstrip('/')}/api/v1",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=120,
+        transport=transport,
     )
 
 
@@ -105,11 +134,13 @@ def wait_job(c: httpx.Client, project_id: str, job_id: str, timeout: float = 360
     raise TimeoutError(job_id)
 
 
-def ensure_catalogue_type(c: httpx.Client, name: str, colour: str, hotkey: str | None = None) -> str:
+def ensure_catalogue_type(
+    c: httpx.Client, name: str, colour: str, hotkey: str | None = None, kind: str = "object"
+) -> str:
     """POST /catalogue/types (spec 2026-09-26-foundation section 13b): a fresh type keeps its new
     id; a 409 `type_exists` reuses the existing live type of that name; a 409 `hotkey_conflict`
     retries once without the hotkey."""
-    body: dict = {"name": name, "colour": colour, "kind": "object"}
+    body: dict = {"name": name, "colour": colour, "kind": kind}
     if hotkey:
         body["hotkey"] = hotkey
     r = c.post("/catalogue/types", json=body)
@@ -122,22 +153,21 @@ def ensure_catalogue_type(c: httpx.Client, name: str, colour: str, hotkey: str |
     return r.json()["id"]
 
 
-def new_project(c: httpx.Client, folder: Path) -> str:
-    folder.mkdir(parents=True, exist_ok=True)
-    type_id = ensure_catalogue_type(c, "excavator", "#f97316")
-    body = {
-        "name": "Point-cloud acceptance",
-        "folder": str(folder),
-        "type_ids": [type_id],
-    }
+def new_project(c: httpx.Client, folder: Path) -> tuple[str, str]:
+    """A project with the excavator object type and the Crack defect type (3D findings need a
+    defect type). Returns (project id, Crack type id)."""
+    Path(folder).mkdir(parents=True, exist_ok=True)
+    excavator = ensure_catalogue_type(c, "excavator", "#f97316")
+    crack = ensure_catalogue_type(c, "Crack", "#ef4444", kind="defect")
+    body = {"name": "Point-cloud acceptance", "folder": str(folder), "type_ids": [excavator, crack]}
     r = c.post("/projects", json=body)
     r.raise_for_status()
-    return r.json()["id"]
+    return r.json()["id"], crack
 
 
 def run_import(a) -> dict:
     c = client(a.base, a.token)
-    pid = a.project_id or new_project(c, Path(a.project_folder))
+    pid = a.project_id or new_project(c, Path(a.project_folder))[0]
     before = psutil.Process(a.backend_pid).memory_info().rss if a.backend_pid else 0
     sampler = PeakSampler(a.backend_pid) if a.backend_pid else None
     if sampler:
@@ -174,7 +204,7 @@ def run_import(a) -> dict:
 
 def run_cancel(a) -> dict:
     c = client(a.base, a.token)
-    pid = a.project_id or new_project(c, Path(a.project_folder))
+    pid = a.project_id or new_project(c, Path(a.project_folder))[0]
     created = c.post(f"/projects/{pid}/pointclouds", json={"path": a.source}).json()
     job_id = created["job"]["id"]
     deadline = time.time() + 1800
@@ -229,19 +259,440 @@ def run_export(a) -> dict:
     }
 
 
+# ---- C-G: the point-cloud workspace (spec 2026-09-26-point-cloud-workspace sections 13 and 16) ----
+
+PATCH_ORIGIN = (500100.0, 3200100.0, 50.0)
+CYL_BASE = (500120.0, 3200100.0, 50.0)
+SHAPES_EPSG = 32639
+
+
+def tilted_patch(origin=PATCH_ORIGIN, width=2.0, height=1.5, tilt_deg=60.0, step=0.02):
+    """A width x height rectangle: `width` runs grid east, `height` rises `tilt_deg` from horizontal
+    towards grid north. Surface area width*height, plan area width*height*cos(tilt).
+    Returns (points (n, 3), corners (4, 3))."""
+    import numpy as np
+
+    o = np.asarray(origin, dtype=np.float64)
+    t = math.radians(tilt_deg)
+    u = np.array([1.0, 0.0, 0.0])
+    v = np.array([0.0, math.cos(t), math.sin(t)])
+    s = np.linspace(0.0, width, round(width / step) + 1)
+    r = np.linspace(0.0, height, round(height / step) + 1)
+    S, R = np.meshgrid(s, r)
+    pts = o + S.reshape(-1, 1) * u + R.reshape(-1, 1) * v
+    corners = np.array([o, o + width * u, o + width * u + height * v, o + height * v])
+    return pts, corners
+
+
+def _axis_centre(z_rel: float, lean_deg: float, azimuth_deg: float, base=CYL_BASE) -> tuple[float, float]:
+    shift = z_rel * math.tan(math.radians(lean_deg))
+    a = math.radians(azimuth_deg)
+    return base[0] + shift * math.sin(a), base[1] + shift * math.cos(a)
+
+
+def leaning_cylinder(
+    base=CYL_BASE, radius=1.0, height=20.0, lean_deg=1.0, azimuth_deg=90.0, dtheta_deg=5.0, dz=0.1
+):
+    """Horizontal circles of `radius` whose centres follow an axis leaning `lean_deg` from vertical
+    towards grid azimuth `azimuth_deg` (clockwise from north: 90 is east)."""
+    import numpy as np
+
+    zs = np.linspace(0.0, height, round(height / dz) + 1)
+    th = np.radians(np.arange(0.0, 360.0, dtheta_deg))
+    Z, TH = np.meshgrid(zs, th)
+    shift = Z * math.tan(math.radians(lean_deg))
+    a = math.radians(azimuth_deg)
+    x = base[0] + shift * math.sin(a) + radius * np.cos(TH)
+    y = base[1] + shift * math.cos(a) + radius * np.sin(TH)
+    return np.stack([x, y, base[2] + Z], axis=-1).reshape(-1, 3)
+
+
+def ring_picks(rng, sigma=0.01, k=8, z_low=1.0, z_high=19.0, radius=1.0, lean_deg=1.0, azimuth_deg=90.0):
+    """k picks round the lower ring (group 0) and k round the upper ring (group 1), each coordinate
+    with Gaussian noise `sigma` (ruling G7), as `CloudMeasurementPoint` dicts."""
+    out = []
+    for group, z_rel in ((0, z_low), (1, z_high)):
+        cx, cy = _axis_centre(z_rel, lean_deg, azimuth_deg)
+        for i in range(k):
+            t = 2 * math.pi * (i + 0.25) / k
+            n = rng.normal(0.0, sigma, 3) if sigma else (0.0, 0.0, 0.0)
+            out.append(
+                {
+                    "x": cx + radius * math.cos(t) + n[0],
+                    "y": cy + radius * math.sin(t) + n[1],
+                    "z": CYL_BASE[2] + z_rel + n[2],
+                    "uncertainty_m": 0.01,
+                    "group": group,
+                }
+            )
+    return out
+
+
+def face_picks(rng, sigma=0.01, z_low=1.0, z_high=19.0, radius=1.0, lean_deg=1.0, azimuth_deg=90.0):
+    """The two-point method's picks: the east face at the bottom and at the top, with noise."""
+    out = []
+    for z_rel in (z_low, z_high):
+        cx, cy = _axis_centre(z_rel, lean_deg, azimuth_deg)
+        n = rng.normal(0.0, sigma, 3) if sigma else (0.0, 0.0, 0.0)
+        out.append(
+            {"x": cx + radius + n[0], "y": cy + n[1], "z": CYL_BASE[2] + z_rel + n[2], "uncertainty_m": 0.01}
+        )
+    return out
+
+
+def write_shapes_las(path: Path) -> Path:
+    """The patch and the cylinder in one LAS 1.2 format 3 file in EPSG:32639 (patch red, cylinder grey)."""
+    import laspy
+    import numpy as np
+    from pyproj import CRS
+
+    patch, _ = tilted_patch()
+    cyl = leaning_cylinder()
+    xyz = np.vstack([patch, cyl])
+    header = laspy.LasHeader(point_format=3, version="1.2")
+    header.scales = np.array([0.001, 0.001, 0.001])
+    header.offsets = np.floor(xyz.min(axis=0))
+    header.add_crs(CRS.from_epsg(SHAPES_EPSG))
+    las = laspy.LasData(header)
+    las.x, las.y, las.z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+    colour = (
+        np.vstack([np.tile([220, 40, 40], (len(patch), 1)), np.tile([160, 160, 160], (len(cyl), 1))]) * 257
+    )
+    las.red, las.green, las.blue = colour[:, 0], colour[:, 1], colour[:, 2]
+    las.classification = np.full(len(xyz), 6, dtype=np.uint8)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    las.write(path)
+    return path
+
+
+def band_widths(s, z, z_lo: float, z_hi: float, bin_m: float = 0.1) -> list[dict]:
+    """Per `bin_m` height bin in [z_lo, z_hi): the extent max(s) - min(s) of the points in it (the
+    shell thickness when the section crosses one wall)."""
+    import numpy as np
+
+    s = np.asarray(s, dtype=np.float64)
+    z = np.asarray(z, dtype=np.float64)
+    keep = (z >= z_lo) & (z < z_hi)
+    idx = np.floor((z[keep] - z_lo) / bin_m).astype(int)
+    rows = []
+    for b in np.unique(idx):
+        sel = s[keep][idx == b]
+        rows.append(
+            {"z": z_lo + (b + 0.5) * bin_m, "width": float(sel.max() - sel.min()), "n": int(len(sel))}
+        )
+    return rows
+
+
+MIN_BIN_POINTS = 3
+"""A bin needs at least this many points to count towards the median (Task 18, task-11-report.md
+problem "C-B2 or the scenario"): the app's profile and this script's from-source crosscheck do not
+always agree on which points fall exactly on a slab edge (the app is inclusive within
+`profile_cut.EPS`; this crosscheck now matches it, see run_crosscheck), so a bin whose count sits
+right at the cutoff can hold N points on one side and N-1 on the other. At the old cutoff of 5, a
+5-vs-4 split meant the bin was scored on one side and dropped on the other, changing which values
+the median is even taken over. This does not make a bin's count immune to a one-point split - a
+3-vs-2 bin at this cutoff would flip exactly the same way - it only moves where that cutoff sits, to
+a count sparse enough that dropping the bin (rather than trusting a 3-point extent as a wall
+thickness) is the right call regardless of which side of it a boundary disagreement lands on."""
+
+
+def _summary(rows: list[dict]) -> dict:
+    widths = sorted(r["width"] for r in rows if r["n"] >= MIN_BIN_POINTS)
+    if not widths:
+        return {"bins": 0, "median_m": None, "max_m": None}
+    return {
+        "bins": len(widths),
+        "median_m": round(widths[len(widths) // 2], 4),
+        "max_m": round(widths[-1], 4),
+    }
+
+
+def _import(c: httpx.Client, pid: str, source: str) -> tuple[dict, dict, float]:
+    t0 = time.perf_counter()
+    r = c.post(f"/projects/{pid}/pointclouds", json={"path": source})
+    r.raise_for_status()
+    created = r.json()
+    job = wait_job(c, pid, created["job"]["id"])
+    return created, job, round(time.perf_counter() - t0, 2)
+
+
+def run_setup(a) -> dict:
+    c = client(a.base, a.token, getattr(a, "transport", None))
+    pid, crack = new_project(c, Path(a.project_folder))
+    created, job, wall = _import(c, pid, a.source)
+    out = {
+        "scenario": "setup",
+        "project_id": pid,
+        "cloud_id": created["cloud"]["id"],
+        "crack_type_id": crack,
+        "import_state": job["state"],
+        "import_error": job.get("error"),
+        "import_wall_s": wall,
+        "source_id": None,
+        "photos_state": None,
+        "photos_wall_s": None,
+    }
+    if getattr(a, "photos", None):
+        t0 = time.perf_counter()
+        r = c.post(f"/projects/{pid}/sources", json={"folder": a.photos})
+        r.raise_for_status()
+        made = r.json()
+        pjob = wait_job(c, pid, made["job"]["id"])
+        out.update(
+            source_id=made["source"]["id"],
+            photos_state=pjob["state"],
+            photos_wall_s=round(time.perf_counter() - t0, 2),
+        )
+    return out
+
+
+def run_shapes(a) -> dict:
+    import numpy as np
+
+    c = client(a.base, a.token, getattr(a, "transport", None))
+    pid = a.project_id or new_project(c, Path(a.project_folder))[0]
+    las = write_shapes_las(Path(a.project_folder) / "shapes.las")
+    created, job, _ = _import(c, pid, str(las))
+    cid = created["cloud"]["id"]
+    rng = np.random.default_rng(7)
+    _, corners = tilted_patch()
+    cases = {
+        "area": (
+            [{"x": float(p[0]), "y": float(p[1]), "z": float(p[2]), "uncertainty_m": 0.01} for p in corners],
+            "area",
+            {"mode": "surface"},
+        ),
+        "rings": (ring_picks(rng), "vertical", {"method": "rings"}),
+        "twopoint": (face_picks(rng), "vertical", {"method": "points"}),
+    }
+    out = {"scenario": "shapes", "project_id": pid, "cloud_id": cid, "import_state": job["state"]}
+    for name, (points, kind, params) in cases.items():
+        r = c.post(
+            f"/projects/{pid}/pointclouds/{cid}/measurements",
+            json={"kind": kind, "points": points, "params": params},
+        )
+        r.raise_for_status()
+        out[name] = {"points": points, "params": params, "server": r.json()["results"], "id": r.json()["id"]}
+    area = out["area"]["server"]
+    rings = out["rings"]["server"]
+    two = out["twopoint"]["server"]
+    out["checks"] = {
+        "surface_3_000_within_0_5pct": abs(area["area_surface_m2"] - 3.0) <= 0.015,
+        "plan_1_500_within_0_5pct": abs(area["area_plan_m2"] - 1.5) <= 0.0075,
+        "rings_angle_1_00_within_0_01": abs(rings["lean_angle_deg"] - 1.0) <= 0.01,
+        "rings_azimuth_90_within_0_5": abs(rings["lean_azimuth_deg"] - 90.0) <= 0.5,
+        "rings_error_deg": abs(rings["lean_angle_deg"] - 1.0),
+        "twopoint_error_deg": abs(two["lean_angle_deg"] - 1.0),
+    }
+    return out
+
+
+def _section(a) -> tuple[dict, dict, float]:
+    """The section line: from --outside-m east of the rim centre to the centre, at the rim's z."""
+    x, y, z = (float(v) for v in a.rim.split(","))
+    A = {"x": x + a.outside_m, "y": y, "z": z, "uncertainty_m": 0.05}
+    B = {"x": x, "y": y, "z": z, "uncertainty_m": 0.05}
+    return A, B, z
+
+
+def run_profile(a) -> dict:
+    c = client(a.base, a.token, getattr(a, "transport", None))
+    A, B, rim_z = _section(a)
+    t0 = time.perf_counter()
+    r = c.post(
+        f"/projects/{a.project_id}/pointclouds/{a.cloud_id}/measurements",
+        json={"kind": "profile", "points": [A, B], "params": {"thickness_m": a.thickness}},
+    )
+    r.raise_for_status()
+    made = r.json()
+    job = wait_job(c, a.project_id, made["job"]["id"])
+    wall = round(time.perf_counter() - t0, 2)
+    mid = made["measurement"]["id"]
+    m = c.get(f"/projects/{a.project_id}/pointclouds/{a.cloud_id}/measurements").json()
+    row = next(x for x in m["items"] if x["id"] == mid)
+    prof = c.get(f"/projects/{a.project_id}/pointclouds/{a.cloud_id}/measurements/{mid}/profile").json()
+    top = band_widths(prof["s"], prof["z"], rim_z - 10.0, rim_z + 0.5)
+    return {
+        "scenario": "profile",
+        "measurement_id": mid,
+        "state": job["state"],
+        "error": job.get("error"),
+        "wall_s": wall,
+        "line": [A, B],
+        "thickness_m": a.thickness,
+        "profile_width_max_m": row["results"]["profile_width_max_m"],
+        "profile_point_count": row["results"]["profile_point_count"],
+        "top_band": _summary(top),
+        "top_band_rows": top,
+    }
+
+
+def run_crosscheck(a) -> dict:
+    """The top-band widths from the source LAS itself (independent of app/pointclouds/profile.py):
+    chunks of 2 M points, only the slab kept.
+
+    The slab test mirrors `app/pointclouds/profile_cut.py::cut` exactly, `EPS` included: that inclusive
+    margin is a deliberate, ruled design choice (plan 2026-09-27-clouds-b2 Ruling 5, "slab and segment
+    edges are inclusive within EPS = 1e-6 m ... so exact edges survive float64 noise at UTM
+    magnitudes"), not a spec deviation. Task 18 (task-11-report.md criterion 5): without this margin
+    here, a point right at the slab edge could be on the app's side of the line and not this script's,
+    so a bin's point count (and, before MIN_BIN_POINTS, whether the bin counted towards the median at
+    all) could differ between the two for no reason but the two boundary rules disagreeing.
+
+    It also binds `s` and `z` to float32 and clips `s` to `[0, length]` before binning, exactly as
+    `cut()` does before it writes the stored profile (`profile_cut.py`: `s_parts.append(np.clip(s[keep],
+    0.0, length).astype(np.float32))`, `z_parts.append(z.astype(np.float32))`). `run_profile`'s "app"
+    top-band comes from that stored (float32, clipped) profile; without the same rounding here, an
+    edge point sitting near a 0.1 m height-bin boundary could round into a different `band_widths` bin
+    on this script's (float64) side than on the app's (float32) side even though it is the same real
+    point and both sides already agree on whether to keep it (Task 18 follow-up).
+    """
+    import laspy
+    import numpy as np
+
+    A, B, rim_z = _section(a)
+    ax, ay = A["x"], A["y"]
+    dx, dy = B["x"] - ax, B["y"] - ay
+    length = math.hypot(dx, dy)
+    ux, uy = dx / length, dy / length
+    half = a.thickness / 2
+    s_all, z_all = [], []
+    with laspy.open(a.source) as f:
+        for chunk in f.chunk_iterator(2_000_000):
+            x = np.asarray(chunk.x, dtype=np.float64) - ax
+            y = np.asarray(chunk.y, dtype=np.float64) - ay
+            s = x * ux + y * uy
+            t = -x * uy + y * ux
+            keep = (np.abs(t) <= half + EPS) & (s >= -EPS) & (s <= length + EPS)
+            z = np.asarray(chunk.z, dtype=np.float64)[keep]
+            s_all.append(np.clip(s[keep], 0.0, length).astype(np.float32))
+            z_all.append(z.astype(np.float32))
+    s = np.concatenate(s_all) if s_all else np.zeros(0)
+    z = np.concatenate(z_all) if z_all else np.zeros(0)
+    top = band_widths(s, z, rim_z - 10.0, rim_z + 0.5)
+    return {
+        "scenario": "crosscheck",
+        "slab_points": int(len(s)),
+        "line": [A, B],
+        "thickness_m": a.thickness,
+        "top_band": _summary(top),
+        "top_band_rows": top,
+    }
+
+
+def run_views(a) -> dict:
+    import hashlib
+    import io
+
+    from PIL import Image
+
+    c = client(a.base, a.token, getattr(a, "transport", None))
+    items = c.get(f"/projects/{a.project_id}/pointclouds/{a.cloud_id}/views").json()["items"]
+    rows = []
+    for v in items:  # one image in memory at a time (each at most 6 MiB)
+        path = (
+            f"/projects/{a.project_id}/findings/{v['subject_id']}/view3d"
+            if v["subject_kind"] == "finding"
+            else f"/projects/{a.project_id}/pointclouds/{a.cloud_id}/measurements/{v['subject_id']}/view3d"
+        )
+        data = c.get(path).content
+        with Image.open(io.BytesIO(data)) as im:
+            size = [im.width, im.height]
+        sha_ok = hashlib.sha256(data).hexdigest() == v["sha256"]
+        rows.append(
+            {
+                "subject_kind": v["subject_kind"],
+                "subject_id": v["subject_id"],
+                "size": size,
+                "bytes": len(data),
+                "sha_ok": sha_ok,
+                "stale": v["stale"],
+                "complete": v["render"]["complete"],
+                "edl": v["render"]["edl"],
+                "ok": sha_ok and size == [1600, 1000],
+            }
+        )
+    return {
+        "scenario": "views",
+        "count": len(rows),
+        "ok": sum(r["ok"] for r in rows),
+        "stale": sum(r["stale"] for r in rows),
+        "incomplete": sum(not r["complete"] for r in rows),
+        "rows": rows,
+    }
+
+
+def run_cameras(a) -> dict:
+    c = client(a.base, a.token, getattr(a, "transport", None))
+    r = c.get(f"/projects/{a.project_id}/pointclouds/{a.cloud_id}/cameras")
+    if r.status_code != 200:
+        return {"scenario": "cameras", "status": r.status_code, "error": r.json().get("error")}
+    s = r.json()
+    zs = sorted(v for v in s["z"] if v is not None)
+    return {
+        "scenario": "cameras",
+        "status": 200,
+        "cameras": len(s["image_id"]),
+        "posed": sum(v is not None for v in s["yaw"]),
+        "fov_assumed": sum(s["fov_assumed"]),
+        "without_gps": s["without_gps"],
+        "truncated": s["truncated"],
+        "sources": s["sources"],
+        "z_median": zs[len(zs) // 2] if zs else None,
+        "z_p1": s["z_p1"],
+        "z_p99": s["z_p99"],
+    }
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("scenario", choices=["import", "cancel", "export"])
-    p.add_argument("--base", required=True)
-    p.add_argument("--token", required=True)
-    p.add_argument("--project-folder", required=True)
+    p.add_argument(
+        "scenario",
+        choices=[
+            "import",
+            "cancel",
+            "export",
+            "setup",
+            "shapes",
+            "profile",
+            "crosscheck",
+            "views",
+            "cameras",
+        ],
+    )
+    p.add_argument("--base")
+    p.add_argument("--token", help="default: KESTREL_TOKEN, else APP_TOKEN")
+    p.add_argument("--project-folder")
     p.add_argument("--project-id")
     p.add_argument("--source")
     p.add_argument("--cloud-id")
     p.add_argument("--backend-pid", type=int)
+    p.add_argument("--photos")
+    p.add_argument("--rim", help="x,y,z of the stack's rim centre (profile, crosscheck)")
+    p.add_argument("--outside-m", type=float, default=8.0)
+    p.add_argument("--thickness", type=float, default=0.2)
+    p.add_argument("--out", help="also write the JSON line to this file")
     a = p.parse_args()
-    out = {"import": run_import, "cancel": run_cancel, "export": run_export}[a.scenario](a)
-    print(json.dumps(out))
+    a.token = resolve_token(a.token, os.environ)
+    if not a.token:
+        p.error("no token: pass --token or set KESTREL_TOKEN / APP_TOKEN")
+    run = {
+        "import": run_import,
+        "cancel": run_cancel,
+        "export": run_export,
+        "setup": run_setup,
+        "shapes": run_shapes,
+        "profile": run_profile,
+        "crosscheck": run_crosscheck,
+        "views": run_views,
+        "cameras": run_cameras,
+    }
+    out = run[a.scenario](a)
+    line = json.dumps(out)
+    if a.out:
+        Path(a.out).write_text(line + "\n", encoding="utf-8")
+    print(line)
     return 0
 
 

@@ -43,7 +43,7 @@ import { FLY_EXIT_AHEAD_M, FlyControls } from "./flyControls";
 import { FrameRing, frameInterval } from "./frameRing";
 import { shouldKeepRendering } from "./idle";
 import { letterbox, photoFrame, photoToCanvas, type LookPose, type LookThrough } from "./lookThrough";
-import { makeMaterialOptions, type ColourMode } from "./materialOptions";
+import { makeMaterialOptions, usesNewFormat, type ColourMode } from "./materialOptions";
 import { mouseButtonsFor, resolveNavMode } from "./navMode";
 import { runOcclusion } from "./occlusion";
 import { overlayObject, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
@@ -213,6 +213,8 @@ export function emptyStats(): ViewerStats {
     errors: [],
     contextLost: false,
     cameraDistance: 0,
+    idle: true,
+    frozen: false,
   };
 }
 
@@ -264,6 +266,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   let tween: Tween | null = null;
   let orbitScript: { until: number; radPerMs: number; resolve: () => void } | null = null;
   let pco: PointCloudOctree | null = null;
+  let octreeV2 = false; // potree-core's material.newFormat as built at load: toggled per colour mode
   let raf = 0;
   let chained = false;
   let lastTickAt: number | null = null;
@@ -389,6 +392,9 @@ export function createEngine(o: EngineOptions): CloudEngine {
     }
   }
 
+  /** A view command (fit, topView, lookAt, setView, goToPose) ran: the load keeps it (C-V1 hand-off M3). */
+  let viewRequested = false;
+
   function applyView(v: View): void {
     camera.position.set(v.position.x, v.position.y, v.position.z);
     controls.target.set(v.target.x, v.target.y, v.target.z);
@@ -401,6 +407,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
 
   /** Instant (S1 fit/topView/lookAt, plan Ruling 5). */
   function jump(v: View): void {
+    viewRequested = true;
     tween = null;
     frameDefault();
     applyView(v);
@@ -410,6 +417,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
 
   /** Tweened; synchronous under reduced motion. */
   function go(to: View): void {
+    viewRequested = true;
     tween = startTween(currentView(), to, performance.now(), isReducedMotion());
     if (tween.ms === 0) {
       applyView(to);
@@ -445,6 +453,11 @@ export function createEngine(o: EngineOptions): CloudEngine {
     pco.material.inputColorEncoding = m.inputColorEncoding as M["inputColorEncoding"];
     pco.material.outputColorEncoding = m.outputColorEncoding as M["outputColorEncoding"];
     pco.material.pointSizeType = m.pointSizeType as M["pointSizeType"];
+    const newFormat = usesNewFormat(colour, octreeV2);
+    if (pco.material.newFormat !== newFormat) {
+      pco.material.newFormat = newFormat; // not a shader-updating property in potree-core
+      pco.material.updateShaderSource();
+    }
     pco.material.pointColorType = m.pointColorType as M["pointColorType"];
     pco.material.size = m.size;
     pco.material.elevationRange = m.elevationRange;
@@ -724,10 +737,12 @@ export function createEngine(o: EngineOptions): CloudEngine {
         return;
       }
       loaded.material.gradient = VIRIDIS;
+      octreeV2 = loaded.material.newFormat;
       scene.add(loaded);
       pco = loaded;
       availability = colourAvailability(attributeNames(loaded.pcoGeometry));
-      if (bounds) applyView(wholeSiteView(bounds));
+      // A view requested before the load (a deep link, a report view's pose) is not overwritten.
+      if (bounds && !viewRequested) applyView(wholeSiteView(bounds));
       reseatFly(); // a rebuild restores fly before the octree loads: look on from the loaded view
       applyMaterial();
       applyClipToMaterial(loaded.material, clip);
@@ -932,7 +947,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       requestRender();
     },
     overlayKeys: () => [...new Set(overlay.children.map((c) => String(c.userData.key)))],
-    stats: () => ({ ...stats, errors: [...stats.errors] }),
+    stats: () => ({ ...stats, errors: [...stats.errors], idle: raf === 0, frozen }),
     sampleColours(): ColourSample {
       drawFrame();
       const gl = renderer.getContext();

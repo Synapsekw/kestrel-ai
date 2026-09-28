@@ -33,6 +33,44 @@ vi.mock("@/clouds/measuring/ProfilePanel", async (importOriginal) => {
   };
 });
 
+// The promises the feature awaits, recorded so a test can wait for an answer to have been handled
+// (its handler was attached first, so it has run by the time an await on the same promise resumes)
+// instead of sleeping a fixed time.
+const seen = vi.hoisted(() => ({
+  previews: [] as Promise<unknown>[],
+  profiles: new Map<string, Promise<unknown>>(),
+}));
+vi.mock("@/clouds/measuring/slab", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/clouds/measuring/slab")>();
+  return {
+    ...real,
+    previewSlab: (...args: Parameters<typeof real.previewSlab>) => {
+      const p = real.previewSlab(...args);
+      seen.previews.push(p);
+      return p;
+    },
+  };
+});
+vi.mock("@/api/cloudMeasurements", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/api/cloudMeasurements")>();
+  return {
+    ...real,
+    getCloudProfile: (...args: Parameters<typeof real.getCloudProfile>) => {
+      const p = real.getCloudProfile(...args);
+      seen.profiles.set(args[3], p);
+      return p;
+    },
+  };
+});
+/** Resolves once the feature has handled `p`'s answer (or rejection) and React has re-rendered. */
+const handled = (p: Promise<unknown> | undefined) =>
+  act(async () => {
+    await p?.then(
+      () => undefined,
+      () => undefined,
+    );
+  });
+
 const base = {
   point_cloud_id: CLOUD_ID,
   note: null,
@@ -159,6 +197,8 @@ beforeEach(() => {
   useChangesStore.setState({ pointcloudsRevision: 0 });
   useToastStore.getState().clear();
   panelProps.last = null;
+  seen.previews.length = 0;
+  seen.profiles.clear();
 });
 
 describe("the measure feature (C-M1 in C-W1's slot)", () => {
@@ -249,7 +289,8 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
       m.tool().onCommit!();
     });
     await waitFor(() => expect(posts(m.requests)).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 20));
+    // The save has settled (its row is listed): a second POST could only have been sent before it.
+    await screen.findByRole("button", { name: /Distance 1/ });
     expect(posts(m.requests)).toHaveLength(1);
   });
 
@@ -341,7 +382,7 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     await act(async () => waiting[1]());
     await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
     await act(async () => waiting[0]());
-    await new Promise((r) => setTimeout(r, 20));
+    await handled(seen.previews[0]);
     expect(panelProps.last?.data?.count).toBe(3);
     expect(panelProps.last?.line.a.y).toBe(N + 30);
     // A new line C while its sample is pending: B's preview is not C's section (the key gate).
@@ -504,7 +545,7 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
       expect(screen.getByTestId("profile-caption")).toHaveTextContent("Full resolution · 2 points"),
     );
     release();
-    await new Promise((r) => setTimeout(r, 20));
+    await handled(seen.profiles.get("r1"));
     expect(screen.getByTestId("profile-caption")).toHaveTextContent("Full resolution · 2 points");
   });
 
@@ -662,7 +703,10 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     m.tap([pick(E, N, 5), pick(E + 12, N, 5)]);
     await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
     await userEvent.click(screen.getByRole("button", { name: /Section c1/ }));
-    await new Promise((r) => setTimeout(r, 20));
+    // Choosing samples synchronously, if at all: once the row shows chosen, the call would be in.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Section c1/ })).toHaveAttribute("aria-pressed", "true"),
+    );
     expect(m.viewer.h.sampleSlab).toHaveBeenCalledTimes(1);
     expect(panelProps.last?.line.a.y).toBe(N);
     expect(panelProps.last?.data?.count).toBe(3);
@@ -684,6 +728,84 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     );
     await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
     expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("profile file missing");
+  });
+
+  it("a fallback preview is dropped when the ready row changes (C-G final review m9)", async () => {
+    const rows = [savedProfile("r3", "ready", N + 20)];
+    let profileCalls = 0;
+    // the first read of r3's profile fails (the fallback samples the line); the next one, for the
+    // row's new version, is still on its way
+    const secondHangs = (api: ApiClient): ApiClient =>
+      ({
+        ...api,
+        GET: ((path: string, init: unknown) =>
+          path.endsWith("/profile") && ++profileCalls > 1
+            ? new Promise(() => undefined)
+            : api.GET(path as never, init as never)) as ApiClient["GET"],
+      }) as ApiClient;
+    mount(
+      "orbit",
+      [
+        listRoute(() => rows),
+        {
+          method: "GET",
+          path: /\/measurements\/r3\/profile$/,
+          status: 500,
+          body: errorBody("internal", "profile file missing"),
+        },
+      ],
+      secondHangs,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /Section r3/ }));
+    await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
+    rows[0] = { ...rows[0], updated_at: "2026-09-27T10:05:00Z" };
+    act(() => useChangesStore.setState((s) => ({ pointcloudsRevision: s.pointcloudsRevision + 1 })));
+    await waitFor(() => expect(profileCalls).toBe(2));
+    // the old version's fallback must not stand in for the new version while it loads
+    await waitFor(() => expect(panelProps.last?.data ?? null).toBeNull());
+  });
+
+  it("a ready row's fallback preview never takes over a draft line's preview (m5)", async () => {
+    const m = mount("section", [
+      listRoute(() => [savedProfile("r3", "ready", N + 20)]),
+      {
+        method: "GET",
+        path: /\/measurements\/r3\/profile$/,
+        status: 500,
+        body: errorBody("internal", "profile file missing"),
+      },
+    ]);
+    await screen.findByTestId("measure-hint");
+    let releaseDraft: () => void = () => undefined;
+    m.viewer.h.sampleSlab.mockImplementation(
+      (a: number[], b: number[], thicknessM: number) =>
+        new Promise((resolve) => {
+          const count = m.viewer.h.sampleSlab.mock.calls.length === 1 ? 7 : 3;
+          const answer = () =>
+            resolve({
+              s: new Float64Array(count),
+              z: new Float64Array(count),
+              rgb: null,
+              count,
+              total: count,
+              a,
+              b,
+              thicknessM,
+            });
+          if (count === 7) releaseDraft = answer;
+          else answer();
+        }),
+    );
+    m.tap([pick(E, N, 5), pick(E + 12, N, 5)]); // the draft line: its answer is held back
+    await userEvent.click(await screen.findByRole("button", { name: /Section r3/ }));
+    // r3's stored profile fails: the fallback samples r3's line and answers first.
+    await waitFor(() => expect(seen.previews).toHaveLength(2));
+    await handled(seen.previews[1]);
+    expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("profile file missing");
+    releaseDraft();
+    await handled(seen.previews[0]);
+    expect(panelProps.last?.line.a.y).toBe(N);
+    expect(panelProps.last?.data?.count).toBe(7);
   });
 
   it("Enter on an open bow-tie refuses without closing it, so the next click corrects it", async () => {

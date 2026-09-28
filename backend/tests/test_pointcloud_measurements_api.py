@@ -1,7 +1,11 @@
 """Measurement CRUD (spec §4.1 ops 8-11, §9): server-computed results, refusals, the cap, events."""
 
+import threading
+import time
+
 import pytest
-from pointclouds import insert_cloud
+from pointclouds import insert_cloud, make_las
+from profile_helpers import cloud_from_las, line_points, wall_section
 from pyproj import CRS, Transformer
 
 from app.db.models import CloudMeasurement
@@ -132,6 +136,37 @@ def test_unknown_cloud_404_and_not_ready_409(client, project_id, handle):
     assert client.post(murl(project_id, "nope"), json=body).status_code == 404
     importing = insert_cloud(handle, status="importing")
     assert client.post(murl(project_id, importing), json=body).status_code == 409
+
+
+def _blocking_cut(started: threading.Event):
+    """Blocks in the cut's own cancellation check, the same seam the real cut streams through."""
+
+    def cut(source, *, a, b, thickness_m, max_points, scale, progress, check_cancelled):
+        started.set()
+        while True:
+            check_cancelled()
+            time.sleep(0.05)
+
+    return cut
+
+
+def test_delete_cancels_a_running_profile_job(client, project_id, handle, wait_job, monkeypatch, tmp_path):
+    """A2: deleting a `computing` profile measurement cancels its live job before/while the row goes;
+    the job's own settle check (`profile._settleable`) already tolerates the row being gone, so it
+    never writes a result back into the deleted measurement."""
+    started = threading.Event()
+    monkeypatch.setattr("app.pointclouds.profile_cut.cut", _blocking_cut(started))
+    cloud_id = cloud_from_las(handle, make_las(tmp_path / "wall.las", 0, points=wall_section()))
+    created = client.post(murl(project_id, cloud_id), json={"kind": "profile", "points": line_points()})
+    assert created.status_code == 202, created.text
+    payload = created.json()
+    mid, job_id = payload["measurement"]["id"], payload["job"]["id"]
+    assert started.wait(20)
+
+    assert client.delete(murl(project_id, cloud_id, mid)).status_code == 204
+    assert wait_job(project_id, job_id)["state"] == "cancelled"
+    with handle.session() as s:
+        assert s.get(CloudMeasurement, mid) is None
 
 
 def test_changes_publish_pointclouds_changed(client, project_id, cloud_id, app):

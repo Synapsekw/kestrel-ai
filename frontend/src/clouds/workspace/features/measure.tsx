@@ -92,6 +92,9 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
   /** The line the latest preview request was for; answers for any other line are dropped. */
   const wantedPreview = useRef<string | null>(null);
   const [preview, setPreview] = useState<{ key: string; data: ProfileData } | null>(null);
+  /** A ready row's stand-in preview when its stored profile cannot be read: its own slot, so it
+   * never drops or replaces a draft line's preview (m5). */
+  const [fallback, setFallback] = useState<{ key: string; data: ProfileData } | null>(null);
   const [full, setFull] = useState<{ key: string; data: ProfileData } | null>(null);
 
   const sel = list.selected;
@@ -174,12 +177,20 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
         toast("danger", messageOf(e, "could not load the profile"));
         // Rather than an empty chart for good: the display points' preview of the same line.
         const v = viewer.current;
-        if (v && selLineJson) sampleWith(v, JSON.parse(selLineJson) as SectionLine);
+        if (!v || !selLineJson) return;
+        void previewSlab(v, JSON.parse(selLineJson) as SectionLine)
+          .then((r) => {
+            if (current) setFallback(r);
+          })
+          .catch((err: unknown) => toast("danger", messageOf(err, "could not sample the section")));
       });
     return () => {
       current = false;
+      // the fallback belongs to this version of the row: a new readyKey (another row, or this one
+      // recomputed) must not show it while its own profile loads (C-G final review m9)
+      setFallback(null);
     };
-  }, [api, projectId, cloud.id, selId, readyKey, selLineJson, viewer, sampleWith]);
+  }, [api, projectId, cloud.id, selId, readyKey, selLineJson, viewer]);
 
   const persist = useCallback(
     async (body: CloudMeasurementCreate, { select = true }: { select?: boolean } = {}): Promise<boolean> => {
@@ -299,7 +310,12 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
         ? headline(sel.kind, sel.params, sel.results, sel.points)
         : null;
   const fullData = !draftLine && full && full.key === readyKey ? full.data : null;
-  const previewData = preview && key && preview.key === key ? preview.data : null;
+  const previewData =
+    preview && key && preview.key === key
+      ? preview.data
+      : fallback && key && fallback.key === key
+        ? fallback.data
+        : null;
   const status: ProfileStatus = draftLine ? "draft" : (sel?.status ?? "draft");
   const canCommit = (isComplete(state) || canCloseArea(state)) && !live.refusal && !list.full && !saving;
 

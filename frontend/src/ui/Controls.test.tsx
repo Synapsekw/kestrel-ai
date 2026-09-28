@@ -146,6 +146,36 @@ describe("Select", () => {
     );
     expect(screen.getByRole("combobox", { name: "Class" }).parentElement!.className).toContain("w-full");
   });
+
+  // Its doc: the wrapper carries the width, the select itself is always full width inside it (C-G
+  // final review I4: fieldClass's width rule must not strip the select's own w-full).
+  it("keeps the select itself full width inside a sized wrapper", () => {
+    render(
+      <Select aria-label="Hotkey" wrapperClassName="w-32" className="font-mono">
+        <option value="">none</option>
+      </Select>,
+    );
+    const select = screen.getByRole("combobox", { name: "Hotkey" });
+    expect(select.className.split(/\s+/)).toContain("w-full");
+    expect(select.parentElement!.className.split(/\s+/)).toContain("w-32");
+  });
+});
+
+describe("Input", () => {
+  // Same gotcha as Select above (`fieldClass`, Input.tsx): a caller's own width class (e.g. a dense
+  // offset field at w-20, CamerasPanelRow.tsx) must replace the default full width, not lose to it,
+  // or the input claims the whole flex row and pushes its siblings into a horizontal scrollbar
+  // (task-18-brief.md item 1).
+  it("lets a caller's width class replace the default full width", () => {
+    render(<Input aria-label="Offset" className="w-20" />);
+    expect(screen.getByLabelText("Offset").className).toContain("w-20");
+    expect(screen.getByLabelText("Offset").className).not.toContain("w-full");
+  });
+
+  it("is full width when the caller gives no width class", () => {
+    render(<Input aria-label="Name" />);
+    expect(screen.getByLabelText("Name").className).toContain("w-full");
+  });
 });
 
 describe("Aero glass controls", () => {

@@ -125,8 +125,13 @@ export function PinsLayer({
     if (!ctl) return;
     const changed = ctl.setPins(views);
     // Pins that arrived or moved (Move pin → refetch) while the view is settled get their
-    // occlusion now: no settle is coming for them otherwise (review fix round 1).
-    if (changed.length > 0 && viewer.current) runOcclusion(viewer.current, ctl);
+    // occlusion now: no settle is coming for them otherwise (review fix round 1). They also need a
+    // frame to be projected at all: findings that answer after settle stayed unplaced until the
+    // camera moved (C-G final review m7). One request, from here, never from the settle listener.
+    if (changed.length > 0 && viewer.current) {
+      runOcclusion(viewer.current, ctl);
+      viewer.current.requestRender();
+    }
   }, [views, viewer]);
 
   useEffect(() => ctlRef.current?.setClip(toPinClip(clipBox)), [clipBox]);

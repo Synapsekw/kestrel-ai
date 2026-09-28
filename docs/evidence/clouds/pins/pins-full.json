@@ -1,0 +1,306 @@
+{
+  "mode": "pins",
+  "effects": "full",
+  "budget": 3000000,
+  "cloud": {
+    "id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+    "points": 21697184
+  },
+  "build": "dev mode (Vite), Microsoft Edge over CDP",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "pins": [
+    {
+      "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
+      "anchor": {
+        "kind": "cloud",
+        "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+        "x": 243514.86399929255,
+        "y": 3178241.330998263,
+        "z": 187.65099900020326,
+        "uncertainty_m": 0.17125732446288566
+      },
+      "captureMs": 874,
+      "viewStatus": 200
+    },
+    {
+      "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
+      "anchor": {
+        "kind": "cloud",
+        "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+        "x": 243519.49299804895,
+        "y": 3178256.1579998345,
+        "z": 173.83599921623866,
+        "uncertainty_m": 0.08562866223144283
+      },
+      "captureMs": 507,
+      "viewStatus": 200
+    },
+    {
+      "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
+      "anchor": {
+        "kind": "cloud",
+        "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+        "x": 243483.45599931397,
+        "y": 3178430.735998894,
+        "z": -7.393001058551789,
+        "uncertainty_m": 0.3425146489257713
+      },
+      "captureMs": 611,
+      "viewStatus": 200
+    },
+    {
+      "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
+      "anchor": {
+        "kind": "cloud",
+        "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+        "x": 243515.2789992544,
+        "y": 3178239.937998614,
+        "z": 186.21799823204677,
+        "uncertainty_m": 0.17125732446288566
+      },
+      "captureMs": 221,
+      "viewStatus": 200
+    },
+    {
+      "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
+      "anchor": {
+        "kind": "cloud",
+        "cloud_id": "4b8ed804-edaf-4df6-9b65-9c42c7b99ef4",
+        "x": 243503.5530109629,
+        "y": 3178472.323006458,
+        "z": 3.498004737304683,
+        "uncertainty_m": 0.3425146489257713
+      },
+      "captureMs": 331,
+      "viewStatus": 200
+    }
+  ],
+  "byView": {
+    "Top": [
+      {
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
+        "x": 724.5564809737349,
+        "y": 430.5867678672969,
+        "state": "visible",
+        "occluded": false,
+        "normal": [
+          -0.00686433296322691,
+          0.48905058434353166,
+          0.8722284143997031
+        ],
+        "passMs": 0.10000014305114746
+      },
+      {
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
+        "x": 728.4434494968401,
+        "y": 421.1503465260897,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0.10000014305114746
+      },
+      {
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
+        "x": 710.839936711828,
+        "y": 326.122111033729,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0.10000014305114746
+      },
+      {
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
+        "x": 725.5658424200869,
+        "y": 431.7313701037575,
+        "state": "visible",
+        "occluded": false,
+        "normal": [
+          -0.8762289276574375,
+          -0.34038221939518964,
+          0.34111993646795596
+        ],
+        "passMs": 0.10000014305114746
+      },
+      {
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
+        "x": 721.4946960516033,
+        "y": 302.6522732019619,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0.10000014305114746
+      }
+    ],
+    "Front": [
+      {
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
+        "x": 726.7490947030634,
+        "y": 322.8047998435178,
+        "state": "back",
+        "occluded": false,
+        "normal": [
+          -0.00686433296322691,
+          0.48905058434353166,
+          0.8722284143997031
+        ],
+        "passMs": 0
+      },
+      {
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
+        "x": 730.0495217804181,
+        "y": 332.6289510582614,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      },
+      {
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
+        "x": 714.2009364751332,
+        "y": 430.05442013191254,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      },
+      {
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
+        "x": 727.5513199560886,
+        "y": 324.5144846393081,
+        "state": "visible",
+        "occluded": false,
+        "normal": [
+          -0.8762289276574375,
+          -0.34038221939518964,
+          0.34111993646795596
+        ],
+        "passMs": 0
+      },
+      {
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
+        "x": 724.2832213976253,
+        "y": 424.55744520195276,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      }
+    ],
+    "Side": [
+      {
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
+        "x": 727.1666571513693,
+        "y": 326.5916125687067,
+        "state": "back",
+        "occluded": false,
+        "normal": [
+          -0.00686433296322691,
+          0.48905058434353166,
+          0.8722284143997031
+        ],
+        "passMs": 0
+      },
+      {
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
+        "x": 734.8231607182938,
+        "y": 334.60131316297105,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      },
+      {
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
+        "x": 825.9376016783978,
+        "y": 431.4524179782375,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      },
+      {
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
+        "x": 726.1595280284089,
+        "y": 328.2650073292615,
+        "state": "back",
+        "occluded": false,
+        "normal": [
+          -0.8762289276574375,
+          -0.34038221939518964,
+          0.34111993646795596
+        ],
+        "passMs": 0
+      },
+      {
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
+        "x": 849.4481931122089,
+        "y": 425.96262247689924,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      }
+    ],
+    "Iso": [
+      {
+        "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
+        "x": 719.886871418339,
+        "y": 334.4020966406632,
+        "state": "visible",
+        "occluded": false,
+        "normal": [
+          -0.00686433296322691,
+          0.48905058434353166,
+          0.8722284143997031
+        ],
+        "passMs": 0
+      },
+      {
+        "id": "a63381aa-6e26-4e5e-94ab-bde1992a08b0",
+        "x": 728.4868124553789,
+        "y": 340.9678085262368,
+        "state": "visible",
+        "occluded": false,
+        "normal": null,
+        "passMs": 0
+      },
+      {
+        "id": "2770059e-ffd8-42d2-90f2-1f0ab2b5bffa",
+        "x": 777.9410822923229,
+        "y": 384.50910361356586,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      },
+      {
+        "id": "47a8a5ad-44bb-45c8-9374-490a7aee74fc",
+        "x": 719.728726209174,
+        "y": 336.8315499300313,
+        "state": "back",
+        "occluded": false,
+        "normal": [
+          -0.8762289276574375,
+          -0.34038221939518964,
+          0.34111993646795596
+        ],
+        "passMs": 0
+      },
+      {
+        "id": "e6fca62a-1d6e-47f6-a4ae-aa9f4132af16",
+        "x": 798.7745397864388,
+        "y": 376.1575543099551,
+        "state": "back",
+        "occluded": true,
+        "normal": null,
+        "passMs": 0
+      }
+    ]
+  },
+  "moved": {
+    "id": "ec30f255-d2f3-40fb-be12-50a75c3f1f18",
+    "stale": false
+  },
+  "problems": []
+}

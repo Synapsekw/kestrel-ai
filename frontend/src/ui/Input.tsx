@@ -9,10 +9,18 @@ import {
 import { Icon } from "./Icon";
 import { cx, transition } from "./tokens";
 
-/** Shared field chrome: the field token, a quiet border, the accent focus ring, the invalid state. */
+/**
+ * Shared field chrome: the field token, a quiet border, the accent focus ring, the invalid state.
+ * `w-full` is the default width, but `cx()` does not resolve Tailwind conflicts (a plain string
+ * join, `tokens.ts`) and Tailwind's own generated order puts `w-full` after a numeric width like
+ * `w-20`, so it would otherwise always win over a caller's explicit width (the same gotcha
+ * `Select`'s `wrapperClassName` already guards against, in this file below). Skip the default
+ * whenever the caller's className already sets its own width.
+ */
 export const fieldClass = (invalid?: boolean, className?: string) =>
   cx(
-    "w-full rounded-control border bg-field text-base text-ink placeholder:text-dim",
+    !/(^|\s)w-/.test(className ?? "") && "w-full",
+    "rounded-control border bg-field text-base text-ink placeholder:text-dim",
     "hover:border-line-strong focus:outline-none focus:border-accent/60 focus:ring-[3px] focus:ring-accent/20",
     "disabled:opacity-45 disabled:pointer-events-none",
     invalid ? "border-danger" : "border-line",
@@ -85,7 +93,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         aria-invalid={invalid || undefined}
         className={fieldClass(
           invalid,
-          cx("appearance-none pr-8", dense ? "h-7 pl-2 text-sm" : "h-[34px] pl-3", className),
+          // always full width inside the wrapper, which carries the caller's width (see its doc)
+          cx("w-full appearance-none pr-8", dense ? "h-7 pl-2 text-sm" : "h-[34px] pl-3", className),
         )}
         {...rest}
       >

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudViewMeta, CloudViewOut, CloudViewPose } from "@contract/client";
+import { ApiFailure } from "@/api/errors";
 import { measurementOf, POSE, viewOut } from "@/test/cloudViewFixtures";
 import { VIEW_MAX_BYTES, type CaptureMark, type CaptureResult } from "../viewer/capture";
 import type { ViewSubject } from "../workspace/seams";
@@ -137,6 +138,40 @@ describe("the capture queue", () => {
     expect(uploads[1].meta.pose).toEqual(POSE); // refresh: the exact current pose, not auto framing
   });
 
+  it("a missing merged onto a waiting move keeps the move (the stronger reason)", async () => {
+    const { queue, engine, uploads } = harness({
+      storedView: (s) =>
+        s.id === "f1"
+          ? viewOut({ pose: { position: [0, -5, 5], target: [0, 0, 0], up: [0, 0, 1], fov_deg: 40 } })
+          : null,
+    });
+    const first = deferred<CaptureResult>();
+    engine.capture.mockImplementationOnce(() => first.promise);
+    const running = queue.enqueue(F2, "create");
+    await vi.waitFor(() => expect(engine.capture).toHaveBeenCalledTimes(1));
+    const a = queue.enqueue(F1, "move");
+    const b = queue.enqueue(F1, "missing", { quiet: true });
+    first.resolve(shot());
+    expect([await running, await a, await b]).toEqual(["saved", "saved", "saved"]);
+    expect(uploads[1].meta.pose.target).toEqual([1, 2, 3]); // auto-framed on the anchor, not the stored pose
+  });
+
+  it("a move merged onto a waiting missing replaces it", async () => {
+    const { queue, engine, uploads } = harness({
+      storedView: () =>
+        viewOut({ pose: { position: [0, -5, 5], target: [0, 0, 0], up: [0, 0, 1], fov_deg: 40 } }),
+    });
+    const first = deferred<CaptureResult>();
+    engine.capture.mockImplementationOnce(() => first.promise);
+    const running = queue.enqueue(F2, "create");
+    await vi.waitFor(() => expect(engine.capture).toHaveBeenCalledTimes(1));
+    const a = queue.enqueue(F1, "missing", { quiet: true });
+    const b = queue.enqueue(F1, "move");
+    first.resolve(shot());
+    expect([await running, await a, await b]).toEqual(["saved", "saved", "saved"]);
+    expect(uploads[1].meta.pose.target).toEqual([1, 2, 3]);
+  });
+
   it("dispose during a capture uploads nothing and reports nothing", async () => {
     const { queue, engine, deps } = harness();
     const first = deferred<CaptureResult>();
@@ -211,6 +246,26 @@ describe("the capture queue", () => {
     expect(await queue.enqueue(F2, "create")).toBe("saved");
     expect(deps.onFail).toHaveBeenCalledTimes(1);
     expect(deps.onFail).toHaveBeenCalledWith(F1, expect.any(Error), false);
+  });
+
+  it("a bulk missing job whose PUT answers not_found (the subject is gone) is a quiet skip", async () => {
+    const gone = new ApiFailure("not_found", "Finding not found", 404);
+    const upload = vi.fn().mockRejectedValue(gone);
+    const { queue, deps } = harness({ upload });
+    expect(await queue.enqueue(F1, "missing", { quiet: true })).toBe("skipped");
+    expect(deps.onFail).not.toHaveBeenCalled();
+    expect(deps.onBusy).toHaveBeenLastCalledWith("finding:f1", false);
+  });
+
+  it("an explicit capture of a deleted subject, or another 404, still fails", async () => {
+    const upload = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiFailure("not_found", "Finding not found", 404))
+      .mockRejectedValueOnce(new ApiFailure("cloud_gone", "Point cloud not found", 404));
+    const { queue, deps } = harness({ upload });
+    expect(await queue.enqueue(F1, "refresh")).toBe("failed");
+    expect(deps.onFail).toHaveBeenCalledWith(F1, expect.any(ApiFailure), false);
+    expect(await queue.enqueue(F1, "missing", { quiet: true })).toBe("failed");
   });
 
   it("an image over 6 MiB is not uploaded", async () => {
