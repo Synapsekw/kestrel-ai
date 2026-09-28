@@ -227,11 +227,11 @@ declare global {
 
 /** Installs `window.__kestrelThumbs` over `loader` (default: the app's singleton). Idempotent. */
 export function installThumbDiagnostics(loader: ThumbLoader = thumbLoader): void {
-  window.__kestrelThumbs = {
+  window.__kestrelThumbs = Object.freeze({
     inFlight: () => loader.inFlight,
     peak: () => loader.peak,
     resetPeak: () => loader.resetPeak(),
-  };
+  });
 }
 
 if (typeof window !== "undefined" && diagnosticsEnabled()) installThumbDiagnostics();

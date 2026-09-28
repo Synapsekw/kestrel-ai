@@ -148,7 +148,7 @@ describe("installThumbDiagnostics", () => {
   });
 
   it("exposes the loader's own inFlight/peak/resetPeak on window.__kestrelThumbs", async () => {
-    const { loader, started } = deferredFetch();
+    const { loader } = deferredFetch();
     installThumbDiagnostics(loader);
     const diag = window.__kestrelThumbs!;
     expect(diag.inFlight()).toBe(0);
@@ -160,10 +160,7 @@ describe("installThumbDiagnostics", () => {
     expect(diag.peak()).toBe(8); // resetPeak starts from the current inFlight, still 8
     ac.abort();
     await Promise.all(all);
-    await act(async () => {
-      started.forEach((s) => s.reject(new DOMException("aborted", "AbortError")));
-      await new Promise((r) => setTimeout(r, 0));
-    });
+    await new Promise((r) => setTimeout(r, 0)); // the slot frees in `finally`, a tick later
     expect(diag.inFlight()).toBe(0);
   });
 });
