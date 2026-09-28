@@ -103,6 +103,24 @@ describe("batchScopeOf", () => {
     expect(r).toEqual({ scope: { source_id: "src-1" }, scopeLabel: "This flight", scopeCount: null });
   });
 
+  it("a flight plus other filters sends the filter, source included, with the filtered count (I4)", () => {
+    const r = seams.batchScopeOf(
+      { ...defaults, sourceId: "src-1", unlabeled: true, severities: [3] },
+      null,
+      41,
+    );
+    expect(r).toEqual({
+      scope: { filter: { source_id: "src-1", unlabeled: true, severity: [3] } },
+      scopeLabel: "41 images in this flight",
+      scopeCount: 41,
+    });
+  });
+
+  it("a flight with only a different sort still sends the source (sorting narrows nothing)", () => {
+    const r = seams.batchScopeOf({ ...defaults, sourceId: "src-1", sort: "path", order: "desc" }, null, 312);
+    expect(r).toEqual({ scope: { source_id: "src-1" }, scopeLabel: "This flight", scopeCount: null });
+  });
+
   it("sends other filters as the contract's ImageFilter (arrays, booleans; no sort)", () => {
     const r = seams.batchScopeOf(
       {

@@ -209,7 +209,11 @@ function imageFilterOf(f: BrowserFilterState): ImageFilter {
   return q;
 }
 
-/** FA's batch scope: a selection or lasso → ids; a flight filter → the source; else the filters (never 100k ids). */
+/**
+ * FA's batch scope: a selection or lasso → ids; a flight as the ONLY narrowing filter → the source;
+ * else the filters, which carry the flight's `source_id` (I4; never 100k ids). Sort and order
+ * narrow nothing, so "only the flight" reads the contract filter, not every browser field.
+ */
 export function batchScopeOf(
   filters: BrowserFilterState,
   ids: readonly string[] | null,
@@ -217,9 +221,11 @@ export function batchScopeOf(
 ): { scope: BatchScope; scopeLabel: string; scopeCount: number | null } {
   if (ids && ids.length > 0)
     return { scope: { image_ids: [...ids] }, scopeLabel: `${ids.length} selected`, scopeCount: ids.length };
-  if (filters.sourceId)
-    return { scope: { source_id: filters.sourceId }, scopeLabel: "This flight", scopeCount: null };
-  return { scope: { filter: imageFilterOf(filters) }, scopeLabel: `${total} images`, scopeCount: total };
+  const filter = imageFilterOf(filters);
+  if (filter.source_id && Object.keys(filter).length === 1)
+    return { scope: { source_id: filter.source_id }, scopeLabel: "This flight", scopeCount: null };
+  const label = filter.source_id ? `${total} images in this flight` : `${total} images`;
+  return { scope: { filter }, scopeLabel: label, scopeCount: total };
 }
 
 /** Ruling 1: FC's plan lists the info chip and the measure readout as not FC's (confirmed on main). */
