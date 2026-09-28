@@ -69,8 +69,17 @@ export function moveCloudFinding(
   });
 }
 
-/** The cloud's findings, highest severity first, capped at 500; counts the rest in ≤ 10 pages. */
-export async function listCloudPins(api: ApiClient, projectId: string, cloudId: string): Promise<PinPage> {
+/**
+ * The cloud's findings, highest severity first, capped at 500; counts the rest in ≤ 10 pages.
+ * `stopped` is checked before each counting page: a superseded load stops its walk (the partial
+ * page it returns is discarded by the caller).
+ */
+export async function listCloudPins(
+  api: ApiClient,
+  projectId: string,
+  cloudId: string,
+  stopped: () => boolean = () => false,
+): Promise<PinPage> {
   const query: FindingListQuery = {
     anchor_kind: ["cloud"],
     data_id: cloudId,
@@ -81,6 +90,7 @@ export async function listCloudPins(api: ApiClient, projectId: string, cloudId: 
   let total = first.items.length;
   let cursor = first.next_cursor;
   for (let i = 0; i < PIN_COUNT_PAGES && cursor; i++) {
+    if (stopped()) break;
     const page = await listFindings(api, projectId, { ...query, cursor });
     total += page.items.length;
     cursor = page.next_cursor === cursor ? null : page.next_cursor;

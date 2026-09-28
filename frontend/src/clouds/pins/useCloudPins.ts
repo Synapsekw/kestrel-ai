@@ -67,14 +67,17 @@ export function useCloudPins(projectId: string, cloudId: string | null): CloudPi
   const [tick, setTick] = useState(0);
   const key = `${projectId}|${cloudId ?? ""}`;
   const loadedKey = useRef<string | null>(null);
+  // Set by `reload()` (own writes): the next load runs at once instead of after the debounce.
+  const immediate = useRef(false);
 
   useEffect(() => {
     if (!cloudId) return;
     let cancelled = false;
     const first = loadedKey.current !== key;
     const run = () => {
+      immediate.current = false;
       Promise.all([
-        listCloudPins(api, projectId, cloudId),
+        listCloudPins(api, projectId, cloudId, () => cancelled),
         listCloudViews(api, projectId, cloudId).catch((e: unknown) => {
           pushLog(`cloud views failed: ${messageOf(e, String(e))}`);
           return { items: [] as CloudViewOut[] };
@@ -98,14 +101,19 @@ export function useCloudPins(projectId: string, cloudId: string | null): CloudPi
           });
         });
     };
-    const timer = window.setTimeout(run, first ? 0 : REFETCH_DEBOUNCE_MS);
+    const timer = window.setTimeout(run, first || immediate.current ? 0 : REFETCH_DEBOUNCE_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
   }, [api, projectId, cloudId, key, findingsRevision, pointcloudsRevision, tick]);
 
-  const reload = useCallback(() => setTick((t) => t + 1), []);
+  // Final-review ruling: an own create/move refetches at once; `findings.changed` and
+  // `pointclouds.changed` bursts keep the debounce.
+  const reload = useCallback(() => {
+    immediate.current = true;
+    setTick((t) => t + 1);
+  }, []);
   const current = loaded && loaded.key === key ? loaded : null;
   const pins = useMemo(
     () =>

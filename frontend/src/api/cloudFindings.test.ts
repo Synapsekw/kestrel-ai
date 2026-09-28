@@ -77,6 +77,23 @@ describe("cloud finding API", () => {
     expect(requests).toHaveLength(PIN_COUNT_PAGES + 1);
   });
 
+  it("stops the counting walk once the caller says the load is superseded", async () => {
+    let stop = false;
+    const { api, requests } = fakeClient([
+      {
+        method: "GET",
+        path: /\/findings$/,
+        body: (r) => {
+          const n = Number(params(r.url).get("cursor") ?? "0");
+          if (n === 2) stop = true; // superseded while the second counting page was in flight
+          return { items: rows(PIN_CAP, n * PIN_CAP), next_cursor: String(n + 1) };
+        },
+      },
+    ]);
+    await listCloudPins(api, PROJECT_ID, CLOUD_ID, () => stop);
+    expect(requests).toHaveLength(3);
+  });
+
   it("stops counting on a repeated cursor", async () => {
     const { api, requests } = fakeClient([
       { method: "GET", path: /\/findings$/, body: { items: rows(PIN_CAP), next_cursor: "same" } },

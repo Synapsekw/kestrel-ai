@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { CloudViewOut } from "@contract/client";
@@ -9,7 +9,8 @@ import { TestApiProvider } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import type { Finding } from "@/api/findings";
 import { setAnchorNormal } from "@/clouds/views/normals";
-import { toCloudPin, useCloudPins } from "./useCloudPins";
+import { PIN_CAP, PIN_COUNT_PAGES } from "@/api/cloudFindings";
+import { REFETCH_DEBOUNCE_MS, toCloudPin, useCloudPins } from "./useCloudPins";
 
 const cloudFinding = (id: string, x = 243500): Finding => ({
   ...exampleFinding,
@@ -121,6 +122,49 @@ describe("useCloudPins", () => {
     expect(
       requests.slice(before).map((r) => new URL(r.url, "http://fake").pathname.split("/").pop()),
     ).toEqual(expect.arrayContaining(["findings", "views"]));
+  });
+
+  it("reload() refetches at once, not after the debounce", async () => {
+    const { wrapper, requests } = setup([findingsRoute([cloudFinding("f-a")]), viewsRoute([])]);
+    const { result } = renderHook(() => useCloudPins(PROJECT_ID, CLOUD_ID), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    const before = requests.length;
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+    act(() => {
+      result.current.reload();
+      useChangesStore.setState({ findingsRevision: 1 }); // the create's own bump lands in the same batch
+    });
+    expect(setTimeoutSpy.mock.calls.some(([, ms]) => ms === REFETCH_DEBOUNCE_MS)).toBe(false);
+    setTimeoutSpy.mockRestore();
+    await waitFor(() => expect(requests.length).toBe(before + 2), { timeout: REFETCH_DEBOUNCE_MS / 2 });
+  });
+
+  it("stops a superseded load's counting walk", async () => {
+    let bumped = false;
+    const { wrapper, requests } = setup([
+      {
+        method: "GET",
+        path: /\/findings$/,
+        body: (r) => {
+          const n = Number(new URL(r.url, "http://fake").searchParams.get("cursor") ?? "0");
+          if (n === 1 && !bumped) {
+            bumped = true;
+            queueMicrotask(() => act(() => useChangesStore.setState({ findingsRevision: 1 })));
+          }
+          const items = Array.from({ length: PIN_CAP }, (_, i) => cloudFinding(`f-${n}-${i}`));
+          return { items, next_cursor: String(n + 1) };
+        },
+      },
+      viewsRoute([]),
+    ]);
+    const { result } = renderHook(() => useCloudPins(PROJECT_ID, CLOUD_ID), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("ready"), { timeout: 3000 });
+    const walks = PIN_COUNT_PAGES + 1;
+    const listed = () => requests.filter((q) => new URL(q.url, "http://fake").pathname.endsWith("/findings"));
+    // The replacing load walks all its pages; the superseded one stopped after a page or two.
+    await waitFor(() => expect(listed().length).toBeGreaterThanOrEqual(walks + 1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(listed().length).toBeLessThan(walks + 4);
   });
 
   it("is empty and idle without a cloud", () => {
