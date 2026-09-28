@@ -39,7 +39,7 @@ describe("routeInfo", () => {
   });
 
   it("frames pages: the images workspace keeps the tabs, the map workspace is full-bleed at its list and its maps", () => {
-    expect(routeInfo("/p/a/images").layout).toBe("page");
+    expect(routeInfo("/p/a/images").layout).toBe("workspace");
     expect(routeInfo("/p/a/images/i1").layout).toBe("workspace");
     expect(routeInfo("/p/a/maps").layout).toBe("fullbleed");
     expect(routeInfo("/p/a/maps/m1").layout).toBe("fullbleed");
