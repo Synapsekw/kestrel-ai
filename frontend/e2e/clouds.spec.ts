@@ -351,10 +351,10 @@ const siteRun = {
 };
 
 /**
- * The map workspace in this file's EPSG:32639 site, with `siteMap` as its one survey's ortho, `siteRun`
- * as that ortho's basis run (the AI detections row draws only basis runs) and the fixture cloud linked
- * to it. The fixture builds every body in the 32639 frame; the spec swaps in its own map, run and
- * detection.
+ * The map workspace in this file's EPSG:32639 site, built by the fixture's `site` option (R-P3), with
+ * `siteRun` as its one ortho's basis run (the AI detections row draws only basis runs) and the fixture
+ * cloud linked to that ortho. The spec only renames the fixture's ortho to `MAP` and swaps in its own
+ * run and detection.
  */
 async function mapRoutes(page: Page) {
   const cors = { "Access-Control-Allow-Origin": "*" };
@@ -372,8 +372,8 @@ async function mapRoutes(page: Page) {
     },
   });
   await enableDiagnostics(page);
-  // The Sep ortho becomes this spec's map (same survey date, so it keeps the fixture's layers).
-  Object.assign(world.maps[0], siteMap, { captured_on: world.maps[0].captured_on });
+  // The fixture's one ortho, already in the 32639 frame, takes this spec's id (the cloud's `map_id`).
+  Object.assign(world.maps[0], { id: MAP, name: siteMap.name });
   const date = String(world.maps[0].captured_on);
   await j((u) => u.pathname === `/api/v1/projects/${P}/map-workspace/surveys`, {
     items: [
@@ -426,8 +426,10 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
   await page.goto(`/p/${P}/maps?map=${MAP}&sel=run:${RUN}`);
   await clickSite(page, 243550, 3178050);
   await page.getByTestId("map-inspector").getByRole("button", { name: "Open in 3D" }).click();
-  // the box centre of corners_site; the footprint (`fp`) the old viewer sent is pinned in the next test
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=243550\\.000,3178050\\.000`));
+  // the box centre of corners_site, and its corners as the footprint
+  await expect(page).toHaveURL(
+    new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=243550\\.000,3178050\\.000&fp=243545\\.000,3178055\\.000;`),
+  );
   await expect
     .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
     .toContain("pin");
@@ -442,6 +444,10 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
     })
     .toBeLessThan(3);
 
+  // the refine: a hit along the pin within 2 m retargets Z and draws the detection's footprint
+  await expect
+    .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
+    .toContain("footprint");
   // The refine's straight-down pick (final review F2) lands on the spot itself, not a splat 2 m off,
   // and on the surface there: the grid point (243550, 3178050) at z = 0.02 x 50 = 1.0.
   const down = await page.evaluate(() => window.__kestrelCloudViewer!.pickDown(243550, 3178050, 2));
@@ -462,24 +468,6 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
   const pane = (await page.getByTestId("site-map").boundingBox())!;
   expect(Math.abs(at.x - (pane.x + pane.width / 2))).toBeLessThan(5);
   expect(Math.abs(at.y - (pane.y + pane.height / 2))).toBeLessThan(5);
-});
-
-// Product defect (M-X Task 12): the workspace's detection "Open in 3D" (mapws/detect/DetectionInspector.tsx
-// -> threeD.ts openIn3dHref) builds `?at=` only, so the cloud view no longer draws the detection's
-// footprint, as the old map viewer's jump (`&fp=` the box corners) did. Remove `test.fail` once it sends `fp`.
-test("a detection's 3D jump carries its footprint, and the cloud view draws it", async ({ page }) => {
-  test.fail();
-  await mapRoutes(page);
-  await page.goto(`/p/${P}/maps?map=${MAP}&sel=run:${RUN}`);
-  await clickSite(page, 243550, 3178050);
-  await page.getByTestId("map-inspector").getByRole("button", { name: "Open in 3D" }).click();
-  await expect(page).toHaveURL(
-    new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=243550\\.000,3178050\\.000&fp=243545\\.000,3178055\\.000;`),
-  );
-  // the refine: a hit along the pin within 2 m retargets Z and draws the detection's footprint
-  await expect
-    .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
-    .toContain("footprint");
 });
 
 test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor seen past it", async ({

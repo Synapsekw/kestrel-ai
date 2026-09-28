@@ -99,7 +99,8 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
 
   const t = types.get(d.class_id);
   const state = REVIEW_STATE[d.review_state];
-  const jump = d.corners_site && survey ? openIn3d(...boxCentre(d.corners_site), survey.date) : null;
+  const jump =
+    d.corners_site && survey ? openIn3d(...boxCentre(d.corners_site), survey.date, d.corners_site) : null;
   // Why there is no 3D button; nothing while the run is still loading.
   const noJumpReason = !d.corners_site
     ? "This detection has no site coordinates, so it cannot be opened in 3D."

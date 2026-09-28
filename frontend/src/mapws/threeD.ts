@@ -18,7 +18,8 @@ export type OpenIn3d = { href: string; cloud: PointCloud } | { href: null; reaso
 /**
  * Today's map → 3D jump (spec 2026-09-23-point-clouds §10, `maps/MapContextMenu.tsx`): the ready clouds
  * linked to the maps of `date`'s survey, newest first; the first whose footprint covers the spot, with
- * `?at=` in that cloud's native CRS (`clouds/jump.ts`).
+ * `?at=` in that cloud's native CRS (`clouds/jump.ts`). A detection's jump also passes its site corners
+ * as `fp`, so the cloud view draws its footprint (the old map viewer's `&fp=`).
  */
 export function openIn3dHref(
   projectId: string,
@@ -26,6 +27,7 @@ export function openIn3dHref(
   n: number,
   date: string | null,
   ctx: OpenIn3dContext,
+  footprint?: readonly (readonly number[])[],
 ): OpenIn3d {
   const { frame } = ctx;
   if (frame.kind !== "crs" || !frame.proj4) return { href: null, reason: NO_FRAME_3D };
@@ -39,10 +41,12 @@ export function openIn3dHref(
     };
   const from = { proj4: frame.proj4, epsg: frame.epsg };
   for (const cloud of linked) {
-    const at = between(from, cloud)({ x: e, y: n });
+    const toCloud = between(from, cloud);
+    const at = toCloud({ x: e, y: n });
+    const fp = footprint?.map(([x, y]) => toCloud({ x, y }));
     if (!cloud.bounds_native || insideXY(cloud.bounds_native, at))
       return {
-        href: `/p/${projectId}/clouds/${cloud.id}${jumpQuery(at)}`,
+        href: `/p/${projectId}/clouds/${cloud.id}${jumpQuery(at, fp)}`,
         cloud,
       };
   }
@@ -53,18 +57,30 @@ export function openIn3dHref(
 }
 
 /** `openIn3dHref` with the workspace's frame, surveys and clouds; the date defaults to r. */
-export function useOpenIn3d(): (e: number, n: number, date?: string | null) => OpenIn3d {
+export function useOpenIn3d(): (
+  e: number,
+  n: number,
+  date?: string | null,
+  footprint?: readonly (readonly number[])[],
+) => OpenIn3d {
   const { projectId, frame } = useWorkspaceStores();
   const { surveys, clouds, r } = useWorkspace(
     useShallow((s) => ({ surveys: s.surveys, clouds: s.clouds, r: s.r })),
   );
   return useCallback(
-    (e: number, n: number, date?: string | null) =>
-      openIn3dHref(projectId, e, n, date === undefined ? r : date, {
-        frame,
-        surveys,
-        clouds,
-      }),
+    (e: number, n: number, date?: string | null, footprint?: readonly (readonly number[])[]) =>
+      openIn3dHref(
+        projectId,
+        e,
+        n,
+        date === undefined ? r : date,
+        {
+          frame,
+          surveys,
+          clouds,
+        },
+        footprint,
+      ),
     [projectId, frame, surveys, clouds, r],
   );
 }

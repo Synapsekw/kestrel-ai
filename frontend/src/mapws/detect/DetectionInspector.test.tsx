@@ -256,14 +256,14 @@ describe("DetectionInspector", () => {
     expect(screen.queryByText(/point cloud/)).toBeNull();
   });
 
-  it("offers Open in 3D at the box centre when the survey has a linked cloud", async () => {
+  it("offers Open in 3D at the box centre, with its corners as the footprint, when the survey has a linked cloud", async () => {
     h.open3d.mockReturnValue({
       href: "/p/x/clouds/c1?at=1.000,1.000",
       cloud: {},
     });
     render(fakeClient(routes()).api);
     const button = await screen.findByRole("button", { name: "Open in 3D" });
-    await waitFor(() => expect(h.open3d).toHaveBeenCalledWith(1, 1, "2026-09-14"));
+    await waitFor(() => expect(h.open3d).toHaveBeenCalledWith(1, 1, "2026-09-14", corners));
     fireEvent.click(button);
     expect(screen.getByTestId("location")).toHaveTextContent("/p/x/clouds/c1?at=1.000,1.000");
   });
