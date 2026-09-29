@@ -81,7 +81,9 @@ test("the Measurements tab lists every kind and opens each where it was measured
   await page.goBack();
 
   await grid.getByRole("row").filter({ hasText: "Fence line" }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/maps\\?sel=measurement:${MAP_M}$`));
+  // The map workspace keeps `sel` and then adds its compare dates (l, r): a `$` after `sel` raced that
+  // (CI run 36597253535), so the selection is asserted, not the end of the address.
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/maps\\?sel=measurement(:|%3A)${MAP_M}(&|$)`));
 });
 
 test("an old volume address still opens the volume view", async ({ page }) => {
