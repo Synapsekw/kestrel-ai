@@ -27,11 +27,19 @@ export default defineConfig({
       ignoreHTTPSErrors: true,
     },
     {
-      command: "pnpm dev",
+      // The built bundle, not `vite dev`: dev serves every source module as its own request (~100
+      // per page load, each new browser context on fresh sockets), and on the Windows runner one of
+      // them failed with net::ERR_NO_BUFFER_SPACE (/@react-refresh), so the app never booted and
+      // the test timed out waiting for the viewer (ci run 36521514150, attempt 2). The bundle is a
+      // handful of requests, loads faster on the 4 vCPU runner, and is what the app ships.
+      // VITE_MOCK_URL is read at build time, hence the build here rather than reusing `pnpm build`.
+      command:
+        `pnpm exec vite build --outDir dist-e2e --emptyOutDir --logLevel warn && ` +
+        `pnpm exec vite preview --outDir dist-e2e --host 127.0.0.1 --port ${webPort} --strictPort`,
       url: `http://127.0.0.1:${webPort}`,
       reuseExistingServer: true,
-      timeout: 60_000,
-      env: { VITE_DEV_PORT: String(webPort), VITE_MOCK_URL: `http://127.0.0.1:${mockPort}` },
+      timeout: 120_000,
+      env: { VITE_MOCK_URL: `http://127.0.0.1:${mockPort}` },
     },
   ],
 });

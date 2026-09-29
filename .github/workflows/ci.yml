@@ -82,6 +82,13 @@ jobs:
         working-directory: frontend
       - run: pnpm e2e
         working-directory: frontend
+      # A socket-level failure (net::ERR_NO_BUFFER_SPACE, run 36521514150) is only visible here:
+      # record the runner's TCP states and ephemeral range when e2e fails.
+      - if: failure()
+        shell: pwsh
+        run: |
+          Get-NetTCPConnection | Group-Object State | Select-Object Count, Name | Format-Table -AutoSize
+          netsh int ipv4 show dynamicport tcp
       # A failed e2e run keeps its traces: the runner is the only machine where some races show.
       - if: failure()
         uses: actions/upload-artifact@v7
