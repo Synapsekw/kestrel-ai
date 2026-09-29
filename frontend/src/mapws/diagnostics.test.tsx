@@ -15,6 +15,7 @@ const api = {
   resetNorth: () => {},
   pixelOf: ([e, n]: [number, number]) => [e - 500000, 4983000 - n] as [number, number],
   coordOf: ([x, y]: [number, number]) => [x + 500000, 4983000 - y] as [number, number],
+  selectionAt: ([e]: [number, number]) => (e === 500010 ? { kind: "detection", id: "d1" } : null),
 };
 
 afterEach(() => localStorage.removeItem("kestrel.diagnostics"));
@@ -38,6 +39,8 @@ describe("the site map diagnostics probe (M-X e2e)", () => {
     expect(window.__kestrelSiteMap?.pixelOf(500010, 4982990)).toEqual([10, 10]);
     expect(window.__kestrelSiteMap?.coordOf(10, 10)).toEqual([500010, 4982990]);
     expect(window.__kestrelSiteMap?.resolution()).toBe(0.25);
+    expect(window.__kestrelSiteMap?.selectionAt(500010, 4982990)).toEqual({ kind: "detection", id: "d1" });
+    expect(window.__kestrelSiteMap?.selectionAt(500020, 4982990)).toBeNull();
     unmount();
     expect(window.__kestrelSiteMap).toBeUndefined();
   });

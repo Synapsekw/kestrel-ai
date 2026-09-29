@@ -28,6 +28,7 @@ describe("the view API under reduced motion (jumps, no animation)", () => {
     });
     expect(api.pixelOf([1, 2])).toBeNull(); // no map rendered yet
     expect(api.coordOf([10, 10])).toBeNull();
+    expect(api.selectionAt([1, 2])).toBeNull();
   });
 
   it("never zooms out to arrive (R-W1-8)", () => {

@@ -1,12 +1,15 @@
 import { useEffect } from "react";
 import { DIAGNOSTICS_KEY } from "@/clouds/viewer/diagnostics";
 import { useWorkspace, useWorkspaceStores } from "./context";
+import type { Selection } from "./types";
 
 /** M-X's e2e drives the map at site coordinates through this (as `__kestrelCloudViewer` for clouds). */
 export interface SiteMapDiagnostics {
   /** CSS pixels relative to the `site-map` pane. */
   pixelOf(e: number, n: number): [number, number] | null;
   coordOf(x: number, y: number): [number, number] | null;
+  /** What a click at site (e, n) would select, as last drawn: e2e waits on it before clicking. */
+  selectionAt(e: number, n: number): Selection | null;
   /** Metres per CSS pixel. */
   resolution(): number | null;
 }
@@ -35,6 +38,7 @@ export function useSiteMapProbe(): void {
     const probe: SiteMapDiagnostics = {
       pixelOf: (e, n) => viewApi.pixelOf([e, n]),
       coordOf: (x, y) => viewApi.coordOf([x, y]),
+      selectionAt: (e, n) => viewApi.selectionAt([e, n]),
       resolution: () => workspace.getState().viewInfo?.resolution ?? null,
     };
     window.__kestrelSiteMap = probe;

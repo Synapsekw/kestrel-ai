@@ -3,6 +3,7 @@ import type View from "ol/View";
 import { dur, isReducedMotion } from "@/ui";
 import type { ViewApi, ViewInfo } from "../state/workspaceStore";
 import type { Coord } from "../types";
+import { pickSelection } from "./sketch";
 
 /** Fit padding (top, right, bottom, left) that keeps the fitted extent clear of the panels. */
 export const FIT_PADDING = [96, 350, 150, 380];
@@ -18,6 +19,11 @@ export function makeViewApi(view: View, mapOf: () => OlMap | null = () => null):
     coordOf: (px: [number, number]) => {
       const c = mapOf()?.getCoordinateFromPixel(px);
       return c ? [c[0], c[1]] : null;
+    },
+    selectionAt: (c: Coord) => {
+      const map = mapOf();
+      const px = map?.getPixelFromCoordinate(c);
+      return map && px ? pickSelection(map, px) : null;
     },
     centreOn: (c: Coord, resolution?: number, opts?: { instant?: boolean }) => {
       const current = view.getResolution();

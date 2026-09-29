@@ -8,6 +8,7 @@ import {
   clickSite,
   enableDiagnostics,
   serveMapWorkspace,
+  untilSelectable,
 } from "./fixtures/mapWorkspace";
 
 // Spec M §15 flow 5 and §9.3: selecting a pending defect detection and pressing A accepts it; the
@@ -25,6 +26,7 @@ test("flow 5: a pending defect detection, A, then a finding pin and F's inspecto
   // R-T11: a `sel=run:` arrival opens the run inspector first.
   await expect(page.getByTestId("map-inspector")).toHaveAttribute("data-sel", `run:${RUN}`);
 
+  await untilSelectable(page, SITE.cE, SITE.cN, `${RUN}.${String(world.detections[0].id)}`);
   await clickSite(page, SITE.cE, SITE.cN); // inside the detection's corners
   const current = page.getByTestId("review-current");
   await expect(current).toHaveAttribute("data-id", String(world.detections[0].id));

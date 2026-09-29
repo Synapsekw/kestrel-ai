@@ -250,6 +250,20 @@ export async function clickSite(
   await page.mouse.click(x, y, { button: opts.button ?? "left" });
 }
 
+/**
+ * Waits until a click at site (e, n) would select the feature whose selection id is `id` (as last
+ * drawn), so a click does not land before its layer has loaded: clickSite waits for the view only,
+ * and on the CI runner a run's detections have answered after the click (runs 36462189068,
+ * 36590111632).
+ */
+export async function untilSelectable(page: Page, e: number, n: number, id: string): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(([e, n]) => window.__kestrelSiteMap?.selectionAt(e, n)?.id ?? null, [e, n]), {
+      timeout: 20_000,
+    })
+    .toBe(id);
+}
+
 /** Longer than OpenLayers' 250 ms double-click window (see `drawSite`). */
 const VERTEX_PACE_MS = 300;
 
