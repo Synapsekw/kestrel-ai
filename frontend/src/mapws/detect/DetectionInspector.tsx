@@ -34,7 +34,8 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
   const openIn3d = useOpenIn3d();
   const parsed = parseDetectionId(selection.id);
   const entry = useDetectStore((s) => (parsed ? s.byId.get(parsed.detectionId) : undefined));
-  const { types, all } = useProjectTypes(projectId);
+  // `loaded`: whether accepting makes a finding (a defect) is only known once the types are.
+  const { types, all, loaded: typesLoaded } = useProjectTypes(projectId);
   const review = useReview(projectId);
   // Keyed by run id so a stale run never shows for a new selection; `run: null` = the load failed.
   const [loaded, setLoaded] = useState<{ runId: string; run: MapRun | null } | null>(null);
@@ -72,11 +73,16 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
   // Off while the finding-delete confirm or the type picker is up: A / X must not act behind a dialog.
   useToolShortcuts(
     [
-      { shortcut: "A", action: "accept", onTrigger: () => decide("accept"), disabled: !d },
+      { shortcut: "A", action: "accept", onTrigger: () => decide("accept"), disabled: !d || !typesLoaded },
       { shortcut: "X", action: "reject", onTrigger: () => decide("reject"), disabled: !d },
       { shortcut: "Shift+A", action: "accept-all", onTrigger: () => void review.decideMany("accept") },
       { shortcut: "Shift+X", action: "reject-all", onTrigger: () => void review.decideMany("reject") },
-      { shortcut: "T", action: "type-picker", onTrigger: () => setPicking(true), disabled: !d },
+      {
+        shortcut: "T",
+        action: "type-picker",
+        onTrigger: () => setPicking(true),
+        disabled: !d || !typesLoaded,
+      },
       {
         shortcut: "Tab",
         action: "next-pending",
@@ -155,13 +161,25 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
         </InspectorSection>
         <InspectorSection key="review" title="Review">
           <div className="grid grid-cols-3 gap-1.5">
-            <Button size="sm" variant="primary" loading={review.busy} onClick={() => decide("accept")}>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={review.busy}
+              disabled={!typesLoaded}
+              onClick={() => decide("accept")}
+            >
               Accept
             </Button>
             <Button size="sm" onClick={() => decide("reject")}>
               Reject
             </Button>
-            <Button size="sm" variant="ghost" ref={typeButton} onClick={() => setPicking(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              ref={typeButton}
+              disabled={!typesLoaded}
+              onClick={() => setPicking(true)}
+            >
               Type…
             </Button>
           </div>

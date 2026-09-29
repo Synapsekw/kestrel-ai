@@ -31,6 +31,11 @@ test("flow 5: a pending defect detection, A, then a finding pin and F's inspecto
   const current = page.getByTestId("review-current");
   await expect(current).toHaveAttribute("data-id", String(world.detections[0].id));
   await expect(page.getByTestId("tool-hint")).toContainText("A accept");
+  // A is bound once the project's types are in (a defect's accept makes a finding; CI run 36593683202
+  // pressed it before them).
+  await expect(
+    page.getByTestId("map-inspector").getByRole("button", { name: "Accept", exact: true }),
+  ).toBeEnabled();
 
   const findingReads = () =>
     world.calls.filter((c) => c.method === "GET" && c.path.startsWith("/map-workspace/findings")).length;

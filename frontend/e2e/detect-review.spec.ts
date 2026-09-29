@@ -71,6 +71,10 @@ test("a map run is reviewed in the workspace from the keyboard (A accept, X reje
   await expect(page.getByTestId("tool-hint")).toContainText("A accept");
   await page.screenshot({ path: evidencePath("maps", "map-review.png"), fullPage: true });
 
+  // A is bound once the project's types are in (see maps-review.spec.ts).
+  await expect(
+    page.getByTestId("map-inspector").getByRole("button", { name: "Accept", exact: true }),
+  ).toBeEnabled();
   await page.keyboard.press("a");
   await expect(current).toHaveAttribute("data-id", detection(2).id);
   await page.keyboard.press("x");
