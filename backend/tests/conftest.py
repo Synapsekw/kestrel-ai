@@ -1,4 +1,6 @@
+import os
 import shutil
+import tempfile
 import time
 from pathlib import Path
 
@@ -17,6 +19,54 @@ from app.main import create_app
 from app.providers.keys import MemoryKeyStore
 
 TOKEN = "test-token"
+# Removed in pytest_unconfigure. Serial runs never create it.
+_worker_isolation: Path | None = None
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Give each xdist worker private writable caches.
+
+    Serial runs leave the environment alone. Workers otherwise share Hypothesis's
+    example directory and Ultralytics' settings file; on Windows those shared files
+    are the locks that flake the suite (and Ultralytics would write into the real
+    user profile). Tests that need a variable unset clear it themselves.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if not worker:
+        return
+    global _worker_isolation
+    root = Path(tempfile.mkdtemp(prefix=f"kestrel-{worker}-"))
+    _worker_isolation = root
+    matplotlib_dir = root / "matplotlib"
+    ultralytics_dir = root / "ultralytics"
+    matplotlib_dir.mkdir()
+    ultralytics_dir.mkdir()
+    os.environ["MPLCONFIGDIR"] = str(matplotlib_dir)
+    os.environ["YOLO_CONFIG_DIR"] = str(ultralytics_dir)
+
+    from hypothesis import settings
+    from hypothesis.database import DirectoryBasedExampleDatabase
+
+    # GitHub Actions sets CI, so Hypothesis loads its ci profile before this hook:
+    # derandomize=True and database=None. A database is illegal in that mode, and
+    # there is no shared example file to lock. Locally the database is on, so each
+    # worker gets its own directory instead of the checkout's .hypothesis folder.
+    if not settings.default.derandomize:
+        settings.register_profile(
+            "kestrel-xdist",
+            database=DirectoryBasedExampleDatabase(root / "hypothesis"),
+        )
+        settings.load_profile("kestrel-xdist")
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    global _worker_isolation
+    if _worker_isolation is None:
+        return
+    shutil.rmtree(_worker_isolation, ignore_errors=True)
+    _worker_isolation = None
+
+
 AHMADIA_RAW = FRAMES_DIR
 SAMPLE_FRAMES = 20
 EIGHT_CLASSES = [

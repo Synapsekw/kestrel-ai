@@ -511,7 +511,9 @@ function apiTraffic(page: Page, quietMs = 1500) {
 test("one project from creation to a training run: every Foundation unit reads what the last one wrote", async ({
   page,
 }) => {
-  test.setTimeout(90_000);
+  // The eight steps finish near 90s on windows-latest. The last click used to land
+  // in the leftover slice, after the test clock had already run out.
+  test.setTimeout(180_000);
   const world = await serveBackend(page);
   const traffic = apiTraffic(page);
 
@@ -635,6 +637,11 @@ test("one project from creation to a training run: every Foundation unit reads w
   await page.getByRole("link", { name: "Train on this dataset" }).click();
   await expect(page.getByRole("heading", { name: "New training run" })).toBeVisible();
   await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
+  // Start stays enabled while the library list is still loading. A click then
+  // fails "Choose a base model" and never posts. Wait until the form has filled
+  // both pickers from the mock.
+  await expect(page.getByLabel("Base model")).not.toHaveValue("", { timeout: 20_000 });
+  await expect(page.getByLabel("Model name")).not.toHaveValue("", { timeout: 20_000 });
   const start = page.getByRole("button", { name: "Start training" });
   await expect(start).toBeEnabled();
   const trained = page.waitForRequest(
