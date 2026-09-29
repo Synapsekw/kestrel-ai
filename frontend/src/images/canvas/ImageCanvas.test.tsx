@@ -226,6 +226,30 @@ describe("createIdleMarker", () => {
     expect(st().interacting).toBe(false);
   });
 
+  it("counts the delay from the end of the input's own work, not its start (a slow notch)", async () => {
+    // CI run 36439794911: on a slow machine one wheel notch's handler (the zoom and its render)
+    // took over 120 ms, so a delay started at mark() was already due when the handler returned and
+    // ran before the next notch - the layers listened again and rebuilt the hit graph per notch.
+    // Real timers: a fake clock cannot hold its timers back through a blocking handler.
+    const idle = createIdleMarker(useImagesWorkspace);
+    const seen: boolean[] = [];
+    const unsub = useImagesWorkspace.subscribe((s) => seen.push(s.interacting));
+    const nextNotch = new Promise<void>((resolve) => {
+      idle.mark();
+      const end = performance.now() + 150;
+      while (performance.now() < end); // the handler's own work: no timer can run inside it
+      setTimeout(() => {
+        idle.mark(); // the next notch, 16 ms after the first was handled
+        resolve();
+      }, 16);
+    });
+    await nextNotch;
+    expect(seen).not.toContain(false);
+    await waitFor(() => expect(st().interacting).toBe(false));
+    unsub();
+    idle.dispose();
+  });
+
   it("clears `interacting` when disposed with a timer pending (T10)", () => {
     vi.useFakeTimers();
     const idle = createIdleMarker(useImagesWorkspace);

@@ -133,7 +133,6 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
     "putLibraryModelClassMap": {422},  # unknown_type (bad/archived type id) or validation_error (bad key)
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
-    "exportLibraryDataset": {422},  # declared; no longer answered since I-BT (segment exports)
     "startTrainingRun": {422},  # task_mismatch: a base model of another task
     "createSurface": {422},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,

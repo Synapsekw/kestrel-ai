@@ -284,10 +284,11 @@ try {
   # 6. one prediction through the packaged torch/ultralytics stack
   $images = Invoke-Api GET "/projects/$pid1/images?limit=$Frames&sort=path"
   $first = $images.items[0]
-  $predicted = Invoke-Api POST "/projects/$pid1/images/$($first.id)/preannotate" `
+  # detectImage (I-BP) replaced /preannotate, which I-FW retired.
+  $predicted = Invoke-Api POST "/projects/$pid1/images/$($first.id)/detect" `
     @{ model_id = $model.id; imgsz = $Imgsz; conf = 0.05 }
   Complete-Step "predict"
-  Write-Host "predict ok $($predicted.items.Count) boxes"
+  Write-Host "predict ok $($predicted.suggestions.Count) boxes $($predicted.device)"
 
   # 6b. smart polygon (spec 2026-09-26-image-inspection §10, §21 risk 2): the SAM 2.1 modules are in
   #     the bundle, the weights arrive through the assist_acquire job, one prepare and one click answer.

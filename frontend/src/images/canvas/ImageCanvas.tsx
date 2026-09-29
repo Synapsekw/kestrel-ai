@@ -58,7 +58,15 @@ export interface ImageCanvasHandle {
   stage(): Konva.Stage | null;
 }
 
-/** Sets `interacting` now and clears it `ms` after the last call (spec §9.1: 120 ms). */
+/**
+ * Sets `interacting` now and clears it after `ms` of quiet following the last call (spec §9.1:
+ * 120 ms). The quiet is counted from the end of the input's own work, not from mark(): mark() runs
+ * at the start of a handler (a wheel notch's zoom and its render), and on a slow machine that work
+ * can outlast the delay - a clock started at mark() was then already due when the handler returned,
+ * ran before the next notch, and the layers listened again and rebuilt their hit graph once per
+ * notch (CI run 36439794911: 48,700 hit draws in one 90-notch zoom). A zero-delay timer runs only
+ * after the current task, so it starts the delay once the handler is done.
+ */
 export function createIdleMarker(
   store: ImagesWorkspaceStore,
   ms = IDLE_AFTER_MS,
@@ -69,9 +77,11 @@ export function createIdleMarker(
       store.getState().setInteracting(true);
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        timer = null;
-        store.getState().setInteracting(false);
-      }, ms);
+        timer = setTimeout(() => {
+          timer = null;
+          store.getState().setInteracting(false);
+        }, ms);
+      }, 0);
     },
     dispose() {
       if (!timer) return;

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { CATALOGUE_PAGE, fulfilJson } from "./fixtures/appSections";
+import { fromMock } from "./mock";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MODEL = "m0000000-2222-4000-8000-000000000001";
@@ -52,10 +53,11 @@ test("the project's type list adds a catalogue type and saves the order with PUT
     (url) => url.pathname === "/api/v1/catalogue/types",
     (route) => fulfilJson(route, CATALOGUE_PAGE),
   );
+  // Read once and answered from memory (mock.ts's fromMock): a proxied route.fetch can meet a
+  // keep-alive socket the mock just closed (ECONNRESET on a loaded CI runner).
+  const project = await fromMock(page, `/api/v1/projects/${P}`);
   await page.route(`**/api/v1/projects/${P}`, async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
-    const response = await route.fetch();
-    const project = (await response.json()) as Record<string, unknown>;
     project.classes = [
       {
         id: "t-1",
@@ -68,7 +70,7 @@ test("the project's type list adds a catalogue type and saves the order with PUT
         group: null,
       },
     ];
-    return route.fulfill({ response, json: project });
+    return fulfilJson(route, project);
   });
   await page.route(`**/api/v1/projects/${P}/types`, (route) => fulfilJson(route, {}));
   await page.goto(`/p/${P}/settings`);
