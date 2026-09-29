@@ -154,10 +154,11 @@ test("photo link: I, a pick, the list, and a click opens the image at the spot",
   await expect(list.getByRole("listitem").first()).toContainText("In frame");
   await expect(page.getByText(/2 photos saw this point · DJI_0712\.JPG closest/)).toBeVisible();
   // I-FW is not on `main` (controller adaptation 3), so only the jump's own URL is asserted here; race
-  // the wait with the click since the (not-yet-built) image screen may rewrite the URL after it lands.
+  // the wait with the click since the image screen rewrites the URL after it lands (it takes `at`/`r`
+  // and strips them). waitForURL is the assertion: it fails the test if the jump URL never appears. A
+  // toHaveURL after it raced that strip and lost whenever the screen was quick (the built bundle).
   const urlRe = new RegExp(`/p/${P}/images/${NADIR}\\?at=[\\d.]+,[\\d.]+&r=\\d+&from=cloud(:|%3A)${CLOUD}`);
   await Promise.all([page.waitForURL(urlRe), list.getByRole("button").first().click()]);
-  await expect(page).toHaveURL(urlRe);
 });
 
 test("arrival from a posed photo pixel looks through the drone and marks the hit", async ({ page }) => {
