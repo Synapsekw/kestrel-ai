@@ -93,9 +93,9 @@ Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight:** the CI-red fix in worktree `ci-red` (`task/ci-red`): the frontend e2e on `main` fails on the slow runner (`images-map-scale` ready budget, `images-perf` hit draws, once `clouds-pins` occlusion).
+**In flight:** nothing. CI on `main` is green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).
 
-**Next:** merge the CI-red fix once its branch is green on CI and confirm 3 green `main` runs. Then Reports (R): plans from `docs/superpowers/specs/2026-09-26-reports-design.md`, then build. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
+**Next:** Reports (R): plans from `docs/superpowers/specs/2026-09-26-reports-design.md`, then build. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
 
 Before that: **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
 - **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
@@ -239,13 +239,13 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 ### I/M/C wave (opened 2026-09-27)
 
 - ~~**CI on `main` is red intermittently**~~ (schemathesis ReadTimeout, agent e2e PermissionError, MapWorkspace keys, query.spec): fixed 2026-09-28 in `c1bdc0b`; 3 green runs followed (`c1bdc0b`, `a88b936`, `f6e984d`).
-- **CI frontend e2e red again since `81b0310`:** `images-map-scale.spec:268` (a wall-clock budget in the normal suite), `images-perf.spec:114` (48,700 hit draws on CI), and once `clouds-pins.spec:116`. Fix in flight (`task/ci-red`).
+- ~~**CI frontend e2e red again since `81b0310`**~~: fixed 2026-09-28/29 (`a988b1d` idle-timer fix + perf budgets moved to the perf config; `a57d619` e2e runs against the built bundle instead of `vite dev`, which removed the runner's `ERR_NO_BUFFER_SPACE` blank-page failures; Accept/Type wait for the project types). 3 green `main` runs in a row at `a57d619`.
 - ~~**12 units not built yet**~~: all merged 2026-09-28, IMC-X included ([[2026-09-28-1905-imc-wave-part-2]]).
 - ~~**Contract prose fixes**~~: done in IMC-X (`333207a`).
 - **Unverified:** the seg GPU training epoch (no `yolo11n-seg.pt` locally) and the seg starter download URL; a real DXF or PDF drawing import through the UI. ~~pypdfium2 bundled~~: `drawings ok` in the frozen smoke.
 - **Installer `c4080c7` not installed; the I/M/C walkthrough has not been run by the operator.** The checks only the operator can do: C-G criteria 4/5/7/8 (4 azimuth is a fail by test design); M-X real-data checks; DXF click-to-select; pan a 20k-point capture map on the real GPU; the Input fields resized by C-G's ui/Input and ui/Slider fix.
 - **Follow-ups:** 3 of 5 `?finding=` cloud arrival re-picks miss by 0.44–0.69 m (C-P1/C-L1); no `at` marker after a 3D→map jump; two quick far clicks can finish a map line.
-- **Backend CI takes ~55 min** (serial pytest on a 4-vCPU runner). Candidates: xdist, sharding, a nightly job for slow tests.
+- ~~**Backend CI takes ~55 min**~~: backend split into 5 xdist shards (`65c8f8f`); a whole CI run is now ~18 min. `sidecar-smoke` still fails on manual dispatch (PotreeConverter payload missing on CI).
 - **Camera z assumes metres**, so it is wrong for a cloud whose vertical unit is feet (C-B3; spec follow-up).
 - **`CloudCameraSet.sources` has no maxItems**; `delete_cloud` has a race on a NULL job_id (C-G parked).
 - **Leftover locked folders:** `.claude/worktrees/m-b2`, `c-p1`, `i-e`.
