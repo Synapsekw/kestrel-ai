@@ -129,9 +129,9 @@ test("frame-time harness: a scripted orbit with 200 pins (reported, not asserted
     renders.length,
     "the render ring must grow during the orbit, not just during load",
   ).toBeGreaterThanOrEqual(10);
-  // real samples, not an empty window (low floors: the timings are reported, and a loaded machine
-  // paces SwiftShader well under 60 Hz)
-  expect(raf.samples).toBeGreaterThanOrEqual(20);
+  // real samples, not an empty window. The timings themselves are reported. A loaded
+  // windows-latest runner has come in at 18 samples over this 5s orbit (well under 60 Hz).
+  expect(raf.samples).toBeGreaterThanOrEqual(10);
   expect(render.samples).toBeGreaterThan(0);
   expect(renders.every((v) => Number.isFinite(v) && v >= 0)).toBe(true);
 
