@@ -1,6 +1,12 @@
 import { test, expect, type Page, type Request } from "@playwright/test";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
-import { clickSite, enableDiagnostics, serveMapWorkspace, sitePixel } from "./fixtures/mapWorkspace";
+import {
+  clickSite,
+  enableDiagnostics,
+  serveMapWorkspace,
+  sitePixel,
+  untilSelectable,
+} from "./fixtures/mapWorkspace";
 import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 import {
   P,
@@ -476,11 +482,9 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
   page,
 }) => {
   await mapRoutes(page);
-  // The click selects only a detection the map has: clickSite waits for the view to settle, not for
-  // the run's detections, and on a slow CI runner (run 36462189068) they answered after the click.
-  const detections = page.waitForResponse((r) => /\/map-runs\/[^/]+\/detections\?/.test(r.url()));
   await page.goto(`/p/${P}/maps?map=${MAP}&sel=run:${RUN}`);
-  await (await detections).finished();
+  // The click selects only a detection the map has drawn (see untilSelectable).
+  await untilSelectable(page, 243550, 3178050, `${RUN}.d1`);
   await clickSite(page, 243550, 3178050);
   await page.getByTestId("map-inspector").getByRole("button", { name: "Open in 3D" }).click();
   // the box centre of corners_site, and its corners as the footprint

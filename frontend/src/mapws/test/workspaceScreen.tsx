@@ -19,6 +19,7 @@ export const fakeView = {
   resetNorth: vi.fn<ViewApi["resetNorth"]>(),
   pixelOf: vi.fn<ViewApi["pixelOf"]>(() => null),
   coordOf: vi.fn<ViewApi["coordOf"]>(() => null),
+  selectionAt: vi.fn<ViewApi["selectionAt"]>(() => null),
 };
 
 /** Publishes `fakeView` as the view API and exposes the mode, the placement count and play. */

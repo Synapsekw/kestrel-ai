@@ -40,6 +40,8 @@ export interface ViewApi {
   pixelOf: (c: Coord) => [number, number] | null;
   /** The site coordinate under a pixel of that map (the inverse of pixelOf); null before it renders. */
   coordOf: (px: [number, number]) => Coord | null;
+  /** What a click at that site coordinate would select, as last drawn (R-W1-12); null before it renders. */
+  selectionAt: (c: Coord) => Selection | null;
 }
 
 /** The right-click menu: where it opened (client px) and the site coordinate under it. */

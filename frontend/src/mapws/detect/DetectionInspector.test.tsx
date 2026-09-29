@@ -167,6 +167,31 @@ describe("DetectionInspector", () => {
     await waitFor(() => expect(h.select).toHaveBeenCalledWith({ kind: "finding", id: "f5" }));
   });
 
+  it("waits for the project's types before accepting or retyping: before them a defect looks like an object", async () => {
+    // Without the types an accepted defect took the object path (next detection), never opening the
+    // finding it created (CI run 36593683202: A pressed 75 ms after the click, before the project).
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/map-runs\/[^/]+$/, body: { ...exampleMapRun, map_id: MAP_ID } },
+      {
+        method: "GET",
+        path: /\/projects\/[^/]+$/,
+        status: 503,
+        body: { error: { code: "x", message: "x" } },
+      },
+      { method: "POST", path: /\/review$/, body: { updated: 1 } },
+    ]);
+    render(api);
+    await screen.findByText(/machinery-v3/);
+    await flush();
+    expect(screen.getByRole("button", { name: "Accept" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Type…" })).toBeDisabled();
+    fireEvent.keyDown(window, { key: "a" });
+    await flush();
+    expect(requests.some((r) => r.method === "POST")).toBe(false);
+    // Reject means the same whatever the type: it does not wait.
+    expect(screen.getByRole("button", { name: "Reject" })).toBeEnabled();
+  });
+
   it("a refused reject asks before deleting the finding", async () => {
     accepted();
     const { api } = fakeClient(refusedReject());

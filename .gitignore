@@ -11,6 +11,7 @@ backend/third_party/
 # node
 node_modules/
 frontend/dist/
+frontend/dist-e2e/
 frontend/test-results/
 frontend/playwright-report/
 # rust / tauri
