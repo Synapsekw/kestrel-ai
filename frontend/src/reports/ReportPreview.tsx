@@ -167,7 +167,8 @@ function SectionView({
   const remaining = entry.done ? 0 : Math.max(section.estimated_pages - sheets.length, 1);
   const titleId = `report-section-${section.key}`;
   const onRetry = useCallback(() => retry(section), [retry, section]);
-  const busy = entry.status === "loading" || showingStale;
+  // A failed refetch keeps the stale blocks but is not busy: nothing is loading until Retry.
+  const busy = entry.status === "loading" || (showingStale && entry.status !== "error");
 
   return (
     <section

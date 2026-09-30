@@ -3,6 +3,8 @@ export interface FakeIntersection {
   /** Reports every observed element that `match`es as intersecting (or not). Wrap in `act`. */
   show: (match: (el: Element) => boolean, visible?: boolean) => void;
   observed: () => Element[];
+  /** The `init` (root, rootMargin) of the live observer watching `el`, or undefined when none is. */
+  initOf: (el: Element) => IntersectionObserverInit | undefined;
   restore: () => void;
 }
 
@@ -12,8 +14,10 @@ export function installFakeIntersectionObserver(): FakeIntersection {
   class FakeObserver {
     readonly targets = new Set<Element>();
     readonly callback: IntersectionObserverCallback;
-    constructor(callback: IntersectionObserverCallback) {
+    readonly init: IntersectionObserverInit;
+    constructor(callback: IntersectionObserverCallback, init: IntersectionObserverInit = {}) {
       this.callback = callback;
+      this.init = init;
       live.add(this);
     }
     observe(el: Element) {
@@ -52,6 +56,7 @@ export function installFakeIntersectionObserver(): FakeIntersection {
       for (const o of [...live]) o.fire(match, visible);
     },
     observed: () => [...live].flatMap((o) => [...o.targets]),
+    initOf: (el) => [...live].find((o) => o.targets.has(el))?.init,
     restore: () => {
       if (original) g.IntersectionObserver = original;
       else delete g.IntersectionObserver;

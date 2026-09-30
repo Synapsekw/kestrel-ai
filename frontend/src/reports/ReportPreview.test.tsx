@@ -6,7 +6,13 @@ import { fakeClient } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { installFakeIntersectionObserver, type FakeIntersection } from "./preview/fakeIntersectionObserver";
 import { FIXTURE_BLOCKS, FIXTURE_OUTLINE, fixtureLoader } from "./preview/fixtures";
-import { ReportPreview, type ReportPreviewHandle, type ReportPreviewProps } from "./ReportPreview";
+import { FIGURE_MARGIN } from "./preview/SnapshotImage";
+import {
+  ReportPreview,
+  SECTION_MARGIN,
+  type ReportPreviewHandle,
+  type ReportPreviewProps,
+} from "./ReportPreview";
 
 let io: FakeIntersection;
 beforeEach(() => {
@@ -104,6 +110,43 @@ describe("ReportPreview", () => {
     expect(within(region).queryByText("Findings at a glance")).toBeNull();
     expect(region).toHaveAttribute("aria-busy", "false");
     expect(loadBlocks).not.toHaveBeenCalled();
+  });
+
+  it("is not busy when a changed section's refetch fails; it keeps the old blocks and offers Retry", async () => {
+    const { loadBlocks, rerender, props } = setup();
+    act(() => io.show(section("summary")));
+    await screen.findByText("Findings at a glance");
+    loadBlocks.mockRejectedValueOnce(new Error("disk"));
+    const edited: ReportOutline = {
+      ...FIXTURE_OUTLINE,
+      sections: FIXTURE_OUTLINE.sections.map((s) =>
+        s.key === "summary" ? { ...s, etag: "e-summary-2" } : s,
+      ),
+    };
+    rerender(<ReportPreview {...props} outline={edited} />);
+    const region = screen.getByRole("region", { name: "Summary" });
+    await within(region).findByText("Could not load this section.");
+    expect(region).toHaveAttribute("aria-busy", "false");
+    expect(within(region).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(within(region).getByText("Findings at a glance")).toBeInTheDocument();
+  });
+
+  it("roots the section and figure observers at the preview, with their margins", async () => {
+    const { container } = setup();
+    const preview = screen.getByRole("region", { name: "Preview" });
+    const summary = container.querySelector('[data-section-key="summary"]')!;
+    // Compare the root by identity: a failing toMatchObject would pretty-print the whole DOM tree.
+    const sectionInit = io.initOf(summary);
+    expect(sectionInit?.root === preview).toBe(true);
+    expect(sectionInit?.rootMargin).toBe(SECTION_MARGIN);
+    expect(SECTION_MARGIN).toBe("1200px 0px");
+    act(() => io.show(section("finding_pages")));
+    await screen.findByRole("article", { name: "F-0042 Crack" });
+    const figure = container.querySelector('[data-snapshot="s-main"]')!;
+    const figureInit = io.initOf(figure);
+    expect(figureInit?.root === preview).toBe(true);
+    expect(figureInit?.rootMargin).toBe(FIGURE_MARGIN);
+    expect(FIGURE_MARGIN).toBe("600px 0px");
   });
 
   it("offers Retry when a section fails, and loads on retry", async () => {
