@@ -46,7 +46,7 @@ const OPTIONS: FormatOption[] = [
   },
   {
     key: "html",
-    label: "Report (HTML, printable)",
+    label: "Image contact sheet (HTML)",
     hint: "One page with a thumbnail of every labeled image and the counts per class — open it in a browser or print it.",
   },
 ];
@@ -145,8 +145,8 @@ export function ExportForm({
         className="items-start [&>span:first-of-type]:mt-0.5"
         label={
           <span className="leading-relaxed">
-            Include suggestions nobody has reviewed yet. The tables, COCO and the report mark them; YOLO label
-            files cannot.
+            Include suggestions nobody has reviewed yet. The tables, COCO and the contact sheet mark them; YOLO
+            label files cannot.
           </span>
         }
       />

@@ -46,7 +46,7 @@ describe("ExportForm", () => {
       screen.getByText("Exports all 10 images: 9 accepted boxes on the 5 checked images."),
     ).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Tables for Excel/ })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Report \(HTML/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Image contact sheet \(HTML\)/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Labels in YOLO/ })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Labels in COCO/ })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Include suggestions/ })).not.toBeChecked();
@@ -81,7 +81,7 @@ describe("ExportForm", () => {
   it("labels the checkbox with what each format can and cannot mark", () => {
     renderForm();
     expect(
-      screen.getByText(/The tables, COCO and the report mark them; YOLO label files cannot/),
+      screen.getByText(/The tables, COCO and the contact sheet mark them; YOLO label files cannot/),
     ).toBeInTheDocument();
   });
 
@@ -94,7 +94,7 @@ describe("ExportForm", () => {
   it("refuses to submit with no format chosen", () => {
     renderForm();
     fireEvent.click(screen.getByRole("checkbox", { name: /Tables for Excel/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Report \(HTML/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Image contact sheet \(HTML\)/ }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Choose at least one format.");
   });
