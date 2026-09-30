@@ -12,6 +12,8 @@ import re
 import shutil
 import threading
 import time
+from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy import delete, func, insert, select
@@ -20,6 +22,8 @@ from sqlalchemy.exc import IntegrityError
 from app.errors import AppError, not_found
 from app.exports.job import RENAME_RETRIES, RENAME_RETRY_DELAY_S
 from app.jobs.cancellation import JobFailure
+from app.pagination import decode_cursor, encode_cursor, newest_first_page
+from app.reports import schemas as rs
 from app.reports.models import Report as ReportRow
 from app.reports.models import ReportVersion as ReportVersionRow
 from app.reports.models import ReportVersionFinding
@@ -221,3 +225,122 @@ def describe_version(handle, version_id: str | None) -> str:
         title = report.title if report is not None else "another report"
         issued = f", issued {row.issued_at.date().isoformat()}" if row.issued_at else ""
         return f"{title} {version_dir_name(row.number)}{issued}"
+
+
+DOCUMENT_MAX_LIMIT = 50
+
+
+def to_schema(row: ReportVersionRow) -> rs.ReportVersion:
+    return rs.ReportVersion.model_validate(
+        {
+            "id": row.id,
+            "report_id": row.report_id,
+            "number": row.number,
+            "state": row.state,
+            "issued_at": row.issued_at,
+            "job_id": row.job_id,
+            "folder": row.folder,
+            "files": row.files or [],
+            "config": row.config,  # R10's plan reads ReportVersion.config
+            "baseline_version_id": row.baseline_version_id,
+            "stats": row.stats or {},
+            "created_at": row.created_at,
+        }
+    )
+
+
+def _require_report(s, report_id: str) -> None:
+    if s.get(ReportRow, report_id) is None:
+        raise not_found("report", report_id)
+
+
+def list_versions(handle, report_id: str, *, limit: int | None, cursor: str | None) -> rs.ReportVersionPage:
+    with handle.session() as s:
+        _require_report(s, report_id)
+        q = select(ReportVersionRow).where(ReportVersionRow.report_id == report_id)
+        found, next_cursor = newest_first_page(
+            s, q, ReportVersionRow.created_at, ReportVersionRow.id, limit, cursor
+        )
+        return rs.ReportVersionPage(items=[to_schema(r) for r in found], next_cursor=next_cursor)
+
+
+def _numbered(s, report_id: str, number: int) -> ReportVersionRow:
+    _require_report(s, report_id)
+    row = s.execute(
+        select(ReportVersionRow).where(
+            ReportVersionRow.report_id == report_id, ReportVersionRow.number == number
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise not_found("report version", str(number))
+    return row
+
+
+def get_numbered(handle, report_id: str, number: int) -> rs.ReportVersion:
+    with handle.session() as s:
+        return to_schema(_numbered(s, report_id, number))
+
+
+def set_issued(handle, report_id: str, number: int, issued: bool) -> rs.ReportVersion:
+    with handle.session() as s:
+        row = _numbered(s, report_id, number)
+        if issued and row.issued_at is None:
+            row.issued_at = datetime.now(UTC)
+        elif not issued:
+            row.issued_at = None
+        s.flush()
+        return to_schema(row)
+
+
+def delete_version(handle, report_id: str, number: int) -> None:
+    """Only a never-issued version; its rows first, then its folder (a folder a locked file keeps is
+    skipped by `next_number`, ruling 3)."""
+    with handle.session() as s:
+        row = _numbered(s, report_id, number)
+        if row.issued_at is not None:
+            raise AppError("issued_version", "An issued version cannot be deleted. Unissue it first.", 409)
+        folder = row.folder
+        s.execute(delete(ReportVersionFinding).where(ReportVersionFinding.version_id == row.id))
+        s.delete(row)
+    if folder:
+        target = handle.folder / folder
+        root = reports_root(handle, report_id)
+        if VERSION_DIR_RE.match(target.name) and target.resolve().parent == root.resolve():
+            shutil.rmtree(target, ignore_errors=True)
+
+
+@lru_cache(maxsize=4)
+def _parsed(path: str, _mtime_ns: int, _size: int) -> rs.ReportDocument:
+    return rs.ReportDocument.model_validate_json(Path(path).read_bytes())
+
+
+def document_page(
+    handle, report_id: str, number: int, *, cursor: str | None, limit: int | None
+) -> rs.ReportDocumentPage:
+    with handle.session() as s:
+        row = _numbered(s, report_id, number)
+        folder = row.folder
+    path = handle.folder / folder / "document.json"
+    try:
+        st = path.stat()
+    except FileNotFoundError:
+        raise AppError("not_found", f"version {number} has no document.json", 404) from None
+    doc = _parsed(str(path), st.st_mtime_ns, st.st_size)
+    n = max(1, min(DOCUMENT_MAX_LIMIT, limit or DOCUMENT_MAX_LIMIT))
+    start = int(decode_cursor(cursor, "i").get("i", 0)) if cursor else 0
+    stop = start + n
+    out, i = [], 0
+    for sec in doc.sections:
+        count = len(sec.blocks)
+        lo, hi = max(start - i, 0), min(stop - i, count)
+        if lo < hi:
+            out.append(sec.model_copy(update={"blocks": sec.blocks[lo:hi]}))
+        i += count
+    return rs.ReportDocumentPage(
+        report_id=doc.report_id,
+        version=doc.version,
+        generated_at=doc.generated_at,
+        theme_version=doc.theme_version,
+        sections=out,
+        next_cursor=encode_cursor(i=stop) if stop < i else None,
+    )
