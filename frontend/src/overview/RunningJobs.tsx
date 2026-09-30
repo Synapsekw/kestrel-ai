@@ -7,11 +7,11 @@ import { GlassPanel, Progress, StatusDot, cx, focusRing, stagger } from "@/ui";
 
 const SHOWN = 2;
 
-function JobCard({ job, index }: { job: Job; index: number }) {
+function JobCard({ job, index, bare }: { job: Job; index: number; bare: boolean }) {
   const running = isActiveJob(job);
   const title = jobTitle(job);
-  return (
-    <GlassPanel variant="pane" className="stagger animate-rise px-4 py-3.5" style={stagger(6 + index)}>
+  const content = (
+    <>
       <p className="flex items-center gap-2 text-xs text-muted">
         <StatusDot status={running ? "running" : "idle"} live={running} />
         {running ? (job.state === "queued" ? "Queued" : "Running") : "Last finished"}
@@ -26,12 +26,26 @@ function JobCard({ job, index }: { job: Job; index: number }) {
       </div>
       {running && <Progress value={job.progress} running label={title} className="mt-2.5" />}
       {job.message && <p className="mt-2 truncate font-mono text-2xs text-muted">{job.message}</p>}
+    </>
+  );
+  if (bare) return <div>{content}</div>;
+  return (
+    <GlassPanel variant="pane" className="stagger animate-rise px-4 py-3.5" style={stagger(6 + index)}>
+      {content}
     </GlassPanel>
   );
 }
 
 /** The project's active jobs (live from the WebSocket store) and the newest finished one. */
-export function RunningJobs({ projectId }: { projectId: string }) {
+export function RunningJobs({
+  projectId,
+  bare = false,
+  hideWhenIdle = false,
+}: {
+  projectId: string;
+  bare?: boolean;
+  hideWhenIdle?: boolean;
+}) {
   const jobs = useJobsStore((s) => s.jobs);
   const { running, done } = useMemo(() => {
     const mine = Object.values(jobs)
@@ -40,17 +54,19 @@ export function RunningJobs({ projectId }: { projectId: string }) {
     return { running: mine.filter(isActiveJob), done: mine.find((j) => j.state === "succeeded") };
   }, [jobs, projectId]);
 
-  if (running.length === 0 && !done)
+  if (running.length === 0 && !done) {
+    if (hideWhenIdle) return null;
     return (
       <GlassPanel variant="pane" className="stagger animate-rise px-4 py-3.5" style={stagger(6)}>
         <h2 className="text-xs text-muted">Jobs</h2>
         <p className="mt-2 text-sm text-muted">Nothing is running.</p>
       </GlassPanel>
     );
+  }
   return (
     <>
       {running.slice(0, SHOWN).map((j, i) => (
-        <JobCard key={j.id} job={j} index={i} />
+        <JobCard key={j.id} job={j} index={i} bare={bare} />
       ))}
       {running.length > SHOWN && (
         <Link
@@ -60,7 +76,7 @@ export function RunningJobs({ projectId }: { projectId: string }) {
           {running.length - SHOWN} more running in Jobs →
         </Link>
       )}
-      {done && <JobCard job={done} index={SHOWN} />}
+      {done && <JobCard job={done} index={SHOWN} bare={bare} />}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { exampleGeoMap, PROJECT_ID } from "@/test/fixtures";
 import { emptyOverview, exampleFinding, fullOverview, SEVERITY_SCALE } from "@/test/findingFixtures";
-import { buildKpis, severityRows } from "./kpis";
+import { buildKpis, formatCoords, headerFigures, severityRows, type Kpi } from "./kpis";
 import { backdropLayout, lonLatToMapPixel, pinsFromFindings, type PinInput } from "./heroPins";
 
 const TODAY = "2026-09-26";
@@ -132,5 +132,21 @@ describe("hero pins", () => {
     ]);
     expect(same.points.every((p) => Number.isFinite(p.xPct) && Number.isFinite(p.yPct))).toBe(true);
     expect(backdropLayout([])).toEqual({ points: [], scale: null });
+  });
+});
+
+describe("headerFigures", () => {
+  it("drops zero and missing figures", () => {
+    const k = (id: Kpi["id"], value: number | null): Kpi => ({ id, label: id, value });
+    expect(
+      headerFigures([k("open", 7), k("top", 0), k("data", 1284), k("volume", null)]).map((f) => f.id),
+    ).toEqual(["open", "data"]);
+  });
+});
+
+describe("formatCoords", () => {
+  it("formats hemispheres", () => {
+    expect(formatCoords(20.4612, 44.8125)).toBe("44.8125° N 20.4612° E");
+    expect(formatCoords(-70.25, -33.5)).toBe("33.5000° S 70.2500° W");
   });
 });
