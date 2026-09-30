@@ -1,0 +1,168 @@
+{
+  "note": "canonical = JSON with object keys sorted at every level, separators ',' and ':' and no whitespace, ASCII only (every non-ASCII character \\u-escaped, as Python's ensure_ascii=True); null is kept; integral numbers are written without a fraction (3.0 -> 3) and -0 as 0; NaN and Infinity are refused. param = the canonical UTF-8 bytes in base64url (RFC 4648 section 5 alphabet), no '=' padding. key = first 32 hex chars of sha256(canonical + '\\n' + source_version + '\\n' + renderer_version). The server re-parses and re-canonicalises every spec, so a key never depends on the client's bytes; byte parity is guaranteed only for numbers that are 0 or have 1e-4 <= |x| < 1e21 (Python and JavaScript switch to exponent notation at different points outside that range).",
+  "renderer_version": "1",
+  "cases": [
+    {
+      "name": "image_crop: non-ASCII label, integral float, ring",
+      "source_version": "1048576:1727690400000000000:2026-09-30T10:00:00+00:00",
+      "spec": {
+        "kind": "image_crop",
+        "image_id": "img-1",
+        "annotation_id": "box-1",
+        "ring": [
+          [
+            10.5,
+            20
+          ],
+          [
+            110.5,
+            20
+          ],
+          [
+            110.5,
+            95.25
+          ],
+          [
+            10.5,
+            95.25
+          ]
+        ],
+        "colour": "#ff5a4f",
+        "label": "F-0042 \u00b7 Crack",
+        "context": 3.0,
+        "out": [
+          1200,
+          900
+        ],
+        "inset": false
+      },
+      "canonical": "{\"annotation_id\":\"box-1\",\"colour\":\"#ff5a4f\",\"context\":3,\"image_id\":\"img-1\",\"inset\":false,\"kind\":\"image_crop\",\"label\":\"F-0042 \\u00b7 Crack\",\"out\":[1200,900],\"ring\":[[10.5,20],[110.5,20],[110.5,95.25],[10.5,95.25]]}",
+      "param": "eyJhbm5vdGF0aW9uX2lkIjoiYm94LTEiLCJjb2xvdXIiOiIjZmY1YTRmIiwiY29udGV4dCI6MywiaW1hZ2VfaWQiOiJpbWctMSIsImluc2V0IjpmYWxzZSwia2luZCI6ImltYWdlX2Nyb3AiLCJsYWJlbCI6IkYtMDA0MiBcdTAwYjcgQ3JhY2siLCJvdXQiOlsxMjAwLDkwMF0sInJpbmciOltbMTAuNSwyMF0sWzExMC41LDIwXSxbMTEwLjUsOTUuMjVdLFsxMC41LDk1LjI1XV19",
+      "key": "68ae1a1686245b3f92d7bea58b61d67a"
+    },
+    {
+      "name": "map: null label kept, nested geometry",
+      "source_version": "52428800:1727690400000000000:April:2026-09-14",
+      "spec": {
+        "kind": "map",
+        "item_id": "map-1",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            500012.25,
+            4983010.5
+          ]
+        },
+        "colour": "#e5af64",
+        "label": null,
+        "min_extent_m": 40.0,
+        "out": [
+          1200,
+          900
+        ],
+        "scale_bar": true,
+        "north": true,
+        "inset": false
+      },
+      "canonical": "{\"colour\":\"#e5af64\",\"geometry\":{\"coordinates\":[500012.25,4983010.5],\"type\":\"Point\"},\"inset\":false,\"item_id\":\"map-1\",\"kind\":\"map\",\"label\":null,\"min_extent_m\":40,\"north\":true,\"out\":[1200,900],\"scale_bar\":true}",
+      "param": "eyJjb2xvdXIiOiIjZTVhZjY0IiwiZ2VvbWV0cnkiOnsiY29vcmRpbmF0ZXMiOls1MDAwMTIuMjUsNDk4MzAxMC41XSwidHlwZSI6IlBvaW50In0sImluc2V0IjpmYWxzZSwiaXRlbV9pZCI6Im1hcC0xIiwia2luZCI6Im1hcCIsImxhYmVsIjpudWxsLCJtaW5fZXh0ZW50X20iOjQwLCJub3J0aCI6dHJ1ZSwib3V0IjpbMTIwMCw5MDBdLCJzY2FsZV9iYXIiOnRydWV9",
+      "key": "98ee08d7eb74b4143a8183e1e745c912"
+    },
+    {
+      "name": "pair: nested specs, bbox and split",
+      "source_version": "a=52428800:1:April:2026-09-14|b=52428800:2:May:2026-09-21",
+      "spec": {
+        "kind": "pair",
+        "a": {
+          "kind": "map",
+          "item_id": "map-a",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              500012.25,
+              4983010.5
+            ]
+          },
+          "colour": "#e5af64",
+          "label": null,
+          "min_extent_m": 40.0,
+          "out": [
+            1200,
+            900
+          ],
+          "scale_bar": true,
+          "north": true,
+          "inset": false
+        },
+        "b": {
+          "kind": "map",
+          "item_id": "map-b",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              500012.25,
+              4983010.5
+            ]
+          },
+          "colour": "#e5af64",
+          "label": null,
+          "min_extent_m": 40.0,
+          "out": [
+            1200,
+            900
+          ],
+          "scale_bar": true,
+          "north": true,
+          "inset": false
+        },
+        "bbox_wgs84": [
+          15.000123,
+          44.98,
+          15.0021,
+          44.9812
+        ],
+        "mode": "swipe",
+        "split": 0.5
+      },
+      "canonical": "{\"a\":{\"colour\":\"#e5af64\",\"geometry\":{\"coordinates\":[500012.25,4983010.5],\"type\":\"Point\"},\"inset\":false,\"item_id\":\"map-a\",\"kind\":\"map\",\"label\":null,\"min_extent_m\":40,\"north\":true,\"out\":[1200,900],\"scale_bar\":true},\"b\":{\"colour\":\"#e5af64\",\"geometry\":{\"coordinates\":[500012.25,4983010.5],\"type\":\"Point\"},\"inset\":false,\"item_id\":\"map-b\",\"kind\":\"map\",\"label\":null,\"min_extent_m\":40,\"north\":true,\"out\":[1200,900],\"scale_bar\":true},\"bbox_wgs84\":[15.000123,44.98,15.0021,44.9812],\"kind\":\"pair\",\"mode\":\"swipe\",\"split\":0.5}",
+      "param": "eyJhIjp7ImNvbG91ciI6IiNlNWFmNjQiLCJnZW9tZXRyeSI6eyJjb29yZGluYXRlcyI6WzUwMDAxMi4yNSw0OTgzMDEwLjVdLCJ0eXBlIjoiUG9pbnQifSwiaW5zZXQiOmZhbHNlLCJpdGVtX2lkIjoibWFwLWEiLCJraW5kIjoibWFwIiwibGFiZWwiOm51bGwsIm1pbl9leHRlbnRfbSI6NDAsIm5vcnRoIjp0cnVlLCJvdXQiOlsxMjAwLDkwMF0sInNjYWxlX2JhciI6dHJ1ZX0sImIiOnsiY29sb3VyIjoiI2U1YWY2NCIsImdlb21ldHJ5Ijp7ImNvb3JkaW5hdGVzIjpbNTAwMDEyLjI1LDQ5ODMwMTAuNV0sInR5cGUiOiJQb2ludCJ9LCJpbnNldCI6ZmFsc2UsIml0ZW1faWQiOiJtYXAtYiIsImtpbmQiOiJtYXAiLCJsYWJlbCI6bnVsbCwibWluX2V4dGVudF9tIjo0MCwibm9ydGgiOnRydWUsIm91dCI6WzEyMDAsOTAwXSwic2NhbGVfYmFyIjp0cnVlfSwiYmJveF93Z3M4NCI6WzE1LjAwMDEyMyw0NC45OCwxNS4wMDIxLDQ0Ljk4MTJdLCJraW5kIjoicGFpciIsIm1vZGUiOiJzd2lwZSIsInNwbGl0IjowLjV9",
+      "key": "c79dc6e55e6e2ffd020096bbd4fbdf65"
+    },
+    {
+      "name": "elevation: -0, a small and a large number",
+      "source_version": "8388608:1727690400000000000:DSM:",
+      "spec": {
+        "kind": "elevation",
+        "item_id": "srf-1",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -0.0,
+            0.001,
+            123456789.125
+          ]
+        },
+        "overlay": "none",
+        "overlay_item_id": null,
+        "out": [
+          800,
+          600
+        ]
+      },
+      "canonical": "{\"geometry\":{\"coordinates\":[0,0.001,123456789.125],\"type\":\"Point\"},\"item_id\":\"srf-1\",\"kind\":\"elevation\",\"out\":[800,600],\"overlay\":\"none\",\"overlay_item_id\":null}",
+      "param": "eyJnZW9tZXRyeSI6eyJjb29yZGluYXRlcyI6WzAsMC4wMDEsMTIzNDU2Nzg5LjEyNV0sInR5cGUiOiJQb2ludCJ9LCJpdGVtX2lkIjoic3JmLTEiLCJraW5kIjoiZWxldmF0aW9uIiwib3V0IjpbODAwLDYwMF0sIm92ZXJsYXkiOiJub25lIiwib3ZlcmxheV9pdGVtX2lkIjpudWxsfQ",
+      "key": "b12b20d212f75c8f27b88a7ac15c2aee"
+    },
+    {
+      "name": "volume_plan: the smallest spec",
+      "source_version": "2026-09-30T10:00:00+00:00",
+      "spec": {
+        "kind": "volume_plan",
+        "measurement_id": "vm-1"
+      },
+      "canonical": "{\"kind\":\"volume_plan\",\"measurement_id\":\"vm-1\"}",
+      "param": "eyJraW5kIjoidm9sdW1lX3BsYW4iLCJtZWFzdXJlbWVudF9pZCI6InZtLTEifQ",
+      "key": "68eed446ec49f1707602b3a36d2b41cc"
+    }
+  ]
+}
