@@ -102,12 +102,14 @@ def placeholder_path(handle, reason: str, size: tuple[int, int]) -> Path:
     digest = hashlib.sha256(f"{reason}\n{w}x{h}\n{RENDERER_VERSION}".encode()).hexdigest()[:32]
     path = cache_dir(handle) / f"ph-{digest}.jpg"
     if path.is_file():
+        touch(path)
         return path
     img = render_placeholder(reason, (w, h))
     try:
         write_jpeg(img, path)
     except OSError:
         if path.is_file():
+            touch(path)
             return path
         retry = cache_dir(handle) / f"ph-{digest}-{uuid4().hex}.jpg"
         write_jpeg(img, retry)

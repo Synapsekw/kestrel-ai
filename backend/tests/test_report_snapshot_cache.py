@@ -79,6 +79,38 @@ def test_prune_of_a_project_without_a_cache_is_a_no_op(tmp_path):
     assert prune(_h(tmp_path)) == 0
 
 
+def test_a_reused_placeholder_s_mtime_advances(tmp_path):
+    """cache.py ~104/~110: placeholder_path must touch an existing ph-*.jpg's mtime on return, since
+    the LRU prune counts ph-* files by mtime; otherwise a placeholder reused between return and read
+    can be pruned out from under a concurrent reader (endpoint read_bytes -> 500)."""
+    h = _h(tmp_path)
+    p = placeholder_path(h, "The image file is missing", (1200, 900))
+    old_ns = 1_700_000_000 * 10**9
+    os.utime(p, ns=(old_ns, old_ns))
+    assert p.stat().st_mtime_ns == old_ns
+    again = placeholder_path(h, "The image file is missing", (1200, 900))
+    assert again == p
+    assert p.stat().st_mtime_ns > old_ns
+
+
+def test_a_placeholder_reused_after_a_failed_write_also_gets_touched(tmp_path, monkeypatch):
+    """The second return point (existing file found after an OSError on write) must also touch."""
+    h = _h(tmp_path)
+    p = placeholder_path(h, "another reason", (400, 300))
+    old_ns = 1_700_000_000 * 10**9
+    os.utime(p, ns=(old_ns, old_ns))
+
+    def flaky(img, path, quality=None):
+        raise OSError("disk full")
+
+    import app.reports.snapshots.cache as cache_module
+
+    monkeypatch.setattr(cache_module, "write_jpeg", flaky)
+    again = cache_module.placeholder_path(h, "another reason", (400, 300))
+    assert again == p
+    assert p.stat().st_mtime_ns > old_ns
+
+
 def test_a_placeholder_is_grey_sized_and_shared_by_reason(tmp_path):
     h = _h(tmp_path)
     p = placeholder_path(h, "The image file is missing", (1200, 900))
