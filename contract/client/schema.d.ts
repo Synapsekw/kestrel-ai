@@ -2782,6 +2782,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogue/types/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a project template's types against the catalogue, in one transaction (spec
+         *     2026-09-30-project-setup section 6). Each spec is matched by normalised name, archived
+         *     types included. A match is reused and left unchanged, except that an archived match is
+         *     unarchived (its catalogue hotkey is cleared when a live type now holds it); a kind or colour
+         *     that differs from the spec is reported as `conflict`, and the catalogue wins. A miss creates
+         *     the type from the spec with `origin: template`. With `dry_run: true` nothing is written and
+         *     a miss has `id: null`. Items come back in request order. Setup calls it on Create, and as a
+         *     dry run while the anomaly list settles, so conflicts show before anything is created.
+         */
+        post: operations["ensureCatalogueTypes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalogue/types/{typeId}": {
         parameters: {
             query?: never;
@@ -4247,6 +4273,70 @@ export interface paths {
         patch: operations["patchReportTemplate"];
         trace?: never;
     };
+    "/api/v1/project-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project templates for the new-project page: the three built-ins first, then the operator's own by name. A template pre-fills the page; it is never stored on the project. */
+        get: operations["listProjectTemplates"];
+        put?: never;
+        /** Save slots and anomaly types as a reusable template (Save as my template). Names are unique after normalising, like catalogue type names; the project name, folder and files are never part of a template. */
+        post: operations["createProjectTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved template. Projects made from it are not affected: a template is never stored on a project. */
+        delete: operations["deleteProjectTemplate"];
+        options?: never;
+        head?: never;
+        /** Rename a saved template, or replace its description or config. Built-ins are read-only. */
+        patch: operations["patchProjectTemplate"];
+        trace?: never;
+    };
+    "/api/v1/setup/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sort dropped files and folders into buckets by route (spec 2026-09-30-project-setup section
+         *     7): a `setup_inspect` job on the model library's runner, because no project exists yet. Read
+         *     it with `GET /library/jobs/{jobId}`; its `result` is an `InspectResult`. Only extensions and
+         *     headers are read, never pixels, raster bodies or points: at most 20 photos per folder, one
+         *     header per GeoTIFF or LAS/LAZ file, the root element of an XML file. The walk stops at 50,000
+         *     files and sets `truncated`. A path that is relative, missing or unreadable is not refused: it
+         *     is listed under `not_recognised` with its reason. With `template_id`, each bucket's
+         *     `slot_key` is assigned for that template; an unknown id leaves every `slot_key` null.
+         */
+        post: operations["startSetupInspect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4338,6 +4428,13 @@ export interface components {
                  *     details `{job_id}`), issued_version (409: an issued version is never deleted),
                  *     invalid_snapshot_spec and snapshot_key_mismatch (400: the snapshot `spec` does not
                  *     decode, or does not match the key).
+                 *     Project setup: template_builtin (409: a built-in project template is never changed
+                 *     or deleted), template_name_taken (409: a project template with that normalised name
+                 *     exists; details `{template_id}`), invalid_template (also 422 for a project template
+                 *     whose config repeats a slot key, a type name or a hotkey; details
+                 *     `{errors: [{path, message}]}`), invalid_severity_rule (422: a severity rule names a
+                 *     level that is not on the scale; details `{name, severity}`), type_name_blank (422: a
+                 *     type name is empty once normalised; details `{name}`).
                  */
                 code: string;
                 message: string;
@@ -13495,8 +13592,17 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
-            /** @description the folder already contains a project (`code` is `already_exists`) */
+            /** @description the folder already contains a project (`code` is `already_exists`), or two types were given one hotkey (`code` is `hotkey_conflict`, details `{type_id}`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`), or a `hotkeys` key is not one of `type_ids` (`code` is `hotkey_invalid`, details `{type_ids}`); nothing is created and the folder is not touched */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19357,6 +19463,41 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    ensureCatalogueTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureTypesRequest"];
+            };
+        };
+        responses: {
+            /** @description one item per requested type, in request order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnsureTypesResult"];
+                };
+            };
+            /** @description a severity rule names a level that is not on the scale (`code` is `invalid_severity_rule`, details `{name, severity}`), a default severity is above the scale (`code` is `severity_unknown`), or a name is empty once normalised, such as `_-_` (`code` is `type_name_blank`, details `{name}`); nothing was written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
     getCatalogueType: {
         parameters: {
             query?: never;
@@ -22470,6 +22611,210 @@ export interface operations {
                 };
             };
             503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listProjectTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description every template; there are few, so the list is not paged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplatePage"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createProjectTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"];
+                };
+            };
+            /** @description a template with that normalised name exists (`code` is `template_name_taken`, details `{template_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteProjectTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in template is never deleted (`code` is `template_builtin`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchProjectTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTemplatePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated template */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in template is never changed (`code` is `template_builtin`), or the new name is taken (`code` is `template_name_taken`, details `{template_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startSetupInspect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description inspect job queued in the library runner */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job": {
+                     *         "id": "j0000000-4444-4000-8000-000000000050",
+                     *         "project_id": "library",
+                     *         "type": "setup_inspect",
+                     *         "state": "queued",
+                     *         "progress": 0,
+                     *         "message": "",
+                     *         "log_path": "runs/j0000000-4444-4000-8000-000000000050/job.log",
+                     *         "params": {
+                     *           "paths": [
+                     *             "E:\\Deliveries\\Tower 14"
+                     *           ],
+                     *           "template_id": "builtin-vertical"
+                     *         },
+                     *         "result": null,
+                     *         "error": null,
+                     *         "created_at": "2026-09-30T10:00:00Z",
+                     *         "started_at": null,
+                     *         "finished_at": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the body is malformed (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };

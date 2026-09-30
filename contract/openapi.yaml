@@ -92,6 +92,7 @@ tags:
   - name: data
   - name: workspace
   - name: reports
+  - name: setup
 
 paths:
   /api/v1/agent/chat:
@@ -158,7 +159,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         "409":
-          description: the folder already contains a project (`code` is `already_exists`)
+          description: "the folder already contains a project (`code` is `already_exists`), or two types were given one hotkey (`code` is `hotkey_conflict`, details `{type_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`), or a `hotkeys` key is not one of `type_ids` (`code` is `hotkey_invalid`, details `{type_ids}`); nothing is created and the folder is not touched"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3863,6 +3869,37 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "503": { $ref: "#/components/responses/CatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalogue/types/ensure:
+    post:
+      tags: [catalogue]
+      operationId: ensureCatalogueTypes
+      summary: |
+        Resolve a project template's types against the catalogue, in one transaction (spec
+        2026-09-30-project-setup section 6). Each spec is matched by normalised name, archived
+        types included. A match is reused and left unchanged, except that an archived match is
+        unarchived (its catalogue hotkey is cleared when a live type now holds it); a kind or colour
+        that differs from the spec is reported as `conflict`, and the catalogue wins. A miss creates
+        the type from the spec with `origin: template`. With `dry_run: true` nothing is written and
+        a miss has `id: null`. Items come back in request order. Setup calls it on Create, and as a
+        dry run while the anomaly list settles, so conflicts show before anything is created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnsureTypesRequest" }
+      responses:
+        "200":
+          description: one item per requested type, in request order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnsureTypesResult" }
+        "422":
+          description: "a severity rule names a level that is not on the scale (`code` is `invalid_severity_rule`, details `{name, severity}`), a default severity is above the scale (`code` is `severity_unknown`), or a name is empty once normalised, such as `_-_` (`code` is `type_name_blank`, details `{name}`); nothing was written"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/catalogue/types/{typeId}:
     parameters:
       - $ref: "#/components/parameters/typeId"
@@ -5961,6 +5998,138 @@ paths:
         "503": { $ref: "#/components/responses/CatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/project-templates:
+    get:
+      tags: [setup]
+      operationId: listProjectTemplates
+      summary: "Project templates for the new-project page: the three built-ins first, then the operator's own by name. A template pre-fills the page; it is never stored on the project."
+      responses:
+        "200":
+          description: every template; there are few, so the list is not paged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTemplatePage" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [setup]
+      operationId: createProjectTemplate
+      summary: "Save slots and anomaly types as a reusable template (Save as my template). Names are unique after normalising, like catalogue type names; the project name, folder and files are never part of a template."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectTemplateCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTemplate" }
+        "409":
+          description: "a template with that normalised name exists (`code` is `template_name_taken`, details `{template_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/project-templates/{templateId}:
+    parameters:
+      - $ref: "#/components/parameters/templateId"
+    patch:
+      tags: [setup]
+      operationId: patchProjectTemplate
+      summary: "Rename a saved template, or replace its description or config. Built-ins are read-only."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectTemplatePatch" }
+      responses:
+        "200":
+          description: the updated template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTemplate" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in template is never changed (`code` is `template_builtin`), or the new name is taken (`code` is `template_name_taken`, details `{template_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [setup]
+      operationId: deleteProjectTemplate
+      summary: "Delete a saved template. Projects made from it are not affected: a template is never stored on a project."
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in template is never deleted (`code` is `template_builtin`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/setup/inspect:
+    post:
+      tags: [setup]
+      operationId: startSetupInspect
+      summary: |
+        Sort dropped files and folders into buckets by route (spec 2026-09-30-project-setup section
+        7): a `setup_inspect` job on the model library's runner, because no project exists yet. Read
+        it with `GET /library/jobs/{jobId}`; its `result` is an `InspectResult`. Only extensions and
+        headers are read, never pixels, raster bodies or points: at most 20 photos per folder, one
+        header per GeoTIFF or LAS/LAZ file, the root element of an XML file. The walk stops at 50,000
+        files and sets `truncated`. A path that is relative, missing or unreadable is not refused: it
+        is listed under `not_recognised` with its reason. With `template_id`, each bucket's
+        `slot_key` is assigned for that template; an unknown id leaves every `slot_key` null.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupInspectRequest" }
+      responses:
+        "202":
+          description: inspect job queued in the library runner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+              example:
+                job:
+                  id: "j0000000-4444-4000-8000-000000000050"
+                  project_id: library
+                  type: setup_inspect
+                  state: queued
+                  progress: 0
+                  message: ""
+                  log_path: "runs/j0000000-4444-4000-8000-000000000050/job.log"
+                  params: { paths: ["E:\\Deliveries\\Tower 14"], template_id: builtin-vertical }
+                  result: null
+                  error: null
+                  created_at: "2026-09-30T10:00:00Z"
+                  started_at: null
+                  finished_at: null
+        "422":
+          description: "the body is malformed (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -6427,6 +6596,13 @@ components:
                 details `{job_id}`), issued_version (409: an issued version is never deleted),
                 invalid_snapshot_spec and snapshot_key_mismatch (400: the snapshot `spec` does not
                 decode, or does not match the key).
+                Project setup: template_builtin (409: a built-in project template is never changed
+                or deleted), template_name_taken (409: a project template with that normalised name
+                exists; details `{template_id}`), invalid_template (also 422 for a project template
+                whose config repeats a slot key, a type name or a hotkey; details
+                `{errors: [{path, message}]}`), invalid_severity_rule (422: a severity rule names a
+                level that is not on the scale; details `{name, severity}`), type_name_blank (422: a
+                type name is empty once normalised; details `{name}`).
             message: { type: string }
             details:
               type: object

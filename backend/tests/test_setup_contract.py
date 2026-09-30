@@ -358,3 +358,70 @@ def test_the_setup_inspect_job_type(spec):
         in description
     )
     assert "(params {paths, template_id})" in description
+
+
+# ------------------------------------------------------------------------------ Task 4: operations
+
+T = "/api/v1/project-templates"
+# operationId -> (method, path, tag, owning unit)
+SETUP_OPERATIONS = {
+    "listProjectTemplates": ("get", T, "setup", "U2"),
+    "createProjectTemplate": ("post", T, "setup", "U2"),
+    "patchProjectTemplate": ("patch", T + "/{templateId}", "setup", "U2"),
+    "deleteProjectTemplate": ("delete", T + "/{templateId}", "setup", "U2"),
+    "startSetupInspect": ("post", "/api/v1/setup/inspect", "setup", "U3"),
+    "ensureCatalogueTypes": ("post", "/api/v1/catalogue/types/ensure", "catalogue", "U2"),
+}
+# statuses each operation must declare besides `default` (index "Interface decisions")
+DECLARED = {
+    "listProjectTemplates": {"200", "503"},
+    "createProjectTemplate": {"201", "409", "422", "503"},
+    "patchProjectTemplate": {"200", "404", "409", "422", "503"},
+    "deleteProjectTemplate": {"204", "404", "409", "503"},
+    "startSetupInspect": {"202", "422", "503"},
+    "ensureCatalogueTypes": {"200", "422", "503"},
+    "createProject": {"201", "409", "422"},
+}
+S1_CODES = (
+    "template_builtin",
+    "template_name_taken",
+    "invalid_template",
+    "invalid_severity_rule",
+    "type_name_blank",
+)
+
+
+def test_the_setup_operations_are_exactly_these(spec):
+    ops = _operations(spec)
+    tagged = {op_id for op_id, (_, _, op) in ops.items() if "setup" in op.get("tags", [])}
+    assert tagged == {op_id for op_id, v in SETUP_OPERATIONS.items() if v[2] == "setup"}
+    for op_id, (method, path, tag, _) in SETUP_OPERATIONS.items():
+        assert ops[op_id][:2] == (method, path), op_id
+        assert ops[op_id][2]["tags"] == [tag], op_id
+        assert ops[op_id][2]["responses"]["default"] == {"$ref": "#/components/responses/Error"}
+    assert "setup" in {t["name"] for t in spec["tags"]}
+
+
+@pytest.mark.parametrize("op_id", sorted(DECLARED))
+def test_the_owner_refusals_are_declared(spec, op_id):
+    assert DECLARED[op_id] <= set(_operations(spec)[op_id][2]["responses"]), op_id
+
+
+def test_the_setup_error_codes_are_documented(spec):
+    text = _schemas(spec)["Error"]["properties"]["error"]["properties"]["code"]["description"]
+    for code in S1_CODES:
+        assert code in text, code
+
+
+def test_the_inspect_job_is_a_library_job_ref(spec):
+    answer = _operations(spec)["startSetupInspect"][2]["responses"]["202"]["content"]["application/json"]
+    assert answer["schema"] == {"$ref": "#/components/schemas/JobRef"}
+    assert answer["example"]["job"]["type"] == "setup_inspect"
+    assert answer["example"]["job"]["project_id"] == "library"
+    assert _errors(spec, "JobRef", answer["example"]) == []
+
+
+def test_the_templates_list_is_not_paged(spec):
+    """At most a few dozen templates: `ProjectTemplatePage` has `items` only (index)."""
+    assert set(_schemas(spec)["ProjectTemplatePage"]["properties"]) == {"items"}
+    assert "parameters" not in _operations(spec)["listProjectTemplates"][2]

@@ -20,6 +20,7 @@ from app.errors import AppError
 from app.findings.backfill import submit_backfill
 from app.jobs.schemas import JobOut
 from app.library.handle import LibraryHandle, get_library
+from app.stubs import add_stubs
 from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/catalogue", tags=["catalogue"])
@@ -135,3 +136,10 @@ def backfill_catalogue_type(
         )
     job = submit_backfill(lib, request.app.state.jobs, typeId)
     return JobRef(job=JobOut.from_row(job, lib.id))
+
+
+# Project setup (spec 2026-09-30-project-setup section 6, plan 2026-09-30-setup-u1): 501 until U2
+# replaces it with the `ensure_template_types` route and deletes STUBS; `app.setup.router`'s
+# `stub_operation_ids()` collects it for tests/test_contract.py.
+STUBS: list[tuple[str, str, str]] = [("POST", "/types/ensure", "ensureCatalogueTypes")]
+add_stubs(router, STUBS, project_scoped=False)
