@@ -42,6 +42,11 @@ def get_report_snapshot(
     body = result.path.read_bytes()
     if result.missing_reason is not None:
         headers = {"Cache-Control": "no-store", "X-Snapshot-Missing": quote(result.missing_reason)}
+    elif result.key != snapshotKey:
+        # The source changed between the key check above and render_result recomputing it (a
+        # concurrent write). Serving this body as `immutable` would poison the old key's URL in the
+        # browser cache; no-store lets the next request see the real key mismatch (400) instead.
+        headers = {"Cache-Control": "no-store"}
     else:
         headers = IMMUTABLE
     return Response(body, media_type="image/jpeg", headers=headers)

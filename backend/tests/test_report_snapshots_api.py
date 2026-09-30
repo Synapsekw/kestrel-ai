@@ -74,6 +74,29 @@ def test_a_missing_source_serves_a_placeholder_the_browser_never_caches(client, 
     assert unquote(r.headers["x-snapshot-missing"]) == "The image was deleted"
 
 
+def test_a_key_that_drifts_between_the_check_and_the_render_is_served_no_store(
+    client, project_id, handle, monkeypatch
+):
+    """routes_snapshots.py: the key check (compute_key) and render_result recompute the key
+    separately. If the source changes in between (e.g. another request writes to it), the new image
+    must not be served `immutable` under the old key's URL."""
+    from app.reports.snapshots import render as render_module
+
+    spec = _spec(add_image(handle, "a.jpg", (2000, 1500)))
+    key = snapshot_key(handle, spec)
+    real_render_result = render_module.render_result
+
+    def drifted(h, s):
+        result = real_render_result(h, s)
+        return render_module.SnapshotResult(key="f" * 32, path=result.path, missing_reason=None)
+
+    monkeypatch.setattr(render_module, "render_result", drifted)
+    r = client.get(_url(project_id, key, spec))
+    assert r.status_code == 200, r.text
+    assert r.headers["cache-control"] == "no-store"
+    assert "x-snapshot-missing" not in r.headers
+
+
 def test_a_changed_source_changes_the_key(client, project_id, handle):
     spec = _spec(add_image(handle, "a.jpg", (2000, 1500)))
     old = snapshot_key(handle, spec)
