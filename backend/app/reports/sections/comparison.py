@@ -1,17 +1,60 @@
-"""Survey comparison (spec §7.2). R2 stub: one "No data" paragraph until R9-M fills it in
-(plan R2 section module protocol: KEY, TITLE, compose; optional page, outline, fingerprint,
-USES_FINDINGS)."""
+"""The survey comparison section (reports spec §7.2 row `comparison`, §9.3, §16; plan R9-M
+Rulings 10-13): per pair of surveys a swipe and/or side-by-side figure with date captions (side by
+side over each footprint when they do not overlap), then the counts-over-time chart."""
 
 from __future__ import annotations
 
 from app.reports import blocks
 from app.reports.context import ComposeContext
 from app.reports.schemas import ReportSectionDoc
+from app.reports.sections import survey_counts, survey_pairs
 
 KEY = "comparison"
 TITLE = "Survey comparison"
 USES_FINDINGS = False
+ONE_SURVEY = "One survey so far: nothing to compare."
 
 
 def compose(ctx: ComposeContext) -> ReportSectionDoc:
-    return ReportSectionDoc(key=KEY, title=TITLE, blocks=[blocks.para("No data", style="note")])
+    opts = ctx.options(KEY)
+    out: list = [blocks.heading(TITLE, level=1)]
+
+    maps = survey_pairs.survey_maps(ctx.handle)
+    if opts.pairs == "auto":
+        pairs = [(a, b, None) for a, b in survey_pairs.auto_pairs(maps)]
+    else:
+        pairs, missing = survey_pairs.explicit_pairs(maps, [p.model_dump() for p in opts.pairs])
+        if missing:
+            ctx.warn("pair_missing", "{n} comparison pair(s) name a map that is not ready.", count=missing)
+
+    if not pairs:
+        out.append(blocks.para(ONE_SURVEY, style="body"))
+    for a, b, given in pairs:
+        centre = None if given else survey_pairs.finding_centre(ctx.handle, a.id, b.id)
+        bbox = survey_pairs.frame(a, b, given, centre)
+        out.append(blocks.heading(f"{a.name} → {b.name}", level=2))
+        out += survey_pairs.pair_blocks(ctx, a, b, bbox, opts.mode)
+
+    if opts.counts_chart:
+        out += _chart(ctx)
+
+    return ReportSectionDoc(key=KEY, title=TITLE, blocks=out)
+
+
+def _chart(ctx: ComposeContext) -> list:
+    data = survey_counts.load(ctx.handle)
+    classes = survey_counts.chosen_classes(data, None)
+    if not classes:
+        return []
+    labels, series = survey_counts.chart_series(data, classes, verified_only=False)
+    out: list = [
+        blocks.heading("Objects counted per survey", level=2),
+        blocks.chart(
+            "line",
+            [{"name": name, "values": values, "colour": colour} for name, colour, values in series],
+            labels,
+            unit=survey_counts.OBJECTS,
+        ),
+    ]
+    out += [blocks.para(n, style="small") for n in survey_counts.not_comparable_notes(data)]
+    return out
