@@ -83,3 +83,13 @@ def test_a_long_unbroken_note_still_renders(tmp_path):
     block = _block(note="x" * 20000, comments=0, photos=0)
     path = _pdf(tmp_path, flowables.block_flowables(block, context(Snapshots(tmp_path / "s"))))
     assert "F-0042" in pdf_pages_text(path)[0]
+
+
+def test_the_comments_label_and_each_meta_line_keep_with_the_next_line(tmp_path):
+    out = flowables.block_flowables(_block(comments=3), context(Snapshots(tmp_path)))
+    comments = out[1:-2]
+    assert comments[0].text == "Comments" and comments[0].getKeepWithNext()
+    metas, bodies = comments[1::2], comments[2::2]
+    assert len(metas) == len(bodies) == 3
+    assert all(m.getKeepWithNext() for m in metas)
+    assert not any(b.getKeepWithNext() for b in bodies)

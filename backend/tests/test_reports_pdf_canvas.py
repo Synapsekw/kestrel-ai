@@ -109,3 +109,32 @@ def test_a_corrupt_logo_is_skipped(tmp_path, caplog):
     bad.write_bytes(b"not an image")
     assert b"/ShadingType 2" in _cover(tmp_path / "bad.pdf", bad)
     assert "logo" in caplog.text
+
+
+def test_pdf_date_treats_a_naive_datetime_as_utc():
+    assert canvas.pdf_date(datetime(2026, 9, 30, 12, 0)) == "D:20260930120000+00'00'"
+
+
+def _header_fits(page_text: str, meta, st) -> str:
+    """The truncated header segment (up to its ellipsis), checked to fit left of the version label."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    head = page_text[: page_text.index("…") + 1].splitlines()[-1]
+    size = canvas.THEME["type"]["furniture_pt"]
+    room = A4[0] - 36 * mm - stringWidth(meta.version_label, st.fonts.sans, size)
+    assert stringWidth(head, st.fonts.sans_bold, size) < room
+    return head
+
+
+def test_a_long_title_and_cont_header_are_cut_before_the_version_label(tmp_path):
+    st = styles.build_styles(fonts.register_fonts())
+    title = "Quarterly inspection of the north yard " * 8  # ~300 characters
+    meta = canvas.PageMeta(
+        title=title, version_label="v3", project="Kuwait yard", generated_at=AT, page_count=0
+    )
+    meta.header_overrides[2] = "F-0042 · " + "Very long finding type " * 12 + " (cont.)"
+    _build(tmp_path / "t.pdf", meta)
+    text = pdf_pages_text(tmp_path / "t.pdf")
+    assert title.strip() not in text[0] and "v3" in text[0]
+    assert _header_fits(text[0], meta, st).startswith("Quarterly inspection")
+    assert _header_fits(text[1], meta, st).startswith("F-0042 · Very long")

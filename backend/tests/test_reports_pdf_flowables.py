@@ -77,6 +77,9 @@ def test_heading_para_kv_kpis_table_chart_and_figures_all_print(tmp_path, ctx):
     ):
         assert word in text, word
     assert "dot=" not in text and "#F59E0B" not in text  # a dot cell is a dot and text, not its repr
+    table = next(f for f in flowables.block_flowables(blocks[4], ctx) if isinstance(f, Table))
+    dot_cell = table._cellvalues[2][1]
+    assert isinstance(dot_cell, Table) and isinstance(dot_cell._cellvalues[0][0], flowables._Dot)  # P8
 
 
 def test_table_columns_honour_style_and_align(ctx):

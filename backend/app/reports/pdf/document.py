@@ -9,6 +9,7 @@ the creation date, deterministic font subsets, JPEG passthrough. Parts: see plan
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -48,6 +49,7 @@ from app.reports.theme import THEME
 if TYPE_CHECKING:
     from app.reports.schemas import ReportDocument, SnapshotRef, VolumeBlock
 
+log = logging.getLogger(__name__)
 PART_BUDGET = 160 * 1024 * 1024
 PAGE_SIZES = {"A4": A4, "Letter": LETTER}
 SPLIT_KINDS = ("finding", "volume")
@@ -91,13 +93,16 @@ def cover_logo(section: Any, out_dir: Path) -> Path | None:
     """The cover's logo file: the `cover` block's `logo.path` (R2 plan ruling 2) - absolute as is, or
     project-relative, resolved against the first ancestor of `out_dir` that holds it (out_dir lies inside
     the project, spec §6.3) - else a `logo_path` on the section. The one place R4 reads the logo. A
-    missing file gives None (no logo)."""
+    missing file, or a relative path with a `..` segment, gives None (no logo)."""
     block = _cover_block(section)
     logo = getattr(block, "logo", None) if block is not None else None
     raw = getattr(logo, "path", None) if logo is not None else getattr(section, "logo_path", None)
     if not raw:
         return None
     path = Path(str(raw))
+    if not path.is_absolute() and ".." in path.parts:  # project-relative means inside the project
+        log.warning("cover logo %s climbs out of the project; skipped", raw)
+        return None
     if path.is_absolute():
         return path if path.is_file() else None
     out_dir = Path(out_dir)
@@ -266,12 +271,17 @@ def _cover_story(section: Any, ctx: RenderContext, band: Frame) -> list:
             rest = blocks[:at] + blocks[i:]
     if on_band:
         story.append(KeepInFrame(band._width, band._height, on_band, mode="shrink"))
-    story.append(FrameBreak())
+    # The body template is chosen here, not at the end: it takes effect at the next page break, so
+    # cover content that overflows the below-band frame continues on a white body page.
+    story += [FrameBreak(), NextPageTemplate("body")]
     story += below
     for b in rest:
         story += block_flowables(b, ctx)
-    story.append(NextPageTemplate("body"))
     return story
+
+
+def _no_content(ctx: RenderContext) -> Paragraph:
+    return Paragraph("No content", ctx.styles.small)
 
 
 def _story(doc: Any, part: list[Slice], ctx: RenderContext, band: Frame | None) -> list:
@@ -285,12 +295,14 @@ def _story(doc: Any, part: list[Slice], ctx: RenderContext, band: Frame | None) 
             story.append(PageBreakIfNotEmpty())
         title = section.title if sl.start == 0 else f"{section.title} (cont.)"
         story.append(SectionMark(f"s-{sl.section_index}-{sl.start}", title))
+        if not section.blocks:  # an empty section says so rather than printing a blank page
+            story.append(_no_content(ctx))
         for block in list(section.blocks)[sl.start : sl.stop]:
             story += block_flowables(block, ctx)
     while story and isinstance(story[-1], PageBreakIfNotEmpty):
         story.pop()
     if not story:  # no sections at all (every one disabled): one honest page, never a 0-page file
-        story.append(Paragraph("No content", ctx.styles.small))
+        story.append(_no_content(ctx))
     return story
 
 

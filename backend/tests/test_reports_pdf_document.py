@@ -300,3 +300,48 @@ def test_doc_meta_title_project_version_and_paper():
         == "Draft"
     )
     assert pdf_document.doc_meta(document([section("summary", "Summary", [])])).title == "Summary"
+
+
+def test_an_overflowing_cover_continues_on_a_white_body_page(tmp_path):
+    """Final review I1: rows that do not fit below the band go on to a body page, not a second band."""
+    cover = cover_section()
+    cover["blocks"][0]["rows"] += [[f"Row {i}", f"value {i}"] for i in range(60)]
+    [part] = _render(tmp_path, document([cover, summary_section()]))
+    pages = pdf_pages_text(part.path)
+    assert "Row 59" in pages[1] and "Row 59" not in pages[0]
+    assert all(v > 240 for v in pixel(part.path, 1, 0.5, 0.005))  # white paper, not the violet band
+    assert "Kestrel AI · Kuwait yard · page 2 /" in pages[1]  # a body page carries the furniture
+
+
+def test_a_5000_character_caption_is_capped_on_every_kind_of_figure(tmp_path):
+    """Final review I2: a body figure, a finding's main figure and a photo, and the cover locator."""
+    from report_docs import figure
+
+    long = "caption " * 625  # 5000 characters
+    cover = cover_section()
+    cover["blocks"][0]["locator"]["caption"] = long
+    f = finding(1)
+    f["figures"][0]["caption"] = long
+    f["photos"][0]["caption"] = long
+    body = section("appendix", "Figures", [figure("fig", caption=long)])
+    doc = document([cover, body, section("finding_pages", "Finding pages", [f])])
+    [part] = _render(tmp_path, doc)
+    text = "\n".join(pdf_pages_text(part.path))
+    assert "…" in text and "F-0001 · Crack" in text
+
+
+def test_an_empty_section_prints_no_content(tmp_path):
+    doc = document([summary_section(), section("appendix", "Appendix", [])])
+    [part] = _render(tmp_path, doc)
+    pages = pdf_pages_text(part.path)
+    assert len(pages) == 2 and "No content" in pages[1] and "No content" not in pages[0]
+
+
+def test_cover_logo_rejects_a_relative_path_that_climbs_out(tmp_path, caplog):
+    from report_pdf_helpers import jpeg
+
+    jpeg(tmp_path / "outside.jpg")
+    out_dir = tmp_path / "proj" / "reports" / "r1"
+    climbing = document([cover_section("../outside.jpg")]).sections[0]
+    assert pdf_document.cover_logo(climbing, out_dir) is None
+    assert "outside.jpg" in caplog.text

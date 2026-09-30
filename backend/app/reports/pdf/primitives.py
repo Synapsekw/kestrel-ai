@@ -27,6 +27,7 @@ from app.reports.theme import THEME
 
 log = logging.getLogger(__name__)
 RADIUS = THEME["page"]["radius_mm"] * mm
+CAPTION_CHARS = 300  # a caption sits in an atomic Table with its figure: uncapped it can outgrow a page
 
 
 def fit_box(px_w: int, px_h: int, box_w: float, box_h: float) -> tuple[float, float]:
@@ -154,7 +155,7 @@ def figure_flowable(
             body = Placeholder(width, height, "Snapshot unreadable", styles)
     rows: list[list[Flowable]] = [[body]]
     if caption:
-        rows.append([Paragraph(text(caption), styles.caption)])
+        rows.append([Paragraph(text(caption, CAPTION_CHARS), styles.caption)])
     # An atomic Table, not a KeepTogether (controller ruling P1): later tasks place this inside
     # other Table cells, and a KeepTogether there raises LayoutError on reportlab 5.0.1.
     table = Table(rows, colWidths=[width], hAlign="CENTER")

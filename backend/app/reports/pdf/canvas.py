@@ -13,6 +13,7 @@ from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.units import mm
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas as rl_canvas
 
 from app.reports.pdf.styles import Styles, colour
@@ -22,7 +23,27 @@ log = logging.getLogger(__name__)
 
 
 def pdf_date(dt: datetime) -> str:
+    """A naive datetime is taken as UTC: astimezone would read it as machine-local time."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC).strftime("D:%Y%m%d%H%M%S+00'00'")
+
+
+HEADER_GAP_MM = 4  # between the header title and the version label
+
+
+def fit_width(s: str, font: str, size: float, width: float) -> str:
+    """`s`, or its longest prefix plus "…" that fits `width` (binary search on the prefix length)."""
+    if stringWidth(s, font, size) <= width:
+        return s
+    lo, hi = 0, len(s)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if stringWidth(s[:mid].rstrip() + "…", font, size) <= width:
+            lo = mid
+        else:
+            hi = mid - 1
+    return s[:lo].rstrip() + "…"
 
 
 @dataclass
@@ -44,10 +65,12 @@ def _furniture(canv: rl_canvas.Canvas, meta: PageMeta, styles: Styles, local: in
     off = THEME["page"]["furniture_offset_mm"] * mm
     size = THEME["type"]["furniture_pt"]
     override = meta.header_overrides.get(local)
+    head_font = styles.fonts.sans_bold if override else styles.fonts.sans
+    room = w - 2 * m - stringWidth(meta.version_label, styles.fonts.sans, size) - HEADER_GAP_MM * mm
     canv.saveState()
-    canv.setFont(styles.fonts.sans_bold if override else styles.fonts.sans, size)
+    canv.setFont(head_font, size)
     canv.setFillColor(colour("ink") if override else colour("muted"))
-    canv.drawString(m, h - off, override or meta.title)
+    canv.drawString(m, h - off, fit_width(override or meta.title, head_font, size, room))
     canv.setFont(styles.fonts.sans, size)
     canv.setFillColor(colour("muted"))
     canv.drawRightString(w - m, h - off, meta.version_label)

@@ -363,6 +363,12 @@ def _finding_band(block: Any, ctx: RenderContext) -> Table:
     return band
 
 
+def _keep_with_next(p: Paragraph) -> Paragraph:
+    """A label never ends a page alone: it moves over with the line it introduces."""
+    p.keepWithNext = 1
+    return p
+
+
 def _finding(block: Any, ctx: RenderContext) -> list:
     """Plan ruling 6: head, figures, kv, note and photos are one KeepTogether; comments flow after it.
     Every piece in the KeepTogether is splittable or shorter than a frame (figures are capped at 0.8 of
@@ -381,10 +387,13 @@ def _finding(block: Any, ctx: RenderContext) -> list:
         body += [Paragraph("Photos", st.cell_label), *_figure_grid(list(block.photos), ctx, 4, 3 * mm)]
     comments: list = []
     if block.comments:
-        comments.append(Paragraph("Comments", st.cell_label))
+        comments.append(_keep_with_next(Paragraph("Comments", st.cell_label)))
         for c in block.comments:
             meta = f"<b>{text(c.author)}</b> · {c.created_at.strftime('%Y-%m-%d')}"
-            comments += [Paragraph(meta, st.comment_meta), Paragraph(text(c.text), st.comment)]
+            comments += [
+                _keep_with_next(Paragraph(meta, st.comment_meta)),
+                Paragraph(text(c.text), st.comment),
+            ]
     return [KeepTogether(body), *comments, FindingEnd(), PageBreakIfNotEmpty()]
 
 
