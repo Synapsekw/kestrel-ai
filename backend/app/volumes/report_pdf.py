@@ -107,7 +107,8 @@ def _summary(items: list[ExportItem]) -> Table:
     return t
 
 
-def _measurement(item: ExportItem) -> list:
+def measurement_flowables(item: ExportItem) -> list:
+    """One measurement's pages. Public: the reports renderer reuses it through R5's volume hook."""
     r, lab = item.results, item.labels
     story: list = [Paragraph(escape(item.name), STYLES["Heading2"])]
     if item.plan_png:
@@ -272,7 +273,7 @@ def story(items: list[ExportItem], *, title: str, project_name: str, generated_a
         _summary(items),
     ]
     for item in items:
-        out += [PageBreak(), *_measurement(item)]
+        out += [PageBreak(), *measurement_flowables(item)]
     return [*out, PageBreak(), *_method()]
 
 

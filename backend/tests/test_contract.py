@@ -231,6 +231,9 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchReport": {422},
     # Reports R1: a generated path is never a readable logo (`asset_invalid`, details {reason}).
     "createReportAsset": {422},
+    # R3: a schema-valid `spec` string that is not a base64url snapshot spec (`invalid_snapshot_spec`),
+    # or a generated key that does not match the spec (`snapshot_key_mismatch`).
+    "getReportSnapshot": {400},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
