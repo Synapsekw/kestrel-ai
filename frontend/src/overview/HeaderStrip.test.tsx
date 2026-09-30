@@ -33,4 +33,13 @@ describe("HeaderStrip", () => {
     });
     expect(screen.getByText(/from ~1,280 photos/)).toBeInTheDocument();
   });
+
+  it("shows no dangling separator when the source is unknown", () => {
+    const site = { ...exampleSite, source: null };
+    renderWithProviders(<HeaderStrip projectId={PROJECT_ID} name="Block C" figures={[]} site={site} />, {
+      api: fakeClient([]).api,
+    });
+    expect(screen.getByText(/44\.8125° N 20\.4612° E/)).toBeInTheDocument();
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+  });
 });

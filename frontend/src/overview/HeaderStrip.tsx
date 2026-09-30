@@ -30,7 +30,7 @@ export function HeaderStrip({
         {site === null ? null : site.center ? (
           <p className="font-mono text-2xs text-muted">
             {formatCoords(site.center[0], site.center[1])}{" "}
-            <span className="text-dim">· {sourceLabel(site)}</span>
+            {sourceLabel(site) && <span className="text-dim">· {sourceLabel(site)}</span>}
           </p>
         ) : (
           <p className="text-2xs text-dim">No location data</p>
