@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 KPI_PER_ROW = 6
+KPI_CHARS = 120  # a KPI card is one short fact; longer text is cut, never a LayoutError
 CELL_PAD = 4  # table_style's LEFTPADDING / RIGHTPADDING
 _ALIGN = {"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT}
 _NO_PAD = [
@@ -153,7 +154,7 @@ def kv_table(rows: Any, ctx: RenderContext) -> list:
         ]
         for r in rows
     ]
-    t = Table(data, colWidths=[ctx.frame_width * 0.32, ctx.frame_width * 0.68], hAlign="LEFT")
+    t = Table(data, colWidths=[ctx.frame_width * 0.32, ctx.frame_width * 0.68], hAlign="LEFT", splitInRow=1)
     t.setStyle(table_style(header=False))
     return [t, Spacer(1, 3 * mm)]
 
@@ -183,14 +184,17 @@ def _kpis(block: Any, ctx: RenderContext) -> list:
     per_row = min(len(items), KPI_PER_ROW)
     cards: list[Any] = []
     for it in items:
-        card = [Paragraph(text(it.value), st.kpi_value), Paragraph(text(it.label), st.kpi_label)]
+        card = [
+            Paragraph(text(it.value, KPI_CHARS), st.kpi_value),
+            Paragraph(text(it.label, KPI_CHARS), st.kpi_label),
+        ]
         if it.delta:
-            card.append(Paragraph(text(it.delta), tone_style(st, it.tone)))
+            card.append(Paragraph(text(it.delta, KPI_CHARS), tone_style(st, it.tone)))
         cards.append(card)
     rows = [cards[i : i + per_row] for i in range(0, len(cards), per_row)]
     blanks = per_row - len(rows[-1])
     rows[-1] = rows[-1] + [""] * blanks
-    t = Table(rows, colWidths=[ctx.frame_width / per_row] * per_row, hAlign="LEFT")
+    t = Table(rows, colWidths=[ctx.frame_width / per_row] * per_row, hAlign="LEFT", splitInRow=1)
     cmds = [
         ("BACKGROUND", (0, 0), (-1, -1), colour("head_fill")),
         ("INNERGRID", (0, 0), (-1, -1), 4, colors.white),
@@ -220,6 +224,7 @@ def _cell(value: Any, style: ParagraphStyle, width: float) -> Any:
         [[dot, Paragraph(text(value.text, MAX_CELL_CHARS), style)]],
         colWidths=[dot.d + 1.5 * mm, inner],
         hAlign={TA_CENTER: "CENTER", TA_RIGHT: "RIGHT"}.get(style.alignment, "LEFT"),
+        splitInRow=1,  # the outer row splits through this cell; the text may run onto the next page
     )
     t.setStyle(TableStyle(_NO_PAD))
     return t
@@ -248,7 +253,13 @@ def _table(block: Any, ctx: RenderContext) -> list:
     for row in block.rows:
         cells = (list(row) + [""] * len(cols))[: len(cols)]
         body.append([_cell(v, s, w) for v, s, w in zip(cells, body_styles, widths, strict=True)])
-    t = Table([head, *body], colWidths=widths, repeatRows=1 if block.repeat_header else 0, hAlign="LEFT")
+    t = Table(
+        [head, *body],
+        colWidths=widths,
+        repeatRows=1 if block.repeat_header else 0,
+        hAlign="LEFT",
+        splitInRow=1,
+    )
     t.setStyle(table_style(header=True))
     return [t, Spacer(1, 4 * mm)]
 

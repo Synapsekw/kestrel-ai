@@ -141,7 +141,8 @@ def test_empty_blocks_print_nothing_or_no_data(tmp_path, ctx):
 
 
 def test_a_300_row_table_with_huge_and_ragged_cells_repeats_its_header(tmp_path, ctx):
-    rows = [[f"F-{i:04d}", "x" * 5000 if i == 5 else "Crack"] for i in range(300)]
+    rows = [[f"F-{i:04d}", "Crack"] for i in range(300)]
+    rows[5] = ["crack " * 1000, "x" * 5000]  # a huge cell in the narrow fixed column, taller than a page
     rows[7] = ["short"]  # too few cells
     rows[8] = ["a", "b", "c", "d"]  # too many
     blocks = _blocks(
@@ -204,3 +205,42 @@ def test_snapshot_refs_lists_every_embedded_snapshot():
     f = document([section("finding_pages", "F", [finding(1)])]).sections[0].blocks[0]
     expected = [key(n) for n in ("f1-main", "f1-a", "f1-b", "p1-0", "p1-1")]
     assert [r.key for r in flowables.snapshot_refs(f)] == expected
+
+
+def test_a_findings_table_row_taller_than_a_page_splits_instead_of_raising(tmp_path, ctx):
+    cols = ["number", "type", "severity", "status", "data_item", "observed", "note"]
+    long_note = "Spalling along the west parapet " * 160  # ~5000 characters, cut to MAX_CELL_CHARS
+    row = [
+        "F-0001",
+        "Crack",
+        {"text": "Major " * 400, "dot": "#F59E0B"},
+        "open",
+        "DJI_0001.JPG",
+        "2026-09-20",
+    ]
+    blocks = _blocks(
+        {
+            "kind": "table",
+            "columns": [{"key": c, "label": c.title()} for c in cols],
+            "rows": [[*row, long_note], [*row, "Short note"]],
+        },
+        {"kind": "kv", "rows": [["Note", long_note], ["Narrow", "word " * 1200]]},
+    )
+    pages = pdf_pages_text(_pdf(tmp_path, ctx, blocks))
+    text = "\n".join(pages)
+    assert len(pages) > 1 and "Short note" in text and "Spalling along the west parapet" in text
+    assert text.count("Major") > 300  # the long dot cell split across pages, not dropped
+
+
+def test_oversized_kpi_text_is_capped(tmp_path, ctx):
+    blocks = _blocks(
+        {
+            "kind": "kpis",
+            "items": [
+                {"label": "L" * 3000, "value": "9" * 3000, "delta": "d " * 2000, "tone": "warn"},
+                {"label": "Open", "value": "7"},
+            ],
+        }
+    )
+    text = pdf_pages_text(_pdf(tmp_path, ctx, blocks))[0]
+    assert "Open" in text and "…" in text
