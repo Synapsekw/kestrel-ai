@@ -167,3 +167,12 @@ def pair_spec(a: SimpleNamespace, b: SimpleNamespace, **overrides) -> SimpleName
     fields = dict(kind="pair", a=a, b=b, bbox_wgs84=None, mode=None, split=None)
     fields.update(overrides)
     return SimpleNamespace(**fields)
+
+
+# --- R3 T6: volume plan and the R9 stubs ---------------------------------------------------------
+
+
+def ns(**fields) -> SimpleNamespace:
+    """A bare spec of exactly the given attributes (no defaults): `volume_plan`, `attachment` and
+    `view3d` have no optional fields R3 fills in with `opt()`, unlike `map`/`elevation`/`pair`."""
+    return SimpleNamespace(**fields)
