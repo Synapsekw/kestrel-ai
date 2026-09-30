@@ -44,10 +44,30 @@ def test_encode_is_unpadded_base64url_and_decodes_back():
         assert canonical_json(decode_spec(text)) == canonical_json(v["spec"])
 
 
+def _b64(text: str) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(text.encode("utf-8")).rstrip(b"=").decode("ascii")
+
+
 @pytest.mark.parametrize(
     "bad",
-    ["", "!!!", "bnVsbA", "WzFd", "x" * (MAX_SPEC_CHARS + 1)],
-    ids=["empty", "not-base64", "decodes-to-null", "decodes-to-a-list", "over-the-char-limit"],
+    [
+        "",
+        "!!!",
+        "bnVsbA",
+        "WzFd",
+        "x" * (MAX_SPEC_CHARS + 1),
+        _b64("[" * 3000),
+    ],
+    ids=[
+        "empty",
+        "not-base64",
+        "decodes-to-null",
+        "decodes-to-a-list",
+        "over-the-char-limit",
+        "deeply-nested-json-recursion",
+    ],
 )
 def test_decode_refuses_what_is_not_a_spec_object(bad):
     with pytest.raises(ValueError):

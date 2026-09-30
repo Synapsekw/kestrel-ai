@@ -63,7 +63,10 @@ def decode_spec(text: str) -> dict:
     if not text or len(text) > MAX_SPEC_CHARS:
         raise ValueError("the snapshot spec is empty or too long")
     raw = base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
-    data = json.loads(raw.decode("utf-8"))
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except RecursionError:
+        raise ValueError("the snapshot spec is nested too deeply") from None
     if not isinstance(data, dict):
         raise ValueError("the snapshot spec is not a JSON object")
     return data
