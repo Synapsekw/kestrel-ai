@@ -82,6 +82,12 @@ if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selfte
 Write-Host ($vol.Trim().Split("`n")[-1])
 Complete-Step "volumes"
 
+# Report PDFs (plan 2026-09-30-reports-r4 Task 8): TTF fonts, gradient, JPEG passthrough, chart, XLSX.
+$reports = & $exe reports-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $reports -notmatch "reports ok") { throw "reports selftest failed: $reports" }
+Write-Host ($reports.Trim().Split("`n")[-1])
+Complete-Step "reports"
+
 # PotreeConverter + laspy/lazrs inside the bundle (ADR 2026-09-23): the real import path on a fixture.
 $pc = & $exe pointcloud-selftest 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $pc -notmatch "pointcloud ok 50000 32639 BROTLI laz 50000") { throw "pointcloud selftest failed: $pc" }
