@@ -18,7 +18,10 @@ for (const size of [
     const mainBox = (await page.locator("main").boundingBox())!;
     // full width (no 1400px cap) and down to main's bottom padding
     expect(gridBox.width).toBeGreaterThan(mainBox.width - 64);
-    expect(mainBox.y + mainBox.height - (gridBox.y + gridBox.height)).toBeLessThanOrEqual(24);
+    // down to main's bottom padding, and not past it (an overflowing grid fails too)
+    const gap = mainBox.y + mainBox.height - (gridBox.y + gridBox.height);
+    expect(gap).toBeLessThanOrEqual(24);
+    expect(gap).toBeGreaterThanOrEqual(-1);
     await page.screenshot({ path: evidencePath("overview-landing", `overview-${size.width}.png`) });
   });
 }
@@ -39,7 +42,13 @@ test("an empty project shows the first-data screen and no grid panes", async ({ 
     (route) =>
       route.fulfill(
         jsonReply({
-          findings: { by_status: { open: 0, reviewed: 0, closed: 0 }, open_by_severity: {}, open_no_severity: 0, by_type: [], trend: [] },
+          findings: {
+            by_status: { open: 0, reviewed: 0, closed: 0 },
+            open_by_severity: {},
+            open_no_severity: 0,
+            by_type: [],
+            trend: [],
+          },
           data: { image_sets: 0, images: 0, maps: 0, elevations: 0, point_clouds: 0, drawings: 0 },
           latest_volume: null,
           hero_map_id: null,

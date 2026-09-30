@@ -12,7 +12,7 @@ const UNLOCKS: [string, string][] = [
 export function FirstData({ projectId }: { projectId: string }) {
   return (
     <div className="grid h-full min-h-[420px] gap-4 lg:grid-cols-[1.4fr_1fr]">
-      <div className="grid place-items-center rounded-panel border border-dashed border-accent p-8 text-center">
+      <div className="grid place-items-center rounded-panel border border-accent/40 bg-accent/5 p-8 text-center">
         <div className="flex max-w-md flex-col items-center gap-3">
           <h2 className="text-xl font-semibold text-ink">Add the first survey</h2>
           <p className="text-sm text-muted">

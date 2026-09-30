@@ -12,4 +12,11 @@ describe("FirstData", () => {
     for (const line of [/Photos/, /Orthomosaic/, /Point cloud/, /Findings/])
       expect(screen.getByText(line)).toBeInTheDocument();
   });
+
+  it("frames the call to action with a solid border: no dashed drop-zone look, since nothing drops there", () => {
+    renderWithProviders(<FirstData projectId={PROJECT_ID} />, { api: fakeClient([]).api });
+    const box = screen.getByRole("heading", { name: "Add the first survey" }).closest(".rounded-panel")!;
+    expect(box).toHaveClass("border");
+    expect(box).not.toHaveClass("border-dashed");
+  });
 });
