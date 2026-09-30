@@ -36,4 +36,5 @@ export const JOB_VERB: Record<Job["type"], string> = {
   assist_acquire: "Getting the smart polygon model",
   elevation_import: "Importing elevation",
   drawing_import: "Importing a drawing",
+  report_render: "Rendering a report",
 };

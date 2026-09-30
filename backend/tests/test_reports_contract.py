@@ -368,3 +368,23 @@ def test_the_reports_error_codes_are_documented(spec):
         "snapshot_key_mismatch",
     ):
         assert code in text, code
+
+
+# ------------------------------------------------------------------------------ Task 5
+
+
+def test_the_report_render_job_type(spec):
+    assert "report_render" in _schemas(spec)["JobType"]["enum"]
+    assert (
+        "report_render {version_id, number, folder, files}"
+        in (_schemas(spec)["Job"]["properties"]["result"]["description"])
+    )
+
+
+def test_the_detect_pdf_format_is_deprecated_but_still_accepted(spec):
+    fmt = _schemas(spec)["DetectExportRequest"]["properties"]["format"]
+    branches = {b["const"]: b for b in fmt["oneOf"]}
+    assert set(branches) == {"csv", "pdf"}
+    assert branches["pdf"].get("deprecated") is True
+    assert "deprecated" not in branches["csv"]
+    assert not _operations(spec)["createDetectExport"][2].get("deprecated")
