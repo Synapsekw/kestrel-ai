@@ -14,6 +14,8 @@ WHITE = (255, 255, 255)
 INK = (30, 30, 30)
 CHIP_BG = (29, 35, 48)
 FALLBACK_COLOUR = (229, 175, 100)  # the app's accent amber, as volumes/plan_image.POLYGON
+DEFAULT_COLOUR = "#e5af64"  # a spec's default `colour` (same amber as FALLBACK_COLOUR, as a hex string)
+PIN_R = 10  # a point geometry's marker radius, in output px
 
 
 @lru_cache(maxsize=16)
@@ -51,6 +53,14 @@ def draw_chip(d, xy, text: str, *, size: int = 18, pad: int = 6, bg=CHIP_BG, fg=
     d.rounded_rectangle(box, radius=4, fill=bg)
     d.text((x + pad - left, y + pad - top), text, fill=fg, font=f)
     return box
+
+
+def pin(d: ImageDraw.ImageDraw, xy: tuple[float, float], colour) -> None:
+    """A point geometry: a solid disc of radius `PIN_R` in `colour`, on a white ring, centred at `xy`
+    (shared by `map_view` and `image_crop` — a one-vertex ring is drawn as a pin either way)."""
+    cx, cy = xy
+    d.ellipse([cx - PIN_R - 3, cy - PIN_R - 3, cx + PIN_R + 3, cy + PIN_R + 3], fill=WHITE)
+    d.ellipse([cx - PIN_R, cy - PIN_R, cx + PIN_R, cy + PIN_R], fill=colour)
 
 
 def paste_inset(

@@ -77,9 +77,11 @@ def test_the_source_version_follows_the_file_and_misses_cleanly(handle):
         render_map_spec(handle, spec)
 
 
-def test_a_map_without_geometry_shows_the_whole_map(handle):
+def test_a_map_without_geometry_shows_the_whole_map_defensively(handle):
+    """R0's MapSpec.geometry is required; this covers the defensive `geometry is None` branch."""
     img = render_map_spec(handle, map_spec(add_map_file(handle), None, label=None, inset=True))
     assert img.size == (1200, 900)
+    assert img.getpixel((600, 450)) != (128, 128, 128)  # the whole map, not a grey placeholder
 
 
 def test_a_dense_map_polygon_is_compacted():

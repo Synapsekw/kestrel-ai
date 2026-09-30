@@ -25,7 +25,17 @@ from app.maps import raster
 from app.maps.georef import Georef
 from app.maps.startup import map_dir, map_raster_path
 from app.reports.snapshots import MISSING, SnapshotUnavailable, opt, out_of
-from app.reports.snapshots.draw import INK, WHITE, draw_chip, font, paste_inset, rgb, text_box
+from app.reports.snapshots.draw import (
+    DEFAULT_COLOUR,
+    INK,
+    WHITE,
+    draw_chip,
+    font,
+    paste_inset,
+    pin,
+    rgb,
+    text_box,
+)
 from app.reports.snapshots.keys import plain
 from app.surfaces.paths import surface_path
 from app.volumes.plan_image import _nice
@@ -34,9 +44,7 @@ PAD = 0.25
 MIN_EXTENT_M = 40.0
 NODATA_GREY = 128  # as raster.write_preview paints nodata
 FILL_ALPHA = 38  # 15 % of 255
-PIN_R = 10
 MAX_GEOMETRY_VERTICES = 120
-DEFAULT_COLOUR = "#e5af64"
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
@@ -272,10 +280,8 @@ def draw_geometry(img: PILImage.Image, geometry: dict, to_out, colour) -> PILIma
     kind = geometry["type"]
     pts = [to_out(x, y) for x, y in geometry_coords(geometry)]
     if kind == "Point":
-        (cx, cy), r = pts[0], PIN_R
         d = ImageDraw.Draw(img)
-        d.ellipse([cx - r - 3, cy - r - 3, cx + r + 3, cy + r + 3], fill=WHITE)
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=colour)
+        pin(d, pts[0], colour)
         return img
     if kind == "LineString":
         d = ImageDraw.Draw(img)
