@@ -147,9 +147,11 @@ the edge cases: no GPS anywhere, findings but no images, a drawing only.
 
 - `OverviewScreen` drops `mx-auto max-w-[1400px]`. The grid is `flex-1 min-h-0` inside the
   existing `PageTransition` column.
-- Rows are `auto minmax(340px, 1.35fr) minmax(220px, 1fr)`. On a 1080p window that is roughly
-  560 and 410 px, and on 1440p roughly 800 and 590 px. When the window is shorter than the floors,
-  `main` (already `overflow-auto`) scrolls.
+- Rows are four tracks: `auto minmax(170px,.675fr) minmax(170px,.675fr) minmax(220px,1fr)`. The hero
+  spans the two middle tracks, so the right column can stack two tiles or give one tile both. The
+  hero keeps a 340 px floor. When the bottom row is empty, `composeOverview` returns a template
+  without it, so there is never an empty track. When the window is shorter than the floors, `main`
+  (already `overflow-auto`) scrolls.
 - Below `lg` (1024 px), the grid becomes a single column with fixed heights: hero 360 px, the rest
   auto. This is today's behaviour.
 - The skeleton uses the same row template, so loading doesn't jump.
@@ -160,8 +162,9 @@ the edge cases: no GPS anywhere, findings but no images, a drawing only.
   - Name, then coordinates in JetBrains Mono (`44.8125° N 20.4612° E`), then the source
     ("from ortho" / "from point cloud" / "from ~1,280 photos"). "No location data" in dim text
     when there is none.
-  - Then the figures, each shown only when non-zero: open findings (in the top-severity colour),
-    critical, images, last survey date and the latest volume with its delta.
+  - Then the figures: the existing `buildKpis` values, each shown only when it is non-zero. These
+    are open findings, the top severity, images, and the latest volume or the reviewed count. A
+    last-survey date is not in the pre-aggregated payload, so it isn't shown.
   - `AddDataButton` on the right. This replaces `KpiRow`.
 - **Hero: map.** Today's `MapHero`, stretched to `h-full`, with its pins and its "Open in Maps"
   link. Its current empty state moves to `firstData`.
@@ -178,7 +181,8 @@ the edge cases: no GPS anywhere, findings but no images, a drawing only.
 - **Hero: drawing / summary.**
   - A drawing shows its thumbnail.
   - The summary card lists the data kinds present, each linking to its tab.
-- **Location.** A new `SiteLocation` renders the SVG from D8. `/overview/site` is fetched after
+- **Location.** A new `SiteLocation` renders the SVG from D8. Its pins are the recent findings that
+  have `lon`/`lat` (≤ 5); the hero map keeps its own full pin read. `/overview/site` is fetched after
   `/overview`, with its own skeleton. If that fetch fails, the pane is dropped quietly and a
   diagnostics log line is written. The Overview never shows an error because of it.
 - **Findings.** Today's `RecentFindings` with 5 rows, fitted to the height and clipped by rows:
@@ -205,7 +209,7 @@ the edge cases: no GPS anywhere, findings but no images, a drawing only.
   - Recent findings: ≤ 5.
   - Point clouds: 1 M points for the hero and 300 k for the tile, via the engine's `pointBudget`,
     and at most one 3D pane on screen.
-  - The location SVG draws ≤ 500 points and ≤ `HERO_PIN_LIMIT` pins.
+  - The location SVG draws ≤ 500 points and ≤ 5 pins.
 - **Startup:** if `/overview/site` or the cloud preview fails, that pane degrades. It never blocks
   or crashes the Overview.
 
