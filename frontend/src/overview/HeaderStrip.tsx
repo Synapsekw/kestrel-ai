@@ -59,7 +59,8 @@ export function HeaderStrip({
               )}
             >
               {f.value?.toLocaleString("en-US")}
-              {f.unit && <span className="ml-0.5 text-xs text-muted">{f.unit}</span>}
+              {/* The images figure's label already says what it counts. */}
+              {f.unit && f.id !== "data" && <span className="ml-0.5 text-xs text-muted">{f.unit}</span>}
             </span>
             <span className="text-2xs text-muted">{label}</span>
           </span>

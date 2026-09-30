@@ -38,7 +38,7 @@ export function ImageryPane({
           <img
             key={img.id}
             src={thumbnailUrl(baseUrl, token, projectId, img.id)}
-            alt={img.path}
+            alt=""
             className="h-full w-full rounded-sm bg-surface-2 object-cover"
           />
         ))}

@@ -84,7 +84,12 @@ export function OverviewScreen() {
   // F22: the day comes from `useNow`, never a `new Date()` of the render's own.
   const today = new Date(useNow(60_000)).toISOString().slice(0, 10);
   const { site, settled: siteSettled } = useOverviewSite(projectId, Boolean(overview));
-  const { images } = useLatestImages(projectId, Boolean(overview && overview.data.images > 0));
+  const { images, failed: imagesFailed } = useLatestImages(
+    projectId,
+    Boolean(overview && overview.data.images > 0),
+  );
+  // A failed or empty newest-images read has nothing to tile: no imagery pane, no mosaic hero.
+  const imagesUnavailable = imagesFailed || images?.length === 0;
   // RunningJobs' notion of "running": any active (queued or running) job of this project.
   const runningJobs = useJobsStore((st) =>
     Object.values(st.jobs).some((j) => j.project_id === projectId && isActiveJob(j)),
@@ -131,17 +136,20 @@ export function OverviewScreen() {
   const s = overview.findings;
   const total = s.by_status.open + s.by_status.reviewed + s.by_status.closed;
   const d = overview.data;
-  const dataTotal = Object.values(d).reduce((a, b) => a + b, 0);
+  // Image sets are not counted: a first import in progress (a source row, no images yet), or one that
+  // failed with none, is still the first-data screen rather than a near-empty grid.
+  const dataTotal = d.images + d.maps + d.elevations + d.point_clouds + d.drawings;
   const hero = overview.hero;
   const facts: OverviewFacts = {
     heroKind: hero?.kind ?? null,
     dataTotal,
     hasCloud: d.point_clouds > 0,
-    hasImages: d.images > 0,
+    hasImages: d.images > 0 && !imagesUnavailable,
     // Until the site read lands, assume a located project will have a site, so the hero does not
     // narrow from 12 to 8 columns under the operator; the location pane shows a skeleton meanwhile.
     hasSite: siteSettled
-      ? Boolean(site && (site.center || site.photo_points.length > 0))
+      ? // SiteLocation draws nothing without bounds, so only bounds make a location pane.
+        site?.bounds_wgs84 != null
       : d.maps + d.point_clouds + d.images > 0,
     findingsTotal: total,
     runningJobs,
@@ -168,7 +176,7 @@ export function OverviewScreen() {
           return <MapHero projectId={projectId} heroMapId={hero.id} hasData />;
         if (hero?.kind === "point_cloud")
           return <CloudPreview projectId={projectId} cloudId={hero.id} variant="hero" className="h-full" />;
-        if (hero?.kind === "images")
+        if (hero?.kind === "images" && !imagesUnavailable)
           return images ? (
             <ImageMosaic projectId={projectId} images={images} className="h-full" />
           ) : (
@@ -179,7 +187,11 @@ export function OverviewScreen() {
         return <CloudPreview projectId={projectId} cloudId={null} variant="tile" className="h-full" />;
       case "location":
         if (!siteSettled) return <Skeleton className="h-full rounded-panel" />;
-        return site && <SiteLocation site={site} pins={recent} className="h-full" />;
+        return (
+          site && (
+            <SiteLocation site={site} pins={recent.filter((f) => f.status !== "closed")} className="h-full" />
+          )
+        );
       case "findings":
         return total > 0 ? (
           <RecentFindings

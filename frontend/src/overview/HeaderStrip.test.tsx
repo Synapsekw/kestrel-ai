@@ -50,4 +50,14 @@ describe("HeaderStrip", () => {
     expect(screen.getByText(/44\.8125° N 20\.4612° E/)).toBeInTheDocument();
     expect(screen.queryByText(/·/)).not.toBeInTheDocument();
   });
+
+  it("shows the images figure as a bare number under its label, without a repeated unit", () => {
+    const data = { id: "data" as const, label: "Project data", value: 1284, unit: "images" };
+    renderWithProviders(<HeaderStrip projectId={PROJECT_ID} name="Block C" figures={[data]} site={null} />, {
+      api: fakeClient([]).api,
+    });
+    expect(screen.getByText("Images")).toBeInTheDocument();
+    expect(screen.queryByText("images")).not.toBeInTheDocument();
+    expect(screen.getByText("1,284")).toBeInTheDocument();
+  });
 });

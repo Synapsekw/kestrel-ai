@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { errorBody, fakeClient, PROJECT_ID, runningJob, type FakeRoute } from "@/test/fixtures";
+import { errorBody, exampleImage, fakeClient, PROJECT_ID, runningJob, type FakeRoute } from "@/test/fixtures";
 import {
   baseRoutes,
   cloudOnlyOverview,
@@ -57,6 +57,12 @@ function renderOverview(overview: object | FakeRoute, extra: FakeRoute[] = []) {
 }
 
 const overviewReads = (requests: { url: string }[]) => requests.filter((r) => /\/overview(\?|$)/.test(r.url));
+
+const imagesRoute: FakeRoute = {
+  method: "GET",
+  path: /\/images$/,
+  body: { items: [exampleImage], next_cursor: null },
+};
 
 const panes = () => [...document.querySelectorAll("[data-pane]")].map((e) => e.getAttribute("data-pane"));
 
@@ -241,8 +247,9 @@ describe("Overview v2 layout", () => {
   });
 
   it("everything: map hero, cloud tile, location, findings, imagery, status", async () => {
-    renderOverview(fullOverview);
+    renderOverview(fullOverview, [imagesRoute]);
     await waitFor(() => expect(panes()).toContain("location"));
+    await waitFor(() => expect(panes()).toContain("imagery"));
     expect(panes()).toEqual(["header", "hero", "cloud", "location", "findings", "imagery", "status"]);
     // Settled, not the loading skeleton: the location is drawn from /overview/site and the header
     // carries its coordinates.
@@ -260,7 +267,7 @@ describe("Overview v2 layout", () => {
   });
 
   it("images only: the mosaic is the hero and there is no separate imagery pane", async () => {
-    renderOverview(imagesOnlyOverview);
+    renderOverview(imagesOnlyOverview, [imagesRoute]);
     await waitFor(() => expect(panes()).toContain("hero"));
     expect(await screen.findByRole("region", { name: "Latest photos" })).toBeInTheDocument();
     expect(panes()).not.toContain("imagery");
@@ -283,8 +290,64 @@ describe("Overview v2 layout", () => {
     expect(screen.queryByText(/Couldn't load the overview/)).not.toBeInTheDocument();
   });
 
+  it("a failed latest-images read shows the summary hero, never an empty mosaic", async () => {
+    renderOverview(imagesOnlyOverview, [
+      { method: "GET", path: /\/images$/, status: 500, body: errorBody("internal", "boom") },
+    ]);
+    expect(await screen.findByRole("region", { name: "Project data" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /1,284 photos/ })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Latest photos" })).not.toBeInTheDocument();
+  });
+
+  it("an empty latest-images page drops the imagery pane instead of leaving an empty grid", async () => {
+    renderOverview(fullOverview);
+    await waitFor(() => expect(panes()).toContain("location"));
+    // The default /images route answers with no rows.
+    await waitFor(() => expect(panes()).not.toContain("imagery"));
+  });
+
+  it("with images, the imagery pane shows", async () => {
+    renderOverview(fullOverview, [imagesRoute]);
+    await waitFor(() => expect(panes()).toContain("imagery"));
+    expect(await screen.findByRole("heading", { name: /Latest imagery/ })).toBeInTheDocument();
+  });
+
+  it("a first import in progress (a source row, no images yet) is still the first-data screen", async () => {
+    renderOverview({
+      ...emptyOverview,
+      data: { image_sets: 1, images: 0, maps: 0, elevations: 0, point_clouds: 0, drawings: 0 },
+    });
+    await waitFor(() => expect(panes()).toEqual(["firstData"]));
+  });
+
+  it("a site without bounds has no location pane (SiteLocation draws nothing without them)", async () => {
+    renderOverview(fullOverview, [
+      { method: "GET", path: /\/overview\/site$/, body: { ...exampleSite, bounds_wgs84: null } },
+    ]);
+    await waitFor(() => expect(screen.getByText(/44\.8125° N 20\.4612° E/)).toBeInTheDocument());
+    expect(panes()).not.toContain("location");
+  });
+
+  it("the location pane pins open findings only, not closed ones", async () => {
+    const at = { lon: 20.4612, lat: 44.8125 };
+    renderOverview(fullOverview, [
+      {
+        method: "GET",
+        path: /\/findings$/,
+        body: {
+          items: [
+            { ...exampleFinding, ...at, id: "f-open" },
+            { ...exampleFinding, ...at, id: "f-closed", status: "closed" },
+          ],
+          next_cursor: null,
+        },
+      },
+    ]);
+    await waitFor(() => expect(screen.getAllByTestId("site-pin")).toHaveLength(1));
+  });
+
   it("with no findings yet, the findings pane offers to run detection", async () => {
-    renderOverview({ ...imagesOnlyOverview, findings: emptyOverview.findings });
+    renderOverview({ ...imagesOnlyOverview, findings: emptyOverview.findings }, [imagesRoute]);
     expect(await screen.findByText("No findings yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Run detection" })).toHaveAttribute(
       "href",
