@@ -4,7 +4,7 @@ Every section starts on a new page and gets a level-0 bookmark; every finding a 
 cover section, when it is the first section, is laid out on the cover page template (gradient band,
 title and subtitle on the band, the rest below). Progress is reported per flowable from afterFlowable
 and cancel is checked there and between parts. Output is deterministic: invariant mode, generated_at as
-the creation date, deterministic font subsets, JPEG passthrough. Parts: see plan_parts (Task 13)."""
+the creation date, deterministic font subsets, JPEG passthrough. Parts: see plan_parts."""
 
 from __future__ import annotations
 
@@ -133,7 +133,28 @@ def doc_meta(doc: Any) -> DocMeta:
 
 
 def plan_parts(doc: Any, size_of: Callable[[Any], int], budget: int) -> list[list[Slice]]:
-    return [[Slice(i, 0, len(s.blocks)) for i, s in enumerate(doc.sections)]]
+    """Greedy split (spec §10.4): a new part starts before a break point (a non-cover section's start,
+    or a finding/volume block) once the embedded bytes would pass `budget`. Never an empty part; a block
+    bigger than the budget stands alone."""
+    parts: list[list[Slice]] = [[]]
+    used = 0
+    for si, section in enumerate(doc.sections):
+        start = 0
+        for bi, block in enumerate(section.blocks):
+            size = size_of(block)
+            breakable = section.key != "cover" and (bi == 0 or block.kind in SPLIT_KINDS)
+            has_content = bool(parts[-1]) or bi > start
+            if breakable and has_content and used + size > budget:
+                if bi > start:
+                    parts[-1].append(Slice(si, start, bi))
+                parts.append([])
+                used, start = 0, bi
+            used += size
+        if not section.blocks and section.key != "cover" and parts[-1] and used > budget:
+            parts.append([])
+            used = 0
+        parts[-1].append(Slice(si, start, len(section.blocks)))
+    return parts
 
 
 def _estimate(block: Any, snapshot_path: Callable, sizes: dict[str, int]) -> int:
