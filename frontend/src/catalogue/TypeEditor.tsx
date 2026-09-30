@@ -4,6 +4,7 @@ import {
   createCatalogueType,
   existingTypeId,
   isHotkeyConflict,
+  isInvalidSeverityRule,
   patchCatalogueType,
   type CatalogueType,
   type CatalogueTypeUpdated,
@@ -21,6 +22,8 @@ import {
   Segmented,
   Select,
   SeverityPicker,
+  Textarea,
+  useSeverityScale,
 } from "@/ui";
 import { ColourSwatch } from "./ColourSwatch";
 import {
@@ -28,11 +31,14 @@ import {
   TYPE_HOTKEYS,
   draftOf,
   findClash,
+  supportsDefinition,
   toCreate,
   toPatch,
   validateTypeDraft,
   type TypeDraft,
 } from "./catalogueModel";
+import { SeverityRulesEditor } from "./SeverityRulesEditor";
+import { MAX_DEFINITION, validateRules } from "./severityRulesModel";
 
 export interface TypeEditorProps {
   /** null: a new type. */
@@ -47,13 +53,18 @@ function split({ backfill_candidates, ...type }: CatalogueTypeUpdated): [Catalog
   return [type, Boolean(backfill_candidates)];
 }
 
-/** The Catalogue's inspector (F §7.5): name, colour, kind, group, default severity, hotkey, archive. */
+/**
+ * The Catalogue's inspector (F §7.5): name, colour, kind, group, definition, default severity,
+ * severity rules (S1 §8), hotkey, archive.
+ */
 export function TypeEditor({ type, types, onSaved, onUseExisting, onClose }: TypeEditorProps) {
   const api = useApi();
   const [draft, setDraft] = useState<TypeDraft>(() => draftOf(type, types));
   const [error, setError] = useState<string | null>(null);
   const [existingId, setExistingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const scale = useSeverityScale();
+  const showSetupFields = supportsDefinition(type);
   const groups = useMemo(
     () => [...new Set(types.map((t) => t.group).filter((g): g is string => Boolean(g)))].sort(),
     [types],
@@ -63,7 +74,10 @@ export function TypeEditor({ type, types, onSaved, onUseExisting, onClose }: Typ
   const turningToDefect = type?.kind === "object" && draft.kind === "defect";
 
   async function save() {
-    const problem = validateTypeDraft(draft, types, type?.id);
+    // A rule on a removed level only blocks a save that sends the rules (plan ruling 2).
+    const rulesSent = type ? "severity_rules" in toPatch(draft, type) : draft.rules.length > 0;
+    const problem =
+      validateTypeDraft(draft, types, type?.id) ?? (rulesSent ? validateRules(draft.rules, scale) : null);
     setExistingId(findClash(draft, types, type?.id)?.id ?? null);
     setError(problem);
     if (problem) return;
@@ -89,7 +103,9 @@ export function TypeEditor({ type, types, onSaved, onUseExisting, onClose }: Typ
           ? "A type with this name already exists."
           : isHotkeyConflict(e)
             ? `Hotkey ${draft.hotkey.toUpperCase()} is already used by another type.`
-            : messageOf(e, "could not save the type"),
+            : isInvalidSeverityRule(e)
+              ? "A rule uses a severity level that is not on the scale. Choose another level for it, then save."
+              : messageOf(e, "could not save the type"),
       );
     } finally {
       setBusy(false);
@@ -167,6 +183,28 @@ export function TypeEditor({ type, types, onSaved, onUseExisting, onClose }: Typ
               <option key={g} value={g} />
             ))}
           </datalist>
+          {showSetupFields && (
+            <Field
+              label="Definition"
+              htmlFor="type-definition"
+              hint={
+                <span className="flex items-start justify-between gap-3">
+                  <span>What it looks like on an image, so every reviewer grades it the same way.</span>
+                  <span className="shrink-0 font-mono tabular-nums">
+                    {`${draft.definition.length} / ${MAX_DEFINITION}`}
+                  </span>
+                </span>
+              }
+            >
+              <Textarea
+                id="type-definition"
+                rows={4}
+                maxLength={MAX_DEFINITION}
+                value={draft.definition}
+                onChange={(e) => patch({ definition: e.target.value })}
+              />
+            </Field>
+          )}
         </div>
       </InspectorSection>
 
@@ -219,6 +257,21 @@ export function TypeEditor({ type, types, onSaved, onUseExisting, onClose }: Typ
           <p className="text-xs text-muted">Objects are counted, not graded, so they have no severity.</p>
         )}
       </InspectorSection>
+
+      {showSetupFields && (
+        <InspectorSection title="Severity rules">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-muted">
+              Read in this order to suggest a severity. Alt+↑ and Alt+↓ move the focused rule.
+            </p>
+            <SeverityRulesEditor
+              rules={draft.rules}
+              defaultSeverity={draft.defaultSeverity}
+              onChange={(rules) => patch({ rules })}
+            />
+          </div>
+        </InspectorSection>
+      )}
 
       <InspectorSection title="Hotkey">
         <Field label="Hotkey" htmlFor="type-hotkey" hint="Picks this type inside the type picker (T).">
