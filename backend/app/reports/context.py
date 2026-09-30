@@ -337,8 +337,25 @@ def findings_page(
         raise AppError("validation_error", f"order is one of {', '.join(ORDERS)}", 422)
     n = max(1, min(PAGE, int(limit)))
     c = decode_cursor(cursor, "o", "n")
-    if c and (c["o"] != order or (order != "number" and "k" not in c)):
-        raise AppError("validation_error", "invalid cursor", 422)
+    if c:
+        if c["o"] != order or (order != "number" and "k" not in c):
+            raise AppError("validation_error", "invalid cursor", 422)
+        cn = c["n"]
+        if not isinstance(cn, int) or isinstance(cn, bool):
+            raise AppError("validation_error", "invalid cursor", 422)
+        if order == "severity_desc":
+            ck = c["k"]
+            if not isinstance(ck, int) or isinstance(ck, bool):
+                raise AppError("validation_error", "invalid cursor", 422)
+        elif order in ("type", "observed"):
+            ck = c["k"]
+            if not isinstance(ck, str):
+                raise AppError("validation_error", "invalid cursor", 422)
+            if order == "observed":
+                try:
+                    date.fromisoformat(ck)
+                except ValueError:
+                    raise AppError("validation_error", "invalid cursor", 422) from None
     obs, tname = observed_on(), type_name()
     sev = func.coalesce(Finding.severity, NO_SEVERITY)
     q = select(

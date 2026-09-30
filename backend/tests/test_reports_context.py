@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.db.models import Finding, ProjectType
 from app.errors import AppError
+from app.pagination import encode_cursor
 from app.reports import blocks
 from app.reports.context import ORDERS, FindingRow, findings_page, iter_findings
 
@@ -81,6 +82,27 @@ def test_cursor_from_another_order_or_garbage_is_422(handle, many):
         with pytest.raises(AppError) as e:
             findings_page(ctx, "type", bad)
         assert e.value.status == 422
+
+
+@pytest.mark.parametrize(
+    "order, cursor_kwargs",
+    [
+        ("number", {"o": "number", "n": {}, "k": None}),
+        ("number", {"o": "number", "n": "x", "k": None}),
+        ("number", {"o": "number", "n": True, "k": None}),
+        ("type", {"o": "type", "n": 1, "k": [1]}),
+        ("severity_desc", {"o": "severity_desc", "n": 1, "k": "a"}),
+        ("observed", {"o": "observed", "n": 1, "k": "not-a-date"}),
+    ],
+)
+def test_cursor_with_a_wrong_typed_value_is_422(handle, many, order, cursor_kwargs):
+    """A structurally valid cursor (right keys) whose n/k values are the wrong type must 422, not
+    reach the database as an unbound dict/list parameter or silently return an empty page."""
+    ctx = ctx_for(handle, config())
+    bad = encode_cursor(**cursor_kwargs)
+    with pytest.raises(AppError) as e:
+        findings_page(ctx, order, bad)
+    assert e.value.status == 422
 
 
 def test_rows_carry_names_colours_and_fallbacks(handle, many):
