@@ -12,7 +12,7 @@ export function FigureRowBlock({
   return (
     <div data-block="figure_row" className="flex flex-wrap items-start" style={{ gap: `0 ${mm(4)}` }}>
       {block.figures.map((f, i) => (
-        <FigureBlock key={f.snapshot.key} block={f} alt={altOf?.(f, i)} />
+        <FigureBlock key={`${i}-${f.snapshot.key}`} block={f} alt={altOf?.(f, i)} />
       ))}
     </div>
   );

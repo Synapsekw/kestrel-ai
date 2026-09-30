@@ -69,6 +69,43 @@ describe("figure blocks", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers Retry on a failed image, which requests the same src again in a new img", () => {
+    render(<FigureBlock block={figure("s6", "Crane")} />, { wrapper: env });
+    act(() => io.show(near("s6")));
+    const first = screen.getByRole("img", { name: "Crane" });
+    fireEvent.error(first);
+    expect(screen.getByRole("img", { name: "Crane: The snapshot could not be loaded." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    const again = screen.getByRole("img", { name: "Crane" });
+    expect(again).not.toBe(first);
+    expect(again).toHaveAttribute("src", "snap://s6");
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByTestId("snapshot-skeleton")).toBeInTheDocument();
+  });
+
+  it("offers no Retry when the source is missing or there is no backend", () => {
+    render(<FigureBlock block={figure("s7", "Image crop", 170, 105, "The source image was moved")} />, {
+      wrapper: env,
+    });
+    render(<FigureBlock block={figure("s8", "Plan")} />);
+    act(() => io.show(() => true));
+    expect(screen.getByRole("img", { name: "Image crop: The source image was moved" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /^Plan: Snapshots show/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("keys a row's figures by position, so a repeated snapshot key is not a duplicate React key", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <FigureRowBlock
+        block={{ kind: "figure_row", figures: [figure("dup", "One", 40, 30), figure("dup", "Two", 40, 30)] }}
+      />,
+      { wrapper: env },
+    );
+    expect(err.mock.calls.some((c) => String(c[0]).includes("same key"))).toBe(false);
+    err.mockRestore();
+  });
+
   it("says why when there is no backend to ask", () => {
     render(<FigureBlock block={figure("s5", "Plan")} />); // default context: resolveSnapshot returns null
     act(() => io.show(near("s5")));

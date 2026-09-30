@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SnapshotRef } from "@/api/reports";
+import { Button } from "@/ui";
 import { PRINT, mm, textStyle } from "../printTheme";
 import { usePreviewEnv } from "./PreviewContext";
 import { useInView } from "./useInView";
@@ -21,6 +22,12 @@ export function SnapshotImage({
   const { resolveSnapshot } = usePreviewEnv();
   const [ref, seen] = useInView<HTMLDivElement>(FIGURE_MARGIN, { once: true });
   const [phase, setPhase] = useState<"loading" | "loaded" | "failed">("loading");
+  // Bumped by Retry: a new <img> element re-requests the same src (no cache-busting query).
+  const [attempt, setAttempt] = useState(0);
+  const retry = () => {
+    setPhase("loading");
+    setAttempt((n) => n + 1);
+  };
   const missing = snapshot.missing_reason ?? null;
   const src = seen && !missing ? resolveSnapshot(snapshot) : null;
   const reason =
@@ -45,12 +52,24 @@ export function SnapshotImage({
     >
       {reason ? (
         <div
-          role="img"
-          aria-label={`${alt}: ${reason}`}
-          className="absolute inset-0 grid place-items-center text-center"
-          style={{ ...textStyle(PRINT.size.small, PRINT.muted), padding: mm(4) }}
+          className="absolute inset-0 flex flex-col items-center justify-center text-center"
+          style={{ gap: mm(2.5), padding: mm(4) }}
         >
-          {reason}
+          <div role="img" aria-label={`${alt}: ${reason}`} style={textStyle(PRINT.size.small, PRINT.muted)}>
+            {reason}
+          </div>
+          {/* Only a failed load can be retried; a missing source or no backend would fail the same way. */}
+          {phase === "failed" && !missing ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="refresh"
+              onClick={retry}
+              style={{ color: PRINT.ink, background: PRINT.paper, borderColor: PRINT.rule }}
+            >
+              Retry
+            </Button>
+          ) : null}
         </div>
       ) : (
         <>
@@ -63,6 +82,7 @@ export function SnapshotImage({
           )}
           {src && (
             <img
+              key={attempt}
               src={src}
               alt={alt}
               decoding="async"
