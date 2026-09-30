@@ -4,7 +4,7 @@ meta table (spec 2026-09-26-foundation section 7.1)."""
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, Index, Integer, String, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, Index, Integer, String, false, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.db.base import UTCDateTime, new_id, utcnow
@@ -56,3 +56,20 @@ class CatalogueMeta(CatalogueBase):
     __tablename__ = "catalogue_meta"
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[Any] = mapped_column(JSON, nullable=True)
+
+
+class ReportTemplate(CatalogueBase):
+    """An app-wide report template (spec 2026-09-26-reports section 6.2, catalogue revision 0002).
+
+    The four built-ins (`builtin=True`, fixed ids from app/reports/templates/builtins.py) are seeded
+    by the migration and never edited. `config` is a portable ReportConfig dumped by_alias."""
+
+    __tablename__ = "report_template"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str] = mapped_column(String, default="", server_default="")
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    config: Mapped[Any] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_report_template_list", "builtin", "name", "id"),)

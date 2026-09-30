@@ -34,7 +34,7 @@ const SCREEN_PATH: Partial<Record<Exclude<AgentNavigate["screen"], "home" | "edi
   label: "images?filter=unlabeled",
   review: "review",
   detect: "runs",
-  export: "export",
+  export: "reports/exports",
   settings: "settings",
 };
 

@@ -6,11 +6,18 @@ import { fetchJobs } from "@/api/jobs";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
 
-const EXPORT_TYPES = new Set<Job["type"]>(["results_export", "map_export", "detect_export"]);
+const EXPORT_TYPES = new Set<Job["type"]>([
+  "results_export",
+  "map_export",
+  "detect_export",
+  "volume_export",
+  "pointcloud_export",
+]);
 
-/** This project's file-producing exports (a `results_export` or a `detect_export` from the Export
- * screen, or a `map_export` from the Maps screen), newest first across every kind; kept fresh by
- * the websocket through the jobs store too. */
+/** This project's file-producing exports, newest first across every kind: `results_export` and
+ * `detect_export` from Data exports, `map_export` from the Map workspace, `volume_export` from the
+ * volume view, `pointcloud_export` from Point clouds (reports spec §13). Report renders are not
+ * listed; they live in report history. Kept fresh by the websocket through the jobs store too. */
 function selectExportJobs(jobs: Record<string, Job>, projectId: string): Job[] {
   return Object.values(jobs)
     .filter((j) => EXPORT_TYPES.has(j.type) && j.project_id === projectId)
@@ -33,13 +40,15 @@ export function useResultsExportJobs(projectId: string): {
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    // The list endpoint's `type` filter takes one value, so a map export (a different job type)
-    // needs its own request; both land in the same job store and are merged by `selectExportJobs`.
+    // The list endpoint's `type` filter takes one value, so each export type needs its own request;
+    // all land in the same job store and are merged by `selectExportJobs`.
     // `allSettled`, not `all`: one kind failing must not hide the other kind's jobs that DID load.
     const kinds = [
       { type: "results_export" as const, label: "results exports" },
       { type: "map_export" as const, label: "map exports" },
       { type: "detect_export" as const, label: "detection exports" },
+      { type: "volume_export" as const, label: "volume exports" },
+      { type: "pointcloud_export" as const, label: "point cloud exports" },
     ];
     Promise.allSettled(kinds.map((k) => fetchJobs(api, projectId, { type: k.type }))).then((results) => {
       if (cancelled) return;
