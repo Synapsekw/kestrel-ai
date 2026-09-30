@@ -53,7 +53,7 @@ def touch(path: Path) -> None:
     try:
         os.utime(path)
     except OSError:
-        pass
+        pass  # best-effort LRU clock
 
 
 def prune_dir(folder: Path, cap_bytes: int = CACHE_CAP_BYTES) -> int:
@@ -93,12 +93,23 @@ def prune(handle, cap_bytes: int = CACHE_CAP_BYTES) -> int:
 
 def placeholder_path(handle, reason: str, size: tuple[int, int]) -> Path:
     """The placeholder JPEG for `reason` at `size`, rendered on first use and shared by every
-    snapshot with the same reason."""
+    snapshot with the same reason. A write that fails (OSError: a full or locked cache disk) is
+    retried once to a private unique name, so a render failure still returns a viewable placeholder
+    (A13); the retry's own OSError propagates, since nothing more can be written."""
     from app.reports.snapshots.placeholder import render_placeholder
 
     w, h = int(size[0]), int(size[1])
     digest = hashlib.sha256(f"{reason}\n{w}x{h}\n{RENDERER_VERSION}".encode()).hexdigest()[:32]
     path = cache_dir(handle) / f"ph-{digest}.jpg"
-    if not path.is_file():
-        write_jpeg(render_placeholder(reason, (w, h)), path)
+    if path.is_file():
+        return path
+    img = render_placeholder(reason, (w, h))
+    try:
+        write_jpeg(img, path)
+    except OSError:
+        if path.is_file():
+            return path
+        retry = cache_dir(handle) / f"ph-{digest}-{uuid4().hex}.jpg"
+        write_jpeg(img, retry)
+        return retry
     return path
