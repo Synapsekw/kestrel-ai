@@ -5,7 +5,7 @@ import { exampleCloud } from "@/test/cloudFixtures";
 import { renderWithProviders } from "@/test/render";
 import { CloudPreview } from "./CloudPreview";
 
-vi.mock("./useInView", () => ({ useInView: () => true }));
+vi.mock("./useInView", () => ({ useInView: () => [() => {}, true] }));
 
 function renderPreview(variant: "hero" | "tile" = "tile") {
   const { api } = fakeClient([{ method: "GET", path: /\/pointclouds$/, body: { items: [exampleCloud] } }]);
@@ -22,6 +22,7 @@ describe("CloudPreview", () => {
     renderPreview();
     await waitFor(() => expect(screen.getByTestId("cloud-static-card")).toBeInTheDocument());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByTestId("cloud-static-card")).toHaveTextContent(/M points · 2026-05-04/);
     expect(screen.getByRole("link", { name: /open in point clouds/i })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/clouds/${exampleCloud.id}`,

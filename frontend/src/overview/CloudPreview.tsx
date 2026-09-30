@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { cloudOctreeUrl } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
@@ -42,10 +42,13 @@ export function CloudPreview({
 }) {
   const api = useApi();
   const { baseUrl, token } = useBackend();
-  const box = useRef<HTMLDivElement>(null);
-  const inView = useInView(box);
-  const [cloud, setCloud] = useState<PointCloud | null | undefined>(undefined);
-  const [failed, setFailed] = useState(false);
+  const [box, inView] = useInView<HTMLDivElement>();
+  // Keyed by what they belong to, so a new project or cloud starts fresh (undefined, not failed).
+  const key = `${projectId}|${cloudId ?? ""}`;
+  const [result, setResult] = useState<{ key: string; cloud: PointCloud | null } | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const cloud = result?.key === key ? result.cloud : undefined;
+  const failed = failedKey === key;
   const [reduced, setReduced] = useState(reducedEffects);
 
   useEffect(() => watchEffects(setReduced), []);
@@ -53,16 +56,18 @@ export function CloudPreview({
     let live = true;
     listPointClouds(api, projectId)
       .then(
-        (all) => live && setCloud(cloudId ? (all.find((c) => c.id === cloudId) ?? null) : newestReady(all)),
+        (all) =>
+          live &&
+          setResult({ key, cloud: cloudId ? (all.find((c) => c.id === cloudId) ?? null) : newestReady(all) }),
       )
       .catch((e: unknown) => {
         pushLog(`point cloud preview unavailable: ${messageOf(e, String(e))}`);
-        if (live) setCloud(null);
+        if (live) setResult({ key, cloud: null });
       });
     return () => {
       live = false;
     };
-  }, [api, projectId, cloudId]);
+  }, [api, projectId, cloudId, key]);
 
   if (cloud === null)
     // A cloud is counted but none is ready yet (still importing, or failed): say so rather than leave a hole.
@@ -99,7 +104,7 @@ export function CloudPreview({
             colour={cloud.has_rgb ? "rgb" : "elevation"}
             elevationRange={elevationRange}
             pointSize={1}
-            onViewState={(s) => s !== "running" && setFailed(true)}
+            onViewState={(s) => s !== "running" && setFailedKey(key)}
           />
           <GlassPanel
             variant="float"

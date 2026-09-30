@@ -13,7 +13,7 @@ export function CloudStaticCard({ projectId, cloud }: { projectId: string; cloud
         <Icon name="cloud" size={28} className="text-muted" />
         <p className="text-sm font-semibold text-ink">{cloud.name}</p>
         <p className="font-mono text-2xs text-muted">
-          {[pts, cloud.captured_on].filter(Boolean).join(" � ")}
+          {[pts, cloud.captured_on].filter(Boolean).join(" · ")}
         </p>
         <Link to={`/p/${projectId}/clouds/${cloud.id}`} className={cx("text-xs text-accent-ink", focusRing)}>
           Open in Point clouds
