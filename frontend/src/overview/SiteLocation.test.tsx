@@ -31,4 +31,25 @@ describe("SiteLocation", () => {
     const { container } = render(<SiteLocation site={noSite} pins={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("names the coordinates and the approximate area in the drawing's label", () => {
+    render(<SiteLocation site={exampleSite} pins={[]} />);
+    expect(
+      screen.getByRole("img", { name: "Site location, 44.8125° N 20.4612° E, about 24.1 ha" }),
+    ).toBeInTheDocument();
+  });
+
+  it("draws the scale label inside the drawing, beside its bar, so letterboxing cannot part them", () => {
+    render(<SiteLocation site={exampleSite} pins={[]} />);
+    const svg = screen.getByRole("img", { name: /site location/i });
+    const label = svg.querySelector("text[data-testid='scale-label']");
+    expect(label?.textContent).toMatch(/^\d+ (m|km)$/);
+    expect(label?.parentElement).toBe(svg.querySelector("[data-testid='scale-bar']")?.parentElement);
+  });
+
+  it("draws the photo points strongly enough to read at site scale", () => {
+    render(<SiteLocation site={exampleSite} pins={[]} />);
+    const [p] = screen.getAllByTestId("photo-point");
+    expect(Number(p.getAttribute("opacity"))).toBeGreaterThanOrEqual(0.85);
+  });
 });

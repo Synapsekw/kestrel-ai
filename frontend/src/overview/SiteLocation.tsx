@@ -2,6 +2,7 @@ import type { Finding } from "@/api/findings";
 import type { OverviewSite } from "@/api/overview";
 import type { CSSProperties } from "react";
 import { cx, GlassPanel, severityOf, useSeverityScale } from "@/ui";
+import { formatCoords } from "./kpis";
 import { niceScale, siteFrame } from "./siteGeometry";
 
 /** Spec 2026-09-30-project-landing §5.3 and D8: where the site is, drawn from our own geometry (no basemap). */
@@ -24,7 +25,12 @@ export function SiteLocation({
   const barUnits = bar.metres / frame.metresPerUnit;
   const dot = frame.height / 90;
   const located = pins.filter((p) => p.lon != null && p.lat != null);
-  const ha = site.area_m2 != null ? `≈ ${(site.area_m2 / 10_000).toFixed(1)} ha` : null;
+  const hectares = site.area_m2 != null ? (site.area_m2 / 10_000).toFixed(1) : null;
+  const ha = hectares != null ? `≈ ${hectares} ha` : null;
+  const [clon, clat] = site.center ?? [(minlon + maxlon) / 2, (minlat + maxlat) / 2];
+  const label = ["Site location", formatCoords(clon, clat), hectares != null && `about ${hectares} ha`]
+    .filter(Boolean)
+    .join(", ");
   return (
     <GlassPanel
       variant="pane"
@@ -38,7 +44,7 @@ export function SiteLocation({
       </h2>
       <svg
         role="img"
-        aria-label="Site location"
+        aria-label={label}
         viewBox={`0 0 ${frame.width} ${frame.height}`}
         preserveAspectRatio="xMidYMid meet"
         className="mt-2 min-h-0 w-full flex-1"
@@ -61,9 +67,9 @@ export function SiteLocation({
               data-testid="photo-point"
               cx={p.x}
               cy={p.y}
-              r={dot / 2.5}
+              r={dot / 1.8}
               className="fill-accent"
-              opacity={0.6}
+              opacity={0.85}
             />
           );
         })}
@@ -84,10 +90,20 @@ export function SiteLocation({
           );
         })}
         <g transform={`translate(${frame.width * 0.04} ${frame.height * 0.94})`}>
-          <rect width={barUnits} height={dot / 2} className="fill-ink" />
+          <rect data-testid="scale-bar" width={barUnits} height={dot / 2} className="fill-ink" />
+          {/* In the drawing, beside its bar: letterboxing moves both together. */}
+          <text
+            data-testid="scale-label"
+            x={barUnits + dot * 1.5}
+            y={dot / 4}
+            dominantBaseline="middle"
+            fontSize={dot * 3.2}
+            className="fill-muted font-mono"
+          >
+            {bar.label}
+          </text>
         </g>
       </svg>
-      <p className="mt-1 font-mono text-2xs text-dim">{bar.label}</p>
     </GlassPanel>
   );
 }
