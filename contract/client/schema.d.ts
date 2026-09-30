@@ -13027,7 +13027,7 @@ export interface components {
         versionNumber: number;
         /** @description the first 32 hex digits of sha256(canonical spec + source version + renderer version) */
         snapshotKey: string;
-        /** @description base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces */
+        /** @description base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces. maxLength 12000 matches keys.MAX_SPEC_CHARS, under uvicorn's h11 16 KiB request-head limit. */
         snapshotSpec: string;
         templateId: string;
         assetId: string;
@@ -21618,7 +21618,7 @@ export interface operations {
     getReportSnapshot: {
         parameters: {
             query: {
-                /** @description base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces */
+                /** @description base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces. maxLength 12000 matches keys.MAX_SPEC_CHARS, under uvicorn's h11 16 KiB request-head limit. */
                 spec: components["parameters"]["snapshotSpec"];
             };
             header?: never;
@@ -21631,11 +21631,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description JPEG bytes */
+            /** @description JPEG bytes: the rendered figure (`Cache-Control: private, max-age=31536000, immutable`), or, when the source is missing or unreadable, a grey placeholder JPEG (`Cache-Control: no-store`, `X-Snapshot-Missing` set) */
             200: {
                 headers: {
-                    /** @description private, max-age=31536000, immutable */
+                    /** @description `private, max-age=31536000, immutable` for a rendered figure; `no-store` for a placeholder (or when the key drifted between the request and the render) */
                     "Cache-Control"?: string;
+                    /** @description The url-quoted operator-facing reason the source could not be rendered. Present only on a placeholder response. */
+                    "X-Snapshot-Missing"?: string;
                     [name: string]: unknown;
                 };
                 content: {
