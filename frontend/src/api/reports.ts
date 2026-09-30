@@ -1,5 +1,10 @@
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, components, paths } from "@contract/client";
-import { unwrap } from "./errors";
+import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
+import { useJobsStore } from "@/store/jobs";
+import { ApiContext, useApi } from "./client";
+import { messageOf, unwrap } from "./errors";
+import type { Page } from "./paging";
 
 type S = components["schemas"];
 const P = "/api/v1/projects/{projectId}" as const;
@@ -125,10 +130,17 @@ export function listVersions(
   reportId: string,
   cursor?: string,
 ): Promise<VersionList> {
-  return unwrap(api.GET(`${R}/versions`, { params: { path: { projectId, reportId }, query: paged(cursor) } }));
+  return unwrap(
+    api.GET(`${R}/versions`, { params: { path: { projectId, reportId }, query: paged(cursor) } }),
+  );
 }
 
-export function getVersion(api: ApiClient, projectId: string, reportId: string, n: number): Promise<ReportVersion> {
+export function getVersion(
+  api: ApiClient,
+  projectId: string,
+  reportId: string,
+  n: number,
+): Promise<ReportVersion> {
   return unwrap(
     api.GET(`${R}/versions/{versionNumber}`, { params: { path: { projectId, reportId, versionNumber: n } } }),
   );
@@ -150,9 +162,16 @@ export function setVersionIssued(
   );
 }
 
-export async function deleteVersion(api: ApiClient, projectId: string, reportId: string, n: number): Promise<void> {
+export async function deleteVersion(
+  api: ApiClient,
+  projectId: string,
+  reportId: string,
+  n: number,
+): Promise<void> {
   await unwrap(
-    api.DELETE(`${R}/versions/{versionNumber}`, { params: { path: { projectId, reportId, versionNumber: n } } }),
+    api.DELETE(`${R}/versions/{versionNumber}`, {
+      params: { path: { projectId, reportId, versionNumber: n } },
+    }),
   );
 }
 
@@ -196,8 +215,14 @@ export function getTemplate(api: ApiClient, templateId: string): Promise<ReportT
   return unwrap(api.GET("/api/v1/report-templates/{templateId}", { params: { path: { templateId } } }));
 }
 
-export function patchTemplate(api: ApiClient, templateId: string, body: TemplatePatch): Promise<ReportTemplate> {
-  return unwrap(api.PATCH("/api/v1/report-templates/{templateId}", { params: { path: { templateId } }, body }));
+export function patchTemplate(
+  api: ApiClient,
+  templateId: string,
+  body: TemplatePatch,
+): Promise<ReportTemplate> {
+  return unwrap(
+    api.PATCH("/api/v1/report-templates/{templateId}", { params: { path: { templateId } }, body }),
+  );
 }
 
 export async function deleteTemplate(api: ApiClient, templateId: string): Promise<void> {
@@ -224,7 +249,12 @@ export function draftBlocksLoader(api: ApiClient, projectId: string, reportId: s
  * the page is the last one). A key never found while walking returns `{ items: [], next_cursor:
  * null }`.
  */
-export function versionBlocksLoader(api: ApiClient, projectId: string, reportId: string, n: number): LoadBlocks {
+export function versionBlocksLoader(
+  api: ApiClient,
+  projectId: string,
+  reportId: string,
+  n: number,
+): LoadBlocks {
   const memo = new Map<string, Promise<ReportDocumentPage>>();
 
   function fetchPage(cursor: string | null): Promise<ReportDocumentPage> {
@@ -344,4 +374,283 @@ export function reportAssetUrl(
   if (!backend) return path;
   const q = new URLSearchParams({ token: backend.token });
   return `${backend.baseUrl.replace(/\/$/, "")}${path}?${q}`;
+}
+
+// ---- hooks (Ruling 1: keyed state, no synchronous setState in effects) ----
+
+export interface PagedList<T> {
+  items: T[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  loadMore: () => void;
+  reload: () => void;
+}
+
+interface PagedState<T> {
+  key: string;
+  items: T[];
+  next: string | null;
+  error: string | null;
+}
+
+function idOf(item: unknown): string {
+  const o = item as { id?: unknown; number?: unknown };
+  return String(o.id ?? o.number);
+}
+
+function usePagedList<T>(key: string, load: (cursor?: string) => Promise<Page<T>>): PagedList<T> {
+  const [revision, setRevision] = useState(0);
+  const fullKey = `${key}#${revision}`;
+  const [state, setState] = useState<PagedState<T> | null>(null);
+  const busy = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    load().then(
+      (page) => {
+        if (!cancelled) setState({ key: fullKey, items: page.items, next: page.next_cursor, error: null });
+      },
+      (e: unknown) => {
+        if (!cancelled)
+          setState({ key: fullKey, items: [], next: null, error: messageOf(e, "could not load the list") });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [fullKey, load]);
+
+  const current = state?.key === fullKey ? state : null;
+
+  const loadMore = useCallback(() => {
+    if (!current?.next || busy.current) return;
+    const cursor = current.next;
+    busy.current = true;
+    load(cursor)
+      .then((page) =>
+        setState((s) => {
+          if (!s || s.key !== fullKey) return s;
+          const seen = new Set(s.items.map(idOf));
+          const fresh = page.items.filter((i) => !seen.has(idOf(i)));
+          // The Prism mock answers the same cursor forever; a repeated cursor ends the list.
+          const next = page.next_cursor === cursor ? null : page.next_cursor;
+          return { ...s, items: [...s.items, ...fresh], next };
+        }),
+      )
+      .catch((e: unknown) =>
+        setState((s) => (s && s.key === fullKey ? { ...s, error: messageOf(e, "could not load more") } : s)),
+      )
+      .finally(() => {
+        busy.current = false;
+      });
+  }, [current, fullKey, load]);
+
+  const reload = useCallback(() => setRevision((r) => r + 1), []);
+  return {
+    items: current?.items ?? [],
+    loading: current === null,
+    error: current?.error ?? null,
+    hasMore: Boolean(current?.next),
+    loadMore,
+    reload,
+  };
+}
+
+export function useReports(projectId: string): PagedList<ReportListItem> {
+  const api = useApi();
+  const load = useCallback(
+    (cursor?: string) => listReports(api, projectId, cursor) as Promise<Page<ReportListItem>>,
+    [api, projectId],
+  );
+  return usePagedList(`reports:${projectId}`, load);
+}
+
+export function useReportVersions(projectId: string, reportId: string): PagedList<ReportVersion> {
+  const api = useApi();
+  const load = useCallback(
+    (cursor?: string) => listVersions(api, projectId, reportId, cursor) as Promise<Page<ReportVersion>>,
+    [api, projectId, reportId],
+  );
+  const list = usePagedList(`versions:${projectId}/${reportId}`, load);
+  useOnJobsFinished("report_render", list.reload);
+  return list;
+}
+
+export function useReportTemplates(): PagedList<ReportTemplate> {
+  const api = useApi();
+  const load = useCallback(
+    (cursor?: string) => listTemplates(api, cursor) as Promise<Page<ReportTemplate>>,
+    [api],
+  );
+  return usePagedList("templates", load);
+}
+
+export function useReport(
+  projectId: string,
+  reportId: string,
+): {
+  report: Report | null;
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+  setReport: (report: Report) => void;
+} {
+  const api = useApi();
+  const [revision, setRevision] = useState(0);
+  const key = `${projectId}/${reportId}#${revision}`;
+  const [state, setState] = useState<{ key: string; report: Report | null; error: string | null } | null>(
+    null,
+  );
+  useEffect(() => {
+    let cancelled = false;
+    getReport(api, projectId, reportId).then(
+      (report) => {
+        if (!cancelled) setState({ key, report, error: null });
+      },
+      (e: unknown) => {
+        if (!cancelled) setState({ key, report: null, error: messageOf(e, "could not load the report") });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, reportId, key]);
+  const current = state?.key === key ? state : null;
+  const setReport = useCallback((report: Report) => setState({ key, report, error: null }), [key]);
+  const reload = useCallback(() => setRevision((r) => r + 1), []);
+  return {
+    report: current?.report ?? null,
+    loading: current === null,
+    error: current?.error ?? null,
+    reload,
+    setReport,
+  };
+}
+
+/** The outline, kept across reloads of the same report so the preview never blanks on an edit. */
+export function useReportOutline(
+  projectId: string,
+  reportId: string,
+): { outline: ReportOutline | null; refreshing: boolean; error: string | null; reload: () => void } {
+  const api = useApi();
+  const [revision, setRevision] = useState(0);
+  const report = `${projectId}/${reportId}`;
+  const [state, setState] = useState<{
+    report: string;
+    revision: number;
+    outline: ReportOutline | null;
+    error: string | null;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getOutline(api, projectId, reportId).then(
+      (outline) => {
+        if (!cancelled) setState({ report, revision, outline, error: null });
+      },
+      (e: unknown) => {
+        if (!cancelled)
+          setState((s) => ({
+            report,
+            revision,
+            outline: s?.report === report ? s.outline : null,
+            error: messageOf(e, "could not load the preview"),
+          }));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, reportId, report, revision]);
+  const reload = useCallback(() => setRevision((r) => r + 1), []);
+  const mine = state?.report === report ? state : null;
+  return {
+    outline: mine?.outline ?? null,
+    refreshing: mine?.revision !== revision,
+    error: mine?.error ?? null,
+    reload,
+  };
+}
+
+/**
+ * `blocksLoader`/`versionLoader` are memoised per source (Ruling 9: `loadBlocks` must be stable for
+ * one source). `versionBlocksLoader` keeps its own per-instance document-page memo (Ruling R-3), so a
+ * fresh loader on every call would defeat it; these two `Map` refs hold one loader per
+ * `(reportId)` / `(reportId, n)` and are only ever mutated in an effect (cleared when `api` or
+ * `projectId` change) or inside the closures below — never read conditionally during render.
+ */
+export function useReportActions(projectId: string) {
+  const api = useApi();
+  const draftLoaders = useRef(new Map<string, LoadBlocks>());
+  const versionLoaders = useRef(new Map<string, LoadBlocks>());
+  useEffect(() => {
+    draftLoaders.current = new Map();
+    versionLoaders.current = new Map();
+  }, [api, projectId]);
+  return useMemo(
+    () => ({
+      create: (body: ReportCreate) => createReport(api, projectId, body),
+      patch: (reportId: string, body: ReportPatch) => patchReport(api, projectId, reportId, body),
+      remove: (reportId: string) => deleteReport(api, projectId, reportId),
+      duplicate: (reportId: string) => duplicateReport(api, projectId, reportId),
+      render: async (reportId: string, body: RenderRequest) => {
+        const ref = await startRender(api, projectId, reportId, body);
+        useJobsStore.getState().upsert(ref.job);
+        return ref;
+      },
+      setIssued: (reportId: string, n: number, issued: boolean) =>
+        setVersionIssued(api, projectId, reportId, n, issued),
+      deleteVersion: (reportId: string, n: number) => deleteVersion(api, projectId, reportId, n),
+      open: (path: string) => openProjectFile(api, projectId, path),
+      importLogo: (path: string) => importReportAsset(api, projectId, path),
+      blocksLoader: (reportId: string): LoadBlocks => {
+        let loader = draftLoaders.current.get(reportId);
+        if (!loader) {
+          loader = draftBlocksLoader(api, projectId, reportId);
+          draftLoaders.current.set(reportId, loader);
+        }
+        return loader;
+      },
+      versionLoader: (reportId: string, n: number): LoadBlocks => {
+        const key = `${reportId}:${n}`;
+        let loader = versionLoaders.current.get(key);
+        if (!loader) {
+          loader = versionBlocksLoader(api, projectId, reportId, n);
+          versionLoaders.current.set(key, loader);
+        }
+        return loader;
+      },
+    }),
+    [api, projectId],
+  );
+}
+
+export function useTemplateActions() {
+  const api = useApi();
+  return useMemo(
+    () => ({
+      create: (body: TemplateCreate) => createTemplate(api, body),
+      patch: (templateId: string, body: TemplatePatch) => patchTemplate(api, templateId, body),
+      remove: (templateId: string) => deleteTemplate(api, templateId),
+    }),
+    [api],
+  );
+}
+
+/** Snapshot `<img src>` resolver; null outside an ApiProvider (the gallery), never a throw. */
+export function useSnapshotSrc(projectId: string): (ref: SnapshotRef) => string | null {
+  const info = useContext(ApiContext)?.info ?? null;
+  return useCallback(
+    (ref: SnapshotRef) => (info ? snapshotUrl(projectId, ref, info) : null),
+    [info, projectId],
+  );
+}
+
+/** Cover-logo `<img src>` resolver for the live preview (Ruling R-5); same soft-context pattern. */
+export function useReportAssetSrc(projectId: string): (assetId: string) => string | null {
+  const info = useContext(ApiContext)?.info ?? null;
+  return useCallback(
+    (assetId: string) => (info ? reportAssetUrl(projectId, assetId, info) : null),
+    [info, projectId],
+  );
 }
