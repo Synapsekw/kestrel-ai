@@ -243,6 +243,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # not have (`invalid_severity_rule`, `severity_unknown`) or a name that normalises to nothing
     # (`type_name_blank`, 422 here: the operation declares only 422 and 503).
     "ensureCatalogueTypes": {422},
+    # S1-U2: a schema-valid template can repeat a slot key, a type name (by normalise_name) or a
+    # hotkey, or have a name that normalises to nothing (`invalid_template`,
+    # details.errors[{path, message}]).
+    "createProjectTemplate": {422},
+    "patchProjectTemplate": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
