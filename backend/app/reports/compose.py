@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.errors import AppError
 from app.pagination import decode_cursor, encode_cursor
 from app.reports.context import (  # noqa: F401 - re-exported: R5 and R9 import them from here
     PAGE,
@@ -105,7 +106,12 @@ def section_page(
     if pager is not None:
         return pager(ctx, cursor, limit)
     items = mod.compose(ctx).blocks
-    start = int(decode_cursor(cursor, "i")["i"]) if cursor else 0
+    start = 0
+    if cursor:
+        i = decode_cursor(cursor, "i")["i"]
+        if not isinstance(i, int) or isinstance(i, bool) or i < 0:
+            raise AppError("validation_error", "invalid cursor", 422)
+        start = i
     end = start + limit
     return list(items[start:end]), (encode_cursor(i=end) if end < len(items) else None)
 
