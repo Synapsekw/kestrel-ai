@@ -11,7 +11,7 @@ import { useJobsStore } from "@/store/jobs";
 export const OVERVIEW_RECENT = 5;
 export const OVERVIEW_ACTIVITY = 8;
 const OVERVIEW_JOBS = 10;
-const BURST_DEBOUNCE_MS = 400;
+export const BURST_DEBOUNCE_MS = 400;
 
 interface Loaded {
   projectId: string;

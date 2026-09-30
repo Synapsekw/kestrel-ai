@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { errorBody, exampleImage, exampleImage2, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
+import { useChangesStore } from "@/store/changes";
 import { useLatestImages } from "./useLatestImages";
 
 vi.mock("@/app/diagnostics", async (orig) => ({ ...(await orig<object>()), pushLog: vi.fn() }));
@@ -63,5 +64,27 @@ describe("useLatestImages", () => {
     rerender({ id: OTHER });
     expect(result.current.images).toBeNull();
     await waitFor(() => expect(result.current.images?.[0]?.id).toBe(exampleImage2.id));
+  });
+
+  it("re-reads once after a burst of data changes, not once per change", async () => {
+    useChangesStore.setState({ dataRevision: 0 });
+    const { stub, wrapper } = setup([{ method: "GET", path: /\/images$/, body: page([exampleImage]) }]);
+    const { result } = renderHook(() => useLatestImages(PROJECT_ID, true), { wrapper });
+    await waitFor(() => expect(result.current.images).toHaveLength(1));
+    expect(stub.requests).toHaveLength(1);
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        useChangesStore.getState().bumpData();
+        useChangesStore.getState().bumpData();
+        useChangesStore.getState().bumpData();
+      });
+      await act(() => vi.advanceTimersByTimeAsync(399));
+      expect(stub.requests).toHaveLength(1);
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      expect(stub.requests).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
