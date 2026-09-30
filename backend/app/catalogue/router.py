@@ -74,9 +74,7 @@ def complete_catalogue_classification(
 def create_catalogue_type(
     body: CatalogueTypeCreate, request: Request, cat: CatalogueHandle = Depends(get_catalogue)
 ) -> CatalogueTypeOut:
-    # `definition` and `severity_rules` reach the service with U2 (plan 2026-09-30-setup-u2), which
-    # deletes this `exclude`; until then they are validated and not stored.
-    ref = service.create_type(cat, **body.model_dump(exclude={"definition", "severity_rules"}))
+    ref = service.create_type(cat, **body.model_dump())
     publish_catalogue_changed(request, {"type_ids": [ref.id]})
     return CatalogueTypeOut.from_ref(ref)
 
