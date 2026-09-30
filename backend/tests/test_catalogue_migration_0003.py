@@ -304,3 +304,34 @@ def test_0003_downgrades_to_0002_and_keeps_every_type(tmp_path):
     _run(data, go)
     assert [r for r in _rows(data) if r[0] != "t4"] == before
     _assert_partial(data)
+
+
+def test_an_interrupted_run_that_dropped_the_partial_indexes_recovers(tmp_path):
+    """pysqlite commits DDL at once: a run that died after the drops leaves 0002 with no indexes."""
+    data = tmp_path / "appdata"
+    _at_0002_with_types(data)
+    _run(
+        data,
+        lambda cfg, conn: [
+            conn.exec_driver_sql("DROP INDEX ux_catalogue_type_live_hotkey"),
+            conn.exec_driver_sql("DROP INDEX ux_catalogue_type_live_name"),
+        ],
+    )
+    before = _rows(data)
+    open_catalogue(data).engine.dispose()
+    _assert_partial(data)
+    assert _rows(data) == before
+
+
+def test_a_stray_alembic_temp_table_does_not_wedge_the_upgrade(tmp_path):
+    data = tmp_path / "appdata"
+    _at_0002_with_types(data)
+    _run(
+        data,
+        lambda cfg, conn: conn.exec_driver_sql("CREATE TABLE _alembic_tmp_catalogue_type (id VARCHAR(36))"),
+    )
+    before = _rows(data)
+    open_catalogue(data).engine.dispose()
+    _assert_partial(data)
+    assert _rows(data) == before
+    assert _sql(data, "SELECT name FROM sqlite_master WHERE name = '_alembic_tmp_catalogue_type'") == []

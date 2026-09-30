@@ -301,9 +301,13 @@ BUILTIN_ROWS = [
 ]
 
 
-def _drop_live_indexes() -> None:
-    op.drop_index("ux_catalogue_type_live_hotkey", table_name="catalogue_type")
-    op.drop_index("ux_catalogue_type_live_name", table_name="catalogue_type")
+def _prepare_rebuild() -> None:
+    """pysqlite commits DDL at once, so an interrupted run can leave the partial indexes dropped or a
+    half-built temp table behind while alembic_version still says the old revision. Every step here
+    is safe to meet again, so the next open recovers instead of failing forever."""
+    op.drop_index("ux_catalogue_type_live_hotkey", table_name="catalogue_type", if_exists=True)
+    op.drop_index("ux_catalogue_type_live_name", table_name="catalogue_type", if_exists=True)
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_catalogue_type")
 
 
 def _create_live_indexes() -> None:
@@ -314,6 +318,7 @@ def _create_live_indexes() -> None:
         ["name_key"],
         unique=True,
         sqlite_where=sa.text("archived = 0"),
+        if_not_exists=True,
     )
     op.create_index(
         "ux_catalogue_type_live_hotkey",
@@ -321,11 +326,12 @@ def _create_live_indexes() -> None:
         ["hotkey"],
         unique=True,
         sqlite_where=sa.text("archived = 0 AND hotkey IS NOT NULL"),
+        if_not_exists=True,
     )
 
 
 def upgrade() -> None:
-    _drop_live_indexes()
+    _prepare_rebuild()
     with op.batch_alter_table("catalogue_type", recreate="always") as batch:
         batch.add_column(sa.Column("definition", sa.Text(), nullable=True))
         batch.add_column(sa.Column("severity_rules", sa.JSON(), nullable=False, server_default="[]"))
@@ -356,7 +362,7 @@ def downgrade() -> None:
     op.drop_table("project_template")
     # 0002's check has no 'template': those types become 'user' types, which is what 0002 calls them.
     op.execute("UPDATE catalogue_type SET origin = 'user' WHERE origin = 'template'")
-    _drop_live_indexes()
+    _prepare_rebuild()
     with op.batch_alter_table("catalogue_type", recreate="always") as batch:
         batch.drop_constraint("ck_catalogue_type_origin", type_="check")
         batch.create_check_constraint("ck_catalogue_type_origin", ORIGIN_CHECK_0002)
