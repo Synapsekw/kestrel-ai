@@ -145,8 +145,8 @@ export function ExportForm({
         className="items-start [&>span:first-of-type]:mt-0.5"
         label={
           <span className="leading-relaxed">
-            Include suggestions nobody has reviewed yet. The tables, COCO and the contact sheet mark them; YOLO
-            label files cannot.
+            Include suggestions nobody has reviewed yet. The tables, COCO and the contact sheet mark them;
+            YOLO label files cannot.
           </span>
         }
       />

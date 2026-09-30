@@ -87,9 +87,17 @@ describe("useResultsExportJobs", () => {
       type: "pointcloud_export" as const,
       state: "succeeded" as const,
       created_at: "2026-09-21T10:00:00Z",
-      result: { cloud_id: "c1", folder: "exports/2026-09-21_100000", laz: "c.laz", files: ["c.laz"], point_count: 5 },
+      result: {
+        cloud_id: "c1",
+        folder: "exports/2026-09-21_100000",
+        laz: "c.laz",
+        files: ["c.laz"],
+        point_count: 5,
+      },
     };
-    useJobsStore.getState().upsert({ ...volumeExport, id: "other-project", project_id: "some-other-project-id" });
+    useJobsStore
+      .getState()
+      .upsert({ ...volumeExport, id: "other-project", project_id: "some-other-project-id" });
     const { api, requests } = fakeClient([
       {
         method: "GET",
@@ -108,7 +116,13 @@ describe("useResultsExportJobs", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.jobs.map((j) => j.id)).toEqual(["cloud-export-1", "volume-export-1"]);
     const types = requests.map((r) => new URL(r.url, "http://x").searchParams.get("type")).sort();
-    expect(types).toEqual(["detect_export", "map_export", "pointcloud_export", "results_export", "volume_export"]);
+    expect(types).toEqual([
+      "detect_export",
+      "map_export",
+      "pointcloud_export",
+      "results_export",
+      "volume_export",
+    ]);
   });
 
   it("names the point cloud exports when only their request fails", async () => {
@@ -116,10 +130,10 @@ describe("useResultsExportJobs", () => {
       const req = input instanceof Request ? input : new Request(input, init);
       const url = new URL(req.url);
       if (url.searchParams.get("type") === "pointcloud_export") {
-        return new Response(
-          JSON.stringify({ error: { code: "http_error", message: "nope", details: {} } }),
-          { status: 500, headers: { "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ error: { code: "http_error", message: "nope", details: {} } }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
       }
       return new Response(JSON.stringify({ items: [], next_cursor: null }), {
         status: 200,

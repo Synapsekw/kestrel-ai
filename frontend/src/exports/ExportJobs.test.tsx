@@ -140,7 +140,13 @@ describe("ExportJobs", () => {
       state: "succeeded" as const,
       progress: 1,
       params: {},
-      result: { cloud_id: "c1", folder: "exports/2026-09-21_100000", laz: "c.laz", files: ["c.laz", "c.json"], point_count: 5 },
+      result: {
+        cloud_id: "c1",
+        folder: "exports/2026-09-21_100000",
+        laz: "c.laz",
+        files: ["c.laz", "c.json"],
+        point_count: 5,
+      },
     };
     const volumeExport = {
       ...runningJob,
