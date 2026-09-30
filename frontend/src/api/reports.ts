@@ -572,21 +572,34 @@ export function useReportOutline(
   };
 }
 
+interface LoaderCacheEntry {
+  draft: Map<string, LoadBlocks>;
+  version: Map<string, LoadBlocks>;
+}
+
+/** `cache.get(api)`, creating the (empty) entry on first use — never mutates a hook's return value. */
+function loaderCacheFor(cache: WeakMap<ApiClient, LoaderCacheEntry>, api: ApiClient): LoaderCacheEntry {
+  let entry = cache.get(api);
+  if (!entry) {
+    entry = { draft: new Map(), version: new Map() };
+    cache.set(api, entry);
+  }
+  return entry;
+}
+
 /**
  * `blocksLoader`/`versionLoader` are memoised per source (Ruling 9: `loadBlocks` must be stable for
  * one source). `versionBlocksLoader` keeps its own per-instance document-page memo (Ruling R-3), so a
- * fresh loader on every call would defeat it; these two `Map` refs hold one loader per
- * `(reportId)` / `(reportId, n)` and are only ever mutated in an effect (cleared when `api` or
- * `projectId` change) or inside the closures below — never read conditionally during render.
+ * fresh loader on every call would defeat it. The cache is a `WeakMap` keyed by the live `ApiClient`
+ * (so a new client, e.g. after a backend reconnect, never reuses a loader bound to the old one) of
+ * `Map`s keyed by a string that folds in `projectId` (so a `projectId` change on the same client
+ * can't return a stale loader either); `\u0000` cannot occur in a project/report id or a version
+ * number, so it's a safe separator. Looked up synchronously inside the closures below — no effect,
+ * no conditional read of `ref.current` during render.
  */
 export function useReportActions(projectId: string) {
   const api = useApi();
-  const draftLoaders = useRef(new Map<string, LoadBlocks>());
-  const versionLoaders = useRef(new Map<string, LoadBlocks>());
-  useEffect(() => {
-    draftLoaders.current = new Map();
-    versionLoaders.current = new Map();
-  }, [api, projectId]);
+  const caches = useRef(new WeakMap<ApiClient, LoaderCacheEntry>());
   return useMemo(
     () => ({
       create: (body: ReportCreate) => createReport(api, projectId, body),
@@ -604,19 +617,22 @@ export function useReportActions(projectId: string) {
       open: (path: string) => openProjectFile(api, projectId, path),
       importLogo: (path: string) => importReportAsset(api, projectId, path),
       blocksLoader: (reportId: string): LoadBlocks => {
-        let loader = draftLoaders.current.get(reportId);
+        const entry = loaderCacheFor(caches.current, api);
+        const key = `${projectId}\u0000${reportId}`;
+        let loader = entry.draft.get(key);
         if (!loader) {
           loader = draftBlocksLoader(api, projectId, reportId);
-          draftLoaders.current.set(reportId, loader);
+          entry.draft.set(key, loader);
         }
         return loader;
       },
       versionLoader: (reportId: string, n: number): LoadBlocks => {
-        const key = `${reportId}:${n}`;
-        let loader = versionLoaders.current.get(key);
+        const entry = loaderCacheFor(caches.current, api);
+        const key = `${projectId}\u0000${reportId}\u0000${n}`;
+        let loader = entry.version.get(key);
         if (!loader) {
           loader = versionBlocksLoader(api, projectId, reportId, n);
-          versionLoaders.current.set(key, loader);
+          entry.version.set(key, loader);
         }
         return loader;
       },

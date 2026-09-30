@@ -7,6 +7,7 @@ import { TestApiProvider } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import {
   useReportActions,
+  useReportAssetSrc,
   useReportOutline,
   useReports,
   useReportVersions,
@@ -102,6 +103,70 @@ describe("useReportActions", () => {
     });
     expect(useJobsStore.getState().jobs.rj2?.type).toBe("report_render");
   });
+
+  it("memoises blocksLoader by reportId, but never reuses a loader across a projectId change", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/sections\/summary\/blocks$/, body: { items: [], next_cursor: null } },
+    ]);
+    // `blocksLoader` is called synchronously during render here, the way a host builds a `loadBlocks`
+    // prop inline in JSX (`loadBlocks={actions.blocksLoader(reportId)}`) — a `useEffect`-based cache
+    // reset would not have run yet at this point in the same render pass that changed `projectId`, so
+    // this is the shape that actually exercises the staleness the cache must avoid.
+    const { result, rerender } = renderHook(
+      ({ projectId }) => useReportActions(projectId).blocksLoader("r1"),
+      { wrapper: wrap(api), initialProps: { projectId: "p1" } },
+    );
+    const loaderA = result.current;
+
+    rerender({ projectId: "p1" });
+    expect(result.current).toBe(loaderA);
+
+    rerender({ projectId: "p2" });
+    const loaderB = result.current;
+    expect(loaderB).not.toBe(loaderA);
+
+    await loaderB("summary", null);
+    expect(requests.at(-1)?.url).toBe("/api/v1/projects/p2/reports/r1/sections/summary/blocks?limit=50");
+  });
+
+  it("memoises versionLoader by reportId and n, but never reuses a loader across an api change", async () => {
+    const clientA = fakeClient([{ method: "GET", path: /\/versions\/2\/document$/, body: { items: [] } }]);
+    const clientB = fakeClient([
+      {
+        method: "GET",
+        path: /\/versions\/2\/document$/,
+        body: {
+          report_id: "r1",
+          version: 2,
+          generated_at: "x",
+          theme_version: "v1",
+          sections: [],
+          next_cursor: null,
+        },
+      },
+    ]);
+    // The `wrapper` component isn't re-invoked with new props by `rerender` (it only ever receives
+    // `children`), so the swap is done through a variable the Wrapper closure reads fresh each render.
+    let activeApi = clientA.api;
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <TestApiProvider api={activeApi}>{children}</TestApiProvider>;
+    }
+    // `versionLoader` is likewise called synchronously during render, not from the test body after
+    // `rerender()` returns (act() would already have flushed any reset effect by then).
+    const { result, rerender } = renderHook(() => useReportActions("p1").versionLoader("r1", 2), {
+      wrapper: Wrapper,
+    });
+    const loaderA = result.current;
+
+    activeApi = clientB.api;
+    rerender();
+    const loaderB = result.current;
+    expect(loaderB).not.toBe(loaderA);
+
+    await loaderB("summary", null);
+    expect(clientB.requests).toHaveLength(1);
+    expect(clientA.requests).toHaveLength(0);
+  });
 });
 
 describe("useSnapshotSrc", () => {
@@ -118,5 +183,18 @@ describe("useSnapshotSrc", () => {
   it("returns null without a backend (gallery)", () => {
     const { result } = renderHook(() => useSnapshotSrc("p1"));
     expect(result.current(ref)).toBeNull();
+  });
+});
+
+describe("useReportAssetSrc", () => {
+  it("points at the backend with the token", () => {
+    const { api } = fakeClient([]);
+    const { result } = renderHook(() => useReportAssetSrc("p1"), { wrapper: wrap(api) });
+    expect(result.current("asset1")).toBe("http://fake/api/v1/projects/p1/report-assets/asset1?token=t");
+  });
+
+  it("returns null without a backend (gallery)", () => {
+    const { result } = renderHook(() => useReportAssetSrc("p1"));
+    expect(result.current("asset1")).toBeNull();
   });
 });
