@@ -7,7 +7,6 @@ import { MeasurementsScreen } from "@/measurements/MeasurementsScreen";
 import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
-import { ExportScreen } from "@/screens/ExportScreen";
 import { MapEvaluateRoute } from "@/screens/MapEvaluateScreen";
 import { RunsScreen } from "@/screens/RunsScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
@@ -87,5 +86,4 @@ export const projectRoutes: RouteObject[] = [
   { path: "review", element: <ReviewRoute /> },
   { path: "analytics", element: <AnalyticsScreen /> },
   { path: "site-areas", element: <SiteAreasScreen /> },
-  { path: "export", element: <ExportScreen /> },
 ];
