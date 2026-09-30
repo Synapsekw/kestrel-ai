@@ -19,17 +19,29 @@ import itertools
 import os
 import stat
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.setup.schemas import InspectNotRecognised, InspectSkipped
+from pydantic import ValidationError
+
+from app.setup.builtins import BUILTIN_TEMPLATES
+from app.setup.classify import HEADER_IMAGE_EXTS, UNKNOWN, Classified, HeaderReader, classify, lens_of
+from app.setup.schemas import (
+    InspectBucket,
+    InspectNotRecognised,
+    InspectResult,
+    InspectSkipped,
+    SlotMatch,
+    TemplateConfig,
+)
 
 MAX_FILES = 50_000
 MAX_FOLDERS = 10_000
 HEADER_SAMPLE_PER_FOLDER = 20
 MAX_SAMPLES = 200
 MAX_NOT_RECOGNISED = 50
+MAX_BUCKETS = 500  # U1 InspectResult.buckets max_length; more would fail validation
 #: Every ctx.progress call is a websocket event; a 50,000-file walk must not send 50,000 of them.
 PROGRESS_INTERVAL_S = 0.2
 WALK_SHARE = 0.3  # of the progress bar; the header reads take the rest
@@ -206,3 +218,208 @@ def walk(
         except OSError:
             skipped.add(text, FILE_UNREADABLE)
     return out
+
+
+# ------------------------------------------------------------------------------------------ sort
+
+
+@dataclass
+class _Bucket:
+    route: str
+    match: dict
+    folder: str
+    count: int = 0
+    bytes: int = 0
+    samples: list[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
+    crs: str | None = None
+
+    def add(self, entry: FileEntry, crs: str | None) -> None:
+        self.count += 1
+        self.bytes += entry.size
+        if len(self.samples) < MAX_SAMPLES:
+            self.samples.append(entry.path.name)
+        if self.route != "images" and len(self.files) < MAX_SAMPLES:  # images import by folder
+            self.files.append(str(entry.path))
+        if self.crs is None:
+            self.crs = crs
+
+    def out(self) -> InspectBucket:
+        return InspectBucket(
+            route=self.route,
+            match=SlotMatch(**self.match),
+            slot_key=None,
+            folder=self.folder,
+            files=list(self.files),
+            count=self.count,
+            bytes=self.bytes,
+            samples=list(self.samples),
+            crs=self.crs,
+        )
+
+
+def _record(buckets: dict[tuple, _Bucket], skipped: Skipped, entry: FileEntry, c: Classified) -> None:
+    if c.route is None:
+        skipped.add(entry.path.name, c.reason or UNKNOWN)
+        return
+    folder = str(entry.path.parent)
+    key = (c.route, tuple(sorted(c.match.items())), folder)
+    bucket = buckets.get(key)
+    if bucket is None:
+        bucket = buckets[key] = _Bucket(c.route, dict(c.match), folder)
+    bucket.add(entry, c.crs)
+
+
+def sort_walked(
+    walked: Walked,
+    reader: HeaderReader,
+    skipped: Skipped,
+    *,
+    check_cancelled: Callable[[], None],
+    progress: Progress,
+) -> list[InspectBucket]:
+    """Classify every listed file into buckets keyed by (route, match, folder), in walk order.
+
+    Per folder the first HEADER_SAMPLE_PER_FOLDER JPEGs (name order) have their header read; the
+    rest are classified afterwards by name, with the thermal majority of the sampled photos that
+    carry no DJI lens suffix as the default for renamed files."""
+    buckets: dict[tuple, _Bucket] = {}
+    total, done = max(walked.files, 1), 0
+
+    def step(entry: FileEntry, c: Classified) -> None:
+        nonlocal done
+        _record(buckets, skipped, entry, c)
+        done += 1
+        progress(
+            WALK_SHARE + (1 - WALK_SHARE) * done / total,
+            f"Reading headers: {done:,} of {walked.files:,} files",
+        )
+
+    for entries in walked.folders.values():
+        sampled, deferred = 0, []
+        votes = [0, 0]  # sampled photos without a DJI lens suffix: [visual, thermal]
+        for entry in entries:
+            check_cancelled()
+            if entry.path.suffix.lower() in HEADER_IMAGE_EXTS:
+                if sampled >= HEADER_SAMPLE_PER_FOLDER:
+                    deferred.append(entry)
+                    continue
+                sampled += 1
+                c = classify(entry.path, reader)
+                if c.route == "images" and lens_of(entry.path) is None:
+                    votes[int(bool(c.match.get("thermal")))] += 1
+            else:
+                c = classify(entry.path, reader)
+            step(entry, c)
+        thermal_default = votes[1] > votes[0]
+        for entry in deferred:
+            check_cancelled()
+            step(entry, classify(entry.path, reader, read_header=False, thermal_default=thermal_default))
+    return [b.out() for b in buckets.values()]
+
+
+# ------------------------------------------------------------------ slots and the suggestion (pure)
+
+
+def _config(config) -> TemplateConfig | None:
+    if isinstance(config, TemplateConfig):
+        return config
+    try:
+        return TemplateConfig.model_validate(config)
+    except ValidationError:
+        return None
+
+
+def _fit(slot, have: dict) -> int | None:
+    """How specifically `slot` takes a bucket whose match is `have`: the number of match keys the
+    slot names, or None when it does not take it. An absent bucket `thermal` is false; a key the
+    slot does not name is a wildcard. U5's `remap.ts` implements the same rule."""
+    want = slot.match.model_dump(exclude_none=True) if slot.match is not None else {}
+    for key, value in want.items():
+        if have.get(key, False if key == "thermal" else None) != value:
+            return None
+    return len(want)
+
+
+def assign_slots(buckets: Sequence[InspectBucket], config) -> list[InspectBucket]:
+    """Each bucket's `slot_key` in `config` (a TemplateConfig or its dict): same route, the most
+    specific fitting slot, the earlier slot on a tie; None when no slot fits or the config is
+    invalid. One slot may take several buckets."""
+    cfg = _config(config)
+    slots = cfg.slots if cfg is not None else []
+    placed = []
+    for bucket in buckets:
+        have = bucket.match.model_dump(exclude_none=True)
+        best, best_score = None, -1
+        for slot in slots:
+            if slot.route != bucket.route:
+                continue
+            score = _fit(slot, have)
+            if score is not None and score > best_score:
+                best, best_score = slot.key, score
+        placed.append(bucket.model_copy(update={"slot_key": best}))
+    return placed
+
+
+def suggest_template(buckets: Sequence[InspectBucket], templates: Sequence[Mapping]) -> str | None:
+    """The template (`{"id", "config"}`) whose required slots the buckets fill most, then whose
+    slots they fill most; the earlier one on a tie; None when none has a required slot filled."""
+    best, best_score = None, (0, 0)
+    for template in templates:
+        cfg = _config(template["config"])
+        if cfg is None:
+            continue
+        filled = {b.slot_key for b in assign_slots(buckets, cfg) if b.slot_key}
+        required = sum(1 for s in cfg.slots if s.required and s.key in filled)
+        score = (required, len(filled))
+        if required > 0 and score > best_score:
+            best, best_score = template["id"], score
+    return best
+
+
+# ----------------------------------------------------------------------------------- whole run
+
+
+def _summary(files: int, groups: int, walk_truncated: bool, capped: bool) -> str:
+    text = f"Sorted {files:,} files into {groups} group(s)"
+    if walk_truncated:
+        text += f"; stopped at {MAX_FILES:,} files"
+    if capped:
+        text += f"; kept the first {MAX_BUCKETS} groups"
+    return text
+
+
+def inspect_paths(
+    paths: Sequence[str],
+    reader: HeaderReader,
+    *,
+    check_cancelled: Callable[[], None],
+    progress: Progress,
+    template_config=None,
+) -> InspectResult:
+    """Walk, sort, assign slots (when a template config is given) and suggest a built-in."""
+    report = ThrottledProgress(progress)
+    skipped = Skipped()
+    walked = walk(paths, skipped, check_cancelled=check_cancelled, progress=report)
+    buckets = sort_walked(walked, reader, skipped, check_cancelled=check_cancelled, progress=report)
+    capped = len(buckets) > MAX_BUCKETS
+    buckets = buckets[:MAX_BUCKETS]
+    if template_config is not None:
+        buckets = assign_slots(buckets, template_config)
+    result = InspectResult(
+        buckets=buckets,
+        not_recognised=skipped.out(),
+        suggested_template_id=suggest_template(buckets, BUILTIN_TEMPLATES),
+        truncated=walked.truncated or capped,
+    )
+    report(1.0, _summary(walked.files, len(buckets), walked.truncated, capped), force=True)
+    return result
+
+
+def dump_result(result: InspectResult) -> dict:
+    """`Job.result`: JSON-safe, and a bucket's `match` names only the keys it sets (SlotMatch has
+    no nullable property, so `{"raster": null}` would contradict the generated client's types)."""
+    data = result.model_dump(mode="json")
+    for bucket in data["buckets"]:
+        bucket["match"] = {k: v for k, v in bucket["match"].items() if v is not None}
+    return data
