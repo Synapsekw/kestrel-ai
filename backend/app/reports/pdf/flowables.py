@@ -1,7 +1,7 @@
 """Block -> flowables (spec 2026-09-26-reports §10.2). Dispatch is on `block.kind`, the discriminator
 R0 pins; every handler returns a list of flowables and never raises on data: a missing snapshot is a
 placeholder, empty blocks print nothing (a chart prints "No data"), long cells are cut. The only
-exception that escapes is JobCancelled. `finding` blocks are Task 11's (finding pages)."""
+exception that escapes is JobCancelled. A `finding` is one page (Task 11), continued when it runs over."""
 
 from __future__ import annotations
 
@@ -16,8 +16,17 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import Flowable, PageBreakIfNotEmpty, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Flowable,
+    KeepTogether,
+    PageBreakIfNotEmpty,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
+from app.findings.numbers import format_number
 from app.jobs.cancellation import JobCancelled
 from app.reports.pdf import charts, primitives
 from app.reports.pdf.flowables_text import MAX_CELL_CHARS, text
@@ -122,24 +131,35 @@ def _figure(block: Any, ctx: RenderContext, max_width: float | None = None) -> l
     return [primitives.figure_flowable(path, w, h, block.caption or "", ctx.styles, reason=reason)]
 
 
+def _figure_grid(figs: list, ctx: RenderContext, per_row: int, gap: float = 4 * mm) -> list:
+    """Figures in rows of `per_row` equal columns, one atomic Table per row (never a KeepTogether in a
+    cell, ruling P1); a short last row is padded with blank cells so every column keeps its width."""
+    if not figs:
+        return []
+    col = ctx.frame_width / per_row
+    out: list = []
+    for i in range(0, len(figs), per_row):
+        row = figs[i : i + per_row]
+        cells = [_figure(f, ctx, max_width=col - gap) for f in row] + [""] * (per_row - len(row))
+        t = Table([cells], colWidths=[col] * per_row, hAlign="LEFT")
+        t.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        out.append(t)
+    return out
+
+
 def _figure_row(block: Any, ctx: RenderContext) -> list:
     figs = list(block.figures)
     if not figs:  # R0 requires one; kept so a hand-built block cannot divide by zero
         return []
-    col = ctx.frame_width / len(figs)
-    t = Table(
-        [[_figure(f, ctx, max_width=col - 4 * mm) for f in figs]], colWidths=[col] * len(figs), hAlign="LEFT"
-    )
-    t.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    return [t, Spacer(1, 3 * mm)]
+    return [*_figure_grid(figs, ctx, len(figs)), Spacer(1, 3 * mm)]
 
 
 def kv_table(rows: Any, ctx: RenderContext) -> list:
@@ -312,6 +332,62 @@ def _cover(block: Any, ctx: RenderContext) -> list:
     return out
 
 
+def _finding_band(block: Any, ctx: RenderContext) -> Table:
+    st, head = ctx.styles, block.head
+    label = f"{format_number(block.number)} · {head.type_name}"
+    graded = bool(head.severity_name)
+    tag = primitives.SeverityTag(
+        head.severity_name if graded else "Ungraded", head.severity_colour if graded else None, st
+    )
+    fw = ctx.frame_width
+    band = Table(
+        [[Paragraph(text(label), st.h3), tag, Paragraph(text(str(head.status).capitalize()), st.cell_mono)]],
+        colWidths=[fw - 70 * mm, 45 * mm, 25 * mm],
+        hAlign="LEFT",
+    )
+    band.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colour("head_fill")),
+                ("LINEBEFORE", (0, 0), (0, 0), 3, safe_colour(head.type_colour, "violet_print")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (0, 0), 8),
+            ]
+        )
+    )
+    # document.py reads these in afterFlowable: the "(cont.)" header and the level-1 bookmark.
+    band._kestrel_finding = label
+    band._kestrel_bookmark = (f"f-{block.finding_id}", label, 1)
+    return band
+
+
+def _finding(block: Any, ctx: RenderContext) -> list:
+    """Plan ruling 6: head, figures, kv, note and photos are one KeepTogether; comments flow after it.
+    Every piece in the KeepTogether is splittable or shorter than a frame (figures are capped at 0.8 of
+    the frame height, the note is Paragraphs), so an over-tall finding flows on instead of raising."""
+    st = ctx.styles
+    figs = list(block.figures)
+    body: list = [_finding_band(block, ctx), Spacer(1, 3 * mm)]
+    if figs:
+        body += _figure(figs[0], ctx)
+    body += _figure_grid(figs[1:], ctx, 2)
+    body += [Spacer(1, 3 * mm), *kv_table(block.kv, ctx)]
+    if block.note:
+        body.append(Paragraph("Note", st.cell_label))
+        body += [Paragraph(text(p.strip()), st.note) for p in re.split(r"\n\s*\n", block.note) if p.strip()]
+    if block.photos:
+        body += [Paragraph("Photos", st.cell_label), *_figure_grid(list(block.photos), ctx, 4, 3 * mm)]
+    comments: list = []
+    if block.comments:
+        comments.append(Paragraph("Comments", st.cell_label))
+        for c in block.comments:
+            meta = f"<b>{text(c.author)}</b> · {c.created_at.strftime('%Y-%m-%d')}"
+            comments += [Paragraph(meta, st.comment_meta), Paragraph(text(c.text), st.comment)]
+    return [KeepTogether(body), *comments, FindingEnd(), PageBreakIfNotEmpty()]
+
+
 HANDLERS: dict[str, Callable[[Any, RenderContext], list]] = {
     "cover": _cover,
     "heading": _heading,
@@ -325,6 +401,7 @@ HANDLERS: dict[str, Callable[[Any, RenderContext], list]] = {
     "page_break": _page_break,
     "volume": _volume,
 }
+HANDLERS["finding"] = _finding
 
 
 def block_flowables(block: Any, ctx: RenderContext) -> list:
