@@ -64,6 +64,27 @@ def test_source_version_when_the_measurement_is_gone_says_so(handle, cloud_id):
     assert sv == MISSING + "The measurement no longer exists"
 
 
+def test_render_when_the_finding_is_gone_raises_the_gone_reason(handle, crack, cloud_id):
+    """render() shares `_gone_reason` with source_version (Ruling A1): the subject deleted between
+    compose and render prints "no longer exists", not the generic "no view saved" wording."""
+    f = cloud_finding(handle, crack["id"], cloud_id)
+    from app.findings import service
+
+    service.delete_finding(handle, f.id)
+    with pytest.raises(LookupError, match="The finding no longer exists"):
+        view3d.render(handle, _spec("finding", f.id, cloud_id))
+
+
+def test_render_when_the_measurement_is_gone_raises_the_gone_reason(handle, cloud_id):
+    from app.db.models import CloudMeasurement
+
+    mid = cloud_measurement(handle, cloud_id)
+    with handle.session() as s:
+        s.delete(s.get(CloudMeasurement, mid))
+    with pytest.raises(LookupError, match="The measurement no longer exists"):
+        view3d.render(handle, _spec("cloud_measurement", mid, cloud_id))
+
+
 def test_the_key_changes_when_the_view_is_recaptured(handle, crack, cloud_id):
     from cloud_views import jpeg
 

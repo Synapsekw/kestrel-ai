@@ -160,7 +160,7 @@ def _placeholder_figure(ctx: ComposeContext, spec, reason: str, *, prefix: str) 
 
 
 def _captured(when) -> str:
-    return f"{when:%d %b %Y}"
+    return blocks.fmt_date(when)
 
 
 def warnings(ctx: ComposeContext) -> None:
@@ -184,9 +184,6 @@ def fingerprint(ctx: ComposeContext) -> str:
     return h.hexdigest()
 
 
-GONE = "The measurement no longer exists"
-
-
 def measurement_figure(ctx: ComposeContext, row: MeasurementItem) -> Figure | None:
     """The cloud measurement's stored view, the hillshade plan of a cloud DSM covering its centroid,
     or a placeholder (spec §9.4). `row` is a MeasurementItem with kind "cloud"; always returns a
@@ -203,7 +200,7 @@ def measurement_figure(ctx: ComposeContext, row: MeasurementItem) -> Figure | No
         m = s.get(CloudMeasurement, row.id)
         found = None if m is None else (m.point_cloud_id, m.kind, list(m.points or []))
     if found is None:
-        return _placeholder_figure(ctx, spec, GONE, prefix=prefix)
+        return _placeholder_figure(ctx, spec, view3d.GONE["cloud_measurement"], prefix=prefix)
     cloud_id, kind, points = found
     link = deep_link(ctx.handle.id, cloud_id)
     view = views.stored_view(ctx.handle, "cloud_measurement", row.id)

@@ -14,6 +14,7 @@ from reports_cloud_rows import (
 )
 
 from app.pointclouds import views
+from app.reports import blocks
 from app.reports.figures import cloud
 from app.reports.snapshots.keys import snapshot_key
 
@@ -43,7 +44,7 @@ def test_a_fresh_view_is_one_view3d_figure_and_no_warning(handle, crack, cloud_i
     assert (fig.width_mm, fig.height_mm) == cloud.VIEW_MM
     assert fig.snapshot.missing_reason is None
     assert fig.snapshot.key == snapshot_key(handle, spec)
-    assert fig.caption == f"3D view, captured {stored.captured_at:%d %b %Y}"
+    assert fig.caption == f"3D view, captured {blocks.fmt_date(stored.captured_at)}"
     assert _codes(ctx) == {}
 
 

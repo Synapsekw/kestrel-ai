@@ -14,6 +14,7 @@ from reports_cloud_rows import (
     store_measurement_view,
 )
 
+from app.reports import blocks
 from app.reports.figures import cloud
 
 
@@ -38,7 +39,7 @@ def test_a_fresh_measurement_view(handle, cloud_id):
         mid,
         cloud_id,
     )
-    assert fig.caption == f"Stack height: 3D view, captured {stored.captured_at:%d %b %Y}"
+    assert fig.caption == f"Stack height: 3D view, captured {blocks.fmt_date(stored.captured_at)}"
     assert _codes(ctx) == {}
 
 

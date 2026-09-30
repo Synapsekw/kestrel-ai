@@ -76,3 +76,19 @@ def test_the_finding_pages_etag_moves_on_capture_and_on_recapture(handle, crack,
     store_finding_view(handle, f.id, data=png(colour=(200, 150, 90)))
     after_recapture = _finding_pages_etag(handle, cfg)
     assert after_recapture != after_capture
+
+
+def test_without_the_cloud_snapshot_kind_there_are_no_view3d_warnings_or_etag_movement(
+    handle, crack, cloud_id
+):
+    """finding_pages.options.snapshots=["image"] (no "cloud") means finding_pages never gates
+    cloud.warnings/cloud.fingerprint in (Ruling A5/A6): a missing view raises no view3d_* warning,
+    and capturing one does not move the section etag."""
+    cfg = config(sections=("finding_pages",), options={"finding_pages": {"snapshots": ["image"]}})
+    f = cloud_finding(handle, crack["id"], cloud_id)  # no captured view: would normally warn
+    outline = build_outline(handle, "r-test", cfg, generated_at=GENERATED_AT)
+    assert not any(w.code.startswith("view3d_") for w in outline.warnings)
+    before = _finding_pages_etag(handle, cfg)
+    store_finding_view(handle, f.id)
+    after = _finding_pages_etag(handle, cfg)
+    assert after == before
