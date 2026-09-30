@@ -84,10 +84,11 @@ def test_kind_is_defect_or_object(cat):
         s.flush()
 
 
-def test_the_catalogue_history_has_one_head_at_0001():
+def test_the_catalogue_history_has_one_head_at_0002():
+    """0002 is Reports' `report_template` (plan 2026-09-30-reports-r0)."""
     cfg = Config(str(MIGRATIONS / "alembic.ini"))
     cfg.set_main_option("script_location", str(MIGRATIONS))
-    assert ScriptDirectory.from_config(cfg).get_heads() == ["0001"]
+    assert ScriptDirectory.from_config(cfg).get_heads() == ["0002"]
 
 
 def test_the_app_opens_the_catalogue(client):
