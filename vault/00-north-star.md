@@ -93,7 +93,7 @@ Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight:** nothing. CI on `main` is green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).
+**In flight:** nothing. CI on `main` is green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
 **Next:** Reports (R): plans from `docs/superpowers/specs/2026-09-26-reports-design.md`, then build. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
 
