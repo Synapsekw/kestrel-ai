@@ -6,16 +6,12 @@ Keeps R0's `router = APIRouter(prefix="/projects/{projectId}")` line; decorator 
 relative to that prefix.
 """
 
-from typing import Any
-
 from fastapi import APIRouter, Body, Depends, Query, Request, Response
-from pydantic import ValidationError
 
-from app.errors import AppError
 from app.pagination import MAX_LIMIT
 from app.projects.service import ProjectHandle, get_project
 from app.reports import service
-from app.reports.config_write import invalid, parse_config, parse_title, validation_errors
+from app.reports.config_write import TITLE_MAX, parse_body
 from app.reports.schemas import Report, ReportCreate, ReportPage, ReportPatch
 
 router = APIRouter(prefix="/projects/{projectId}")
@@ -24,18 +20,6 @@ CODE = service.CODE
 
 def _catalogue(request: Request):
     return getattr(request.app.state, "catalogue", None)
-
-
-def _dedup(errors: list[dict]) -> list[dict]:
-    """Keep the first message for a path; drop any later one for the same path (improves on the
-    templates route, which can list the same path twice with two messages)."""
-    seen: set[str] = set()
-    out: list[dict] = []
-    for e in errors:
-        if e["path"] not in seen:
-            seen.add(e["path"])
-            out.append(e)
-    return out
 
 
 @router.get("/reports", response_model=ReportPage)
@@ -53,22 +37,18 @@ def list_reports(
 def create_report(
     request: Request, body: dict = Body(...), handle: ProjectHandle = Depends(get_project)
 ) -> Report:
-    errors: list[dict] = []
-    try:
-        ReportCreate.model_validate(body)
-    except ValidationError as e:
-        errors += validation_errors(e)
-
-    title, errs = parse_title(body.get("title"))
-    errors += errs
-    template_id = body.get("template_id")
-    if template_id is not None and not isinstance(template_id, str):
-        errors.append({"path": "template_id", "message": "Give a template id."})
-
-    errors = _dedup(errors)
-    if errors:
-        raise invalid(CODE, "The report is not valid.", errors)
-    return service.create_report(handle, _catalogue(request), title=title, template_id=template_id)
+    f = parse_body(
+        ReportCreate,
+        body,
+        code=CODE,
+        message="The report is not valid.",
+        text_field="title",
+        text_max=TITLE_MAX,
+        partial=False,
+    )
+    return service.create_report(
+        handle, _catalogue(request), title=f["title"], template_id=f.get("template_id")
+    )
 
 
 @router.get("/reports/{reportId}", response_model=Report)
@@ -84,25 +64,15 @@ def patch_report(
 ) -> Report:
     service.get_report(handle, reportId)  # 404 before 422 for an unknown report
 
-    errors: list[dict] = []
-    try:
-        ReportPatch.model_validate(body)
-    except ValidationError as e:
-        errors += validation_errors(e)
-
-    fields: dict[str, Any] = {}
-    if "title" in body:
-        fields["title"], errs = parse_title(body["title"])
-        errors += errs
-    if "config" in body:
-        try:
-            fields["config"] = parse_config(body["config"], code=CODE)
-        except AppError as e:  # its errors already cover the config schema and config_problems
-            errors += e.details.get("errors", [])
-
-    errors = _dedup(errors)
-    if errors:
-        raise invalid(CODE, "The report settings are not valid.", errors)
+    fields = parse_body(
+        ReportPatch,
+        body,
+        code=CODE,
+        message="The report settings are not valid.",
+        text_field="title",
+        text_max=TITLE_MAX,
+        partial=True,
+    )
     return service.patch_report(handle, reportId, **fields)
 
 

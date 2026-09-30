@@ -126,3 +126,41 @@ def test_get_report_asset_after_file_deleted_is_404(client, project_id, handle, 
     (handle.folder / body["path"]).unlink()
     r = client.get(ASSET_URL.format(pid=project_id, aid=body["id"]))
     assert (r.status_code, r.json()["error"]["code"]) == (404, "not_found")
+
+
+def test_a_camera_mpo_jpeg_is_accepted(client, project_id, tmp_path):
+    src = tmp_path / "phone.jpg"
+    Image.new("RGB", (40, 20), "red").save(
+        src, "MPO", save_all=True, append_images=[Image.new("RGB", (40, 20), "blue")]
+    )
+    with Image.open(src) as im:
+        assert im.format == "MPO"  # what Pillow calls a phone/camera JPEG with a second frame
+    r = _post(client, project_id, src)
+    assert r.status_code == 201, r.text
+    assert (r.json()["width"], r.json()["height"]) == (40, 20)
+
+
+def test_a_source_over_the_pixel_budget_is_refused_before_decoding(client, project_id, tmp_path, monkeypatch):
+    src = tmp_path / "wide.png"
+    Image.new("RGB", (100, 100)).save(src)
+    monkeypatch.setattr(assets, "MAX_SOURCE_PIXELS", 9_999)
+    r = _post(client, project_id, src)
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "asset_invalid")
+    assert r.json()["error"]["details"]["reason"] == "too_large"
+
+
+def test_a_big_jpeg_is_judged_at_its_draft_size(client, project_id, make_jpeg, tmp_path, monkeypatch):
+    src = make_jpeg(tmp_path / "big.jpg", 4800, 2400)  # draft: 1/2 per side, 2400 x 1200
+    monkeypatch.setattr(assets, "MAX_SOURCE_PIXELS", 5_000_000)  # < 11.5 MP full, > 2.9 MP draft
+    r = _post(client, project_id, src)
+    assert r.status_code == 201, r.text
+
+
+def test_reimport_does_not_rewrite_an_existing_file(client, project_id, tmp_path, monkeypatch):
+    src = tmp_path / "a.png"
+    Image.new("RGB", (50, 50), "#0f8f76").save(src)
+    first = _post(client, project_id, src).json()
+    writes = []
+    monkeypatch.setattr(assets, "_write", lambda dest, data: writes.append(dest))
+    second = _post(client, project_id, src)
+    assert second.status_code == 201 and second.json()["id"] == first["id"] and writes == []

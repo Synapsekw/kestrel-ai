@@ -3,16 +3,16 @@
 
 Every refusal is one 422 whose `details.errors` lists `{path, message}` per invalid field, `path`
 dotted from the request body root (`config.filters.date.to`). Schema errors (pydantic) and the
-semantic rules below share that shape, so the builder can mark each field. `validation_errors` is
-the same shape for a whole request body validated against one of R0's request models (plan R1
-Ruling P2), used by later tasks' routes.
+semantic rules below share that shape, so the builder can mark each field. `parse_body` is the one
+place a report or template request body is validated against R0's request models (plan R1 Ruling
+P2), with one entry per invalid path; both CRUD routes use it.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.errors import AppError
 from app.reports.schemas import ReportConfig
@@ -115,12 +115,13 @@ def parse_title(raw: Any, *, path: str = "title", max_len: int = TITLE_MAX) -> t
 def portable_config(config: ReportConfig) -> ReportConfig:
     """What a template may keep: no data-item ids, no project logo, no fixed report date (§6.2).
 
-    Never mutates `config` (it may be a shared BUILTIN_TEMPLATES instance) — `deep=True` copies the
-    nested models too, not just the top-level replacement.
+    Never mutates `config` (it may be a shared BUILTIN_TEMPLATES instance) and shares no list or
+    nested model with it: one deep copy up front, then the replacements on that copy.
     """
-    filters = config.filters.model_copy(update={"data_item_ids": None})
-    cover = config.cover.model_copy(update={"logo_asset_id": None, "report_date": None})
-    return config.model_copy(update={"filters": filters, "cover": cover}, deep=True)
+    out = config.model_copy(deep=True)
+    filters = out.filters.model_copy(update={"data_item_ids": None})
+    cover = out.cover.model_copy(update={"logo_asset_id": None, "report_date": None})
+    return out.model_copy(update={"filters": filters, "cover": cover})
 
 
 def config_for_project(config: ReportConfig, *, title: str) -> ReportConfig:
@@ -130,3 +131,77 @@ def config_for_project(config: ReportConfig, *, title: str) -> ReportConfig:
     """
     out = portable_config(config)
     return out.model_copy(update={"cover": out.cover.model_copy(update={"title": title})})
+
+
+def parse_body(
+    model: type[BaseModel],
+    raw: dict[str, Any],
+    *,
+    code: str,
+    message: str,
+    text_field: str,
+    text_max: int,
+    partial: bool,
+) -> dict[str, Any]:
+    """The fields `raw` sets, validated against R0's request `model`, or ONE 422 `code` listing
+    exactly one `{path, message}` per invalid path (plan R1 Ruling P2; final review #1).
+
+    - The whole body is checked against `model`, so unknown keys are refused at their own path.
+    - `text_field` (a report's `title`, a template's `name`) is judged only by `parse_title` on the
+      stripped value: pydantic's own errors on that field are dropped, and the model sees the
+      stripped text, so a padded value whose stripped length fits is accepted (and returned
+      stripped). It is required unless `partial`; in a PATCH, a present `null` is refused too.
+    - `config` is validated once (`ReportConfig`), and its `config_problems` join the same 422.
+    - Where a path has both a pydantic and a semantic message, the semantic one is kept.
+
+    Returns `{field: value}` for each field present in `raw`: the text stripped, `config` as a
+    `ReportConfig`, the rest as the model parsed them.
+    """
+    body = dict(raw)
+    semantic: list[dict] = []
+
+    if not partial or text_field in raw:
+        text, errs = parse_title(raw.get(text_field), path=text_field, max_len=text_max)
+        semantic += errs
+        if text is not None:
+            body[text_field] = text
+
+    config: ReportConfig | None = None
+    config_bad = False
+    if "config" in raw:  # a present null is refused, as before (a report always has a config)
+        try:
+            config = ReportConfig.model_validate(raw["config"])
+        except ValidationError as e:
+            config_bad = True
+            semantic += validation_errors(e, "config")
+        else:
+            body["config"] = config  # a model instance: not validated again below
+            semantic += config_problems(config)
+
+    schema: list[dict] = []
+    parsed: BaseModel | None = None
+    try:
+        parsed = model.model_validate(body)
+    except ValidationError as e:
+        for err in e.errors():
+            head = str(err["loc"][0]) if err["loc"] else ""
+            if head == text_field or (head == "config" and config_bad):
+                continue  # judged above
+            schema.append({"path": _join("", err["loc"]), "message": err["msg"]})
+
+    merged: dict[str, str] = {}
+    for er in schema:  # the first pydantic message per path
+        merged.setdefault(er["path"], er["message"])
+    seen: set[str] = set()
+    for er in semantic:  # the first semantic message per path, replacing pydantic's
+        if er["path"] not in seen:
+            seen.add(er["path"])
+            merged[er["path"]] = er["message"]
+    if merged:
+        raise invalid(code, message, [{"path": p, "message": m} for p, m in merged.items()])
+
+    assert parsed is not None
+    out = {k: getattr(parsed, k) for k in raw if k in type(parsed).model_fields}
+    if config is not None:
+        out["config"] = config
+    return out

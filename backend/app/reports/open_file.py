@@ -33,4 +33,9 @@ def open_in_default_app(handle: ProjectHandle, relative_path: str) -> None:
         )
     if not target.is_file():
         raise not_found("path", relative_path)
-    start(target)
+    try:
+        start(target)
+    except OSError as e:  # no app registered for the suffix, access denied, ... (final review #3)
+        raise AppError(
+            "conflict", f"Windows could not open {target.name}: no app is set up to open it here", 409
+        ) from e

@@ -6,11 +6,9 @@ No prefix: the paths are `/report-templates...`, outside any project (R0's stub 
 from typing import Any
 
 from fastapi import APIRouter, Body, Query, Request, Response
-from pydantic import ValidationError
 
-from app.errors import AppError
 from app.pagination import MAX_LIMIT
-from app.reports.config_write import invalid, parse_config, parse_title, validation_errors
+from app.reports.config_write import parse_body
 from app.reports.schemas import (
     ReportTemplate,
     ReportTemplateCreate,
@@ -29,44 +27,17 @@ def _catalogue(request: Request):
 
 
 def _parse(body: dict[str, Any], *, partial: bool) -> dict[str, Any]:
-    """The template fields of `body`, or one 422 listing every invalid field (plan R1 Ruling P2).
-
-    `body` is validated against R0's `ReportTemplateCreate`/`ReportTemplatePatch` (extra keys
-    forbidden, name and description bounds, config shape); that plus the semantic checks the
-    schema cannot state - a blank name after stripping, and `config_problems` (plan R1 Ruling 3),
-    surfaced here through `parse_config` - land in the same 422. Duplicate `(path, message)`
-    entries (the same config field flagged by both the whole-body check and `parse_config`'s own
-    re-validation) collapse to one.
-    """
-    model_cls = ReportTemplatePatch if partial else ReportTemplateCreate
-    errors: list[dict] = []
-    try:
-        model_cls.model_validate(body)
-    except ValidationError as e:
-        errors += validation_errors(e)
-
-    out: dict[str, Any] = {}
-    if not partial or "name" in body:
-        out["name"], errs = parse_title(body.get("name"), path="name", max_len=NAME_MAX)
-        errors += errs
-    if "description" in body:
-        out["description"] = body["description"]
-    if not partial or "config" in body:
-        try:
-            out["config"] = parse_config(body.get("config"), code=CODE)
-        except AppError as e:  # its errors already cover the config schema and config_problems
-            errors += e.details.get("errors", [])
-
-    if errors:
-        seen: set[tuple[str, str]] = set()
-        deduped: list[dict] = []
-        for er in errors:
-            key = (er["path"], er["message"])
-            if key not in seen:
-                seen.add(key)
-                deduped.append(er)
-        raise invalid(CODE, "The template is not valid.", deduped)
-    return out
+    """The template fields of `body`, or one 422 with one entry per invalid path (plan R1 Ruling
+    P2, final review #1): the shared `parse_body` over R0's `ReportTemplateCreate`/`Patch`."""
+    return parse_body(
+        ReportTemplatePatch if partial else ReportTemplateCreate,
+        body,
+        code=CODE,
+        message="The template is not valid.",
+        text_field="name",
+        text_max=NAME_MAX,
+        partial=partial,
+    )
 
 
 @router.get("/report-templates", response_model=ReportTemplatePage)
@@ -94,8 +65,8 @@ def get_report_template(templateId: str, request: Request) -> ReportTemplate:  #
 
 @router.patch("/report-templates/{templateId}", response_model=ReportTemplate)
 def patch_report_template(templateId: str, request: Request, body: dict = Body(...)) -> ReportTemplate:  # noqa: N803
-    if templateId in service.BUILTIN_IDS:
-        raise service.builtin_template(templateId)
+    # 409 built-in, then 503 catalogue down, then 404 unknown id, THEN 422 (final review #2)
+    service.require_custom(_catalogue(request), templateId)
     f = _parse(body, partial=True)
     return service.update_template(_catalogue(request), templateId, **f)
 

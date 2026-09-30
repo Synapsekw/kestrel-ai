@@ -145,6 +145,8 @@ def test_duplicate_copies_config_not_versions(handle, cat):
     assert copy.config == r.config and copy.last_version is None and copy.archived is False
 
 
-def test_duplicate_truncates_a_long_title(handle, cat):
+def test_duplicate_truncates_a_long_title_and_keeps_the_copy_suffix(handle, cat):
     r = service.create_report(handle, cat, title="x" * 200)
-    assert len(service.duplicate_report(handle, r.id).title) == 200
+    title = service.duplicate_report(handle, r.id).title
+    assert len(title) == 200 and title.endswith(" (copy)")
+    assert title == "x" * (200 - len(" (copy)")) + " (copy)"

@@ -26,7 +26,10 @@ from app.reports.schemas import ReportAsset
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_SIDE = 1200
-FORMATS = frozenset({"JPEG", "PNG", "WEBP"})
+# MPO is what Pillow calls a phone/camera JPEG carrying a second frame; it decodes as a JPEG.
+FORMATS = frozenset({"JPEG", "MPO", "PNG", "WEBP"})
+# Pixels a source may have at decode time (after a JPEG's draft reduction): ~200 MB as RGBA.
+MAX_SOURCE_PIXELS = 50_000_000
 ASSETS_DIR = "reports/assets"
 
 
@@ -59,6 +62,13 @@ def _encode(src: Path) -> tuple[bytes, int, int]:
                     "not_an_image", f"{src.name} is a {opened.format} image; use PNG, JPEG or WebP."
                 )
             opened.draft("RGB", (MAX_SIDE, MAX_SIDE))  # JPEG: decode reduced; a no-op otherwise
+            w, h = opened.size
+            if w * h > MAX_SOURCE_PIXELS:  # judged before any decode (bounded read)
+                raise _invalid(
+                    "too_large",
+                    f"{src.name} is {w} x {h} pixels; the limit is {MAX_SOURCE_PIXELS:,} pixels.",
+                    pixels=w * h,
+                )
             im = ImageOps.exif_transpose(opened)
             im = im.convert("RGBA" if _has_alpha(im) else "RGB")
             im.thumbnail((MAX_SIDE, MAX_SIDE), PILImage.Resampling.LANCZOS)
@@ -90,7 +100,9 @@ def import_logo(handle: ProjectHandle, source: str) -> ReportAsset:
     rel = f"{ASSETS_DIR}/logo-{sha[:8]}.png"
     with handle.session() as s:
         row = s.execute(select(AssetRow).where(AssetRow.sha256 == sha)).scalars().first()
-        _write(handle.folder / (row.path if row is not None else rel), data)
+        dest = handle.folder / (row.path if row is not None else rel)
+        if row is None or not dest.is_file():  # an existing file is never rewritten (a reader may
+            _write(dest, data)  # hold it open: os.replace fails on Windows); a vanished one heals
         if row is None:
             row = AssetRow(id=new_id(), kind="logo", path=rel, sha256=sha, width=width, height=height)
             s.add(row)

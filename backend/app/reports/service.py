@@ -184,10 +184,13 @@ def delete_report(handle: ProjectHandle, report_id: str) -> str:
         return "deleted"
 
 
+COPY_SUFFIX = " (copy)"
+
+
 def _copy_title(title: str) -> str:
-    """`"<title> (copy)"` when it fits in TITLE_MAX, else the title itself (Ruling 6)."""
-    copy = f"{title} (copy)"
-    return copy if len(copy) <= TITLE_MAX else title[:TITLE_MAX]
+    """`"<title> (copy)"`, the title cut short when that would pass TITLE_MAX (Ruling 6; final
+    review #8), so a copy always reads as one."""
+    return title[: TITLE_MAX - len(COPY_SUFFIX)] + COPY_SUFFIX
 
 
 def duplicate_report(handle: ProjectHandle, report_id: str) -> Report:

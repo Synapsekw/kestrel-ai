@@ -58,3 +58,14 @@ def test_missing_file_is_404(client, project_id, opened):
 
 def test_unknown_project_is_404(client, opened):
     assert _post(client, "nope", "x.pdf").status_code == 404
+
+
+def test_no_app_for_the_file_is_409_not_500(client, project_id, handle, monkeypatch):
+    def no_app(path):
+        raise OSError(1155, "No application is associated with the specified file")
+
+    monkeypatch.setattr("app.reports.open_file.start", no_app)
+    (handle.folder / "notes.txt").write_text("x")
+    r = _post(client, project_id, "notes.txt")
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "conflict")
+    assert "notes.txt" in r.json()["error"]["message"]

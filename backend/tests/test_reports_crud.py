@@ -108,3 +108,58 @@ def test_create_from_builtin_without_catalogue(client, project_id):
     assert create_report(client, project_id)["template_id"] is None
     resp = client.post(reports_url(project_id), json={"title": "x", "template_id": tpl["id"]})
     assert (resp.status_code, resp.json()["error"]["code"]) == (503, "catalogue_unavailable")
+
+
+def _errors(r):
+    return r.json()["error"]["details"]["errors"]
+
+
+def test_blank_title_is_one_entry_on_create_and_patch(client, project_id):
+    rep = create_report(client, project_id)
+    url = f"{reports_url(project_id)}/{rep['id']}"
+    for blank in ("", "   "):
+        for r in (
+            client.post(reports_url(project_id), json={"title": blank}),
+            client.patch(url, json={"title": blank}),
+        ):
+            assert (r.status_code, r.json()["error"]["code"]) == (422, "invalid_report")
+            assert _errors(r) == [{"path": "title", "message": "Give a name."}]
+
+
+def test_long_title_is_one_entry_and_a_padded_fitting_title_is_stored_stripped(client, project_id):
+    rep = create_report(client, project_id)
+    url = f"{reports_url(project_id)}/{rep['id']}"
+    long = "x" * 201
+    for r in (
+        client.post(reports_url(project_id), json={"title": long}),
+        client.patch(url, json={"title": long}),
+    ):
+        assert r.status_code == 422
+        assert _errors(r) == [{"path": "title", "message": "Keep it to 200 characters."}]
+    padded = "  " + "y" * 200 + "  "
+    r = client.post(reports_url(project_id), json={"title": padded})
+    assert r.status_code == 201, r.text
+    assert r.json()["title"] == "y" * 200
+    r = client.patch(url, json={"title": padded})
+    assert r.status_code == 200, r.text
+    assert r.json()["title"] == "y" * 200
+
+
+def test_unknown_key_is_refused_with_its_path(client, project_id):
+    rep = create_report(client, project_id)
+    url = f"{reports_url(project_id)}/{rep['id']}"
+    for r in (
+        client.post(reports_url(project_id), json={"title": "A", "bogus": 1}),
+        client.patch(url, json={"bogus": 1}),
+    ):
+        assert (r.status_code, r.json()["error"]["code"]) == (422, "invalid_report")
+        assert [e["path"] for e in _errors(r)] == ["bogus"]
+
+
+def test_patch_lists_one_entry_per_path(client, project_id):
+    rep = create_report(client, project_id)
+    raw = config_json()
+    raw["filters"]["statuses"] = ["open", "open"]
+    r = client.patch(f"{reports_url(project_id)}/{rep['id']}", json={"title": "", "config": raw})
+    paths = [e["path"] for e in _errors(r)]
+    assert len(paths) == len(set(paths)) and set(paths) == {"title", "config.filters.statuses.1"}

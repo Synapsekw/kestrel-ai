@@ -60,9 +60,13 @@ def list_templates(
     q = select(TemplateRow).order_by(_RANK, TemplateRow.name, TemplateRow.id)
     c = decode_cursor(cursor, "r", "n", "id")
     if c:
-        q = q.where(
-            tuple_(_RANK, TemplateRow.name, TemplateRow.id) > tuple_(int(c["r"]), str(c["n"]), str(c["id"]))
-        )
+        try:  # keys present but values of the wrong type: the same 422 as a malformed cursor
+            key = (int(c["r"]), c["n"], c["id"])
+            if not (isinstance(key[1], str) and isinstance(key[2], str)):
+                raise TypeError
+        except (TypeError, ValueError):
+            raise AppError("validation_error", "invalid cursor", 422) from None
+        q = q.where(tuple_(_RANK, TemplateRow.name, TemplateRow.id) > tuple_(*key))
     with cat.session() as s:
         rows = list(s.execute(q.limit(n + 1)).scalars())
         items = [_out(r) for r in rows[:n]]
@@ -117,6 +121,17 @@ def _custom_row(s, template_id: str) -> TemplateRow:
     if row.builtin:
         raise builtin_template(template_id)
     return row
+
+
+def require_custom(cat: CatalogueHandle | None, template_id: str) -> None:
+    """Refuse a PATCH/DELETE target before its body is read: 409 built-in, 503 catalogue down, 404
+    unknown id (Ruling 9; final review #2)."""
+    if template_id in BUILTIN_IDS:
+        raise builtin_template(template_id)
+    if cat is None:
+        raise catalogue_unavailable()
+    with cat.session() as s:
+        _custom_row(s, template_id)
 
 
 def update_template(

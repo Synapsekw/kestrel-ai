@@ -178,3 +178,15 @@ def test_validation_errors_is_a_public_helper_for_whole_request_bodies():
     assert "config.paper.size" in paths
     assert "extra" in paths
     assert all(set(err) == {"path", "message"} for err in errors)
+
+
+def test_portable_config_shares_no_list_with_its_input():
+    raw = config_json()
+    raw["filters"]["type_ids"] = ["type-1"]
+    parsed = parse_config(raw, code="x")
+    out = portable_config(parsed)
+    assert out.filters.type_ids == ["type-1"]
+    assert out.filters.type_ids is not parsed.filters.type_ids
+    assert out.filters.statuses is not parsed.filters.statuses
+    out.filters.type_ids.append("type-2")
+    assert parsed.filters.type_ids == ["type-1"]
