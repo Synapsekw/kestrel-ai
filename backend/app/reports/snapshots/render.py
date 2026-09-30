@@ -5,6 +5,7 @@ placeholder is never stored under the snapshot's key (plan ruling 4)."""
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 from collections.abc import Callable
@@ -228,3 +229,36 @@ def render_result(handle, spec) -> SnapshotResult:
 def render_to_cache(handle, spec) -> Path:
     """The cached JPEG for `spec`, or the placeholder's; never raises for a bad source."""
     return render_result(handle, spec).path
+
+
+@functools.cache
+def _spec_adapter():
+    """R0's `SnapshotSpec` TypeAdapter, built once (amendment A18): constructing it walks the whole
+    discriminated union, and `parse_spec` runs on every preview and every figure a job composes."""
+    from pydantic import TypeAdapter
+
+    from app.reports.schemas import SnapshotSpec
+
+    return TypeAdapter(SnapshotSpec)
+
+
+def parse_spec(data: dict):
+    """`data` validated as R0's SnapshotSpec (a discriminated union on `kind`). ValueError
+    (pydantic's ValidationError, a ValueError subclass) when it is not one."""
+    value = _spec_adapter().validate_python(data)
+    return getattr(value, "root", value)
+
+
+def snapshot_ref(handle, spec):
+    """The SnapshotRef a composer puts in a `figure` block: the key now, the known output size and
+    the missing source's reason (R2, R9). Rendering happens later (preview or job)."""
+    from app.reports.schemas import SnapshotRef
+    from app.reports.snapshots.keys import MAX_SPEC_CHARS, encode_spec
+
+    key, sv = compute_key(handle, spec)
+    width, height = output_size(spec)
+    if len(encode_spec(spec)) > MAX_SPEC_CHARS:
+        log.warning("snapshot spec %s is over %d chars; compact its ring or geometry", key, MAX_SPEC_CHARS)
+    return SnapshotRef(
+        key=key, spec=spec, width_px=width, height_px=height, missing_reason=missing_reason(sv)
+    )
