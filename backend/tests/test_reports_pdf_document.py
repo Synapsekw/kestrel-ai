@@ -243,6 +243,29 @@ def test_missing_snapshots_and_an_empty_section_still_render(tmp_path):
     assert any("Snapshot unavailable" in p for p in pdf_pages_text(part.path))
 
 
+def test_a_document_without_sections_is_one_readable_no_content_page(tmp_path):
+    seen = []
+    [part] = _render(tmp_path, document([]), seen=seen)
+    pages = pdf_pages_text(part.path)
+    assert part.pages == len(pages) == 1 and "No content" in pages[0]
+    assert seen[-1] == 1.0
+
+
+def test_a_document_with_only_an_empty_section_still_opens(tmp_path):
+    [part] = _render(tmp_path, document([section("appendix", "Appendix", [])]))
+    assert part.pages == len(pdf_pages_text(part.path)) >= 1
+    assert pdf_toc(part.path) == [(0, "Appendix")]
+
+
+def test_a_cover_only_document_is_one_bookmarked_page(tmp_path):
+    seen = []
+    [part] = _render(tmp_path, document([cover_section()]), seen=seen)
+    pages = pdf_pages_text(part.path)
+    assert part.pages == len(pages) == 1 and "Quarterly inspection" in pages[0]
+    assert pdf_toc(part.path) == [(0, "Cover")]
+    assert seen[-1] == 1.0
+
+
 def test_helvetica_fallback_when_the_fonts_are_removed(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(fonts, "FONT_DIR", tmp_path / "no-fonts")
     monkeypatch.setattr(fonts, "_cache", {})

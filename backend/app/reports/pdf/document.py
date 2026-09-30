@@ -268,6 +268,8 @@ def _story(doc: Any, part: list[Slice], ctx: RenderContext, band: Frame | None) 
             story += block_flowables(block, ctx)
     while story and isinstance(story[-1], PageBreakIfNotEmpty):
         story.pop()
+    if not story:  # no sections at all (every one disabled): one honest page, never a 0-page file
+        story.append(Paragraph("No content", ctx.styles.small))
     return story
 
 
