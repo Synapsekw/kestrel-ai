@@ -226,6 +226,16 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`model_or_provider_required`), a blank cloud query (`query_required`), no class mapped
     # (`unmapped_classes`), no stored key (`conflict` 409) or missing weights (`model_unavailable`).
     "detectImageBatch": {409, 422},
+    # Reports R1: a schema-valid template whose config breaks a rule the schema cannot state
+    # (a section twice, a date range backwards, a blank name) is `invalid_template`.
+    "createReportTemplate": {422},
+    "patchReportTemplate": {422},
+    # Reports R1: a whitespace title, or a config that breaks a rule the schema cannot state, or a
+    # generated logo id that is not an asset of the project, is `invalid_report`.
+    "createReport": {422},
+    "patchReport": {422},
+    # Reports R1: a generated path is never a readable logo (`asset_invalid`, details {reason}).
+    "createReportAsset": {422},
     # R3: a schema-valid `spec` string that is not a base64url snapshot spec (`invalid_snapshot_spec`),
     # or a generated key that does not match the spec (`snapshot_key_mismatch`).
     "getReportSnapshot": {400},
