@@ -4325,8 +4325,8 @@ export interface paths {
          *     7): a `setup_inspect` job on the model library's runner, because no project exists yet. Read
          *     it with `GET /library/jobs/{jobId}`; its `result` is an `InspectResult`. Only extensions and
          *     headers are read, never pixels, raster bodies or points: at most 20 photos per folder, one
-         *     header per GeoTIFF or LAS/LAZ file, the root element of an XML file. The walk stops at 50,000
-         *     files and sets `truncated`. A path that is relative, missing or unreadable is not refused: it
+         *     header per GeoTIFF or LAS/LAZ file, the root element of an XML file. The walk stops early, at
+         *     50,000 files, 10,000 folders or 500 buckets, and sets `truncated`. A path that is relative, missing or unreadable is not refused: it
          *     is listed under `not_recognised` with its reason. With `template_id`, each bucket's
          *     `slot_key` is assigned for that template; an unknown id leaves every `slot_key` null.
          */
@@ -9353,7 +9353,7 @@ export interface components {
             group?: string | null;
             /** @description null when absent */
             definition?: string | null;
-            /** @description in order; empty when absent */
+            /** @description in order; empty when absent; a level not on the scale is refused with 422 `invalid_severity_rule`, details `{name, severity}` */
             severity_rules?: components["schemas"]["SeverityRule"][];
         };
         /**
@@ -9372,6 +9372,7 @@ export interface components {
             group?: string | null;
             archived?: boolean;
             definition?: string | null;
+            /** @description a level not on the scale is refused with 422 `invalid_severity_rule`, details `{name, severity}` */
             severity_rules?: components["schemas"]["SeverityRule"][];
         };
         /**
@@ -13295,7 +13296,7 @@ export interface components {
             not_recognised: components["schemas"]["InspectNotRecognised"];
             /** @description the built-in whose required slots the most buckets fill; null when none fits */
             suggested_template_id: string | null;
-            /** @description true when the walk stopped at 50,000 files */
+            /** @description true when the walk stopped early: at 50,000 files, 10,000 folders or 500 buckets */
             truncated: boolean;
         };
     };

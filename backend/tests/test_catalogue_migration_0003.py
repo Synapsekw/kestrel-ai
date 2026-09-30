@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from alembic import command
+from alembic import op as alembic_op
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
@@ -321,6 +322,32 @@ def test_an_interrupted_run_that_dropped_the_partial_indexes_recovers(tmp_path):
     open_catalogue(data).engine.dispose()
     _assert_partial(data)
     assert _rows(data) == before
+
+
+def test_a_failure_after_the_rebuild_rolls_back_and_the_next_open_recovers(tmp_path, monkeypatch):
+    """The seed insert dies after the batch rebuild: the open raises, and the next open still reaches 0003."""
+    data = tmp_path / "appdata"
+    _at_0002_with_types(data)
+    before = _rows(data)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("seed failed")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(alembic_op, "bulk_insert", boom)
+        with pytest.raises(Exception, match="seed failed"):
+            open_catalogue(data)
+
+    cat = open_catalogue(data)
+    try:
+        with cat.engine.connect() as conn:
+            assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
+        with cat.session() as s:
+            assert sorted(s.execute(select(ProjectTemplate.id)).scalars()) == sorted(BUILTIN_IDS)
+    finally:
+        cat.engine.dispose()
+    assert _rows(data) == before
+    _assert_partial(data)
 
 
 def test_a_stray_alembic_temp_table_does_not_wedge_the_upgrade(tmp_path):

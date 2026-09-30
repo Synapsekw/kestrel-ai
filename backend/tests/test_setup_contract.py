@@ -351,7 +351,9 @@ def test_the_models_leave_cross_field_rules_to_their_owners():
 
 
 def test_the_setup_inspect_job_type(spec):
-    assert _schemas(spec)["JobType"]["enum"][-1] == "setup_inspect"
+    job_types = _schemas(spec)["JobType"]["enum"]
+    assert "setup_inspect" in job_types
+    assert job_types.index("setup_inspect") > job_types.index("report_render")
     description = _schemas(spec)["Job"]["properties"]["result"]["description"]
     assert (
         "setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated}"
