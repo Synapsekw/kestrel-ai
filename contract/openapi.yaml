@@ -12408,3 +12408,888 @@ components:
     SiteAreaCategory:
       type: string
       enum: [general, laydown, exclusion, excavation, other]
+
+    # ------------------------------------------------------------ reports (R0, spec 2026-09-26-reports §7, §8, §9.1, §14)
+    SectionKey:
+      type: string
+      description: "a report section kind; a config lists each exactly once and its order is print order"
+      enum: [cover, summary, findings_table, finding_pages, measurements, comparison, object_counts, appendix]
+    ReportCover:
+      type: object
+      additionalProperties: false
+      required: [title, subtitle, site, client, author, logo_asset_id, report_date]
+      properties:
+        title: { type: string, maxLength: 200, description: "empty means the report's title" }
+        subtitle: { type: [string, "null"], maxLength: 200 }
+        site: { type: [string, "null"], maxLength: 200 }
+        client: { type: [string, "null"], maxLength: 200 }
+        author: { type: string, maxLength: 200 }
+        logo_asset_id: { type: [string, "null"], description: "a `ReportAsset` id of this project; a template never keeps it" }
+        report_date: { type: [string, "null"], format: date, description: "null means the render day" }
+    ReportPaper:
+      type: object
+      additionalProperties: false
+      required: [size, orientation]
+      properties:
+        size: { type: string, enum: [A4, Letter] }
+        orientation: { type: string, enum: [portrait], description: "landscape is deferred (spec §20)" }
+    ReportDateFilter:
+      type: object
+      additionalProperties: false
+      description: "which findings by their observed date (spec §7.1): `range` uses `from` and `to` (inclusive days), `last_days` uses `days`, `since_last_issued` is after the newest issued version of this report"
+      required: [rule, from, to, days]
+      properties:
+        rule: { type: string, enum: [all, range, last_days, since_last_issued] }
+        from: { type: [string, "null"], format: date }
+        to: { type: [string, "null"], format: date }
+        days: { type: [integer, "null"], minimum: 1, maximum: 3650 }
+    ReportFilters:
+      type: object
+      additionalProperties: false
+      required: [severity_min, include_ungraded, statuses, type_ids, data_item_ids, date]
+      properties:
+        severity_min: { type: [integer, "null"], minimum: 1, maximum: 9, description: "a level of the severity scale; null includes every level" }
+        include_ungraded: { type: boolean, description: "findings without a severity are included" }
+        statuses:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/FindingStatus" }
+        type_ids: { type: [array, "null"], maxItems: 500, items: { type: string }, description: "catalogue type ids; null is every type the project uses" }
+        data_item_ids: { type: [array, "null"], maxItems: 1000, items: { type: string }, description: "project data item ids; null is every item; a template never keeps them" }
+        date: { $ref: "#/components/schemas/ReportDateFilter" }
+    CoverOptions:
+      type: object
+      additionalProperties: false
+      required: [show_locator]
+      properties:
+        show_locator: { type: boolean, description: "a map locator of the site on the cover" }
+    SummaryOptions:
+      type: object
+      additionalProperties: false
+      required: [narrative, show_deltas]
+      properties:
+        narrative: { type: string, maxLength: 20000, description: "plain text; blank lines separate paragraphs" }
+        show_deltas: { type: boolean }
+    FindingsTableOptions:
+      type: object
+      additionalProperties: false
+      required: [columns, sort]
+      properties:
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+          items: { type: string, enum: [number, type, severity, status, data_item, observed, note] }
+        sort: { type: string, enum: [severity_desc, number, type, observed] }
+    FindingPagesOptions:
+      type: object
+      additionalProperties: false
+      required: [snapshots, photos_max, comments, context_inset]
+      properties:
+        snapshots:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [image, map, cloud] }
+        photos_max: { type: integer, minimum: 0, maximum: 6 }
+        comments: { type: string, enum: [none, last, all] }
+        context_inset: { type: boolean }
+    MeasurementsOptions:
+      type: object
+      additionalProperties: false
+      required: [kinds, snapshots, measurement_ids]
+      properties:
+        kinds:
+          type: array
+          minItems: 1
+          maxItems: 6
+          uniqueItems: true
+          items: { type: string, enum: [length, area, height, lean, profile, volume] }
+        snapshots: { type: boolean }
+        measurement_ids: { type: [array, "null"], maxItems: 1000, items: { type: string }, description: "null is every measurement of the chosen kinds" }
+    ComparisonPair:
+      type: object
+      additionalProperties: false
+      required: [item_a, item_b, bbox_wgs84]
+      properties:
+        item_a: { type: string }
+        item_b: { type: string }
+        bbox_wgs84: { type: [array, "null"], minItems: 4, maxItems: 4, items: { type: number }, description: "[west, south, east, north]; null is the common footprint" }
+    ComparisonOptions:
+      type: object
+      additionalProperties: false
+      required: [pairs, mode, counts_chart]
+      properties:
+        pairs:
+          description: "`auto` pairs consecutive surveys; otherwise the listed pairs"
+          oneOf:
+            - { type: string, enum: [auto] }
+            - { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ComparisonPair" } }
+        mode: { type: string, enum: [swipe, side_by_side, both] }
+        counts_chart: { type: boolean }
+    ObjectCountsOptions:
+      type: object
+      additionalProperties: false
+      required: [type_ids, per_area, verified_only]
+      properties:
+        type_ids: { type: [array, "null"], maxItems: 500, items: { type: string } }
+        per_area: { type: boolean }
+        verified_only: { type: boolean }
+    AppendixOptions:
+      type: object
+      additionalProperties: false
+      required: [include_methods]
+      properties:
+        include_methods: { type: boolean }
+    ReportSectionCover:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [cover] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/CoverOptions" }
+    ReportSectionSummary:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [summary] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/SummaryOptions" }
+    ReportSectionFindingsTable:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [findings_table] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/FindingsTableOptions" }
+    ReportSectionFindingPages:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [finding_pages] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/FindingPagesOptions" }
+    ReportSectionMeasurements:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [measurements] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/MeasurementsOptions" }
+    ReportSectionComparison:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [comparison] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/ComparisonOptions" }
+    ReportSectionObjectCounts:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [object_counts] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/ObjectCountsOptions" }
+    ReportSectionAppendix:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [appendix] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/AppendixOptions" }
+    ReportSection:
+      oneOf:
+        - $ref: "#/components/schemas/ReportSectionCover"
+        - $ref: "#/components/schemas/ReportSectionSummary"
+        - $ref: "#/components/schemas/ReportSectionFindingsTable"
+        - $ref: "#/components/schemas/ReportSectionFindingPages"
+        - $ref: "#/components/schemas/ReportSectionMeasurements"
+        - $ref: "#/components/schemas/ReportSectionComparison"
+        - $ref: "#/components/schemas/ReportSectionObjectCounts"
+        - $ref: "#/components/schemas/ReportSectionAppendix"
+      discriminator:
+        propertyName: key
+        mapping:
+          cover: "#/components/schemas/ReportSectionCover"
+          summary: "#/components/schemas/ReportSectionSummary"
+          findings_table: "#/components/schemas/ReportSectionFindingsTable"
+          finding_pages: "#/components/schemas/ReportSectionFindingPages"
+          measurements: "#/components/schemas/ReportSectionMeasurements"
+          comparison: "#/components/schemas/ReportSectionComparison"
+          object_counts: "#/components/schemas/ReportSectionObjectCounts"
+          appendix: "#/components/schemas/ReportSectionAppendix"
+    ReportConfig:
+      type: object
+      additionalProperties: false
+      description: "a report's configuration (spec §7.1); PATCH sends it whole. Each section key appears exactly once (a repeat is `invalid_report` / `invalid_template`); an enabled cover prints first"
+      required: [cover, paper, filters, sections]
+      properties:
+        cover: { $ref: "#/components/schemas/ReportCover" }
+        paper: { $ref: "#/components/schemas/ReportPaper" }
+        filters: { $ref: "#/components/schemas/ReportFilters" }
+        sections:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items: { $ref: "#/components/schemas/ReportSection" }
+      example:
+        cover: { title: "Harbour wall inspection", subtitle: "September survey", site: "North quay", client: "Port authority", author: "D. Operator", logo_asset_id: null, report_date: null }
+        paper: { size: A4, orientation: portrait }
+        filters:
+          severity_min: null
+          include_ungraded: true
+          statuses: [open, reviewed]
+          type_ids: null
+          data_item_ids: null
+          date: { rule: all, from: null, to: null, days: null }
+        sections:
+          - { key: cover, enabled: true, options: { show_locator: true } }
+          - { key: summary, enabled: true, options: { narrative: "", show_deltas: true } }
+          - { key: findings_table, enabled: true, options: { columns: [number, type, severity, status, data_item, observed, note], sort: severity_desc } }
+          - { key: finding_pages, enabled: true, options: { snapshots: [image, map, cloud], photos_max: 4, comments: last, context_inset: true } }
+          - { key: measurements, enabled: true, options: { kinds: [length, area, height, lean, profile, volume], snapshots: true, measurement_ids: null } }
+          - { key: comparison, enabled: true, options: { pairs: auto, mode: both, counts_chart: true } }
+          - { key: object_counts, enabled: true, options: { type_ids: null, per_area: true, verified_only: false } }
+          - { key: appendix, enabled: true, options: { include_methods: true } }
+    SnapshotGeometry:
+      type: object
+      additionalProperties: false
+      description: "a GeoJSON Point, LineString or Polygon in the item's CRS"
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [Point, LineString, Polygon] }
+        coordinates: { type: array, items: {}, description: "GeoJSON coordinates for `type`" }
+    ImageCropSpec:
+      type: object
+      additionalProperties: false
+      description: "a crop around an annotation (spec §9.2); `ring` is its outline in image pixels (one vertex draws a pin), `annotation_id` keys the snapshot on the annotation's `updated_at`"
+      required: [kind, image_id, annotation_id, ring, colour, label, context, out, inset]
+      properties:
+        kind: { type: string, enum: [image_crop] }
+        image_id: { type: string }
+        annotation_id: { type: [string, "null"] }
+        ring:
+          type: array
+          minItems: 1
+          maxItems: 4096
+          items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        label: { type: string }
+        context: { type: number, minimum: 1, maximum: 10, description: "the crop is this many times the ring's size" }
+        out: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 16, maximum: 2400 } }
+        inset: { type: boolean }
+    MapSpec:
+      type: object
+      additionalProperties: false
+      description: "a decimated window of a map item around a geometry (spec §9.3)"
+      required: [kind, item_id, geometry, colour, label, min_extent_m, out, scale_bar, north, inset]
+      properties:
+        kind: { type: string, enum: [map] }
+        item_id: { type: string, description: "a map id" }
+        geometry: { $ref: "#/components/schemas/SnapshotGeometry" }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        label: { type: [string, "null"] }
+        min_extent_m: { type: number, minimum: 1, maximum: 100000 }
+        out: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 16, maximum: 2400 } }
+        scale_bar: { type: boolean }
+        north: { type: boolean }
+        inset: { type: boolean }
+    ElevationSpec:
+      type: object
+      additionalProperties: false
+      description: "a hillshade of an elevation surface (spec §9.3); `overlay: diff` subtracts `overlay_item_id`"
+      required: [kind, item_id, geometry, overlay, overlay_item_id, out]
+      properties:
+        kind: { type: string, enum: [elevation] }
+        item_id: { type: string, description: "a surface id" }
+        geometry:
+          oneOf:
+            - $ref: "#/components/schemas/SnapshotGeometry"
+            - type: "null"
+        overlay: { type: string, enum: [none, diff] }
+        overlay_item_id: { type: [string, "null"] }
+        out: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 16, maximum: 2400 } }
+    PairSideSpec:
+      oneOf:
+        - $ref: "#/components/schemas/MapSpec"
+        - $ref: "#/components/schemas/ElevationSpec"
+      discriminator:
+        propertyName: kind
+        mapping:
+          map: "#/components/schemas/MapSpec"
+          elevation: "#/components/schemas/ElevationSpec"
+    PairSpec:
+      type: object
+      additionalProperties: false
+      description: "two surveys over one WGS84 box, side by side or as a swipe composite split at `split` (spec §9.3)"
+      required: [kind, a, b, bbox_wgs84, mode, split]
+      properties:
+        kind: { type: string, enum: [pair] }
+        a: { $ref: "#/components/schemas/PairSideSpec" }
+        b: { $ref: "#/components/schemas/PairSideSpec" }
+        bbox_wgs84: { type: [array, "null"], minItems: 4, maxItems: 4, items: { type: number } }
+        mode: { type: string, enum: [side_by_side, swipe] }
+        split: { type: number, minimum: 0.05, maximum: 0.95 }
+    View3dSpec:
+      type: object
+      additionalProperties: false
+      description: "C's stored report view, passed through (spec §9.4)"
+      required: [kind, subject_kind, subject_id, cloud_id]
+      properties:
+        kind: { type: string, enum: [view3d] }
+        subject_kind: { $ref: "#/components/schemas/CloudViewSubjectKind" }
+        subject_id: { type: string }
+        cloud_id: { type: string }
+    VolumePlanSpec:
+      type: object
+      additionalProperties: false
+      description: "a volume measurement's plan image (volumes/plan_image, unchanged)"
+      required: [kind, measurement_id]
+      properties:
+        kind: { type: string, enum: [volume_plan] }
+        measurement_id: { type: string }
+    AttachmentSpec:
+      type: object
+      additionalProperties: false
+      description: "a finding photo at print size, never the original"
+      required: [kind, finding_id, attachment_id, out]
+      properties:
+        kind: { type: string, enum: [attachment] }
+        finding_id: { type: string }
+        attachment_id: { type: string }
+        out: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 16, maximum: 2400 } }
+    SnapshotSpec:
+      oneOf:
+        - $ref: "#/components/schemas/ImageCropSpec"
+        - $ref: "#/components/schemas/MapSpec"
+        - $ref: "#/components/schemas/ElevationSpec"
+        - $ref: "#/components/schemas/PairSpec"
+        - $ref: "#/components/schemas/View3dSpec"
+        - $ref: "#/components/schemas/VolumePlanSpec"
+        - $ref: "#/components/schemas/AttachmentSpec"
+      discriminator:
+        propertyName: kind
+        mapping:
+          image_crop: "#/components/schemas/ImageCropSpec"
+          map: "#/components/schemas/MapSpec"
+          elevation: "#/components/schemas/ElevationSpec"
+          pair: "#/components/schemas/PairSpec"
+          view3d: "#/components/schemas/View3dSpec"
+          volume_plan: "#/components/schemas/VolumePlanSpec"
+          attachment: "#/components/schemas/AttachmentSpec"
+    SnapshotRef:
+      type: object
+      description: "a figure's snapshot: fetch it at `/projects/{projectId}/report-snapshots/{key}?spec=<base64url canonical JSON of spec>`"
+      required: [key, spec, width_px, height_px, missing_reason]
+      properties:
+        key: { type: string, pattern: "^[0-9a-f]{32}$" }
+        spec: { $ref: "#/components/schemas/SnapshotSpec" }
+        width_px: { type: integer, minimum: 1 }
+        height_px: { type: integer, minimum: 1 }
+        missing_reason: { type: [string, "null"], description: "set when the source was unreadable; the image is a placeholder" }
+      example:
+        key: "3f2a9c0d1e4b5a6978c0d1e2f3a4b5c6"
+        spec: { kind: image_crop, image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-5555-4000-8000-000000000001", ring: [[812, 404], [908, 404], [908, 444], [812, 444]], colour: "#ff5a4f", label: "F-0042 · Crack", context: 3.0, out: [1200, 900], inset: true }
+        width_px: 1200
+        height_px: 900
+        missing_reason: null
+    Heading:
+      type: object
+      required: [kind, level, text]
+      properties:
+        kind: { type: string, enum: [heading] }
+        level: { type: integer, minimum: 1, maximum: 3 }
+        text: { type: string }
+    Para:
+      type: object
+      required: [kind, text, style]
+      properties:
+        kind: { type: string, enum: [para] }
+        text: { type: string }
+        style: { type: string, enum: [body, small, note] }
+    Kv:
+      type: object
+      required: [kind, rows]
+      properties:
+        kind: { type: string, enum: [kv] }
+        rows: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: string } } }
+    KpiItem:
+      type: object
+      required: [label, value, delta, tone, colour]
+      properties:
+        label: { type: string }
+        value: { type: string }
+        delta: { type: [string, "null"], description: "a signed change since the baseline, e.g. +3" }
+        tone: { type: string, enum: [neutral, good, bad, warn] }
+        colour: { type: [string, "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "a severity dot" }
+    Kpis:
+      type: object
+      required: [kind, items]
+      properties:
+        kind: { type: string, enum: [kpis] }
+        items: { type: array, items: { $ref: "#/components/schemas/KpiItem" } }
+    TableColumn:
+      type: object
+      required: [key, label, align, width_mm, style]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        align: { type: string, enum: [left, center, right] }
+        width_mm: { type: [number, "null"], description: "null shares the remaining width" }
+        style: { type: string, enum: [text, mono], description: "mono is JetBrains Mono for numbers and ids" }
+    TableDotCell:
+      type: object
+      required: [text, dot]
+      properties:
+        text: { type: string }
+        dot: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+    TableCell:
+      oneOf:
+        - { type: string }
+        - $ref: "#/components/schemas/TableDotCell"
+    Table:
+      type: object
+      required: [kind, columns, rows, repeat_header]
+      properties:
+        kind: { type: string, enum: [table] }
+        columns: { type: array, items: { $ref: "#/components/schemas/TableColumn" } }
+        rows: { type: array, items: { type: array, items: { $ref: "#/components/schemas/TableCell" } } }
+        repeat_header: { type: boolean }
+    Figure:
+      type: object
+      required: [kind, snapshot, caption, width_mm, height_mm]
+      properties:
+        kind: { type: string, enum: [figure] }
+        snapshot: { $ref: "#/components/schemas/SnapshotRef" }
+        caption: { type: string }
+        width_mm: { type: number, exclusiveMinimum: 0, maximum: 300 }
+        height_mm: { type: number, exclusiveMinimum: 0, maximum: 300 }
+    FigureRow:
+      type: object
+      required: [kind, figures]
+      properties:
+        kind: { type: string, enum: [figure_row] }
+        figures: { type: array, minItems: 1, maxItems: 4, items: { $ref: "#/components/schemas/Figure" } }
+    ChartSeries:
+      type: object
+      required: [name, values, colour]
+      properties:
+        name: { type: string }
+        values: { type: array, items: { type: [number, "null"] } }
+        colour: { type: [string, "null"], pattern: "^#[0-9a-fA-F]{6}$" }
+    Chart:
+      type: object
+      description: "a vector chart; `chart` names its type because `kind` is the block discriminator"
+      required: [kind, chart, title, series, x_labels, unit]
+      properties:
+        kind: { type: string, enum: [chart] }
+        chart: { type: string, enum: [bar, stacked_bar, line] }
+        title: { type: [string, "null"] }
+        series: { type: array, items: { $ref: "#/components/schemas/ChartSeries" } }
+        x_labels: { type: array, items: { type: string } }
+        unit: { type: [string, "null"] }
+    FindingHead:
+      type: object
+      required: [type_name, type_colour, severity_level, severity_name, severity_colour, status]
+      properties:
+        type_name: { type: string }
+        type_colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        severity_level: { type: [integer, "null"] }
+        severity_name: { type: [string, "null"], description: "null prints Ungraded" }
+        severity_colour: { type: [string, "null"], pattern: "^#[0-9a-fA-F]{6}$" }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+    Comment:
+      type: object
+      required: [author, text, created_at]
+      properties:
+        author: { type: string }
+        text: { type: string }
+        created_at: { type: string, format: date-time }
+    FindingBlock:
+      type: object
+      description: "one finding page (spec §7.3)"
+      required: [kind, finding_id, number, head, figures, kv, note, photos, comments]
+      properties:
+        kind: { type: string, enum: [finding] }
+        finding_id: { type: string }
+        number: { type: integer, minimum: 1 }
+        head: { $ref: "#/components/schemas/FindingHead" }
+        figures: { type: array, items: { $ref: "#/components/schemas/Figure" } }
+        kv: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: string } } }
+        note: { type: string }
+        photos: { type: array, items: { $ref: "#/components/schemas/Figure" } }
+        comments: { type: array, items: { $ref: "#/components/schemas/Comment" } }
+    PageBreakBlock:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [page_break] }
+    VolumeBlock:
+      type: object
+      description: "a volume measurement; the PDF renders it with the volume export's own flowables"
+      required: [kind, measurement_id, title, rows, figure, stale]
+      properties:
+        kind: { type: string, enum: [volume] }
+        measurement_id: { type: string }
+        title: { type: string }
+        rows: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: string } } }
+        figure:
+          oneOf:
+            - $ref: "#/components/schemas/Figure"
+            - type: "null"
+        stale: { type: boolean, description: "true prints stale, recalculate instead of numbers" }
+    CoverLogo:
+      type: object
+      required: [asset_id, path, width_px, height_px]
+      properties:
+        asset_id: { type: string }
+        path: { type: string, description: "project-relative with forward slashes: reports/assets/logo-<sha8>.png" }
+        width_px: { type: integer, minimum: 1 }
+        height_px: { type: integer, minimum: 1 }
+    CoverBlock:
+      type: object
+      description: "the cover section's one block: the band title and subtitle, the rows Project, Site, Client, Author, Report date, Period, Version and Status, the logo (null when unset or missing) and the site locator"
+      required: [kind, title, subtitle, rows, logo, locator]
+      properties:
+        kind: { type: string, enum: [cover] }
+        title: { type: string }
+        subtitle: { type: [string, "null"] }
+        rows: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: string } } }
+        logo:
+          oneOf:
+            - $ref: "#/components/schemas/CoverLogo"
+            - type: "null"
+        locator:
+          oneOf:
+            - $ref: "#/components/schemas/Figure"
+            - type: "null"
+    Block:
+      oneOf:
+        - $ref: "#/components/schemas/Heading"
+        - $ref: "#/components/schemas/Para"
+        - $ref: "#/components/schemas/Kv"
+        - $ref: "#/components/schemas/Kpis"
+        - $ref: "#/components/schemas/Table"
+        - $ref: "#/components/schemas/Figure"
+        - $ref: "#/components/schemas/FigureRow"
+        - $ref: "#/components/schemas/Chart"
+        - $ref: "#/components/schemas/FindingBlock"
+        - $ref: "#/components/schemas/PageBreakBlock"
+        - $ref: "#/components/schemas/VolumeBlock"
+        - $ref: "#/components/schemas/CoverBlock"
+      discriminator:
+        propertyName: kind
+        mapping:
+          heading: "#/components/schemas/Heading"
+          para: "#/components/schemas/Para"
+          kv: "#/components/schemas/Kv"
+          kpis: "#/components/schemas/Kpis"
+          table: "#/components/schemas/Table"
+          figure: "#/components/schemas/Figure"
+          figure_row: "#/components/schemas/FigureRow"
+          chart: "#/components/schemas/Chart"
+          finding: "#/components/schemas/FindingBlock"
+          page_break: "#/components/schemas/PageBreakBlock"
+          volume: "#/components/schemas/VolumeBlock"
+          cover: "#/components/schemas/CoverBlock"
+    ReportSectionDoc:
+      type: object
+      required: [key, title, blocks]
+      properties:
+        key: { $ref: "#/components/schemas/SectionKey" }
+        title: { type: string }
+        blocks: { type: array, items: { $ref: "#/components/schemas/Block" } }
+    ReportDocument:
+      type: object
+      description: "a composed report (spec §8.1), frozen as `document.json` in each version; contract/fixtures/report-document.json has every block and snapshot kind"
+      required: [report_id, version, generated_at, theme_version, paper, sections]
+      properties:
+        report_id: { type: string }
+        version: { type: [integer, "null"], description: "null in a live preview" }
+        generated_at: { type: string, format: date-time }
+        theme_version: { type: string }
+        paper: { $ref: "#/components/schemas/ReportPaper" }
+        sections: { type: array, items: { $ref: "#/components/schemas/ReportSectionDoc" } }
+    BlockPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/Block" } }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - { kind: heading, level: 2, text: "Executive summary" }
+          - { kind: para, text: "Thirty-eight findings match the filters.", style: body }
+          - kind: kpis
+            items:
+              - { label: Findings, value: "38", delta: "+3", tone: neutral, colour: null }
+              - { label: Major, value: "5", delta: null, tone: warn, colour: "#ff9c3a" }
+        next_cursor: null
+    ReportDocumentPage:
+      type: object
+      description: "a frozen document paged across sections, at most 50 blocks a page; a section split across pages repeats its key"
+      required: [report_id, version, generated_at, theme_version, sections, next_cursor]
+      properties:
+        report_id: { type: string }
+        version: { type: [integer, "null"] }
+        generated_at: { type: string, format: date-time }
+        theme_version: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/ReportSectionDoc" } }
+        next_cursor: { type: [string, "null"] }
+    ReportWarning:
+      type: object
+      required: [code, message, count, link]
+      properties:
+        code: { type: string, description: "for example view3d_missing, view3d_stale, logo_missing, ungraded, source_missing, finding_deleted" }
+        message: { type: string }
+        count: { type: [integer, "null"] }
+        link: { type: [string, "null"], description: "an app route that fixes it" }
+    ReportBaseline:
+      type: object
+      required: [version_id, report_id, report_title, number, issued_at]
+      properties:
+        version_id: { type: string }
+        report_id: { type: string }
+        report_title: { type: string }
+        number: { type: integer, minimum: 1 }
+        issued_at: { type: string, format: date-time }
+    DeltaSummary:
+      type: object
+      description: "changes since the baseline (spec §8.3); a null baseline reads First report"
+      required: [baseline, new, closed, escalated, deescalated, reopened, left]
+      properties:
+        baseline:
+          oneOf:
+            - $ref: "#/components/schemas/ReportBaseline"
+            - type: "null"
+        new: { type: integer, minimum: 0 }
+        closed: { type: integer, minimum: 0 }
+        escalated: { type: integer, minimum: 0 }
+        deescalated: { type: integer, minimum: 0 }
+        reopened: { type: integer, minimum: 0 }
+        left: { type: integer, minimum: 0, description: "in the baseline but not in this report; a count only" }
+    OutlineSection:
+      type: object
+      required: [key, title, block_count, etag, estimated_pages]
+      properties:
+        key: { $ref: "#/components/schemas/SectionKey" }
+        title: { type: string }
+        block_count: { type: integer, minimum: 0 }
+        etag: { type: string, description: "changes whenever the section's blocks would change" }
+        estimated_pages: { type: integer, minimum: 0 }
+    ReportOutline:
+      type: object
+      description: "the enabled sections with aggregates only (bounded)"
+      required: [report_id, sections, finding_count, warnings, deltas]
+      properties:
+        report_id: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/OutlineSection" } }
+        finding_count: { type: integer, minimum: 0 }
+        warnings: { type: array, items: { $ref: "#/components/schemas/ReportWarning" } }
+        deltas: { $ref: "#/components/schemas/DeltaSummary" }
+      example:
+        report_id: "r0000000-7777-4000-8000-000000000001"
+        sections:
+          - { key: cover, title: Cover, block_count: 4, etag: "c1f0a9d2", estimated_pages: 1 }
+          - { key: summary, title: "Executive summary", block_count: 6, etag: "9b77e012", estimated_pages: 2 }
+        finding_count: 38
+        warnings:
+          - { code: view3d_missing, message: "2 findings have no 3D view", count: 2, link: "/p/7f1c2e3a-1111-4000-8000-000000000001/clouds/p0000000-1111-4000-8000-000000000001" }
+        deltas:
+          baseline: { version_id: "v0000000-7777-4000-8000-000000000001", report_id: "r0000000-7777-4000-8000-000000000001", report_title: "Harbour wall inspection", number: 2, issued_at: "2026-09-24T09:00:00Z" }
+          new: 3
+          closed: 1
+          escalated: 1
+          deescalated: 0
+          reopened: 0
+          left: 0
+    ReportVersionState:
+      type: string
+      enum: [rendering, ready, failed]
+    ReportFileKind:
+      type: string
+      enum: [pdf, csv, xlsx]
+    ReportVersionSummary:
+      type: object
+      required: [number, state, issued_at, pages]
+      properties:
+        number: { type: [integer, "null"], description: "null while rendering or after a failure" }
+        state: { $ref: "#/components/schemas/ReportVersionState" }
+        issued_at: { type: [string, "null"], format: date-time }
+        pages: { type: [integer, "null"] }
+    ReportListItem:
+      type: object
+      required: [id, title, template_id, archived, created_at, updated_at, last_version]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        template_id: { type: [string, "null"] }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_version:
+          oneOf:
+            - $ref: "#/components/schemas/ReportVersionSummary"
+            - type: "null"
+      example:
+        id: "r0000000-7777-4000-8000-000000000001"
+        title: "Harbour wall inspection"
+        template_id: builtin-full
+        archived: false
+        created_at: "2026-09-20T08:00:00Z"
+        updated_at: "2026-09-29T16:20:00Z"
+        last_version: { number: 3, state: ready, issued_at: null, pages: 42 }
+    ReportPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReportListItem" } }
+        next_cursor: { type: [string, "null"] }
+    Report:
+      type: object
+      required: [id, title, template_id, archived, config, created_at, updated_at, last_version]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        template_id: { type: [string, "null"], description: "the template it was created from; display only" }
+        archived: { type: boolean }
+        config: { $ref: "#/components/schemas/ReportConfig" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_version:
+          oneOf:
+            - $ref: "#/components/schemas/ReportVersionSummary"
+            - type: "null"
+    ReportCreate:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        template_id: { type: [string, "null"], description: "a built-in id such as builtin-full or an app-wide template; absent or null uses builtin-full" }
+    ReportPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        config: { $ref: "#/components/schemas/ReportConfig" }
+    ReportFile:
+      type: object
+      required: [name, kind, bytes, sha256, pages]
+      properties:
+        name: { type: string, description: "a file in the version's folder" }
+        kind: { $ref: "#/components/schemas/ReportFileKind" }
+        bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        pages: { type: [integer, "null"], description: "PDF parts only" }
+    ReportVersionStats:
+      type: object
+      required: [finding_count, page_count, part_count, warnings, label, error]
+      properties:
+        finding_count: { type: [integer, "null"] }
+        page_count: { type: [integer, "null"] }
+        part_count: { type: [integer, "null"] }
+        warnings: { type: array, items: { $ref: "#/components/schemas/ReportWarning" } }
+        label: { type: [string, "null"], description: "the render's label" }
+        error: { type: [string, "null"], description: "why a failed render failed" }
+    ReportVersion:
+      type: object
+      description: "an immutable render; a rendering or failed row has no number and cannot be addressed by number"
+      required: [id, report_id, number, state, issued_at, job_id, folder, files, config, baseline_version_id, stats, created_at]
+      properties:
+        id: { type: string }
+        report_id: { type: string }
+        number: { type: [integer, "null"] }
+        state: { $ref: "#/components/schemas/ReportVersionState" }
+        issued_at: { type: [string, "null"], format: date-time }
+        job_id: { type: [string, "null"] }
+        folder: { type: [string, "null"], description: "project-relative, e.g. reports/<reportId>/v003" }
+        files: { type: array, items: { $ref: "#/components/schemas/ReportFile" } }
+        config: { $ref: "#/components/schemas/ReportConfig" }
+        baseline_version_id: { type: [string, "null"] }
+        stats: { $ref: "#/components/schemas/ReportVersionStats" }
+        created_at: { type: string, format: date-time }
+    ReportVersionPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReportVersion" } }
+        next_cursor: { type: [string, "null"] }
+    ReportVersionPatch:
+      type: object
+      additionalProperties: false
+      required: [issued]
+      properties:
+        issued: { type: boolean, description: "true marks the version Issued; false unissues it" }
+    RenderRequest:
+      type: object
+      additionalProperties: false
+      required: [formats]
+      properties:
+        formats:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/ReportFileKind" }
+        label: { type: [string, "null"], maxLength: 100 }
+    ReportTemplate:
+      type: object
+      required: [id, name, description, builtin, config, created_at, updated_at]
+      properties:
+        id: { type: string, description: "builtin-full, builtin-findings-summary, builtin-survey-counts, builtin-volumes, or a UUID" }
+        name: { type: string }
+        description: { type: string }
+        builtin: { type: boolean, description: "a built-in can be duplicated but never changed or deleted" }
+        config: { $ref: "#/components/schemas/ReportConfig" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ReportTemplatePage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReportTemplate" } }
+        next_cursor: { type: [string, "null"] }
+    ReportTemplateCreate:
+      type: object
+      additionalProperties: false
+      required: [name, config]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500, description: "empty when absent" }
+        config: { $ref: "#/components/schemas/ReportConfig" }
+    ReportTemplatePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        config: { $ref: "#/components/schemas/ReportConfig" }
+    ReportAsset:
+      type: object
+      required: [id, kind, path, sha256, width, height, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [logo] }
+        path: { type: string, description: "project-relative: reports/assets/logo-<sha8>.png" }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+      example: { id: "a0000000-7777-4000-8000-000000000001", kind: logo, path: "reports/assets/logo-1a2b3c4d.png", sha256: "1a2b3c4d00000000000000000000000000000000000000000000000000000000", width: 600, height: 200, created_at: "2026-09-29T08:00:00Z" }
+    ReportAssetCreate:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: "an absolute path to a JPEG, PNG or WebP picked with the file dialog" }

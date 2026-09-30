@@ -9,3 +9,6 @@ overrides:
   - files: ["openapi.yaml#/components/schemas/Event"]
     rules:
       oas3-unused-component: off
+  - files: ["openapi.yaml#/components/schemas/ReportDocument"]
+    rules:
+      oas3-unused-component: off

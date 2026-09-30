@@ -11555,6 +11555,965 @@ export interface components {
         };
         /** @enum {string} */
         SiteAreaCategory: "general" | "laydown" | "exclusion" | "excavation" | "other";
+        /**
+         * @description a report section kind; a config lists each exactly once and its order is print order
+         * @enum {string}
+         */
+        SectionKey: "cover" | "summary" | "findings_table" | "finding_pages" | "measurements" | "comparison" | "object_counts" | "appendix";
+        ReportCover: {
+            /** @description empty means the report's title */
+            title: string;
+            subtitle: string | null;
+            site: string | null;
+            client: string | null;
+            author: string;
+            /** @description a `ReportAsset` id of this project; a template never keeps it */
+            logo_asset_id: string | null;
+            /**
+             * Format: date
+             * @description null means the render day
+             */
+            report_date: string | null;
+        };
+        ReportPaper: {
+            /** @enum {string} */
+            size: "A4" | "Letter";
+            /**
+             * @description landscape is deferred (spec §20)
+             * @enum {string}
+             */
+            orientation: "portrait";
+        };
+        /** @description which findings by their observed date (spec §7.1): `range` uses `from` and `to` (inclusive days), `last_days` uses `days`, `since_last_issued` is after the newest issued version of this report */
+        ReportDateFilter: {
+            /** @enum {string} */
+            rule: "all" | "range" | "last_days" | "since_last_issued";
+            /** Format: date */
+            from: string | null;
+            /** Format: date */
+            to: string | null;
+            days: number | null;
+        };
+        ReportFilters: {
+            /** @description a level of the severity scale; null includes every level */
+            severity_min: number | null;
+            /** @description findings without a severity are included */
+            include_ungraded: boolean;
+            statuses: components["schemas"]["FindingStatus"][];
+            /** @description catalogue type ids; null is every type the project uses */
+            type_ids: string[] | null;
+            /** @description project data item ids; null is every item; a template never keeps them */
+            data_item_ids: string[] | null;
+            date: components["schemas"]["ReportDateFilter"];
+        };
+        CoverOptions: {
+            /** @description a map locator of the site on the cover */
+            show_locator: boolean;
+        };
+        SummaryOptions: {
+            /** @description plain text; blank lines separate paragraphs */
+            narrative: string;
+            show_deltas: boolean;
+        };
+        FindingsTableOptions: {
+            columns: ("number" | "type" | "severity" | "status" | "data_item" | "observed" | "note")[];
+            /** @enum {string} */
+            sort: "severity_desc" | "number" | "type" | "observed";
+        };
+        FindingPagesOptions: {
+            snapshots: ("image" | "map" | "cloud")[];
+            photos_max: number;
+            /** @enum {string} */
+            comments: "none" | "last" | "all";
+            context_inset: boolean;
+        };
+        MeasurementsOptions: {
+            kinds: ("length" | "area" | "height" | "lean" | "profile" | "volume")[];
+            snapshots: boolean;
+            /** @description null is every measurement of the chosen kinds */
+            measurement_ids: string[] | null;
+        };
+        ComparisonPair: {
+            item_a: string;
+            item_b: string;
+            /** @description [west, south, east, north]; null is the common footprint */
+            bbox_wgs84: number[] | null;
+        };
+        ComparisonOptions: {
+            /** @description `auto` pairs consecutive surveys; otherwise the listed pairs */
+            pairs: "auto" | components["schemas"]["ComparisonPair"][];
+            /** @enum {string} */
+            mode: "swipe" | "side_by_side" | "both";
+            counts_chart: boolean;
+        };
+        ObjectCountsOptions: {
+            type_ids: string[] | null;
+            per_area: boolean;
+            verified_only: boolean;
+        };
+        AppendixOptions: {
+            include_methods: boolean;
+        };
+        ReportSectionCover: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "cover";
+            enabled: boolean;
+            options: components["schemas"]["CoverOptions"];
+        };
+        ReportSectionSummary: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "summary";
+            enabled: boolean;
+            options: components["schemas"]["SummaryOptions"];
+        };
+        ReportSectionFindingsTable: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "findings_table";
+            enabled: boolean;
+            options: components["schemas"]["FindingsTableOptions"];
+        };
+        ReportSectionFindingPages: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "finding_pages";
+            enabled: boolean;
+            options: components["schemas"]["FindingPagesOptions"];
+        };
+        ReportSectionMeasurements: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "measurements";
+            enabled: boolean;
+            options: components["schemas"]["MeasurementsOptions"];
+        };
+        ReportSectionComparison: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "comparison";
+            enabled: boolean;
+            options: components["schemas"]["ComparisonOptions"];
+        };
+        ReportSectionObjectCounts: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "object_counts";
+            enabled: boolean;
+            options: components["schemas"]["ObjectCountsOptions"];
+        };
+        ReportSectionAppendix: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "appendix";
+            enabled: boolean;
+            options: components["schemas"]["AppendixOptions"];
+        };
+        ReportSection: components["schemas"]["ReportSectionCover"] | components["schemas"]["ReportSectionSummary"] | components["schemas"]["ReportSectionFindingsTable"] | components["schemas"]["ReportSectionFindingPages"] | components["schemas"]["ReportSectionMeasurements"] | components["schemas"]["ReportSectionComparison"] | components["schemas"]["ReportSectionObjectCounts"] | components["schemas"]["ReportSectionAppendix"];
+        /**
+         * @description a report's configuration (spec §7.1); PATCH sends it whole. Each section key appears exactly once (a repeat is `invalid_report` / `invalid_template`); an enabled cover prints first
+         * @example {
+         *       "cover": {
+         *         "title": "Harbour wall inspection",
+         *         "subtitle": "September survey",
+         *         "site": "North quay",
+         *         "client": "Port authority",
+         *         "author": "D. Operator",
+         *         "logo_asset_id": null,
+         *         "report_date": null
+         *       },
+         *       "paper": {
+         *         "size": "A4",
+         *         "orientation": "portrait"
+         *       },
+         *       "filters": {
+         *         "severity_min": null,
+         *         "include_ungraded": true,
+         *         "statuses": [
+         *           "open",
+         *           "reviewed"
+         *         ],
+         *         "type_ids": null,
+         *         "data_item_ids": null,
+         *         "date": {
+         *           "rule": "all",
+         *           "from": null,
+         *           "to": null,
+         *           "days": null
+         *         }
+         *       },
+         *       "sections": [
+         *         {
+         *           "key": "cover",
+         *           "enabled": true,
+         *           "options": {
+         *             "show_locator": true
+         *           }
+         *         },
+         *         {
+         *           "key": "summary",
+         *           "enabled": true,
+         *           "options": {
+         *             "narrative": "",
+         *             "show_deltas": true
+         *           }
+         *         },
+         *         {
+         *           "key": "findings_table",
+         *           "enabled": true,
+         *           "options": {
+         *             "columns": [
+         *               "number",
+         *               "type",
+         *               "severity",
+         *               "status",
+         *               "data_item",
+         *               "observed",
+         *               "note"
+         *             ],
+         *             "sort": "severity_desc"
+         *           }
+         *         },
+         *         {
+         *           "key": "finding_pages",
+         *           "enabled": true,
+         *           "options": {
+         *             "snapshots": [
+         *               "image",
+         *               "map",
+         *               "cloud"
+         *             ],
+         *             "photos_max": 4,
+         *             "comments": "last",
+         *             "context_inset": true
+         *           }
+         *         },
+         *         {
+         *           "key": "measurements",
+         *           "enabled": true,
+         *           "options": {
+         *             "kinds": [
+         *               "length",
+         *               "area",
+         *               "height",
+         *               "lean",
+         *               "profile",
+         *               "volume"
+         *             ],
+         *             "snapshots": true,
+         *             "measurement_ids": null
+         *           }
+         *         },
+         *         {
+         *           "key": "comparison",
+         *           "enabled": true,
+         *           "options": {
+         *             "pairs": "auto",
+         *             "mode": "both",
+         *             "counts_chart": true
+         *           }
+         *         },
+         *         {
+         *           "key": "object_counts",
+         *           "enabled": true,
+         *           "options": {
+         *             "type_ids": null,
+         *             "per_area": true,
+         *             "verified_only": false
+         *           }
+         *         },
+         *         {
+         *           "key": "appendix",
+         *           "enabled": true,
+         *           "options": {
+         *             "include_methods": true
+         *           }
+         *         }
+         *       ]
+         *     }
+         */
+        ReportConfig: {
+            cover: components["schemas"]["ReportCover"];
+            paper: components["schemas"]["ReportPaper"];
+            filters: components["schemas"]["ReportFilters"];
+            sections: components["schemas"]["ReportSection"][];
+        };
+        /** @description a GeoJSON Point, LineString or Polygon in the item's CRS */
+        SnapshotGeometry: {
+            /** @enum {string} */
+            type: "Point" | "LineString" | "Polygon";
+            /** @description GeoJSON coordinates for `type` */
+            coordinates: unknown[];
+        };
+        /** @description a crop around an annotation (spec §9.2); `ring` is its outline in image pixels (one vertex draws a pin), `annotation_id` keys the snapshot on the annotation's `updated_at` */
+        ImageCropSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "image_crop";
+            image_id: string;
+            annotation_id: string | null;
+            ring: number[][];
+            colour: string;
+            label: string;
+            /** @description the crop is this many times the ring's size */
+            context: number;
+            out: number[];
+            inset: boolean;
+        };
+        /** @description a decimated window of a map item around a geometry (spec §9.3) */
+        MapSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "map";
+            /** @description a map id */
+            item_id: string;
+            geometry: components["schemas"]["SnapshotGeometry"];
+            colour: string;
+            label: string | null;
+            min_extent_m: number;
+            out: number[];
+            scale_bar: boolean;
+            north: boolean;
+            inset: boolean;
+        };
+        /** @description a hillshade of an elevation surface (spec §9.3); `overlay: diff` subtracts `overlay_item_id` */
+        ElevationSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "elevation";
+            /** @description a surface id */
+            item_id: string;
+            geometry: components["schemas"]["SnapshotGeometry"] | null;
+            /** @enum {string} */
+            overlay: "none" | "diff";
+            overlay_item_id: string | null;
+            out: number[];
+        };
+        PairSideSpec: components["schemas"]["MapSpec"] | components["schemas"]["ElevationSpec"];
+        /** @description two surveys over one WGS84 box, side by side or as a swipe composite split at `split` (spec §9.3) */
+        PairSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pair";
+            a: components["schemas"]["PairSideSpec"];
+            b: components["schemas"]["PairSideSpec"];
+            bbox_wgs84: number[] | null;
+            /** @enum {string} */
+            mode: "side_by_side" | "swipe";
+            split: number;
+        };
+        /** @description C's stored report view, passed through (spec §9.4) */
+        View3dSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "view3d";
+            subject_kind: components["schemas"]["CloudViewSubjectKind"];
+            subject_id: string;
+            cloud_id: string;
+        };
+        /** @description a volume measurement's plan image (volumes/plan_image, unchanged) */
+        VolumePlanSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "volume_plan";
+            measurement_id: string;
+        };
+        /** @description a finding photo at print size, never the original */
+        AttachmentSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "attachment";
+            finding_id: string;
+            attachment_id: string;
+            out: number[];
+        };
+        SnapshotSpec: components["schemas"]["ImageCropSpec"] | components["schemas"]["MapSpec"] | components["schemas"]["ElevationSpec"] | components["schemas"]["PairSpec"] | components["schemas"]["View3dSpec"] | components["schemas"]["VolumePlanSpec"] | components["schemas"]["AttachmentSpec"];
+        /**
+         * @description a figure's snapshot: fetch it at `/projects/{projectId}/report-snapshots/{key}?spec=<base64url canonical JSON of spec>`
+         * @example {
+         *       "key": "3f2a9c0d1e4b5a6978c0d1e2f3a4b5c6",
+         *       "spec": {
+         *         "kind": "image_crop",
+         *         "image_id": "10000000-5555-4000-8000-000000000001",
+         *         "annotation_id": "b0000000-5555-4000-8000-000000000001",
+         *         "ring": [
+         *           [
+         *             812,
+         *             404
+         *           ],
+         *           [
+         *             908,
+         *             404
+         *           ],
+         *           [
+         *             908,
+         *             444
+         *           ],
+         *           [
+         *             812,
+         *             444
+         *           ]
+         *         ],
+         *         "colour": "#ff5a4f",
+         *         "label": "F-0042 · Crack",
+         *         "context": 3,
+         *         "out": [
+         *           1200,
+         *           900
+         *         ],
+         *         "inset": true
+         *       },
+         *       "width_px": 1200,
+         *       "height_px": 900,
+         *       "missing_reason": null
+         *     }
+         */
+        SnapshotRef: {
+            key: string;
+            spec: components["schemas"]["SnapshotSpec"];
+            width_px: number;
+            height_px: number;
+            /** @description set when the source was unreadable; the image is a placeholder */
+            missing_reason: string | null;
+        };
+        Heading: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "heading";
+            level: number;
+            text: string;
+        };
+        Para: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "para";
+            text: string;
+            /** @enum {string} */
+            style: "body" | "small" | "note";
+        };
+        Kv: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "kv";
+            rows: string[][];
+        };
+        KpiItem: {
+            label: string;
+            value: string;
+            /** @description a signed change since the baseline, e.g. +3 */
+            delta: string | null;
+            /** @enum {string} */
+            tone: "neutral" | "good" | "bad" | "warn";
+            /** @description a severity dot */
+            colour: string | null;
+        };
+        Kpis: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "kpis";
+            items: components["schemas"]["KpiItem"][];
+        };
+        TableColumn: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            align: "left" | "center" | "right";
+            /** @description null shares the remaining width */
+            width_mm: number | null;
+            /**
+             * @description mono is JetBrains Mono for numbers and ids
+             * @enum {string}
+             */
+            style: "text" | "mono";
+        };
+        TableDotCell: {
+            text: string;
+            dot: string;
+        };
+        TableCell: string | components["schemas"]["TableDotCell"];
+        Table: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "table";
+            columns: components["schemas"]["TableColumn"][];
+            rows: components["schemas"]["TableCell"][][];
+            repeat_header: boolean;
+        };
+        Figure: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "figure";
+            snapshot: components["schemas"]["SnapshotRef"];
+            caption: string;
+            width_mm: number;
+            height_mm: number;
+        };
+        FigureRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "figure_row";
+            figures: components["schemas"]["Figure"][];
+        };
+        ChartSeries: {
+            name: string;
+            values: (number | null)[];
+            colour: string | null;
+        };
+        /** @description a vector chart; `chart` names its type because `kind` is the block discriminator */
+        Chart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "chart";
+            /** @enum {string} */
+            chart: "bar" | "stacked_bar" | "line";
+            title: string | null;
+            series: components["schemas"]["ChartSeries"][];
+            x_labels: string[];
+            unit: string | null;
+        };
+        FindingHead: {
+            type_name: string;
+            type_colour: string;
+            severity_level: number | null;
+            /** @description null prints Ungraded */
+            severity_name: string | null;
+            severity_colour: string | null;
+            status: components["schemas"]["FindingStatus"];
+        };
+        Comment: {
+            author: string;
+            text: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description one finding page (spec §7.3) */
+        FindingBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "finding";
+            finding_id: string;
+            number: number;
+            head: components["schemas"]["FindingHead"];
+            figures: components["schemas"]["Figure"][];
+            kv: string[][];
+            note: string;
+            photos: components["schemas"]["Figure"][];
+            comments: components["schemas"]["Comment"][];
+        };
+        PageBreakBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "page_break";
+        };
+        /** @description a volume measurement; the PDF renders it with the volume export's own flowables */
+        VolumeBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "volume";
+            measurement_id: string;
+            title: string;
+            rows: string[][];
+            figure: components["schemas"]["Figure"] | null;
+            /** @description true prints stale, recalculate instead of numbers */
+            stale: boolean;
+        };
+        CoverLogo: {
+            asset_id: string;
+            /** @description project-relative with forward slashes: reports/assets/logo-<sha8>.png */
+            path: string;
+            width_px: number;
+            height_px: number;
+        };
+        /** @description the cover section's one block: the band title and subtitle, the rows Project, Site, Client, Author, Report date, Period, Version and Status, the logo (null when unset or missing) and the site locator */
+        CoverBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "cover";
+            title: string;
+            subtitle: string | null;
+            rows: string[][];
+            logo: components["schemas"]["CoverLogo"] | null;
+            locator: components["schemas"]["Figure"] | null;
+        };
+        Block: components["schemas"]["Heading"] | components["schemas"]["Para"] | components["schemas"]["Kv"] | components["schemas"]["Kpis"] | components["schemas"]["Table"] | components["schemas"]["Figure"] | components["schemas"]["FigureRow"] | components["schemas"]["Chart"] | components["schemas"]["FindingBlock"] | components["schemas"]["PageBreakBlock"] | components["schemas"]["VolumeBlock"] | components["schemas"]["CoverBlock"];
+        ReportSectionDoc: {
+            key: components["schemas"]["SectionKey"];
+            title: string;
+            blocks: components["schemas"]["Block"][];
+        };
+        /** @description a composed report (spec §8.1), frozen as `document.json` in each version; contract/fixtures/report-document.json has every block and snapshot kind */
+        ReportDocument: {
+            report_id: string;
+            /** @description null in a live preview */
+            version: number | null;
+            /** Format: date-time */
+            generated_at: string;
+            theme_version: string;
+            paper: components["schemas"]["ReportPaper"];
+            sections: components["schemas"]["ReportSectionDoc"][];
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "kind": "heading",
+         *           "level": 2,
+         *           "text": "Executive summary"
+         *         },
+         *         {
+         *           "kind": "para",
+         *           "text": "Thirty-eight findings match the filters.",
+         *           "style": "body"
+         *         },
+         *         {
+         *           "kind": "kpis",
+         *           "items": [
+         *             {
+         *               "label": "Findings",
+         *               "value": "38",
+         *               "delta": "+3",
+         *               "tone": "neutral",
+         *               "colour": null
+         *             },
+         *             {
+         *               "label": "Major",
+         *               "value": "5",
+         *               "delta": null,
+         *               "tone": "warn",
+         *               "colour": "#ff9c3a"
+         *             }
+         *           ]
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        BlockPage: {
+            items: components["schemas"]["Block"][];
+            next_cursor: string | null;
+        };
+        /** @description a frozen document paged across sections, at most 50 blocks a page; a section split across pages repeats its key */
+        ReportDocumentPage: {
+            report_id: string;
+            version: number | null;
+            /** Format: date-time */
+            generated_at: string;
+            theme_version: string;
+            sections: components["schemas"]["ReportSectionDoc"][];
+            next_cursor: string | null;
+        };
+        ReportWarning: {
+            /** @description for example view3d_missing, view3d_stale, logo_missing, ungraded, source_missing, finding_deleted */
+            code: string;
+            message: string;
+            count: number | null;
+            /** @description an app route that fixes it */
+            link: string | null;
+        };
+        ReportBaseline: {
+            version_id: string;
+            report_id: string;
+            report_title: string;
+            number: number;
+            /** Format: date-time */
+            issued_at: string;
+        };
+        /** @description changes since the baseline (spec §8.3); a null baseline reads First report */
+        DeltaSummary: {
+            baseline: components["schemas"]["ReportBaseline"] | null;
+            new: number;
+            closed: number;
+            escalated: number;
+            deescalated: number;
+            reopened: number;
+            /** @description in the baseline but not in this report; a count only */
+            left: number;
+        };
+        OutlineSection: {
+            key: components["schemas"]["SectionKey"];
+            title: string;
+            block_count: number;
+            /** @description changes whenever the section's blocks would change */
+            etag: string;
+            estimated_pages: number;
+        };
+        /**
+         * @description the enabled sections with aggregates only (bounded)
+         * @example {
+         *       "report_id": "r0000000-7777-4000-8000-000000000001",
+         *       "sections": [
+         *         {
+         *           "key": "cover",
+         *           "title": "Cover",
+         *           "block_count": 4,
+         *           "etag": "c1f0a9d2",
+         *           "estimated_pages": 1
+         *         },
+         *         {
+         *           "key": "summary",
+         *           "title": "Executive summary",
+         *           "block_count": 6,
+         *           "etag": "9b77e012",
+         *           "estimated_pages": 2
+         *         }
+         *       ],
+         *       "finding_count": 38,
+         *       "warnings": [
+         *         {
+         *           "code": "view3d_missing",
+         *           "message": "2 findings have no 3D view",
+         *           "count": 2,
+         *           "link": "/p/7f1c2e3a-1111-4000-8000-000000000001/clouds/p0000000-1111-4000-8000-000000000001"
+         *         }
+         *       ],
+         *       "deltas": {
+         *         "baseline": {
+         *           "version_id": "v0000000-7777-4000-8000-000000000001",
+         *           "report_id": "r0000000-7777-4000-8000-000000000001",
+         *           "report_title": "Harbour wall inspection",
+         *           "number": 2,
+         *           "issued_at": "2026-09-24T09:00:00Z"
+         *         },
+         *         "new": 3,
+         *         "closed": 1,
+         *         "escalated": 1,
+         *         "deescalated": 0,
+         *         "reopened": 0,
+         *         "left": 0
+         *       }
+         *     }
+         */
+        ReportOutline: {
+            report_id: string;
+            sections: components["schemas"]["OutlineSection"][];
+            finding_count: number;
+            warnings: components["schemas"]["ReportWarning"][];
+            deltas: components["schemas"]["DeltaSummary"];
+        };
+        /** @enum {string} */
+        ReportVersionState: "rendering" | "ready" | "failed";
+        /** @enum {string} */
+        ReportFileKind: "pdf" | "csv" | "xlsx";
+        ReportVersionSummary: {
+            /** @description null while rendering or after a failure */
+            number: number | null;
+            state: components["schemas"]["ReportVersionState"];
+            /** Format: date-time */
+            issued_at: string | null;
+            pages: number | null;
+        };
+        /**
+         * @example {
+         *       "id": "r0000000-7777-4000-8000-000000000001",
+         *       "title": "Harbour wall inspection",
+         *       "template_id": "builtin-full",
+         *       "archived": false,
+         *       "created_at": "2026-09-20T08:00:00Z",
+         *       "updated_at": "2026-09-29T16:20:00Z",
+         *       "last_version": {
+         *         "number": 3,
+         *         "state": "ready",
+         *         "issued_at": null,
+         *         "pages": 42
+         *       }
+         *     }
+         */
+        ReportListItem: {
+            id: string;
+            title: string;
+            template_id: string | null;
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            last_version: components["schemas"]["ReportVersionSummary"] | null;
+        };
+        ReportPage: {
+            items: components["schemas"]["ReportListItem"][];
+            next_cursor: string | null;
+        };
+        Report: {
+            id: string;
+            title: string;
+            /** @description the template it was created from; display only */
+            template_id: string | null;
+            archived: boolean;
+            config: components["schemas"]["ReportConfig"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            last_version: components["schemas"]["ReportVersionSummary"] | null;
+        };
+        ReportCreate: {
+            title: string;
+            /** @description a built-in id such as builtin-full or an app-wide template; absent or null uses builtin-full */
+            template_id?: string | null;
+        };
+        ReportPatch: {
+            title?: string;
+            config?: components["schemas"]["ReportConfig"];
+        };
+        ReportFile: {
+            /** @description a file in the version's folder */
+            name: string;
+            kind: components["schemas"]["ReportFileKind"];
+            bytes: number;
+            sha256: string;
+            /** @description PDF parts only */
+            pages: number | null;
+        };
+        ReportVersionStats: {
+            finding_count: number | null;
+            page_count: number | null;
+            part_count: number | null;
+            warnings: components["schemas"]["ReportWarning"][];
+            /** @description the render's label */
+            label: string | null;
+            /** @description why a failed render failed */
+            error: string | null;
+        };
+        /** @description an immutable render; a rendering or failed row has no number and cannot be addressed by number */
+        ReportVersion: {
+            id: string;
+            report_id: string;
+            number: number | null;
+            state: components["schemas"]["ReportVersionState"];
+            /** Format: date-time */
+            issued_at: string | null;
+            job_id: string | null;
+            /** @description project-relative, e.g. reports/<reportId>/v003 */
+            folder: string | null;
+            files: components["schemas"]["ReportFile"][];
+            config: components["schemas"]["ReportConfig"];
+            baseline_version_id: string | null;
+            stats: components["schemas"]["ReportVersionStats"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReportVersionPage: {
+            items: components["schemas"]["ReportVersion"][];
+            next_cursor: string | null;
+        };
+        ReportVersionPatch: {
+            /** @description true marks the version Issued; false unissues it */
+            issued: boolean;
+        };
+        RenderRequest: {
+            formats: components["schemas"]["ReportFileKind"][];
+            label?: string | null;
+        };
+        ReportTemplate: {
+            /** @description builtin-full, builtin-findings-summary, builtin-survey-counts, builtin-volumes, or a UUID */
+            id: string;
+            name: string;
+            description: string;
+            /** @description a built-in can be duplicated but never changed or deleted */
+            builtin: boolean;
+            config: components["schemas"]["ReportConfig"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ReportTemplatePage: {
+            items: components["schemas"]["ReportTemplate"][];
+            next_cursor: string | null;
+        };
+        ReportTemplateCreate: {
+            name: string;
+            /** @description empty when absent */
+            description?: string;
+            config: components["schemas"]["ReportConfig"];
+        };
+        ReportTemplatePatch: {
+            name?: string;
+            description?: string;
+            config?: components["schemas"]["ReportConfig"];
+        };
+        /**
+         * @example {
+         *       "id": "a0000000-7777-4000-8000-000000000001",
+         *       "kind": "logo",
+         *       "path": "reports/assets/logo-1a2b3c4d.png",
+         *       "sha256": "1a2b3c4d00000000000000000000000000000000000000000000000000000000",
+         *       "width": 600,
+         *       "height": 200,
+         *       "created_at": "2026-09-29T08:00:00Z"
+         *     }
+         */
+        ReportAsset: {
+            id: string;
+            /** @enum {string} */
+            kind: "logo";
+            /** @description project-relative: reports/assets/logo-<sha8>.png */
+            path: string;
+            sha256: string;
+            width: number;
+            height: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReportAssetCreate: {
+            /** @description an absolute path to a JPEG, PNG or WebP picked with the file dialog */
+            path: string;
+        };
     };
     responses: {
         /** @description error envelope */

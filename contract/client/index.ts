@@ -317,3 +317,31 @@ export function drawingPageThumbnailUrl(
   const q = new URLSearchParams({ token });
   return `${base}/api/v1/projects/${projectId}/drawing-inspections/${inspectionId}/pages/${page}/thumbnail?${q}`;
 }
+
+// Reports (plan 2026-09-30-reports-r0).
+export type SectionKey = Schemas["SectionKey"];
+export type ReportConfig = Schemas["ReportConfig"];
+export type ReportFilters = Schemas["ReportFilters"];
+export type ReportSection = Schemas["ReportSection"];
+export type Report = Schemas["Report"];
+export type ReportListItem = Schemas["ReportListItem"];
+export type ReportPage = Schemas["ReportPage"];
+export type ReportOutline = Schemas["ReportOutline"];
+export type OutlineSection = Schemas["OutlineSection"];
+export type DeltaSummary = Schemas["DeltaSummary"];
+export type ReportWarning = Schemas["ReportWarning"];
+export type Block = Schemas["Block"];
+export type BlockPage = Schemas["BlockPage"];
+export type TableCell = Schemas["TableCell"];
+export type CoverBlock = Schemas["CoverBlock"];
+export type SnapshotSpec = Schemas["SnapshotSpec"];
+export type SnapshotRef = Schemas["SnapshotRef"];
+export type ReportDocument = Schemas["ReportDocument"];
+export type ReportDocumentPage = Schemas["ReportDocumentPage"];
+export type ReportVersion = Schemas["ReportVersion"];
+export type ReportVersionPage = Schemas["ReportVersionPage"];
+export type ReportFile = Schemas["ReportFile"];
+export type ReportTemplate = Schemas["ReportTemplate"];
+export type ReportTemplatePage = Schemas["ReportTemplatePage"];
+export type ReportAsset = Schemas["ReportAsset"];
+export type RenderRequest = Schemas["RenderRequest"];
