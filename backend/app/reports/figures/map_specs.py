@@ -5,11 +5,9 @@ plates, 83x52 mm locators."""
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
-from sqlalchemy.orm import Session
-
-from app.db.models import ProjectType
 from app.reports import blocks
 from app.reports.context import ComposeContext
 from app.reports.figures import map_geo
@@ -20,7 +18,28 @@ MAIN_MM = (140.0, 105.0)
 HALF_MM = (83.0, 52.0)
 PLATE_MM = (140.0, 105.0)
 MEASURE_COLOUR = "#8F7BFF"  # the print violet (spec §10.1)
-UNKNOWN_TYPE = ("Unknown type", MEASURE_COLOUR)
+
+log = logging.getLogger(__name__)
+
+
+def compact(geometry: dict) -> dict:
+    """R3's `compact_geometry` (rounded, simplified to <= 120 vertices) so the spec stays inside R3's
+    vertex limit and the preview URL's `MAX_SPEC_CHARS`. Imported lazily, as `context._engine_key`
+    does, so compose never needs PIL/shapely/rasterio at import; without the engine the geometry
+    passes unchanged (the ref then carries the no-engine reason anyway), as does a shape shapely
+    cannot read."""
+    try:
+        from shapely.errors import ShapelyError
+
+        from app.reports.snapshots import SnapshotUnavailable
+        from app.reports.snapshots.map_view import compact_geometry
+    except ImportError:
+        log.warning("the snapshot engine is not installed; a figure geometry is not compacted")
+        return geometry
+    try:
+        return compact_geometry(geometry)
+    except (ShapelyError, SnapshotUnavailable, ValueError, TypeError, IndexError, KeyError):
+        return geometry  # a degenerate or unknown shape: R3 decides (it refuses what it cannot draw)
 
 
 def ref(ctx: ComposeContext, spec) -> SnapshotRef:
@@ -39,7 +58,7 @@ def _map_spec(map_id: str, geometry: dict, colour: str, label: str | None, inset
     return MapSpec(
         kind="map",
         item_id=map_id,
-        geometry=geometry,
+        geometry=compact(geometry),
         colour=colour,
         label=label,
         min_extent_m=40,
@@ -73,7 +92,7 @@ def elevation_figure(
     size_mm: tuple[float, float] = PLATE_MM,
 ) -> Figure:
     spec = ElevationSpec(
-        kind="elevation", item_id=surface_id, geometry=geometry, overlay="none", out=list(OUT)
+        kind="elevation", item_id=surface_id, geometry=compact(geometry), overlay="none", out=list(OUT)
     )
     return figure(ctx, spec, caption, size_mm)
 
@@ -105,21 +124,3 @@ def volume_plan_figure(
     ctx: ComposeContext, *, measurement_id: str, caption: str, size_mm: tuple[float, float] = PLATE_MM
 ) -> Figure:
     return figure(ctx, VolumePlanSpec(kind="volume_plan", measurement_id=measurement_id), caption, size_mm)
-
-
-def options_of(ctx: ComposeContext, key: str) -> dict:
-    """The options of section `key` in the report's config, as a plain dict (`{}` when the section
-    is absent or carries no options), per controller Ruling P3."""
-    try:
-        opts = ctx.options(key)
-    except KeyError:
-        return {}
-    return opts.model_dump(mode="json") if opts is not None else {}
-
-
-def type_look(s: Session, type_id: str) -> tuple[str, str]:
-    """(name, colour) of a project type; an unknown or since-removed type prints generically.
-    Findings use `FindingRow.type_name`/`type_colour` instead (Ruling P4); this is for figures that
-    carry a bare type id with no `FindingRow` (e.g. a non-finding map annotation)."""
-    row = s.get(ProjectType, type_id)
-    return (row.name, row.colour) if row else UNKNOWN_TYPE

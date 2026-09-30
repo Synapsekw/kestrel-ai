@@ -31,11 +31,15 @@ def test_utm_to_wgs84_round_trips():
 def test_polygon_closes_its_ring_and_line_is_a_linestring():
     assert map_geo.polygon([[0, 0], [1, 0], [1, 1]])["coordinates"][0][-1] == [0, 0]
     assert map_geo.polygon([[0, 0], [1, 0], [1, 1], [0, 0]])["coordinates"][0].count([0, 0]) == 2
-    assert map_geo.line([[0, 0], [1, 0]]) in (
-        {"type": "LineString", "coordinates": [[0, 0], [1, 0]]},
-        {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [0, 0]]]},  # Ruling 6 fallback
-    )
+    assert map_geo.line([[0, 0], [1, 0]]) == {"type": "LineString", "coordinates": [[0, 0], [1, 0]]}
     assert map_geo.point(1, 2) == {"type": "Point", "coordinates": [1.0, 2.0]}
+
+
+def test_day_text_is_the_reports_locale_free_date():
+    from datetime import date
+
+    assert map_geo.day_text(date(2026, 9, 1)) == "1 Sep 2026"
+    assert map_geo.day_text(date(2026, 12, 25)) == "25 Dec 2026"
 
 
 def test_intersect_and_contains():

@@ -17,6 +17,7 @@ def test_a_current_volume_prints_its_numbers_and_its_plan(handle):
     kv = _kv(b)
     assert kv["Net"] == "12.5 m³" and kv["Stockpile volume (above base)"] == "13.5 m³"
     assert kv["Base"] == "Stockpile toe — plane" and kv["Top surface"] == "DSM 1 Sep"
+    assert kv["Calculated"] == "2 Sep 2026"  # the report's date style, not ISO
     assert b.figure.snapshot.spec.kind == "volume_plan"
 
 

@@ -54,7 +54,7 @@ def test_rows_carry_the_data_item_name_the_source_and_the_value(handle):
     labels = measure_rows.data_labels(handle, page)
     row = measure_rows.table_row(page[0], labels)
     assert row[0] == "c" and row[1] == labels[page[0].data_id] and row[2] == "Cloud lean"
-    assert row[3] == "4.2 mm/m" and row[4] == "ready" and row[5] == "01 Sep 2026"
+    assert row[3] == "4.2 mm/m" and row[4] == "ready" and row[5] == "1 Sep 2026"
     assert page[0].id == c
 
 
@@ -86,6 +86,11 @@ def test_value_texts():
     assert measure_rows.value_text(item(status="computing")) == "calculating"
     assert measure_rows.value_text(item(status="failed")) == "failed"
     assert measure_rows.value_text(item(), stale=True) == "stale, recalculate"
+    # The Status column speaks the same words as the Value column (never the raw state).
+    assert measure_rows.table_row(item(status="computing"), {})[3:5] == ["calculating", "calculating"]
+    assert measure_rows.table_row(item(status="stale"), {})[4] == "stale, recalculate"
+    assert measure_rows.table_row(item(), {}, stale=True)[4] == "stale, recalculate"
+    assert measure_rows.table_row(item(), {})[4] == "ready"
 
 
 def test_the_table_is_174_mm_wide_with_a_repeating_header():

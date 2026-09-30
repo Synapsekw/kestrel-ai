@@ -12,6 +12,7 @@ from app.db.models import GeoMap, PointCloud, Surface
 from app.measurements.schemas import MeasurementItem
 from app.measurements.union import list_page
 from app.reports import blocks
+from app.reports.figures.map_geo import day_text
 from app.reports.schemas import Block
 
 PAGE = 200
@@ -101,15 +102,19 @@ def value_text(item: MeasurementItem, stale: bool | None = None) -> str:
     return f"{v:,.2f} {UNIT_TEXT[unit]}" if unit in UNIT_TEXT else f"{v:,.2f}"
 
 
+def status_text(item: MeasurementItem, stale: bool | None = None) -> str:
+    """The Status column in the Value column's words ("calculating", never the raw "computing")."""
+    return STALE if stale else STATUS_TEXT.get(item.status, item.status)
+
+
 def table_row(item: MeasurementItem, labels: dict[str, str], stale: bool | None = None) -> list[str]:
-    status = STALE if stale else item.status
     return [
         item.name,
         labels.get(item.data_id or "", "—"),
         SOURCE_TEXT[(item.kind, item.sub_kind)],
         value_text(item, stale),
-        status,
-        item.created_at.strftime("%d %b %Y"),
+        status_text(item, stale),
+        day_text(item.created_at),
     ]
 
 

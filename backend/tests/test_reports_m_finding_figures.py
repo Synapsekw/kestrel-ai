@@ -55,7 +55,7 @@ def test_a_cloud_finding_inside_a_map_gets_a_locator_on_the_newest_map(handle, p
     [fig] = map_fig.finding_figures(make_ctx(handle), row_of(handle, fid))
     assert fig.snapshot.spec.item_id == new and fig.snapshot.spec.inset is False
     assert fig.snapshot.spec.geometry.coordinates == [pytest_approx(PT[0]), pytest_approx(PT[1])]
-    assert fig.caption == "Location on Sep · 01 Sep 2026"
+    assert fig.caption == "Location on Sep · 1 Sep 2026"
     assert (fig.width_mm, fig.height_mm) == (83.0, 52.0)
 
 
@@ -66,6 +66,30 @@ def test_a_finding_outside_every_map_or_without_coordinates_gets_nothing(handle,
     ctx = make_ctx(handle)
     assert map_fig.finding_figures(ctx, row_of(handle, far)) == []
     assert map_fig.finding_figures(ctx, row_of(handle, none)) == []
+
+
+def test_the_figures_come_from_the_finding_row_and_a_few_map_columns(handle, project, app):
+    """No re-read of the finding (the FindingRow carries its anchor), and the covering-map lookup
+    selects columns, never whole GeoMap rows."""
+    from sqlalchemy import event
+
+    add_geomap(handle, name="Sep", captured_on=date(2026, 9, 1))
+    lon, lat = map_geo.to_crs([PT], UTM33, WGS84)[0]
+    row = row_of(handle, cloud_finding_row(handle, number=7, type_id=_type(project)["id"], lon=lon, lat=lat))
+    ctx = make_ctx(handle)
+    seen: list[str] = []
+
+    def spy(conn, cursor, statement, *a):
+        seen.append(" ".join(statement.lower().split()))
+
+    event.listen(handle.engine, "before_cursor_execute", spy)
+    try:
+        [fig] = map_fig.finding_figures(ctx, row)
+    finally:
+        event.remove(handle.engine, "before_cursor_execute", spy)
+    assert fig.caption == "Location on Sep · 1 Sep 2026"
+    assert not any("from finding" in q for q in seen)
+    assert not any("geo_map.geotransform" in q for q in seen)  # a column only a whole row carries
 
 
 def pytest_approx(v):

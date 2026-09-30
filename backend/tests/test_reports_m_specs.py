@@ -1,13 +1,15 @@
 """R9-M's seam: every figure is a SnapshotRef whose key is R3's key for its spec (spec §8.2 step 4,
 §9.1), sized per Ruling 1."""
 
+import math
 from datetime import date
 
 from reports_m_rows import add_dem, add_geomap, make_ctx
 from reports_rows import config, ctx_for
 
 from app.reports.figures import map_geo, map_specs
-from app.reports.snapshots.keys import snapshot_key
+from app.reports.snapshots.keys import MAX_SPEC_CHARS, encode_spec, snapshot_key
+from app.reports.snapshots.map_view import MAX_GEOMETRY_VERTICES
 
 
 def test_a_map_figure_references_the_spec_by_r3s_key(handle):
@@ -20,7 +22,7 @@ def test_a_map_figure_references_the_spec_by_r3s_key(handle):
         geometry=map_geo.point(500050.0, 4982950.0),
         colour="#FF0000",
         label="F-0001 · Crack",
-        caption="Sep · 01 Sep 2026",
+        caption="Sep · 1 Sep 2026",
         size_mm=map_specs.MAIN_MM,
         inset=True,
     )
@@ -69,14 +71,27 @@ def test_a_volume_plan_figure(handle):
     assert (fig.snapshot.width_px, fig.snapshot.height_px) == (1200, 900)
 
 
-def test_options_of_reads_a_sections_options(handle):
-    ctx = make_ctx(handle, "object_counts", per_area=False)
-    assert map_specs.options_of(ctx, "object_counts")["per_area"] is False
-    assert map_specs.options_of(ctx, "no_such_section") == {}
+def _ring(n: int, cx: float = 500050.0, cy: float = 4982950.0, r: float = 40.0) -> list[list[float]]:
+    return [
+        [cx + r * math.cos(2 * math.pi * i / n) + 0.0123456, cy + r * math.sin(2 * math.pi * i / n)]
+        for i in range(n)
+    ]
 
 
-def test_type_look_falls_back_for_an_unknown_type(handle, project):
-    with handle.session() as s:
-        known = project["classes"][0]
-        assert map_specs.type_look(s, known["id"]) == (known["name"], known["colour"])
-        assert map_specs.type_look(s, "gone") == ("Unknown type", "#8F7BFF")
+def test_a_long_map_geometry_is_compacted_to_fit_a_spec_url(handle):
+    mid = add_geomap(handle, name="Sep")
+    fig = map_specs.map_figure(
+        make_ctx(handle), map_id=mid, geometry=map_geo.polygon(_ring(500)), colour="#8F7BFF", caption="c"
+    )
+    ring = fig.snapshot.spec.geometry.coordinates[0]
+    assert len(ring) <= MAX_GEOMETRY_VERTICES
+    assert len(encode_spec(fig.snapshot.spec)) <= MAX_SPEC_CHARS
+
+
+def test_a_long_elevation_geometry_is_compacted_too(handle):
+    sid = add_dem(handle)
+    fig = map_specs.elevation_figure(
+        make_ctx(handle), surface_id=sid, geometry=map_geo.line(_ring(500)), caption="c"
+    )
+    assert len(fig.snapshot.spec.geometry.coordinates) <= MAX_GEOMETRY_VERTICES
+    assert len(encode_spec(fig.snapshot.spec)) <= MAX_SPEC_CHARS

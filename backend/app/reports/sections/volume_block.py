@@ -5,8 +5,11 @@ writing the row. A stale block carries no numbers and no figure."""
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.db.models import VolumeMeasurement
 from app.reports.figures import map_specs
+from app.reports.figures.map_geo import day_text
 from app.reports.schemas import VolumeBlock
 from app.volumes.items import ExportItem
 from app.volumes.service import fingerprint, inputs_snapshot, stale_reasons
@@ -29,6 +32,16 @@ def _why(s, row: VolumeMeasurement) -> str:
         return "never calculated"
     reasons = stale_reasons(row.results.get("inputs", {}), inputs_snapshot(s, row))
     return "; ".join(reasons) or "inputs changed since the calculation"
+
+
+def _calculated(value) -> str:
+    """The calculation day as the report prints dates (`2 Sep 2026`); the raw text if unparseable."""
+    if not value:
+        return "—"
+    try:
+        return day_text(datetime.fromisoformat(str(value)).date())
+    except ValueError:
+        return str(value)[:10]
 
 
 def m3(v) -> str:
@@ -81,7 +94,7 @@ def volume_block(ctx, measurement_id: str, *, with_figure: bool) -> VolumeBlock:
         ["Area", m2(r.get("area_m2"))],
         ["Top surface", (r.get("top_surface") or {}).get("name", "—")],
         ["Base", item.base_detail],
-        ["Calculated", str(r.get("computed_at", "—"))[:10]],
+        ["Calculated", _calculated(r.get("computed_at"))],
     ]
     figure = (
         map_specs.volume_plan_figure(ctx, measurement_id=measurement_id, caption=f"Plan of {title}")

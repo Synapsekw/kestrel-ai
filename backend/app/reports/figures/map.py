@@ -12,7 +12,6 @@ lives on the finding row or the map row, both already covered by the section's n
 
 from __future__ import annotations
 
-from app.db.models import Finding, GeoMap
 from app.reports.context import ComposeContext, FindingRow
 from app.reports.figures import map_geo, map_specs
 from app.reports.schemas import Figure
@@ -20,25 +19,24 @@ from app.workspace.frame import WGS84
 
 
 def finding_figures(ctx: ComposeContext, finding: FindingRow) -> list[Figure]:
+    """Built from the FindingRow's own anchor fields (anchor_kind, map_id, geometry, lon/lat) plus a
+    column select of the one map it resolves to; the finding is never re-read."""
+    label = f"{finding.label} · {finding.type_name}"
     with ctx.session() as s:
-        current = s.get(Finding, finding.id)
-        if current is None:
-            return []
-        label = f"{finding.label} · {finding.type_name}"
-        if current.anchor_kind == "map":
-            gmap = s.get(GeoMap, current.map_id) if current.map_id else None
-            if gmap is None or not current.geometry:
+        if finding.anchor_kind == "map":
+            gmap = map_geo.map_ref(s, finding.map_id)
+            if gmap is None or not finding.geometry:
                 return []
-            map_id, geometry = gmap.id, dict(current.geometry)
+            map_id, geometry = gmap.id, dict(finding.geometry)
             caption = f"{gmap.name} · {map_geo.day_text(map_geo.survey_day(gmap))}"
             size, inset = map_specs.MAIN_MM, True
         else:
-            if current.lon is None or current.lat is None:
+            if finding.lon is None or finding.lat is None:
                 return []
-            gmap = map_geo.covering_map(s, current.lon, current.lat)
+            gmap = map_geo.covering_map(s, finding.lon, finding.lat)
             if gmap is None:
                 return []
-            xy = map_geo.to_crs([[current.lon, current.lat]], WGS84, gmap.crs_wkt)
+            xy = map_geo.to_crs([[finding.lon, finding.lat]], WGS84, gmap.crs_wkt)
             if xy is None:
                 return []
             map_id, geometry = gmap.id, map_geo.point(*xy[0])

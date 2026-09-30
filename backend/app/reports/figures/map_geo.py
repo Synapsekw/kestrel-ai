@@ -1,25 +1,35 @@
 """Pure geometry for R9-M's map figures (reports spec §9.3): coordinates into an item's CRS, GeoJSON
-builders, WGS84 frames for survey pairs. Nothing here reads a raster; `covering_map` reads a few
-`geo_map` columns (tens of rows)."""
+builders, WGS84 frames for survey pairs. Nothing here reads a raster; `covering_map` selects a few
+`geo_map` columns (tens of rows), never whole map rows."""
 
 from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import GeoMap
+from app.reports.blocks import fmt_date
 from app.workspace.frame import transform_xy
 
 BBox = tuple[float, float, float, float]
 Points = Sequence[Sequence[float]]
 ASPECT = 4 / 3
-# Ruling 6: False only if R3's map renderer cannot draw a LineString (Task 1 Step 1). Confirmed True:
-# the merged app/reports/snapshots/map_view.py draws Point, LineString and Polygon geometry.
-LINESTRING_SUPPORTED = True
+
+
+@dataclass(frozen=True)
+class MapRef:
+    """The few `geo_map` columns a figure caption and spec need."""
+
+    id: str
+    name: str
+    crs_wkt: str | None
+    captured_on: date | None
+    created_at: datetime
 
 
 def to_crs(points: Points, src_wkt: str | None, dst_wkt: str | None) -> list[list[float]] | None:
@@ -47,10 +57,8 @@ def polygon(ring: Points) -> dict:
 
 
 def line(points: Points) -> dict:
-    pts = [list(p) for p in points]
-    if LINESTRING_SUPPORTED:
-        return {"type": "LineString", "coordinates": pts}
-    return {"type": "Polygon", "coordinates": [pts + [list(p) for p in reversed(pts[:-1])]]}
+    """A LineString (R3's map_view draws Point, LineString and Polygon; plan Ruling 6 needs no fallback)."""
+    return {"type": "LineString", "coordinates": [list(p) for p in points]}
 
 
 def centroid(points: Points) -> tuple[float, float]:
@@ -91,17 +99,32 @@ def survey_day(gmap) -> date:
 
 
 def day_text(d: date) -> str:
-    return d.strftime("%d %b %Y")
+    """`1 Sep 2026`: R2's `blocks.fmt_date` (fixed English month names, no strftime, no locale)."""
+    return fmt_date(d)
 
 
-def covering_map(s: Session, lon: float, lat: float) -> GeoMap | None:
-    """The newest ready map whose WGS84 footprint holds the point."""
+_REF_COLS = (GeoMap.id, GeoMap.name, GeoMap.crs_wkt, GeoMap.captured_on, GeoMap.created_at)
+
+
+def map_ref(s: Session, map_id: str | None) -> MapRef | None:
+    """The map's caption/spec columns, or None when it is gone."""
+    if not map_id:
+        return None
+    row = s.execute(select(*_REF_COLS).where(GeoMap.id == map_id)).first()
+    return MapRef(*row) if row is not None else None
+
+
+def covering_map(s: Session, lon: float, lat: float) -> MapRef | None:
+    """The newest ready map whose WGS84 footprint holds the point (a column select, tens of rows)."""
     rows = s.execute(
-        select(GeoMap).where(GeoMap.status == "ready", GeoMap.bounds_wgs84.is_not(None))
-    ).scalars()
+        select(*_REF_COLS, GeoMap.bounds_wgs84).where(
+            GeoMap.status == "ready", GeoMap.bounds_wgs84.is_not(None)
+        )
+    ).all()
     best = None
-    for m in rows:
-        if m.bounds_wgs84 and contains(m.bounds_wgs84, lon, lat):
+    for *cols, bounds in rows:
+        m = MapRef(*cols)
+        if bounds and contains(bounds, lon, lat):
             if best is None or (survey_day(m), m.created_at, m.id) > (
                 survey_day(best),
                 best.created_at,
