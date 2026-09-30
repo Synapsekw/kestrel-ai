@@ -53,6 +53,7 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   assist_acquire: "sparkle",
   elevation_import: "elevation",
   drawing_import: "drawing",
+  report_render: "report",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

@@ -39,7 +39,7 @@ FORMAT_LABEL = {
     "yolo": "YOLO labels",
     "yolo_seg": "YOLO polygon labels",
     "coco": "COCO file",
-    "html": "Report",
+    "html": "Image contact sheet (HTML)",
 }
 
 log = logging.getLogger(__name__)

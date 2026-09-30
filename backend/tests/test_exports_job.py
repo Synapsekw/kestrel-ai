@@ -458,3 +458,10 @@ def test_sweep_does_not_follow_a_junction_and_delete_the_real_export(handle, mon
         assert (real_export / "detections.csv").read_text("utf-8") == "x"
     finally:
         link.rmdir()
+
+
+def test_html_format_is_labelled_image_contact_sheet():
+    """Reports spec §13: the HTML format is the image contact sheet; reports are PDFs now."""
+    from app.exports.job import FORMAT_LABEL
+
+    assert FORMAT_LABEL["html"] == "Image contact sheet (HTML)"

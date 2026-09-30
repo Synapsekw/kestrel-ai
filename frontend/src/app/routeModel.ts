@@ -43,7 +43,6 @@ export const SECONDARY_PAGES: readonly PageEntry[] = [
   { id: "query", label: "Detect", icon: "detect" },
   { id: "analytics", label: "Analytics", icon: "trend" },
   { id: "site-areas", label: "Site areas", icon: "map" },
-  { id: "export", label: "Export", icon: "download" },
   { id: "settings", label: "Project settings", icon: "settings" },
 ];
 

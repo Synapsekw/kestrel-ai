@@ -3,10 +3,12 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { exampleGeoMap, exampleMapRun, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
+import { useToastStore } from "@/ui";
 import { ExportMapDialog } from "./ExportMapDialog";
 
 describe("ExportMapDialog", () => {
   it("exports a scored run in every format", async () => {
+    useToastStore.getState().clear();
     const { api, requests } = fakeClient([
       {
         method: "POST",
@@ -35,6 +37,11 @@ describe("ExportMapDialog", () => {
       formats: ["geojson", "gpkg", "csv"],
     });
     expect(useJobsStore.getState().jobs[runningJob.id]?.type).toBe("map_export");
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => t.text)).toContain(
+        "Export started: find it under Past exports in Reports → Data exports when it is done.",
+      ),
+    );
   });
 
   it("offers only the pixel CSV for a map without coordinates", () => {

@@ -390,11 +390,14 @@ await step("9 export the trained model to ONNX", async (check, snap) => {
   await snap("onnx-exported");
 });
 
-await step("9.5 export the results in every format; the model section shows the ONNX file", async (check, snap) => {
+await step("9.5 export the results in every format via Reports → Data exports", async (check, snap) => {
   const { existsSync, readFileSync, readdirSync } = await import("node:fs");
-  await page.getByRole("navigation").getByRole("link", { name: "Export" }).click();
-  await urlIs(/\/export/);
-  const form = page.locator('[aria-label="Results"]');
+  await page.goto(new URL(`/p/${projectId}/reports/exports`, page.url()).href);
+  await urlIs(/\/reports\/exports/);
+  const panel = page.getByRole("region", { name: "Data exports" });
+  check("the Data exports panel is shown", await visible(panel));
+  check("Data exports is the selected view", (await page.getByRole("radio", { name: "Data exports" }).getAttribute("aria-checked")) === "true");
+  const form = panel.locator('[aria-label="Results"]');
   check("the export says what it will contain", await visible(form.getByText(/Exports (all )?\d+ images?: \d+ accepted box(es)? on the \d+ checked images?/)));
   for (const label of ["Labels in YOLO format", "Labels in COCO format"]) {
     const box = form.getByLabel(label);
@@ -412,7 +415,8 @@ await step("9.5 export the results in every format; the model section shows the 
     await sleep(1000);
   }
   check("the export job succeeded", job?.state === "succeeded", `${job?.state} ${job?.error ?? ""}`);
-  const row = page.getByTestId(`export-job-${job.id}`);
+  check("the Past exports heading is shown", await visible(panel.getByRole("heading", { name: "Past exports" })));
+  const row = panel.getByTestId(`export-job-${job.id}`);
   check("the past export is listed with Show in folder", await visible(row.getByRole("button", { name: "Show in folder" }), 30_000));
   const folder = join(cfg.projectFolder, ...job.result.folder.split("/"));
   const files = readdirSync(folder);
@@ -422,9 +426,6 @@ await step("9.5 export the results in every format; the model section shows the 
   check("the report is self-contained with thumbnails", report.includes("data:image/jpeg") && !/https?:\/\//.test(report));
   check("no partial folder is left behind", !readdirSync(join(cfg.projectFolder, "exports")).some((n) => n.startsWith(".partial")));
   await snap("export-done");
-  const models = page.locator('[aria-label="Model for other applications"]');
-  check("the model section explains ONNX and shows the exported file", await visible(models.getByText(/\.onnx/)));
-  await snap("export-model-section");
   check("export folder exists", existsSync(folder));
 });
 

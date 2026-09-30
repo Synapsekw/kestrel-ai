@@ -38,6 +38,7 @@ const TYPE_NAME: Record<Job["type"], string> = {
   assist_acquire: "Smart polygon model",
   elevation_import: "Elevation import",
   drawing_import: "Drawing import",
+  report_render: "Report",
 };
 
 function num(v: unknown): number | null {
@@ -139,6 +140,8 @@ export function jobToastText(job: Job): string {
     case "drawing_import":
       // One job type, two phases (spec 2026-09-26-map-workspace section 8.2).
       return job.params?.phase === "build" ? "Drawing imported" : "Drawing file read";
+    case "report_render":
+      return "Report rendered";
   }
 }
 
