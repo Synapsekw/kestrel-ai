@@ -100,10 +100,12 @@ export interface RouteInfo {
  * How the shell frames a project page. The one place a workspace unit changes when its surface
  * lands: `maps` is full-bleed at its list (the map workspace, M-W1); C makes `clouds` full-bleed.
  */
-export function layoutOf(tab: string, detail: boolean): Layout {
+export function layoutOf(tab: string, detail: boolean, sub?: string): Layout {
   if (tab === "maps") return "fullbleed";
   if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
   if (tab === "images") return "workspace";
+  // R7: the report builder's three panes fill the page under the tabs; Data exports stays a page.
+  if (tab === "reports" && detail && sub !== "exports") return "workspace";
   return "page";
 }
 
@@ -128,7 +130,7 @@ export function routeInfo(pathname: string): RouteInfo {
       projectId: second,
       tab: tab?.id ?? null,
       page: tab?.label ?? secondary?.label ?? null,
-      layout: layoutOf(seg, parts.length > 3),
+      layout: layoutOf(seg, parts.length > 3, parts[3]),
       transitionKey: `p/${second}/${seg}`,
     };
   }
