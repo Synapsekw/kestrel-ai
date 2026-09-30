@@ -11,6 +11,7 @@ from app.errors import AppError
 from app.pagination import encode_cursor
 from app.reports import blocks
 from app.reports.context import ORDERS, FindingRow, findings_page, iter_findings
+from app.reports.schemas import ReportWarning
 
 
 @pytest.fixture
@@ -103,6 +104,34 @@ def test_cursor_with_a_wrong_typed_value_is_422(handle, many, order, cursor_kwar
     with pytest.raises(AppError) as e:
         findings_page(ctx, order, bad)
     assert e.value.status == 422
+
+
+@pytest.mark.parametrize(
+    "order, cursor_kwargs",
+    [
+        ("number", {"o": "number", "n": 10**30, "k": None}),
+        ("number", {"o": "number", "n": -1, "k": None}),
+        ("severity_desc", {"o": "severity_desc", "n": 1, "k": 10**30}),
+        ("severity_desc", {"o": "severity_desc", "n": 1, "k": -(10**30)}),
+    ],
+)
+def test_cursor_with_an_out_of_range_integer_is_422(handle, many, order, cursor_kwargs):
+    """SQLite cannot bind an integer outside int64 (OverflowError -> 500); a tampered cursor 422s."""
+    ctx = ctx_for(handle, config())
+    with pytest.raises(AppError) as e:
+        findings_page(ctx, order, encode_cursor(**cursor_kwargs))
+    assert e.value.status == 422
+
+
+def test_warn_is_total_over_pre_seeded_warnings(handle, many):
+    seeded = ReportWarning.model_validate(
+        {"code": "no_view", "message": "2 findings have no 3D view", "count": 2}
+    )
+    ctx = ctx_for(handle, config(), warnings=[seeded])
+    ctx.warn("no_view", "{n} findings have no 3D view")
+    assert [(w.code, w.count, w.message) for w in ctx.warnings] == [
+        ("no_view", 3, "2 findings have no 3D view")
+    ]
 
 
 def test_rows_carry_names_colours_and_fallbacks(handle, many):

@@ -3,10 +3,10 @@
 from datetime import UTC, datetime
 
 import pytest
-from reports_rows import add_cloud, add_findings, add_report, add_type, add_version, config
+from reports_rows import add_cloud, add_findings, add_map, add_report, add_type, add_version, config
 from sqlalchemy import update
 
-from app.db.models import Finding
+from app.db.models import Finding, GeoMap, PointCloud, ProjectType
 from app.reports.models import Report
 
 API = "/api/v1"
@@ -58,7 +58,8 @@ def test_outline_deltas_carry_an_issued_baseline(client, project_id, handle, see
     assert r.status_code == 200, r.text
     deltas = r.json()["deltas"]
     assert deltas["baseline"]["number"] == 1
-    assert deltas["new"] > 0 or deltas["closed"] > 0 or deltas["escalated"] > 0 or deltas["deescalated"] > 0
+    counts = {k: deltas[k] for k in ("new", "closed", "escalated", "deescalated", "reopened", "left")}
+    assert counts == {"new": 2, "closed": 0, "escalated": 0, "deescalated": 0, "reopened": 0, "left": 0}
 
 
 def test_a_finding_edit_moves_only_finding_sections(client, project_id, handle, seeded):
@@ -139,3 +140,72 @@ def test_a_garbage_offset_cursor_is_422_not_500(client, project_id, seeded):
 def test_unknown_report_is_404(client, project_id):
     assert client.get(_url(project_id, "nope", "outline")).status_code == 404
     assert client.get(_url(project_id, "nope", "sections/summary/blocks")).status_code == 404
+
+
+def _block_etag(client, pid, rid, key):
+    r = client.get(_url(pid, rid, f"sections/{key}/blocks"))
+    assert r.status_code == 200, r.text
+    return r.headers["etag"].strip('"')
+
+
+def _moved(before, after):
+    return {k for k in before if before[k] != after[k]}
+
+
+def test_a_data_item_rename_moves_finding_sections_and_the_appendix(client, project_id, handle, seeded):
+    before = _etags(client, project_id, seeded["rid"])
+    with handle.session() as s:
+        s.get(PointCloud, seeded["cloud"]).name = "Scan renamed"  # no Finding.updated_at bump
+    after = _etags(client, project_id, seeded["rid"])
+    assert {"findings_table", "finding_pages", "appendix"} <= _moved(before, after)
+    assert _block_etag(client, project_id, seeded["rid"], "appendix") == after["appendix"]
+
+
+def test_a_map_import_finishing_moves_the_cover_and_the_appendix(client, project_id, handle, seeded):
+    mid = add_map(handle, status="importing", bounds=None)
+    before = _etags(client, project_id, seeded["rid"])
+    with handle.session() as s:
+        m = s.get(GeoMap, mid)
+        m.status, m.bounds_native = "ready", [500000.0, 5000000.0, 500100.0, 5000080.0]
+    after = _etags(client, project_id, seeded["rid"])
+    assert {"cover", "appendix"} <= _moved(before, after)
+    assert _block_etag(client, project_id, seeded["rid"], "cover") == after["cover"]
+    assert _block_etag(client, project_id, seeded["rid"], "appendix") == after["appendix"]
+
+
+def test_a_project_rename_moves_the_cover(client, project_id, handle, seeded):
+    before = _etags(client, project_id, seeded["rid"])
+    with handle.session() as s:
+        handle.row(s).name = "Renamed project"
+    after = _etags(client, project_id, seeded["rid"])
+    assert "cover" in _moved(before, after)
+    assert _block_etag(client, project_id, seeded["rid"], "cover") == after["cover"]
+
+
+def test_a_type_kind_change_moves_the_etags(client, project_id, handle, seeded):
+    before = _etags(client, project_id, seeded["rid"])
+    with handle.session() as s:
+        s.get(ProjectType, seeded["type"]).kind = "object"
+    assert "finding_pages" in _moved(before, _etags(client, project_id, seeded["rid"]))
+
+
+def _cur(**kw):
+    import base64
+    import json
+
+    return base64.urlsafe_b64encode(json.dumps(kw).encode()).decode()
+
+
+@pytest.mark.parametrize(
+    ("key", "cursor"),
+    [
+        ("finding_pages", {"o": "number", "n": 10**30, "k": None}),
+        ("finding_pages", {"o": "number", "n": -1, "k": None}),
+        ("summary", {"i": 10**30}),
+    ],
+)
+def test_an_out_of_range_cursor_is_422_not_500(client, project_id, seeded, key, cursor):
+    r = client.get(
+        _url(project_id, seeded["rid"], f"sections/{key}/blocks"), params={"cursor": _cur(**cursor)}
+    )
+    assert r.status_code == 422, r.text

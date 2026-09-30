@@ -18,6 +18,7 @@ from datetime import datetime
 from app.errors import AppError
 from app.pagination import decode_cursor, encode_cursor
 from app.reports.context import (  # noqa: F401 - re-exported: R5 and R9 import them from here
+    INT64,
     PAGE,
     Baseline,
     ComposeContext,
@@ -109,7 +110,7 @@ def section_page(
     start = 0
     if cursor:
         i = decode_cursor(cursor, "i")["i"]
-        if not isinstance(i, int) or isinstance(i, bool) or i < 0:
+        if not isinstance(i, int) or isinstance(i, bool) or not 0 <= i < INT64:
             raise AppError("validation_error", "invalid cursor", 422)
         start = i
     end = start + limit

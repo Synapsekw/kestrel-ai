@@ -134,3 +134,21 @@ def test_fingerprint_moves_with_comments(handle, three):
             FindingComment(finding_id=fid, author="D", text="x", created_at=datetime(2026, 9, 25, tzinfo=UTC))
         )
     assert finding_pages.fingerprint(ctx) != before
+
+
+def test_a_figure_module_fingerprint_joins_the_etag(handle, three, monkeypatch):
+    ctx = ctx_for(handle, _cfg(snapshots=["cloud"]))
+    monkeypatch.setattr(cloud, "fingerprint", lambda ctx: "a", raising=False)
+    a = finding_pages.fingerprint(ctx)
+    monkeypatch.setattr(cloud, "fingerprint", lambda ctx: "b", raising=False)
+    assert finding_pages.fingerprint(ctx) != a
+
+
+def test_the_image_fingerprint_joins_when_photos_or_comments_print(handle, three, monkeypatch):
+    ctx = ctx_for(handle, _cfg(snapshots=[], photos_max=0, comments="none"))
+    other = ctx_for(handle, _cfg(snapshots=[], photos_max=2, comments="none"))
+    monkeypatch.setattr(image, "fingerprint", lambda ctx: "a", raising=False)
+    a, oa = finding_pages.fingerprint(ctx), finding_pages.fingerprint(other)
+    monkeypatch.setattr(image, "fingerprint", lambda ctx: "b", raising=False)
+    assert finding_pages.fingerprint(ctx) == a  # image output is off: its hook does not run
+    assert finding_pages.fingerprint(other) != oa

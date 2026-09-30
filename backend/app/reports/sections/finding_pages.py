@@ -85,4 +85,12 @@ def fingerprint(ctx: ComposeContext) -> str:
                 FindingAttachment.finding_id.in_(ids)
             )
         ).one()
-    return f"{tuple(com)}|{tuple(att)}"
+    opts = ctx.options(KEY)
+    hooks = [str(k) for k in opts.snapshots]
+    if (opts.photos_max > 0 or str(opts.comments) != "none") and "image" not in hooks:
+        hooks.append("image")
+    extra = []
+    for kind in hooks:  # a figure module's optional `fingerprint(ctx) -> str` joins the etag
+        fp = getattr(FIGURE_MODULES[kind], "fingerprint", None)
+        extra.append(f"{kind}:{fp(ctx)}" if fp is not None else kind)
+    return f"{tuple(com)}|{tuple(att)}|{'|'.join(extra)}"

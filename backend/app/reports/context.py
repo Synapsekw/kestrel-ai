@@ -40,6 +40,7 @@ UNGRADED = "Ungraded"
 GREY = "#5E5C7A"  # the print theme's muted ink (spec §10.1)
 UNKNOWN_TYPE = "Unknown type"
 NO_ENGINE = "The snapshot engine is not installed."
+INT64 = 2**63  # SQLite binds only int64; a larger cursor integer would raise OverflowError (a 500)
 _SPEC = TypeAdapter(SnapshotSpec)
 
 
@@ -253,7 +254,8 @@ class ComposeContext:
         for i, w in enumerate(self.warnings):
             if w.code == code:
                 total = (w.count or 0) + n
-                text = self._templates[code].format(n=total) if "{n}" in self._templates[code] else w.message
+                template = self._templates.get(code, w.message)  # total over pre-seeded warnings
+                text = template.format(n=total) if "{n}" in template else w.message
                 self.warnings[i] = w.model_copy(update={"count": total, "message": text})
                 return
         self._templates[code] = message
@@ -341,11 +343,11 @@ def findings_page(
         if c["o"] != order or (order != "number" and "k" not in c):
             raise AppError("validation_error", "invalid cursor", 422)
         cn = c["n"]
-        if not isinstance(cn, int) or isinstance(cn, bool):
+        if not isinstance(cn, int) or isinstance(cn, bool) or not 0 <= cn < INT64:
             raise AppError("validation_error", "invalid cursor", 422)
         if order == "severity_desc":
             ck = c["k"]
-            if not isinstance(ck, int) or isinstance(ck, bool):
+            if not isinstance(ck, int) or isinstance(ck, bool) or not -INT64 <= ck < INT64:
                 raise AppError("validation_error", "invalid cursor", 422)
         elif order in ("type", "observed"):
             ck = c["k"]

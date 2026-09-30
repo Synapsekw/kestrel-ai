@@ -53,24 +53,64 @@ def _finding_fp(ctx: ComposeContext) -> list:
     return [row[0], str(row[1]), row[2], row[3]]
 
 
-def _data_fp(ctx: ComposeContext) -> list:
-    out = []
+# Per data item, every column a section prints or orders by: labels (finding cells, appendix), dates
+# (observed, period, appendix order), status and bounds (cover locator), sizes and EPSG (appendix).
+# These tables carry no updated_at, so the rows themselves are hashed.
+_DATA_COLUMNS = (
+    (
+        Source,
+        (Source.label, Source.site, Source.kind, Source.captured_on, Source.created_at, Source.image_count),
+    ),
+    (
+        GeoMap,
+        (
+            GeoMap.name,
+            GeoMap.status,
+            GeoMap.captured_on,
+            GeoMap.created_at,
+            GeoMap.width,
+            GeoMap.height,
+            GeoMap.gsd_cm,
+            GeoMap.epsg,
+            GeoMap.bounds_native,
+        ),
+    ),
+    (
+        Surface,
+        (
+            Surface.name,
+            Surface.kind,
+            Surface.status,
+            Surface.captured_on,
+            Surface.created_at,
+            Surface.cell_size_m,
+            Surface.point_cloud_id,
+        ),
+    ),
+    (
+        PointCloud,
+        (
+            PointCloud.name,
+            PointCloud.status,
+            PointCloud.captured_on,
+            PointCloud.created_at,
+            PointCloud.point_count,
+            PointCloud.epsg,
+        ),
+    ),
+)
+
+
+def _data_fp(ctx: ComposeContext) -> str:
+    """A digest of the data items' printed columns; one column select per table, ordered by id,
+    streamed into the hash (bounded by the number of data items, as the appendix is)."""
+    h = hashlib.sha256()
     with ctx.session() as s:
-        for model in (Source, GeoMap, Surface, PointCloud):
-            out.append(
-                [
-                    str(v)
-                    for v in s.execute(
-                        select(
-                            func.count(),
-                            func.max(model.created_at),
-                            func.max(model.captured_on),
-                            func.min(model.captured_on),
-                        )
-                    ).one()
-                ]
-            )
-    return out
+        for model, cols in _DATA_COLUMNS:
+            h.update(model.__tablename__.encode())
+            for row in s.execute(select(model.id, *cols).order_by(model.id)):
+                h.update(json.dumps(list(row), default=str).encode())
+    return h.hexdigest()
 
 
 def common_fingerprint(ctx: ComposeContext) -> dict:
@@ -78,7 +118,8 @@ def common_fingerprint(ctx: ComposeContext) -> dict:
         "filters": ctx.config.filters.model_dump(mode="json"),
         "today": ctx.today.isoformat(),
         "baseline": ctx.baseline.version_id if ctx.baseline else None,
-        "types": sorted((k, v.name, v.colour) for k, v in ctx.types.items()),
+        "project": ctx.project_name,
+        "types": sorted((k, v.name, v.colour, v.kind) for k, v in ctx.types.items()),
         "scale": [(lv.level, lv.name, lv.colour) for lv in ctx.scale],
         "data": _data_fp(ctx),
         "marks": [ctx.version, ctx.issued],
