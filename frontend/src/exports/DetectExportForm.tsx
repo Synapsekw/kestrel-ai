@@ -1,41 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Job, Source } from "@contract/client";
 import { useApi } from "@/api/client";
-import { createDetectExport, type DetectExportFormat } from "@/api/detectExports";
+import { createDetectExport } from "@/api/detectExports";
 import { messageOf } from "@/api/errors";
 import { fetchAllSources } from "@/api/sources";
 import { sortSources } from "@/analytics/format";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, Field, Segmented, Select } from "@/ui";
+import { Alert, Button, buttonClass, Field, Select } from "@/ui";
 
 interface Props {
   projectId: string;
   onStarted?: (job: Job) => void;
 }
 
-const FORMATS: { value: DetectExportFormat; label: string; hint: string }[] = [
-  {
-    value: "csv",
-    label: "Table (CSV)",
-    hint: "One row per source, class and site area, with the total and the verified count. Opens in Excel.",
-  },
-  {
-    value: "pdf",
-    label: "Report (PDF)",
-    hint: "One report per source: an overview picture, the counts per class and per site area, and how they were counted.",
-  },
-];
+const CSV_HINT =
+  "One row per source, class and site area, with the total and the verified count. Opens in Excel.";
 
 const ALL = "";
 
 const sourceName = (s: Source) =>
   `${s.label ?? s.folder} (${s.kind === "map" ? "map" : "photos"}${s.captured_on ? `, ${s.captured_on}` : ""})`;
 
-/** A project's counts, as a CSV table or a PDF report per source. */
+/** A project's counts as a CSV table; the per-source PDF is a Survey count report now (reports spec §13). */
 export function DetectExportForm({ projectId, onStarted }: Props) {
   const api = useApi();
-  const [format, setFormat] = useState<DetectExportFormat>("csv");
   const [sourceId, setSourceId] = useState(ALL);
   const [sources, setSources] = useState<Source[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -66,7 +56,7 @@ export function DetectExportForm({ projectId, onStarted }: Props) {
       const job = await createDetectExport(
         api,
         projectId,
-        sourceId === ALL ? { format } : { format, source_id: sourceId },
+        sourceId === ALL ? { format: "csv" } : { format: "csv", source_id: sourceId },
       );
       useJobsStore.getState().upsert(job);
       onStarted?.(job);
@@ -78,7 +68,6 @@ export function DetectExportForm({ projectId, onStarted }: Props) {
     }
   }
 
-  const hint = FORMATS.find((f) => f.value === format)?.hint;
   const empty = sources !== null && sources.length === 0;
 
   return (
@@ -92,16 +81,7 @@ export function DetectExportForm({ projectId, onStarted }: Props) {
           Maps count objects. Photos count detections, and the same object can appear in several photos.
         </p>
       </div>
-      <div className="flex flex-col gap-2">
-        <Segmented
-          label="Format"
-          options={FORMATS}
-          value={format}
-          onChange={setFormat}
-          className="self-start"
-        />
-        <p className="max-w-prose text-xs leading-relaxed text-muted">{hint}</p>
-      </div>
+      <p className="max-w-prose text-xs leading-relaxed text-muted">Table (CSV). {CSV_HINT}</p>
       <Field label="Sources" htmlFor="detect-export-source" className="max-w-sm">
         <Select
           id="detect-export-source"
@@ -130,6 +110,17 @@ export function DetectExportForm({ projectId, onStarted }: Props) {
       >
         Export
       </Button>
+      <div className="flex flex-col gap-2 border-t border-line pt-4">
+        <p className="max-w-prose text-sm text-muted">
+          A printable report of the counts, with an overview picture per source, is a report now.
+        </p>
+        <Link
+          to={`/p/${projectId}/reports?new=builtin-survey-counts`}
+          className={buttonClass("secondary", "md", "w-fit")}
+        >
+          Create a Survey count report
+        </Link>
+      </div>
     </section>
   );
 }
