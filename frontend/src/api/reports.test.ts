@@ -28,8 +28,10 @@ import {
   specParam,
   startRender,
   versionBlocksLoader,
+  versionOutline,
   type Block,
   type ReportDocumentPage,
+  type ReportVersion,
   type SnapshotRef,
   type TemplateCreate,
   type TemplatePatch,
@@ -253,6 +255,67 @@ describe("versionBlocksLoader pagination (Ruling R-3)", () => {
     ]);
     const loadBlocks = versionBlocksLoader(api, "p1", "r1", 2);
     expect(await loadBlocks("appendix", null)).toEqual({ items: [], next_cursor: null });
+  });
+});
+
+describe("versionOutline (R7: a version opened read-only)", () => {
+  const version = (over: Partial<ReportVersion> = {}): ReportVersion =>
+    ({
+      id: "v-id",
+      report_id: "r1",
+      number: 3,
+      config: {
+        paper: { size: "Letter", orientation: "portrait" },
+        sections: [
+          { key: "cover", enabled: true, options: {} },
+          { key: "summary", enabled: false, options: {} },
+          { key: "finding_pages", enabled: true, options: {} },
+          { key: "findings_table", enabled: true, options: {} },
+          { key: "comparison", enabled: true, options: {} },
+          { key: "appendix", enabled: false, options: {} },
+        ],
+      },
+      stats: {
+        finding_count: 12,
+        page_count: 9,
+        part_count: 1,
+        warnings: [{ code: "view3d_missing", message: "2 findings have no 3D view", count: 2, link: null }],
+        label: null,
+        error: null,
+      },
+      ...over,
+    }) as unknown as ReportVersion;
+
+  it("lists the enabled sections in config order with the backend's default titles", () => {
+    const o = versionOutline(version());
+    expect(o.report_id).toBe("r1");
+    expect(o.sections).toEqual([
+      { key: "cover", title: "Cover", block_count: 1, etag: "v3", estimated_pages: 1 },
+      { key: "finding_pages", title: "Finding details", block_count: 1, etag: "v3", estimated_pages: 1 },
+      { key: "findings_table", title: "Findings", block_count: 1, etag: "v3", estimated_pages: 1 },
+      { key: "comparison", title: "Survey comparison", block_count: 1, etag: "v3", estimated_pages: 1 },
+    ]);
+    expect(o.finding_count).toBe(12);
+    expect(o.warnings).toHaveLength(1);
+    expect(o.deltas).toEqual({
+      baseline: null,
+      new: 0,
+      closed: 0,
+      escalated: 0,
+      deescalated: 0,
+      reopened: 0,
+      left: 0,
+    });
+  });
+
+  it("takes titles from the caller, keys the etag by id without a number, and reads a null count as 0", () => {
+    const base = version();
+    const o = versionOutline(version({ number: null, stats: { ...base.stats, finding_count: null } }), {
+      cover: "Title page",
+    });
+    expect(o.sections[0]).toMatchObject({ key: "cover", title: "Title page", etag: "vv-id" });
+    expect(o.sections[1].title).toBe("Finding details");
+    expect(o.finding_count).toBe(0);
   });
 });
 

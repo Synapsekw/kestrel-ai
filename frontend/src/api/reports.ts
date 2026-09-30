@@ -297,6 +297,49 @@ export function versionBlocksLoader(
   };
 }
 
+/** The section titles the backend composes (R2 section modules' `TITLE`). */
+const SECTION_TITLES: Record<SectionKey, string> = {
+  cover: "Cover",
+  summary: "Summary",
+  findings_table: "Findings",
+  finding_pages: "Finding details",
+  measurements: "Measurements",
+  comparison: "Survey comparison",
+  object_counts: "Object counts",
+  appendix: "Appendix",
+};
+
+/**
+ * An outline for a frozen version (there is no version outline endpoint): its enabled sections in
+ * config order, one `v<n>` etag for all of them (a version never changes), and zero deltas.
+ * `titles` overrides the default titles per key.
+ *
+ * The host (R7 History) renders a version read-only as
+ * `<ReportPreview key={`v${n}`} outline={versionOutline(version)} paper={version.config.paper.size}
+ * pageCount={version.stats.page_count} loadBlocks={actions.versionLoader(n)} … />`.
+ */
+export function versionOutline(
+  version: ReportVersion,
+  titles?: Partial<Record<SectionKey, string>>,
+): ReportOutline {
+  const etag = `v${version.number ?? version.id}`;
+  return {
+    report_id: version.report_id,
+    sections: version.config.sections
+      .filter((s) => s.enabled)
+      .map((s) => ({
+        key: s.key,
+        title: titles?.[s.key] ?? SECTION_TITLES[s.key],
+        block_count: 1,
+        etag,
+        estimated_pages: 1,
+      })),
+    finding_count: version.stats.finding_count ?? 0,
+    warnings: version.stats.warnings,
+    deltas: { baseline: null, new: 0, closed: 0, escalated: 0, deescalated: 0, reopened: 0, left: 0 },
+  };
+}
+
 // ---- snapshot / asset URLs (index "SnapshotSpec kinds"; Rulings R-2–R-5) ----
 
 /**
