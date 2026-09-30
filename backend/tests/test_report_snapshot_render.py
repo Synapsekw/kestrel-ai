@@ -1,6 +1,7 @@
 """R3: dispatch, keys, the two render slots and the cache (spec §9.1, §9.5, §17): byte-identical
 output, the key changing with the source mtime, placeholders never cached under a key."""
 
+import logging
 import os
 import threading
 from types import SimpleNamespace
@@ -92,6 +93,24 @@ def test_a_lookup_error_is_a_placeholder_with_its_reason(handle, monkeypatch):
         assert im.size == (480, 360)
 
 
+def test_a_lookup_error_subclass_from_a_renderer_bug_is_the_generic_placeholder(
+    tmp_path, monkeypatch, caplog
+):
+    """Review finding 2 (controller ruling): only SnapshotUnavailable and an exact
+    LookupError(reason) are operator-facing reasons. KeyError, IndexError and other LookupError
+    subclasses are renderer bugs: logged, and turned into the generic placeholder like any other
+    crash, not silently shown to the operator as if a human wrote that message."""
+
+    def boom(h, s):
+        raise KeyError("foo")
+
+    monkeypatch.setitem(RENDERERS, "volume_plan", Renderer(lambda h, s: "v1", boom))
+    with caplog.at_level(logging.ERROR, logger="app.reports.snapshots.render"):
+        result = render_result(SimpleNamespace(folder=tmp_path), ns(kind="volume_plan", measurement_id="m"))
+    assert result.missing_reason == render.UNKNOWN_FAILURE and result.path.is_file()
+    assert any(r.levelname == "ERROR" and r.exc_info for r in caplog.records)
+
+
 def test_a_renderer_module_may_set_its_own_jpeg_quality(tmp_path, monkeypatch):
     img = PILImage.new("RGB", (1600, 1000), (40, 90, 160))
     fake = SimpleNamespace(source_version=lambda h, s: "v1", render=lambda h, s: img, JPEG_QUALITY=88)
@@ -135,6 +154,46 @@ def test_the_first_miss_prunes_the_cache(tmp_path, monkeypatch):
     )
     render_result(SimpleNamespace(folder=tmp_path), ns(kind="volume_plan", measurement_id="m"))
     assert len(calls) == 1
+
+
+def test_a_prune_failure_does_not_break_a_successful_render(tmp_path, monkeypatch, caplog):
+    """Review finding 3: prune_dir can propagate an OSError from scandir (a locked or unreadable
+    cache folder). `_after_miss` runs after the write already succeeded, so that failure must never
+    cost the snapshot that was just rendered and cached."""
+    monkeypatch.setattr(render, "_misses", 0)
+
+    def boom_prune(h, *a, **k):
+        raise PermissionError("cache folder locked")
+
+    monkeypatch.setattr(render.cache, "prune", boom_prune)
+    monkeypatch.setitem(
+        RENDERERS, "volume_plan", Renderer(lambda h, s: "v", lambda h, s: PILImage.new("RGB", (1200, 900)))
+    )
+    with caplog.at_level(logging.WARNING, logger="app.reports.snapshots.render"):
+        result = render_result(SimpleNamespace(folder=tmp_path), ns(kind="volume_plan", measurement_id="m"))
+    assert result.missing_reason is None and result.path.is_file()
+    assert any(r.levelname == "WARNING" for r in caplog.records)
+
+
+def test_a_same_key_write_race_serves_the_file_already_cached(tmp_path, monkeypatch):
+    """Review finding 1: two threads/processes can miss the same key at once and both render; the
+    second `os.replace` onto the same destination can raise on Windows (e.g. PermissionError from a
+    concurrent reader holding the file open) even though a valid JPEG already landed there.
+    render_result must serve that file rather than a false "could not be rendered" placeholder."""
+    img = PILImage.new("RGB", (1200, 900), (5, 6, 7))
+    real_write_jpeg = cache_module.write_jpeg
+
+    def write_then_raise_as_if_another_writer_landed_it(img_, path, quality=cache_module.JPEG_QUALITY):
+        real_write_jpeg(img_, path, quality)  # the bytes really land at `path`
+        raise OSError("PermissionError: the destination is open elsewhere")
+
+    monkeypatch.setattr(cache_module, "write_jpeg", write_then_raise_as_if_another_writer_landed_it)
+    monkeypatch.setitem(RENDERERS, "volume_plan", Renderer(lambda h, s: "v", lambda h, s: img))
+    h = SimpleNamespace(folder=tmp_path)
+    result = render_result(h, ns(kind="volume_plan", measurement_id="m"))
+    assert result.missing_reason is None
+    assert result.path == cached_path(h, result.key)
+    assert result.path.read_bytes() == encode_jpeg(img)
 
 
 def test_a_cache_write_failure_is_a_placeholder_not_an_exception(tmp_path, monkeypatch):

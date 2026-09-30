@@ -17,6 +17,7 @@ from PIL import Image as PILImage
 from app.reports.snapshots import (
     DEFAULT_OUT,
     MISSING,
+    SnapshotUnavailable,
     attachment,
     cache,
     image_crop,
@@ -148,7 +149,16 @@ def _after_miss(handle) -> None:
         _misses += 1
         due = _misses % PRUNE_EVERY == 1
     if due:
-        cache.prune(handle)
+        try:
+            cache.prune(handle)
+        except OSError:  # review finding 3: a locked/unreadable cache folder never costs the
+            # snapshot that was just rendered and cached.
+            log.warning("snapshot cache prune failed", exc_info=True)
+
+
+def _crashed(key: str, spec) -> str:
+    log.exception("snapshot %s (%s) failed", key, getattr(spec, "kind", "?"))
+    return UNKNOWN_FAILURE
 
 
 def _placeholder(handle, key: str, reason: str, size) -> SnapshotResult:
@@ -181,15 +191,33 @@ def render_result(handle, spec) -> SnapshotResult:
             img = renderer.render(handle, spec)
             if img.size != tuple(size):
                 raise RuntimeError(f"{spec.kind} rendered {img.size}, expected {size}")
-        except LookupError as e:  # SnapshotUnavailable, or a renderer's LookupError(reason)
-            reason = getattr(e, "reason", None) or (str(e.args[0]) if e.args else UNKNOWN_FAILURE)
+        except SnapshotUnavailable as e:
+            reason = e.reason
+        except LookupError as e:
+            # Controller ruling (review finding 2): only SnapshotUnavailable and an exact
+            # LookupError(reason) are operator-facing reasons. A renderer *bug* that happens to
+            # raise some other LookupError subclass (KeyError, IndexError, ...) is not a reason a
+            # human wrote for the operator, so it is logged and treated like any other crash.
+            if type(e) is LookupError:
+                reason = str(e.args[0]) if e.args else UNKNOWN_FAILURE
+            else:
+                reason = _crashed(key, spec)
         except Exception:
-            log.exception("snapshot %s (%s) failed", key, getattr(spec, "kind", "?"))
-            reason = UNKNOWN_FAILURE
+            reason = _crashed(key, spec)
         else:
             try:
                 cache.write_jpeg(img, path, getattr(renderer, "JPEG_QUALITY", cache.JPEG_QUALITY))
-            except OSError:  # A13: a cache write never turns into an unhandled exception
+            except OSError:
+                if path.is_file():
+                    # Review finding 1: two threads/processes can miss the same key at once and
+                    # both render; the second `os.replace` onto the same destination can raise on
+                    # Windows (e.g. PermissionError from a concurrent reader holding it open) even
+                    # though a valid JPEG already landed there. Serve it rather than a false
+                    # placeholder.
+                    return SnapshotResult(key, path, None)
+                log.warning(
+                    "snapshot %s (%s) cache write failed", key, getattr(spec, "kind", "?"), exc_info=True
+                )
                 reason = UNKNOWN_FAILURE
     if reason is not None:
         return _placeholder(handle, key, reason, size)
