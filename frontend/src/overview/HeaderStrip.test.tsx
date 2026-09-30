@@ -19,6 +19,14 @@ describe("HeaderStrip", () => {
     expect(screen.getByText("Open findings")).toBeInTheDocument();
   });
 
+  it("keeps the name slot while the name loads, without a placeholder name", () => {
+    renderWithProviders(<HeaderStrip projectId={PROJECT_ID} name={null} figures={[]} site={null} />, {
+      api: fakeClient([]).api,
+    });
+    expect(screen.getByRole("heading", { name: "Loading project name" })).toBeInTheDocument();
+    expect(screen.queryByText("Project")).not.toBeInTheDocument();
+  });
+
   it("says once, quietly, when there is no location", () => {
     renderWithProviders(<HeaderStrip projectId={PROJECT_ID} name="Block C" figures={[]} site={noSite} />, {
       api: fakeClient([]).api,

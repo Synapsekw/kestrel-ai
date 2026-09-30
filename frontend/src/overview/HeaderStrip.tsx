@@ -19,14 +19,25 @@ export function HeaderStrip({
   site,
 }: {
   projectId: string;
-  name: string;
+  /** Null while the project read is in flight: a shimmer holds the slot, never a placeholder name. */
+  name: string | null;
   figures: Kpi[];
   site: OverviewSite | null;
 }) {
   return (
     <GlassPanel variant="pane" className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
       <div className="min-w-0">
-        <h2 className="truncate text-lg font-semibold text-ink">{name}</h2>
+        <h2 className="truncate text-lg font-semibold text-ink">
+          {name ?? (
+            <>
+              <span className="sr-only">Loading project name</span>
+              <span
+                aria-hidden="true"
+                className="inline-block h-5 w-40 animate-shimmer rounded-sm bg-surface-2 align-middle"
+              />
+            </>
+          )}
+        </h2>
         {site === null ? null : site.center ? (
           <p className="font-mono text-2xs text-muted">
             {formatCoords(site.center[0], site.center[1])}{" "}

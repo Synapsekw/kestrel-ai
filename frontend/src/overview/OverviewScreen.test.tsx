@@ -104,9 +104,11 @@ describe("OverviewScreen", () => {
     expect(jobsQ.get("limit")).toBe("10");
   });
 
-  it("tells the map hero whether the project holds any data", async () => {
-    renderOverview(fullOverview);
-    expect(await screen.findByTestId("map-hero")).toHaveAttribute("data-has-data", "true");
+  it("a map hero without a map id falls through to the summary hero", async () => {
+    renderOverview({ ...fullOverview, hero: { kind: "map", id: null } });
+    await waitFor(() => expect(panes()).toContain("hero"));
+    expect(await screen.findByRole("link", { name: /1,284 photos/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("map-hero")).not.toBeInTheDocument();
   });
 
   it("keeps the last dashboard with a Retry notice when a refresh fails", async () => {
@@ -242,6 +244,10 @@ describe("Overview v2 layout", () => {
     renderOverview(fullOverview);
     await waitFor(() => expect(panes()).toContain("location"));
     expect(panes()).toEqual(["header", "hero", "cloud", "location", "findings", "imagery", "status"]);
+    // Settled, not the loading skeleton: the location is drawn from /overview/site and the header
+    // carries its coordinates.
+    expect(await screen.findAllByTestId("photo-point")).not.toHaveLength(0);
+    expect(screen.getByText(/44\.8125° N 20\.4612° E/)).toBeInTheDocument();
     expect(screen.getByTestId("map-hero")).toBeInTheDocument();
     expect(screen.getByTestId("cloud-tile")).toBeInTheDocument();
   });

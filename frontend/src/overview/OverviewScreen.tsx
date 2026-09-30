@@ -9,7 +9,7 @@ import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, GlassPanel, Skeleton, buttonClass, useSeverityScale } from "@/ui";
 import { Banners } from "./Banners";
 import { CloudPreview } from "./CloudPreview";
-import { composeOverview, ROWS_FULL, type OverviewFacts, type PaneId } from "./compose";
+import { composeOverview, type OverviewFacts, type PaneId } from "./compose";
 import { FirstData } from "./FirstData";
 import { HeaderStrip } from "./HeaderStrip";
 import { ImageMosaic } from "./ImageMosaic";
@@ -26,22 +26,22 @@ import { useOverviewSite } from "./useOverviewSite";
 import "./overview.css";
 
 /** The loading state keeps the full layout's shape, so the page does not jump when it lands. */
-const SKELETON_PANES: { id: PaneId; col: string; row: string; className: string }[] = [
-  { id: "header", col: "1 / -1", row: "1", className: "h-14" },
-  { id: "hero", col: "1 / span 8", row: "2 / span 2", className: "h-full" },
-  { id: "cloud", col: "9 / -1", row: "2", className: "h-full" },
-  { id: "location", col: "9 / -1", row: "3", className: "h-full" },
-  { id: "findings", col: "1 / span 5", row: "4", className: "h-full" },
-  { id: "imagery", col: "6 / span 4", row: "4", className: "h-full" },
-  { id: "status", col: "10 / span 3", row: "4", className: "h-full" },
-];
+const SKELETON = composeOverview({
+  heroKind: "map",
+  dataTotal: 1,
+  hasCloud: true,
+  hasImages: true,
+  hasSite: true,
+  findingsTotal: 1,
+  runningJobs: false,
+});
 
 function OverviewSkeleton() {
   return (
-    <div className="ov-grid w-full" aria-busy="true" style={{ "--ov-rows": ROWS_FULL } as CSSProperties}>
-      {SKELETON_PANES.map((p) => (
+    <div className="ov-grid w-full" aria-busy="true" style={{ "--ov-rows": SKELETON.rows } as CSSProperties}>
+      {SKELETON.panes.map((p) => (
         <div key={p.id} data-pane={p.id} style={{ "--col": p.col, "--row": p.row } as CSSProperties}>
-          <Skeleton className={`${p.className} min-h-28 rounded-panel`} />
+          <Skeleton className={`${p.id === "header" ? "h-14" : "h-full"} min-h-28 rounded-panel`} />
         </div>
       ))}
     </div>
@@ -91,7 +91,7 @@ export function OverviewScreen() {
   );
   // The same project read the top bar's breadcrumb takes the name from.
   const { project } = useProject(projectId);
-  const projectName = project?.id === projectId ? project.name : "Project";
+  const projectName = project?.id === projectId ? project.name : null;
 
   useEffect(() => {
     // F §4.3: the reduced-effects Auto probe measures frames on the first Overview render.
