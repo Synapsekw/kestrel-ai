@@ -185,8 +185,8 @@ the edge cases: no GPS anywhere, findings but no images, a drawing only.
   have `lon`/`lat` (≤ 5); the hero map keeps its own full pin read. `/overview/site` is fetched after
   `/overview`, with its own skeleton. If that fetch fails, the pane is dropped quietly and a
   diagnostics log line is written. The Overview never shows an error because of it.
-- **Findings.** Today's `RecentFindings` with 5 rows, fitted to the height and clipped by rows:
-  it shows as many as fit, up to 5.
+- **Findings.** Today's `RecentFindings` with up to 5 rows, fitted to the pane's height. When the
+  pane is shorter than 5 rows, the list scrolls inside the pane, so every row stays reachable.
 - **Imagery.** A mosaic of the newest thumbnails, 8 in a 4×2 grid, with a "View all" link. It
   uses the same fetch as `ImageMosaic`, with `limit=8`.
 - **Status.** `SeverityBars`, then `RunningJobs` (in compact form, shown only when a job is
