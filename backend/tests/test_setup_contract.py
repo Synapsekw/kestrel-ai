@@ -345,3 +345,16 @@ def test_the_models_leave_cross_field_rules_to_their_owners():
         }
     )
     assert len(config.slots) == 2 and len(config.types) == 2
+
+
+# ------------------------------------------------------------------------------ Task 3: job type
+
+
+def test_the_setup_inspect_job_type(spec):
+    assert _schemas(spec)["JobType"]["enum"][-1] == "setup_inspect"
+    description = _schemas(spec)["Job"]["properties"]["result"]["description"]
+    assert (
+        "setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated}"
+        in description
+    )
+    assert "(params {paths, template_id})" in description

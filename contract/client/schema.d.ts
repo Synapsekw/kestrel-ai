@@ -8964,7 +8964,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render" | "setup_inspect";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -8999,7 +8999,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}) */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}) */
             result: {
                 [key: string]: unknown;
             } | null;
