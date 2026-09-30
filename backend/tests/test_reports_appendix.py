@@ -66,3 +66,43 @@ def test_no_data_items(handle):
         ctx_for(handle, config(sections=("appendix",), options={"appendix": {"include_methods": False}}))
     )
     assert out == [{**out[0], "kind": "para", "text": "No data items"}]
+
+
+def test_outline_block_count_matches_compose_with_no_items(handle):
+    ctx = ctx_for(handle, config(sections=("appendix",), options={"appendix": {"include_methods": True}}))
+    assert appendix.outline(ctx).block_count == len(appendix.compose(ctx).blocks)
+
+
+def test_outline_block_count_matches_compose_with_methods_and_provenance(handle):
+    t, c = add_type(handle, "crack"), add_cloud(handle)
+    add_map(handle, name="Ortho")
+    add_findings(
+        handle,
+        [
+            {"type_id": t, "anchor": "cloud", "target": c, "created_by": "model:yolo11s", "confidence": 0.8},
+            {"type_id": t, "anchor": "cloud", "target": c},
+        ],
+    )
+    ctx = ctx_for(handle, config(sections=("appendix",), options={"appendix": {"include_methods": True}}))
+    assert appendix.outline(ctx).block_count == len(appendix.compose(ctx).blocks)
+
+
+def test_outline_block_count_matches_compose_with_data_item_filter(handle):
+    add_map(handle, name="A")
+    b = add_map(handle, name="B")
+    ctx = ctx_for(
+        handle,
+        config(
+            sections=("appendix",),
+            filters={"data_item_ids": [b]},
+            options={"appendix": {"include_methods": True}},
+        ),
+    )
+    assert appendix.outline(ctx).block_count == len(appendix.compose(ctx).blocks)
+
+
+def test_outline_block_count_matches_compose_with_include_methods_false(handle):
+    add_map(handle, name="Ortho")
+    add_cloud(handle, name="Scan")
+    ctx = ctx_for(handle, config(sections=("appendix",), options={"appendix": {"include_methods": False}}))
+    assert appendix.outline(ctx).block_count == len(appendix.compose(ctx).blocks)
