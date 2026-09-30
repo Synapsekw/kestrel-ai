@@ -131,4 +131,37 @@ describe("ExportJobs", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show in folder" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("the export folder is gone");
   });
+
+  it("names each row's kind and reveals a finished point cloud or volume export's folder", () => {
+    const cloudExport = {
+      ...runningJob,
+      id: "cloud-export-1",
+      type: "pointcloud_export" as const,
+      state: "succeeded" as const,
+      progress: 1,
+      params: {},
+      result: { cloud_id: "c1", folder: "exports/2026-09-21_100000", laz: "c.laz", files: ["c.laz", "c.json"], point_count: 5 },
+    };
+    const volumeExport = {
+      ...runningJob,
+      id: "volume-export-1",
+      type: "volume_export" as const,
+      state: "succeeded" as const,
+      progress: 1,
+      params: {},
+      result: { folder: "exports/2026-09-20_100000", files: ["volumes.pdf", "volumes.xlsx"] },
+    };
+    render([cloudExport, volumeExport]);
+    const cloudRow = screen.getByTestId("export-job-cloud-export-1");
+    expect(cloudRow).toHaveTextContent("Point cloud export");
+    expect(cloudRow).toHaveTextContent("c.laz");
+    const volumeRow = screen.getByTestId("export-job-volume-export-1");
+    expect(volumeRow).toHaveTextContent("Export volumes");
+    expect(volumeRow).toHaveTextContent("volumes.xlsx");
+    for (const row of [cloudRow, volumeRow]) {
+      expect(row).not.toHaveTextContent("undefined");
+      expect(row).not.toHaveTextContent("NaN");
+    }
+    expect(screen.getAllByRole("button", { name: "Show in folder" })).toHaveLength(2);
+  });
 });

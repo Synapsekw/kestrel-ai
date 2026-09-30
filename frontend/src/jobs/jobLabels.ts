@@ -170,12 +170,19 @@ export function resultsExportSummary(job: Job): string | null {
   return `${imageCount} image${imageCount === 1 ? "" : "s"}, ${boxCount} box${boxCount === 1 ? "" : "es"}`;
 }
 
-/** A job that writes files under `exports/`: a results export, a map export or a detection export. */
+/** A job that writes files under `exports/` with a `{folder, files}` result: a results, map,
+ * detection, volume or point cloud export. */
 function isFileExport(job: Job): boolean {
-  return job.type === "results_export" || job.type === "map_export" || job.type === "detect_export";
+  return (
+    job.type === "results_export" ||
+    job.type === "map_export" ||
+    job.type === "detect_export" ||
+    job.type === "volume_export" ||
+    job.type === "pointcloud_export"
+  );
 }
 
-/** The file list of a finished results or map export, project-relative to its folder; [] when not
+/** The file list of a finished file export, project-relative to its folder; [] when not
  * available. */
 export function resultsExportFiles(job: Job): string[] {
   const files = job.result?.files;
@@ -184,7 +191,7 @@ export function resultsExportFiles(job: Job): string[] {
     : [];
 }
 
-/** The folder a finished results or map export wrote into (project-relative), or null. */
+/** The folder a finished file export wrote into (project-relative), or null. */
 export function resultsExportFolder(job: Job): string | null {
   const folder = job.result?.folder;
   return isFileExport(job) && job.state === "succeeded" && typeof folder === "string" ? folder : null;
