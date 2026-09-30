@@ -134,3 +134,21 @@ def test_an_undecodable_file_becomes_unavailable(handle, photo):
         s.get(FindingAttachment, aid).path = rel
     with pytest.raises(SnapshotUnavailable):
         attachment.render(handle, _spec(fid, aid))
+
+
+def test_an_over_limit_photo_is_refused_even_between_1x_and_2x(
+    handle, crack, make_jpeg, tmp_path, monkeypatch
+):
+    """Pillow's own DecompressionBombError only fires above 2x MAX_IMAGE_PIXELS; between 1x and 2x
+    it only warns and still decodes. `render` must refuse it anyway (image_crop.py's own explicit
+    pixel-count guard, amendment A11): a photo whose pixel count lands in that 1x-2x band, checked
+    against a MAX_IMAGE_PIXELS lowered just for this test."""
+    from app.findings import attachments
+
+    f, _, _ = image_finding(handle, crack["id"], make_jpeg)
+    src = tmp_path / "big.jpg"
+    PILImage.new("RGB", (1000, 900), (10, 20, 30)).save(src, "JPEG", quality=90)  # 900,000 px
+    aid = attachments.add(handle, f.id, str(src)).id  # inspected under the real (huge) default limit
+    monkeypatch.setattr(attachment.PILImage, "MAX_IMAGE_PIXELS", 800_000)  # 900,000 px is 1.125x this
+    with pytest.raises(SnapshotUnavailable):
+        attachment.render(handle, _spec(f.id, aid))
