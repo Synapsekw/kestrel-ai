@@ -1,0 +1,59 @@
+"""The print theme (spec 2026-09-26-reports §10.1). Every colour and size of the PDF lives here, as
+literals equal to contract/fixtures/report-theme.json (tests/test_reports_theme.py pins them; the
+preview's printTheme.ts pins the same file). Literals, not a JSON read: contract/ is not in the frozen
+bundle. No PDF-library import here, so routers may import this module."""
+
+THEME: dict = {
+    "version": 1,
+    "fonts": {"sans": "Space Grotesk", "mono": "JetBrains Mono"},
+    "colours": {
+        "ink": "#15142B",
+        "muted": "#5E5C7A",
+        "rule": "#DAD8EA",
+        "head_fill": "#F3F1FC",
+        "paper": "#FFFFFF",
+        "violet": "#6A5CFF",
+        "violet_print": "#8F7BFF",
+        "teal": "#0F8F76",
+        "teal_print": "#5FE3C0",
+        "placeholder_fill": "#EEEDF5",
+        "ungraded": "#9A98B0",
+        "tone_neutral": "#5E5C7A",
+        "tone_good": "#0F8F76",
+        "tone_bad": "#B3261E",
+        "tone_warn": "#8A5A00",
+    },
+    "cover": {
+        "gradient": ["#3B2A7A", "#6A5CFF", "#0F5B66"],
+        "band_fraction": 0.38,
+        "title_pt": 30,
+        "subtitle_pt": 12,
+        "logo_chip_mm": [44, 22],
+    },
+    "type": {
+        "body_pt": 9.5,
+        "body_leading_pt": 13,
+        "small_pt": 8,
+        "note_pt": 9,
+        "h1_pt": 18,
+        "h2_pt": 14,
+        "h3_pt": 11,
+        "mono_pt": 8.5,
+        "furniture_pt": 7.5,
+        "kpi_value_pt": 16,
+    },
+    "page": {
+        "margin_mm": 18,
+        "furniture_offset_mm": 10,
+        "radius_mm": 3,
+        "sizes_mm": {"A4": [210, 297], "Letter": [215.9, 279.4]},
+    },
+    "severity": {"dot_mm": 2.2, "pill_tint": 0.12},
+    "finding": {"main_mm": [170, 105], "secondary_mm": [83, 52], "photo_mm": [40, 30]},
+    "chart": {
+        "height_mm": 70,
+        "palette": ["#6A5CFF", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"],
+    },
+}
+
+THEME_VERSION: int = THEME["version"]
