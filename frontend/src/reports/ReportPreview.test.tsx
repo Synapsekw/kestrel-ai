@@ -87,6 +87,25 @@ describe("ReportPreview", () => {
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeInTheDocument();
   });
 
+  it("drops the old blocks when a section is edited down to nothing, without a request", async () => {
+    const { loadBlocks, rerender, props } = setup();
+    act(() => io.show(section("summary")));
+    await screen.findByText("Findings at a glance");
+    loadBlocks.mockClear();
+    const emptied: ReportOutline = {
+      ...FIXTURE_OUTLINE,
+      sections: FIXTURE_OUTLINE.sections.map((s) =>
+        s.key === "summary" ? { ...s, etag: "e-summary-empty", block_count: 0 } : s,
+      ),
+    };
+    rerender(<ReportPreview {...props} outline={emptied} />);
+    const region = screen.getByRole("region", { name: "Summary" });
+    expect(within(region).getByText("Nothing to show in this section.")).toBeInTheDocument();
+    expect(within(region).queryByText("Findings at a glance")).toBeNull();
+    expect(region).toHaveAttribute("aria-busy", "false");
+    expect(loadBlocks).not.toHaveBeenCalled();
+  });
+
   it("offers Retry when a section fails, and loads on retry", async () => {
     const good = fixtureLoader();
     const loadBlocks = vi.fn<LoadBlocks>().mockRejectedValueOnce(new Error("disk")).mockImplementation(good);

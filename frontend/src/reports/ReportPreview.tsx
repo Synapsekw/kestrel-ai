@@ -157,7 +157,9 @@ function SectionView({
     if (near && needs) request(section);
   }, [near, needs, entry.blocks.length, request, section]);
 
-  const showingStale = first && entry.stale !== null && entry.stale.length > 0;
+  // Old blocks stay (dimmed) only while the new first page is pending; a section edited down to
+  // nothing is done at once and must show its empty sheet, not the deleted blocks.
+  const showingStale = first && !entry.done && entry.stale !== null && entry.stale.length > 0;
   const sheets = useMemo(
     () => paginate(section.key, showingStale ? (entry.stale ?? []) : entry.blocks),
     [section.key, showingStale, entry.stale, entry.blocks],
@@ -165,7 +167,7 @@ function SectionView({
   const remaining = entry.done ? 0 : Math.max(section.estimated_pages - sheets.length, 1);
   const titleId = `report-section-${section.key}`;
   const onRetry = useCallback(() => retry(section), [retry, section]);
-  const busy = entry.status === "loading" || (!entry.done && showingStale);
+  const busy = entry.status === "loading" || showingStale;
 
   return (
     <section
@@ -203,7 +205,7 @@ function SectionView({
           <SheetSkeleton paper={paper} loading={entry.status === "loading"} extraPages={remaining - 1} />
         </div>
       ) : null}
-      {!entry.done && showingStale ? <div ref={tailRef} data-testid={`pending-${section.key}`} /> : null}
+      {showingStale ? <div ref={tailRef} data-testid={`pending-${section.key}`} /> : null}
     </section>
   );
 }
