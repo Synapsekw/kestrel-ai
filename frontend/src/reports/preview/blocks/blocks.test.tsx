@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockOf } from "@/api/reports";
@@ -81,9 +81,18 @@ describe("VolumeBlock", () => {
     render(<VolumeBlock block={volumes[0]} />);
     render(<VolumeBlock block={volumes[1]} />);
     expect(screen.getByRole("cell", { name: "894.3 m³" })).toBeInTheDocument();
-    const stale = screen.getByRole("region", { name: "Stockpile B" });
+    const stale = screen.getByRole("group", { name: "Stockpile B" });
     expect(within(stale).getByText("Stale, recalculate")).toBeInTheDocument();
     expect(within(stale).queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
+  it("labels each volume by its own title even when the same measurement is shown twice", () => {
+    render(<VolumeBlock block={volumes[1]} />);
+    render(<VolumeBlock block={volumes[1]} />);
+    const groups = screen.getAllByRole("group", { name: "Stockpile B" });
+    expect(groups).toHaveLength(2);
+    expect(groups[0].getAttribute("aria-labelledby")).not.toBe(groups[1].getAttribute("aria-labelledby"));
   });
 });
 
@@ -121,6 +130,25 @@ describe("CoverBlock (Ruling R-6)", () => {
     );
     render(<CoverBlock block={cover} />, { wrapper: withLogo });
     expect(screen.getByRole("img", { name: "Logo" })).toHaveAttribute("src", "asset://logo1");
+  });
+
+  it("hides the logo chip when the logo image fails to load", () => {
+    const withLogo = ({ children }: { children: ReactNode }) => (
+      <PreviewEnvContext.Provider
+        value={{
+          resolveSnapshot: () => null,
+          resolveAsset: () => "asset://gone",
+          scrollRoot: null,
+          paper: "A4",
+        }}
+      >
+        {children}
+      </PreviewEnvContext.Provider>
+    );
+    const { container } = render(<CoverBlock block={cover} />, { wrapper: withLogo });
+    fireEvent.error(screen.getByRole("img", { name: "Logo" }));
+    expect(screen.queryByRole("img", { name: "Logo" })).toBeNull();
+    expect(container.querySelector("[data-logo-chip]")).toBeNull();
   });
 
   it("renders no chip (no broken image) when resolveAsset returns null", () => {

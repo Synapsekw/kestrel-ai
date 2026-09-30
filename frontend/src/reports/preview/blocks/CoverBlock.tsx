@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { BlockOf } from "@/api/reports";
 import { PRINT, mm, paperOf, textStyle } from "../../printTheme";
 import { usePreviewEnv } from "../PreviewContext";
@@ -12,6 +13,9 @@ import { KvBlock } from "./KvBlock";
 export function CoverBlock({ block }: { block: BlockOf<"cover"> }) {
   const env = usePreviewEnv();
   const logoSrc = block.logo ? env.resolveAsset(block.logo.asset_id) : null;
+  // The src that failed to load: its chip is hidden (no broken-image icon on the cover); a new src shows again.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showLogo = logoSrc !== null && logoSrc !== failedSrc;
   const bandHeightMm = paperOf(env.paper).height_mm * PRINT.coverBand;
   return (
     <section data-block="cover">
@@ -32,8 +36,9 @@ export function CoverBlock({ block }: { block: BlockOf<"cover"> }) {
             {block.subtitle}
           </p>
         ) : null}
-        {logoSrc ? (
+        {showLogo ? (
           <div
+            data-logo-chip
             className="absolute overflow-hidden"
             style={{
               top: mm(PRINT.margin),
@@ -44,7 +49,12 @@ export function CoverBlock({ block }: { block: BlockOf<"cover"> }) {
               background: PRINT.paper,
             }}
           >
-            <img src={logoSrc} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <img
+              src={logoSrc}
+              alt="Logo"
+              onError={() => setFailedSrc(logoSrc)}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
           </div>
         ) : null}
       </div>
