@@ -26,15 +26,18 @@ def add_map_file(
     rotation: float = 0.0,
     name: str = "April",
     captured_on: date | None = date(2026, 9, 14),
+    seed: int = 0,
+    origin: tuple[float, float] = (500000.0, 4983000.0),
 ) -> str:
-    """A `ready` GeoMap row backed by a real 60 x 45 m display raster at 3 cm/px (tests/geotiffs.py)."""
+    """A `ready` GeoMap row backed by a real 60 x 45 m display raster at 3 cm/px (tests/geotiffs.py).
+    `seed` and `origin` let a pair test build two distinct, or non-overlapping, map files."""
     with handle.session() as s:
         row = GeoMap(name=name, status="ready", source_path="x.tif", source_size=1, captured_on=captured_on)
         s.add(row)
         s.flush()
         map_id = row.id
     path = map_raster_path(handle, map_id)
-    make_geotiff(path, MAP_WIDTH, MAP_HEIGHT, pixel=MAP_PIXEL, rotation=rotation)
+    make_geotiff(path, MAP_WIDTH, MAP_HEIGHT, pixel=MAP_PIXEL, rotation=rotation, seed=seed, origin=origin)
     with rasterio.open(path) as src:
         geotransform = list(src.transform.to_gdal())
         crs_wkt = src.crs.to_wkt()
@@ -134,5 +137,33 @@ def image_crop_spec(image_id: str, ring, **overrides) -> SimpleNamespace:
         out=[1200, 900],
         inset=False,
     )
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
+
+
+# --- R3 T5: elevation and pair -------------------------------------------------------------------
+
+
+def elevation_spec(item_id, geometry, **overrides) -> SimpleNamespace:
+    """An `elevation` spec; unset fields are `None` so `opt()` falls through to R3's defaults."""
+    fields = dict(
+        kind="elevation",
+        item_id=item_id,
+        geometry=geometry,
+        overlay=None,
+        overlay_item_id=None,
+        out=None,
+        colour=None,
+        label=None,
+        min_extent_m=None,
+    )
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
+
+
+def pair_spec(a: SimpleNamespace, b: SimpleNamespace, **overrides) -> SimpleNamespace:
+    """A `pair` spec over two full `map`/`elevation` specs; unset fields fall through to R3's
+    defaults (mode `swipe`, split 0.5)."""
+    fields = dict(kind="pair", a=a, b=b, bbox_wgs84=None, mode=None, split=None)
     fields.update(overrides)
     return SimpleNamespace(**fields)

@@ -18,17 +18,20 @@ import numpy as np
 import rasterio
 from PIL import Image as PILImage
 from PIL import ImageDraw
+from pyproj import CRS, Transformer
+from rasterio.enums import Resampling
 from shapely.geometry import shape as shapely_shape
 
 from app.db.models import GeoMap, Surface
 from app.maps import raster
-from app.maps.georef import Georef
+from app.maps.georef import EDGE_SAMPLES, M_PER_DEG_LAT, M_PER_DEG_LON_EQUATOR, Georef
 from app.maps.startup import map_dir, map_raster_path
 from app.reports.snapshots import MISSING, SnapshotUnavailable, opt, out_of
 from app.reports.snapshots.draw import (
     DEFAULT_COLOUR,
     INK,
     WHITE,
+    chip_size,
     draw_chip,
     font,
     paste_inset,
@@ -37,8 +40,10 @@ from app.reports.snapshots.draw import (
     text_box,
 )
 from app.reports.snapshots.keys import plain
+from app.surfaces.grid import MAX_READ, hillshade, open_surface
 from app.surfaces.paths import surface_path
 from app.volumes.plan_image import _nice
+from app.volumes.regions import lattice_window
 
 PAD = 0.25
 MIN_EXTENT_M = 40.0
@@ -46,6 +51,9 @@ NODATA_GREY = 128  # as raster.write_preview paints nodata
 FILL_ALPHA = 38  # 15 % of 255
 MAX_GEOMETRY_VERTICES = 120
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+ELEVATION_NODATA = 245  # as volumes/plan_image paints nodata
+GUTTER = 8
+NO_COMMON_AREA = "No common area"
 
 
 # --- items -------------------------------------------------------------------------------------
@@ -393,4 +401,230 @@ def render_map_spec(handle, spec) -> PILImage.Image:
     )
     if opt(spec, "inset", False):
         _map_inset(handle, item, img, win)
+    return img
+
+
+# --- elevation -----------------------------------------------------------------------------------
+
+elevation_source_version = item_source_version
+
+
+def elevation_view(reader, bounds, out) -> View:
+    """A hillshade of the surface over world `bounds`, as volumes/plan_image.render_plan_image draws
+    it, from one boundless read of exactly `out` cells (spec §9.3 step 7).
+
+    `SurfaceReader.read` refuses an output side over `MAX_READ` (amendment A10): the read is capped
+    to `MAX_READ` per side, keeping `out`'s aspect, and the hillshade is then LANCZOS-resized up to
+    exactly `out`."""
+    spec = reader.spec
+    win = lattice_window(spec, bounds)
+    out_w, out_h = int(out[0]), int(out[1])
+    scale = min(1.0, MAX_READ / out_w, MAX_READ / out_h)
+    read_w, read_h = max(1, round(out_w * scale)), max(1, round(out_h * scale))
+    z = reader.read(win, out_shape=(read_h, read_w), resampling=Resampling.bilinear, boundless=True)
+    read_cw = int(win.width) * spec.cell_size / read_w
+    read_ch = int(win.height) * spec.cell_size / read_h
+    shade = hillshade(z, read_cw, read_ch)
+    grey = np.where(shade > 0, shade, ELEVATION_NODATA).astype(np.uint8)
+    img = PILImage.fromarray(np.stack([grey] * 3, axis=-1), "RGB")
+    if (read_w, read_h) != (out_w, out_h):
+        img = img.resize((out_w, out_h), PILImage.LANCZOS)
+    cw = int(win.width) * spec.cell_size / out_w
+    ch = int(win.height) * spec.cell_size / out_h
+    x0 = spec.x0 + int(win.col_off) * spec.cell_size
+    y0 = spec.y0 - int(win.row_off) * spec.cell_size
+
+    def to_out(nx: float, ny: float) -> tuple[float, float]:
+        return ((nx - x0) / cw, (y0 - ny) / ch)
+
+    return View(img, to_out, cw, 0.0)
+
+
+def render_elevation_spec(handle, spec) -> PILImage.Image:
+    """`overlay` is ignored: a diff overlay in comparisons is deferred (spec §20; plan ruling 7)."""
+    item = _require(surface_item(handle, spec.item_id))
+    out = out_of(spec)
+    aspect = out[0] / out[1]
+    geometry = plain(opt(spec, "geometry"))
+    with open_surface(item.path) as reader:
+        if geometry:
+            xs, ys = zip(*geometry_coords(geometry), strict=True)
+            floor = float(opt(spec, "min_extent_m", MIN_EXTENT_M))
+            bounds = plan_window((min(xs), min(ys), max(xs), max(ys)), pad=PAD, floor=floor, aspect=aspect)
+        else:
+            bounds = plan_window(reader.spec.bounds, pad=0.0, floor=1e-6, aspect=aspect)
+        view = elevation_view(reader, bounds, out)
+    return decorate(
+        view,
+        geometry,
+        colour=opt(spec, "colour", DEFAULT_COLOUR),
+        label=opt(spec, "label"),
+        scale_bar=True,
+        north=True,
+        attribution=attribution_text(item),
+    )
+
+
+# --- pair ------------------------------------------------------------------------------------------
+
+
+def pair_source_version(handle, spec) -> str:
+    a, b = item_source_version(handle, spec.a), item_source_version(handle, spec.b)
+    for v in (a, b):
+        if v.startswith(MISSING):
+            return v
+    return f"a={a}|b={b}"
+
+
+def edge_samples(bbox) -> tuple[list[float], list[float]]:
+    """EDGE_SAMPLES points along each edge of `bbox`: edges curve under reprojection."""
+    minx, miny, maxx, maxy = (float(v) for v in bbox)
+    xs: list[float] = []
+    ys: list[float] = []
+    for i in range(EDGE_SAMPLES):
+        t = i / (EDGE_SAMPLES - 1)
+        x, y = minx + t * (maxx - minx), miny + t * (maxy - miny)
+        xs += [x, x, minx, maxx]
+        ys += [miny, maxy, y, y]
+    return xs, ys
+
+
+def footprint_wgs84(handle, spec) -> tuple[float, float, float, float]:
+    item = _require(_item(handle, spec))
+    if spec.kind == "map":
+        if item.bounds_wgs84:
+            return tuple(item.bounds_wgs84)
+        return tuple(Georef(item.geotransform, item.crs_wkt).bounds_wgs84(item.width, item.height))
+    if not item.crs_wkt or not item.bounds_native:
+        raise SnapshotUnavailable("The elevation has no coordinates")
+    t = Transformer.from_crs(CRS.from_wkt(item.crs_wkt), CRS.from_epsg(4326), always_xy=True)
+    lons, lats = t.transform(*edge_samples(item.bounds_native))
+    return (min(lons), min(lats), max(lons), max(lats))
+
+
+def fit_aspect_wgs84(bbox, aspect: float, *, grow: bool = False) -> tuple[float, float, float, float]:
+    """`bbox` shrunk (or, with `grow`, enlarged) about its centre to `aspect` measured in metres."""
+    minx, miny, maxx, maxy = (float(v) for v in bbox)
+    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+    m_lon = M_PER_DEG_LON_EQUATOR * math.cos(math.radians(cy))
+    w_m, h_m = (maxx - minx) * m_lon, (maxy - miny) * M_PER_DEG_LAT
+    if (w_m / h_m > aspect) != grow:
+        w_m = h_m * aspect
+    else:
+        h_m = w_m / aspect
+    half_lon, half_lat = w_m / (2 * m_lon), h_m / (2 * M_PER_DEG_LAT)
+    return (cx - half_lon, cy - half_lat, cx + half_lon, cy + half_lat)
+
+
+def common_bbox(a, b, aspect: float) -> tuple[float, float, float, float] | None:
+    """The intersection of two WGS84 footprints shrunk to `aspect` about its centre (spec §9.3),
+    or None when they do not overlap."""
+    minx, miny = max(a[0], b[0]), max(a[1], b[1])
+    maxx, maxy = min(a[2], b[2]), min(a[3], b[3])
+    if maxx <= minx or maxy <= miny:
+        return None
+    return fit_aspect_wgs84((minx, miny, maxx, maxy), aspect)
+
+
+def item_over_bbox(handle, spec, bbox_wgs84, size) -> PILImage.Image:
+    """One map or elevation item read over a WGS84 bbox projected into its own CRS (spec §9.3). Each
+    call builds the WGS84 <-> item CRS `Transformer` once, for all `edge_samples` points."""
+    item = _require(_item(handle, spec))
+    aspect = size[0] / size[1]
+    xs, ys = edge_samples(bbox_wgs84)
+    if spec.kind == "map":
+        georef = Georef(item.geotransform, item.crs_wkt)
+        pxs, pys = georef.wgs84_to_pixel(xs, ys)
+        bounds = (min(pxs), min(pys), max(pxs), max(pys))
+        win = pixel_window(plan_window(bounds, pad=0.0, floor=1.0, aspect=aspect))
+        with rasterio.open(item.path) as src:
+            view = map_view(src, georef, win, size, georef.metres_per_pixel(item.width, item.height))
+    else:
+        if not item.crs_wkt:
+            raise SnapshotUnavailable("The elevation has no coordinates")
+        t = Transformer.from_crs(CRS.from_epsg(4326), CRS.from_wkt(item.crs_wkt), always_xy=True)
+        nx, ny = t.transform(xs, ys)
+        bounds = plan_window((min(nx), min(ny), max(nx), max(ny)), pad=0.0, floor=1e-6, aspect=aspect)
+        with open_surface(item.path) as reader:
+            view = elevation_view(reader, bounds, size)
+    return decorate(
+        view,
+        plain(opt(spec, "geometry")),
+        colour=opt(spec, "colour", DEFAULT_COLOUR),
+        label=None,
+        scale_bar=True,
+        north=True,
+        attribution=attribution_text(item),
+    )
+
+
+def swipe_composite(a: PILImage.Image, b: PILImage.Image, split: float) -> PILImage.Image:
+    """Columns [0, split*W) from `a`, the rest from `b`, a 2 px white divider (M's swipe, printed)."""
+    w, h = a.size
+    cut = min(w - 1, max(1, round(split * w)))
+    out = a.copy()
+    out.paste(b.crop((cut, 0, w, h)), (cut, 0))
+    ImageDraw.Draw(out).rectangle([cut - 1, 0, cut, h - 1], fill=WHITE)
+    return out
+
+
+def side_by_side(a: PILImage.Image, b: PILImage.Image, size) -> PILImage.Image:
+    out = PILImage.new("RGB", (int(size[0]), int(size[1])), WHITE)
+    out.paste(a, (0, 0))
+    out.paste(b, (a.width + GUTTER, 0))
+    return out
+
+
+def _when(item) -> str:
+    return date_text(item.captured_on) or item.name
+
+
+def _pair_chips(img, a_item, b_item, *, b_x: int | None = None) -> None:
+    d = ImageDraw.Draw(img)
+    draw_chip(d, (12, 12), f"A · {_when(a_item)}")
+    text = f"B · {_when(b_item)}"
+    draw_chip(d, (b_x if b_x is not None else img.width - chip_size(text)[0] - 70, 12), text)
+
+
+def _side_by_side_pair(handle, a, b, a_item, b_item, bbox_a, bbox_b, panel, out_size) -> PILImage.Image:
+    """One side-by-side composite: `a` over `bbox_a` and `b` over `bbox_b` (the same common bbox, or
+    each item's own footprint when there is none), with the A/B date chips (spec §16, amendment A16:
+    one helper instead of the repeated side-by-side + chips block)."""
+    left = item_over_bbox(handle, a, bbox_a, panel)
+    right = item_over_bbox(handle, b, bbox_b, panel)
+    img = side_by_side(left, right, out_size)
+    _pair_chips(img, a_item, b_item, b_x=panel[0] + GUTTER + 12)
+    return img
+
+
+def render_pair_spec(handle, spec) -> PILImage.Image:
+    a, b = spec.a, spec.b
+    out_w, out_h = out_of(a)
+    mode = opt(spec, "mode", "swipe")
+    a_item, b_item = _require(_item(handle, a)), _require(_item(handle, b))
+    fa, fb = footprint_wgs84(handle, a), footprint_wgs84(handle, b)
+    panel = ((out_w - GUTTER) // 2, out_h)
+    size = panel if mode == "side_by_side" else (out_w, out_h)
+    given = opt(spec, "bbox_wgs84")
+    bbox = fit_aspect_wgs84(given, size[0] / size[1]) if given else common_bbox(fa, fb, size[0] / size[1])
+    if bbox is None:  # spec §16: side by side over each item's own footprint
+        img = _side_by_side_pair(
+            handle,
+            a,
+            b,
+            a_item,
+            b_item,
+            fit_aspect_wgs84(fa, panel[0] / panel[1], grow=True),
+            fit_aspect_wgs84(fb, panel[0] / panel[1], grow=True),
+            panel,
+            (out_w, out_h),
+        )
+        cw, _ = chip_size(NO_COMMON_AREA)
+        draw_chip(ImageDraw.Draw(img), ((out_w - cw) / 2, 64), NO_COMMON_AREA)
+        return img
+    if mode == "side_by_side":
+        return _side_by_side_pair(handle, a, b, a_item, b_item, bbox, bbox, panel, (out_w, out_h))
+    left, right = item_over_bbox(handle, a, bbox, size), item_over_bbox(handle, b, bbox, size)
+    img = swipe_composite(left, right, float(opt(spec, "split", 0.5)))
+    _pair_chips(img, a_item, b_item)
     return img
