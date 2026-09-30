@@ -508,6 +508,8 @@ def fit_aspect_wgs84(bbox, aspect: float, *, grow: bool = False) -> tuple[float,
     cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
     m_lon = M_PER_DEG_LON_EQUATOR * math.cos(math.radians(cy))
     w_m, h_m = (maxx - minx) * m_lon, (maxy - miny) * M_PER_DEG_LAT
+    if w_m <= 0 or h_m <= 0:
+        raise SnapshotUnavailable("The comparison area is empty")
     if (w_m / h_m > aspect) != grow:
         w_m = h_m * aspect
     else:

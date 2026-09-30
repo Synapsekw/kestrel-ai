@@ -21,9 +21,12 @@ from surfaces import CX, CY, X0, Y1, circle, cone, fixture_spec, plane
 from volume_rows import add_surface
 
 from app.maps.georef import M_PER_DEG_LAT, M_PER_DEG_LON_EQUATOR
+from app.reports.snapshots import SnapshotUnavailable
+from app.reports.snapshots.draw import CHIP_BG
 from app.reports.snapshots.map_view import (
     common_bbox,
     elevation_source_version,
+    fit_aspect_wgs84,
     footprint_wgs84,
     item_over_bbox,
     pair_source_version,
@@ -80,6 +83,30 @@ def test_common_bbox_is_the_intersection_fitted_to_the_aspect_in_metres():
     assert common_bbox(a, [16.0, 46.0, 16.1, 46.1], 4 / 3) is None
 
 
+def test_a_degenerate_given_bbox_wgs84_is_refused_not_divided_by_zero():
+    """map_view.py ~511: a zero or negative width/height given bbox_wgs84 (metres) used to divide by
+    zero inside fit_aspect_wgs84; it must raise SnapshotUnavailable("The comparison area is empty")
+    instead, so the pair renderer turns it into a placeholder rather than a 500."""
+    with pytest.raises(SnapshotUnavailable, match="comparison area is empty"):
+        fit_aspect_wgs84([15.0, 45.0, 15.0, 45.01], 4 / 3)  # zero width
+    with pytest.raises(SnapshotUnavailable, match="comparison area is empty"):
+        fit_aspect_wgs84([15.0, 45.0, 15.01, 45.0], 4 / 3)  # zero height
+    with pytest.raises(SnapshotUnavailable, match="comparison area is empty"):
+        fit_aspect_wgs84([15.0, 45.0, 14.99, 45.01], 4 / 3)  # negative width
+
+
+def test_a_pair_with_a_degenerate_given_bbox_is_a_placeholder_not_a_500(handle):
+    a = add_map_file(handle, name="April", seed=1)
+    b = add_map_file(handle, name="May", seed=2)
+    spec = pair_spec(
+        map_spec(a, _map_pin(), label=None),
+        map_spec(b, _map_pin(), label=None),
+        bbox_wgs84=[15.0, 45.0, 15.0, 45.01],
+    )
+    with pytest.raises(SnapshotUnavailable, match="comparison area is empty"):
+        render_pair_spec(handle, spec)
+
+
 def test_swipe_and_side_by_side_composite_geometry():
     a = PILImage.new("RGB", (1200, 900), (255, 0, 0))
     b = PILImage.new("RGB", (1200, 900), (0, 0, 255))
@@ -125,6 +152,21 @@ def test_pairs_without_a_common_area_fall_back_to_side_by_side(handle):
     img = render_pair_spec(handle, spec)
     assert img.size == (1200, 900)
     assert all(img.getpixel((x, 450)) == WHITE for x in range(596, 604))
+    # amendment: the "No common area" chip must actually be drawn (spec §16), not just asserted by
+    # comparing rendered output against a differently-composed render (that would pass even if the
+    # chip were never drawn). render_pair_spec draws it centred at y=64 over a chip-background-fill
+    # rounded rect (draw.draw_chip), so a CHIP_BG pixel must appear in that band; a render of the same
+    # composite with no chip drawn (the two panels alone) never has that colour in that band.
+    chip_band = [img.getpixel((x, 70)) for x in range(500, 700)]
+    assert CHIP_BG in chip_band
+    panel_bbox_a = fit_aspect_wgs84(footprint_wgs84(handle, spec.a), 596 / 900, grow=True)
+    panel_bbox_b = fit_aspect_wgs84(footprint_wgs84(handle, spec.b), 596 / 900, grow=True)
+    no_chip = side_by_side(
+        item_over_bbox(handle, spec.a, panel_bbox_a, (596, 900)),
+        item_over_bbox(handle, spec.b, panel_bbox_b, (596, 900)),
+        (1200, 900),
+    )
+    assert CHIP_BG not in [no_chip.getpixel((x, 70)) for x in range(500, 700)]
 
 
 def test_an_elevation_pair_swipes_too(handle):
