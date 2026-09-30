@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ApiClient, Job } from "@contract/client";
+import { createApiClient, type ApiClient, type Job } from "@contract/client";
 import { exampleJob, fakeClient } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
@@ -56,6 +56,33 @@ describe("useReports", () => {
     const { result } = renderHook(() => useReports("p1"), { wrapper: wrap(api) });
     await waitFor(() => expect(result.current.error).toBe("disk"));
     expect(result.current.items).toEqual([]);
+  });
+});
+
+describe("usePagedList loadMore after reload", () => {
+  it("issues a new loadMore after a reload while the old one is in flight, and drops the stale answer", async () => {
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    const held: { url: string; resolve: (r: Response) => void }[] = [];
+    const fetchImpl = (input: Request | string | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (!url.includes("cursor=")) return Promise.resolve(json({ items: [{ id: "a" }], next_cursor: "c2" }));
+      return new Promise<Response>((resolve) => held.push({ url, resolve }));
+    };
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl as typeof fetch });
+    const { result } = renderHook(() => useReports("p1"), { wrapper: wrap(api) });
+    await waitFor(() => expect(result.current.items.map((r) => r.id)).toEqual(["a"]));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(held).toHaveLength(1));
+    act(() => result.current.reload());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(held).toHaveLength(2));
+    await act(async () => held[1].resolve(json({ items: [{ id: "c" }], next_cursor: null })));
+    await waitFor(() => expect(result.current.items.map((r) => r.id)).toEqual(["a", "c"]));
+    await act(async () => held[0].resolve(json({ items: [{ id: "stale" }], next_cursor: "c9" })));
+    expect(result.current.items.map((r) => r.id)).toEqual(["a", "c"]);
+    expect(result.current.hasMore).toBe(false);
   });
 });
 

@@ -403,7 +403,9 @@ function usePagedList<T>(key: string, load: (cursor?: string) => Promise<Page<T>
   const [revision, setRevision] = useState(0);
   const fullKey = `${key}#${revision}`;
   const [state, setState] = useState<PagedState<T> | null>(null);
-  const busy = useRef(false);
+  // The list key/revision whose loadMore is in flight: a reload starts a new revision, so a loadMore
+  // after it is not blocked by the old revision's request (whose answer is dropped by the key check).
+  const busy = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -424,9 +426,9 @@ function usePagedList<T>(key: string, load: (cursor?: string) => Promise<Page<T>
   const current = state?.key === fullKey ? state : null;
 
   const loadMore = useCallback(() => {
-    if (!current?.next || busy.current) return;
+    if (!current?.next || busy.current === fullKey) return;
     const cursor = current.next;
-    busy.current = true;
+    busy.current = fullKey;
     load(cursor)
       .then((page) =>
         setState((s) => {
@@ -442,7 +444,7 @@ function usePagedList<T>(key: string, load: (cursor?: string) => Promise<Page<T>
         setState((s) => (s && s.key === fullKey ? { ...s, error: messageOf(e, "could not load more") } : s)),
       )
       .finally(() => {
-        busy.current = false;
+        if (busy.current === fullKey) busy.current = null;
       });
   }, [current, fullKey, load]);
 
