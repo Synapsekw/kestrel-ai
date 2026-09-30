@@ -57,3 +57,51 @@ test("the Catalogue classifies a migrated type, offers the backfill and edits th
   expect(((await put).postDataJSON() as { levels: unknown[] }).levels).toHaveLength(5);
   await expect(page.getByText("Severity scale saved")).toBeVisible();
 });
+
+test("the type editor saves a definition and ordered severity rules", async ({ page }) => {
+  // After migration 0003 every type carries both fields; Crack starts with neither filled.
+  const crack = { ...CATALOGUE_PAGE.items[2], definition: null, severity_rules: [] };
+  await page.route(
+    (url) => url.pathname === "/api/v1/catalogue/types",
+    (route) => fulfilJson(route, { items: [crack], next_cursor: null, needs_classification: false }),
+  );
+  await page.route(
+    (url) => /^\/api\/v1\/catalogue\/types\/[^/]+$/.test(url.pathname),
+    (route) =>
+      fulfilJson(route, {
+        ...crack,
+        ...(route.request().postDataJSON() as object),
+        backfill_candidates: false,
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === "/api/v1/catalogue/severity",
+    (route) => fulfilJson(route, { levels: SEVERITY }),
+  );
+
+  await page.goto("/catalogue");
+  await page.getByRole("row", { name: /Crack/ }).click({ timeout: 15_000 });
+  await page.getByLabel("Definition", { exact: true }).fill("A linear fracture in concrete.");
+
+  await page.getByRole("button", { name: "Add rule" }).click();
+  await page.getByLabel("Rule 1 condition", { exact: true }).fill("Hairline, under 0.3 mm");
+  await page.getByLabel("Rule 1 severity", { exact: true }).selectOption("1");
+  await page.getByRole("button", { name: "Add rule" }).click();
+  await page.getByLabel("Rule 2 condition", { exact: true }).fill("Wider than 5 mm");
+  await page.getByLabel("Rule 2 severity", { exact: true }).selectOption("4");
+
+  await page.getByLabel("Rule 2 condition", { exact: true }).press("Alt+ArrowUp");
+  await expect(page.getByLabel("Rule 1 condition", { exact: true })).toHaveValue("Wider than 5 mm");
+  await expect(page.getByLabel("Rule 1 condition", { exact: true })).toBeFocused();
+  await expect(page.getByRole("status").filter({ hasText: "Rule moved to position 1 of 2" })).toBeAttached();
+
+  const patch = page.waitForRequest((r) => r.method() === "PATCH");
+  await page.getByRole("button", { name: "Save type" }).click();
+  expect((await patch).postDataJSON()).toEqual({
+    definition: "A linear fracture in concrete.",
+    severity_rules: [
+      { when: "Wider than 5 mm", severity: 4 },
+      { when: "Hairline, under 0.3 mm", severity: 1 },
+    ],
+  });
+});
