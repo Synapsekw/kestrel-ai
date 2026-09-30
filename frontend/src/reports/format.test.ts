@@ -31,8 +31,12 @@ describe("reports format", () => {
       "Issued v3 · 24 Sep",
     );
     expect(lastVersionLine({ number: 2, state: "ready", issued_at: null, pages: 10 })).toBe("Draft v2");
-    expect(lastVersionLine({ number: null, state: "rendering", issued_at: null, pages: null })).toBe("Rendering…");
-    expect(lastVersionLine({ number: null, state: "failed", issued_at: null, pages: null })).toBe("Render failed");
+    expect(lastVersionLine({ number: null, state: "rendering", issued_at: null, pages: null })).toBe(
+      "Rendering…",
+    );
+    expect(lastVersionLine({ number: null, state: "failed", issued_at: null, pages: null })).toBe(
+      "Render failed",
+    );
   });
 
   it("counts pages and parts", () => {
@@ -46,9 +50,11 @@ describe("reports format", () => {
   });
 
   it("reads a failed render's message", () => {
-    expect(versionError(version(1, { state: "failed", number: null, stats: stats({ error: "The disk is full" }) }))).toBe(
-      "The disk is full",
-    );
+    expect(
+      versionError(
+        version(1, { state: "failed", number: null, stats: stats({ error: "The disk is full" }) }),
+      ),
+    ).toBe("The disk is full");
     expect(versionError(version(1))).toBeNull();
   });
 

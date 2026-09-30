@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { getOutline, getReport, patchReport, type Report, type ReportConfig, type ReportOutline } from "@/api/reports";
+import {
+  getOutline,
+  getReport,
+  patchReport,
+  type Report,
+  type ReportConfig,
+  type ReportOutline,
+} from "@/api/reports";
 import { pushLog } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
 import { PATCH_DEBOUNCE_MS } from "./builderModel";

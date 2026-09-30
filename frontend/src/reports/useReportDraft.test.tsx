@@ -2,7 +2,14 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { createApiClient } from "@contract/client";
-import { errorBody, fakeClient, fakeFetch, PROJECT_ID, type FakeRoute, type RecordedRequest } from "@/test/fixtures";
+import {
+  errorBody,
+  fakeClient,
+  fakeFetch,
+  PROJECT_ID,
+  type FakeRoute,
+  type RecordedRequest,
+} from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { outline, report, REPORT_ID } from "@/test/reportBuilderFixtures";
 import { useChangesStore } from "@/store/changes";
@@ -166,7 +173,9 @@ describe("useReportDraft", () => {
     expect(patches(inner.requests)).toHaveLength(1); // still waiting on the first
     release();
     await waitFor(() => expect(patches(inner.requests)).toHaveLength(2));
-    const last = patches(inner.requests)[1].body as { config: { sections: { key: string; enabled: boolean }[] } };
+    const last = patches(inner.requests)[1].body as {
+      config: { sections: { key: string; enabled: boolean }[] };
+    };
     expect(last.config.sections.find((s) => s.key === "summary")?.enabled).toBe(false);
     expect(last.config.sections.find((s) => s.key === "appendix")?.enabled).toBe(false);
   });

@@ -76,7 +76,8 @@ type DateFilter = Filters["date"];
 export type DateRule = DateFilter["rule"];
 type Status = Filters["statuses"][number];
 
-const toggleIn = <T>(list: readonly T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+const toggleIn = <T>(list: readonly T[], v: T): T[] =>
+  list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 /** "None chosen" is every one (Ruling 13). */
 const orAll = (list: string[]): string[] | null => (list.length === 0 ? null : list);
 
@@ -94,9 +95,15 @@ export const setSeverityMin = (f: Filters, level: number | null): Filters => ({
   include_ungraded: level === null,
 });
 
-export const toggleStatus = (f: Filters, status: Status): Filters => ({ ...f, statuses: toggleIn(f.statuses, status) });
+export const toggleStatus = (f: Filters, status: Status): Filters => ({
+  ...f,
+  statuses: toggleIn(f.statuses, status),
+});
 
-export const toggleType = (f: Filters, id: string): Filters => ({ ...f, type_ids: orAll(toggleIn(f.type_ids ?? [], id)) });
+export const toggleType = (f: Filters, id: string): Filters => ({
+  ...f,
+  type_ids: orAll(toggleIn(f.type_ids ?? [], id)),
+});
 
 export const allTypes = (f: Filters): Filters => ({ ...f, type_ids: null });
 

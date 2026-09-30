@@ -33,7 +33,10 @@ describe("sections", () => {
   });
 
   it("moves one place, never above the cover, never the cover itself", () => {
-    expect(keys(moveSection(base(), "measurements", -1))?.slice(3, 5)).toEqual(["measurements", "finding_pages"]);
+    expect(keys(moveSection(base(), "measurements", -1))?.slice(3, 5)).toEqual([
+      "measurements",
+      "finding_pages",
+    ]);
     expect(moveSection(base(), "summary", -1)).toBeNull();
     expect(moveSection(base(), "cover", 1)).toBeNull();
     expect(moveSection(base(), "appendix", 1)).toBeNull();
@@ -61,7 +64,10 @@ describe("sections", () => {
     expect(off.find((s) => s.key === "appendix")?.enabled).toBe(false);
     expect(off.find((s) => s.key === "summary")?.enabled).toBe(true);
     const opts = setSectionOptions(base(), "finding_pages", { photos_max: 0 });
-    expect(opts.find((s) => s.key === "finding_pages")?.options).toMatchObject({ photos_max: 0, comments: "last" });
+    expect(opts.find((s) => s.key === "finding_pages")?.options).toMatchObject({
+      photos_max: 0,
+      comments: "last",
+    });
   });
 
   it("announces a new position", () => {
