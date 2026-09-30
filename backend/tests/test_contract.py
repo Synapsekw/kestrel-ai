@@ -221,6 +221,9 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`model_or_provider_required`), a blank cloud query (`query_required`), no class mapped
     # (`unmapped_classes`), no stored key (`conflict` 409) or missing weights (`model_unavailable`).
     "detectImageBatch": {409, 422},
+    # R3: a schema-valid `spec` string that is not a base64url snapshot spec (`invalid_snapshot_spec`),
+    # or a generated key that does not match the spec (`snapshot_key_mismatch`).
+    "getReportSnapshot": {400},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
