@@ -301,15 +301,15 @@ export function versionBlocksLoader(
 
 /**
  * A JSON string exactly as Python's json.dumps(ensure_ascii=True) writes it: every UTF-16 code unit
- * above U+007F becomes a lowercase `\uXXXX` escape (a surrogate pair becomes two escapes, matching
- * ensure_ascii).
+ * from U+007F (DEL, which ensure_ascii escapes too) up becomes a lowercase `\uXXXX` escape (a
+ * surrogate pair becomes two escapes, matching ensure_ascii).
  */
 function pyString(s: string): string {
   const json = JSON.stringify(s);
   let out = "";
   for (let i = 0; i < json.length; i += 1) {
     const code = json.charCodeAt(i);
-    out += code > 0x7f ? `\\u${code.toString(16).padStart(4, "0")}` : json[i];
+    out += code >= 0x7f ? `\\u${code.toString(16).padStart(4, "0")}` : json[i];
   }
   return out;
 }
@@ -317,6 +317,8 @@ function pyString(s: string): string {
 /**
  * `json.dumps(spec, sort_keys=True, separators=(",", ":"))`, the backend's canonical form
  * (Ruling R-4). `undefined` keys are dropped; `null` is kept; non-finite numbers are refused.
+ * Byte parity with Python holds for numbers with 1e-4 <= |x| < 1e21 (R3's fixture guarantees only
+ * that range); outside it JavaScript's and Python's exponent formatting differ.
  */
 export function canonicalJson(value: unknown): string {
   if (value === null) return "null";

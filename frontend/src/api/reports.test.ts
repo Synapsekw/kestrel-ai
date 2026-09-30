@@ -274,6 +274,11 @@ describe("canonical snapshot spec", () => {
     expect(canonicalJson({ label: 'q"\n' })).toBe('{"label":"q\\"\\n"}');
   });
 
+  it("escapes DEL (U+007F) as Python's ensure_ascii does, and keeps the printable ASCII range", () => {
+    expect(canonicalJson({ a: String.fromCharCode(0x7f) })).toBe('{"a":"\\u007f"}');
+    expect(canonicalJson({ a: "~ }" })).toBe('{"a":"~ }"}');
+  });
+
   it("drops undefined keys and keeps null, booleans and numbers", () => {
     expect(canonicalJson({ a: undefined, b: null, c: true, d: 1.5, e: [1, "x"] })).toBe(
       '{"b":null,"c":true,"d":1.5,"e":[1,"x"]}',
