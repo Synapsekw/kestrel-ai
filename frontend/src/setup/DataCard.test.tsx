@@ -307,4 +307,35 @@ describe("DataCard", () => {
     );
     expect(screen.queryByRole("button", { name: "Browse folders" }) !== null).toBe(mode === "tauri");
   });
+
+  it("a folder dropped while a sort runs is not queued and says so", async () => {
+    nextJob = inspectJob();
+    jobs[INSPECT_JOB_ID] = inspectJob();
+    const requests = renderData();
+    await dropFolder(["E:\\DCIM"]);
+    await screen.findByRole("status", { name: "Sorting files" });
+    await dropFolder(["E:\\Other"]);
+    expect(
+      await screen.findByText("Sorting in progress. Drop the next folder when it finishes."),
+    ).toBeInTheDocument();
+    expect(inspects(requests)).toHaveLength(1);
+  });
+
+  it("keeps the typed path when the sort fails to start", async () => {
+    renderData({
+      routes: [
+        {
+          method: "POST",
+          path: /\/setup\/inspect$/,
+          status: 422,
+          body: errorBody("invalid_paths", "it broke"),
+        },
+      ],
+    });
+    const field = await screen.findByRole("textbox", { name: "Folder or file path" });
+    fireEvent.change(field, { target: { value: "E:\\DCIM" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sort files" }));
+    await screen.findByText(/it broke/);
+    expect(field).toHaveValue("E:\\DCIM");
+  });
 });

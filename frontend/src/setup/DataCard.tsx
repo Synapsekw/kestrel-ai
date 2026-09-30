@@ -30,11 +30,22 @@ export function DataCard({ templates, onUseTemplate }: DataCardProps) {
   const [over, setOver] = useState(false);
   const [path, setPath] = useState("");
   const [pathError, setPathError] = useState<string | null>(null);
+  const [busyDropJob, setBusyDropJob] = useState<string | null>(null);
+  const runningJobId = useSetupDraft((s) => s.inspect?.jobId ?? null);
   const canSort = inspect.libraryUnavailable === null;
 
   useEffect(() => {
     if (!canSort) return;
-    return subscribeFolderDrop({ onOver: setOver, onDrop: (paths) => void start(paths) });
+    return subscribeFolderDrop({
+      onOver: setOver,
+      onDrop: (paths) => {
+        setOver(false);
+        // One sort at a time: say so rather than dropping the folder without a word.
+        const run = useSetupDraft.getState().inspect;
+        if (run) setBusyDropJob(run.jobId);
+        else void start(paths);
+      },
+    });
   }, [canSort, start]);
 
   async function browse(slot: TemplateSlot | null) {
@@ -47,15 +58,16 @@ export function DataCard({ templates, onUseTemplate }: DataCardProps) {
     }
   }
 
-  function sortTyped() {
+  async function sortTyped() {
     const p = path.trim();
     if (!isAbsolutePath(p)) {
       setPathError("Type a full path, such as E:\\DCIM\\100MEDIA.");
       return;
     }
     setPathError(null);
-    setPath("");
-    void start([p]);
+    await start([p]);
+    // Keep the typed path when the sort did not start, so it can be corrected and retried.
+    if (useSetupDraft.getState().inspect) setPath("");
   }
 
   const suggested =
@@ -133,7 +145,7 @@ export function DataCard({ templates, onUseTemplate }: DataCardProps) {
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              sortTyped();
+              void sortTyped();
             }}
           >
             <Input
@@ -150,6 +162,11 @@ export function DataCard({ templates, onUseTemplate }: DataCardProps) {
       {pathError && (
         <p role="alert" className="text-xs text-danger">
           {pathError}
+        </p>
+      )}
+      {busyDropJob !== null && busyDropJob === runningJobId && (
+        <p role="status" className="text-xs text-muted">
+          {"Sorting in progress. Drop the next folder when it finishes."}
         </p>
       )}
       {inspect.error && (
