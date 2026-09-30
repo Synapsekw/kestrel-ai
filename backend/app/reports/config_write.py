@@ -39,18 +39,41 @@ def dump(config: ReportConfig) -> dict:
     return config.model_dump(mode="json", by_alias=True)
 
 
-def config_problems(config: ReportConfig, *, prefix: str = "config") -> list[dict]:
-    """Semantic rules pydantic cannot express on one field (plan R1 Ruling 3)."""
+def _dup_errors(
+    values, base: str, *, key=lambda v: str(getattr(v, "value", v)), suffix: str = ""
+) -> list[dict]:
+    """One error per repeated value in `values`, `path` pointing at the duplicate's own index under
+    `base` (`{base}.{i}{suffix}`). Shared by every `uniqueItems: true` array the contract declares
+    on the report config that pydantic cannot state on its own (plan R1 Rulings 3, P7)."""
     errors: list[dict] = []
     seen: set[str] = set()
+    for i, v in enumerate(values):
+        k = key(v)
+        if k in seen:
+            errors.append({"path": f"{base}.{i}{suffix}", "message": f"{k} appears twice."})
+        seen.add(k)
+    return errors
+
+
+def config_problems(config: ReportConfig, *, prefix: str = "config") -> list[dict]:
+    """Semantic rules pydantic cannot express on one field (plan R1 Ruling 3, P7)."""
+    errors: list[dict] = []
+    errors += _dup_errors(
+        config.sections,
+        f"{prefix}.sections",
+        key=lambda s: str(getattr(s.key, "value", s.key)),
+        suffix=".key",
+    )
     for i, section in enumerate(config.sections):
         key = str(getattr(section.key, "value", section.key))
-        if key in seen:
-            errors.append({"path": f"{prefix}.sections.{i}.key", "message": f"{key} appears twice."})
-        seen.add(key)
-    statuses = [str(getattr(s, "value", s)) for s in config.filters.statuses]
-    if len(statuses) != len(set(statuses)):  # the contract's `uniqueItems: true`, pydantic cannot state it
-        errors.append({"path": f"{prefix}.filters.statuses", "message": "List each status once."})
+        base = f"{prefix}.sections.{i}.options"
+        if key == "findings_table":
+            errors += _dup_errors(section.options.columns, f"{base}.columns")
+        elif key == "finding_pages":
+            errors += _dup_errors(section.options.snapshots, f"{base}.snapshots")
+        elif key == "measurements":
+            errors += _dup_errors(section.options.kinds, f"{base}.kinds")
+    errors += _dup_errors(config.filters.statuses, f"{prefix}.filters.statuses")
     date = config.filters.date
     if date is not None:
         rule = str(getattr(date.rule, "value", date.rule))

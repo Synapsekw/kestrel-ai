@@ -81,6 +81,37 @@ def test_config_problems_is_empty_for_a_builtin():
     assert config_problems(parse_config(config_json(), code="x")) == []
 
 
+@pytest.mark.parametrize(
+    ("mutate", "expected_path"),
+    [
+        (lambda raw: raw["filters"].update(statuses=["open", "open"]), "config.filters.statuses.1"),
+        # builtin-full's sections are in canonical order: 2=findings_table, 3=finding_pages, 4=measurements.
+        (
+            lambda raw: raw["sections"][2]["options"].update(columns=["number", "number"]),
+            "config.sections.2.options.columns.1",
+        ),
+        (
+            lambda raw: raw["sections"][3]["options"].update(snapshots=["image", "image"]),
+            "config.sections.3.options.snapshots.1",
+        ),
+        (
+            lambda raw: raw["sections"][4]["options"].update(kinds=["length", "length"]),
+            "config.sections.4.options.kinds.1",
+        ),
+    ],
+)
+def test_a_duplicate_in_a_unique_items_array_is_refused(mutate, expected_path):
+    # Controller Ruling P7: the contract declares `uniqueItems: true` on ReportFilters.statuses,
+    # FindingsTableOptions.columns, FindingPagesOptions.snapshots and MeasurementsOptions.kinds;
+    # pydantic cannot state that, so config_problems refuses a duplicate with a path pointing at
+    # the repeated item's own index.
+    raw = config_json()
+    mutate(raw)
+    with pytest.raises(AppError) as e:
+        parse_config(raw, code="invalid_report")
+    assert expected_path in _paths(e.value)
+
+
 def test_portable_config_strips_project_only_fields_and_keeps_the_rest():
     raw = config_json()
     raw["filters"]["data_item_ids"] = ["item-1"]
