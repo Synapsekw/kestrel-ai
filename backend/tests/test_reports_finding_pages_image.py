@@ -9,7 +9,7 @@ from reports_image_rows import add_comments, add_photos, image_finding, make_ctx
 from app.db.models import FindingAttachment
 from app.reports.compose import SECTION_COMPOSERS
 from app.reports.snapshots.keys import encode_spec
-from app.reports.snapshots.render import render_to_cache
+from app.reports.snapshots.render import render_result, render_to_cache
 
 API = "/api/v1"
 
@@ -59,8 +59,9 @@ def test_a_deleted_photo_renders_a_placeholder(handle, crack, make_jpeg, tmp_pat
     (photo,) = _finding_block(handle, photos_max=4).photos
     with handle.session() as s:
         (handle.folder / s.get(FindingAttachment, aid).path).unlink()
-    path = render_to_cache(handle, photo.snapshot.spec)  # R3: never raises on one snapshot
-    with PILImage.open(path) as im:
+    result = render_result(handle, photo.snapshot.spec)  # R3: never raises on one snapshot
+    assert result.missing_reason is not None
+    with PILImage.open(result.path) as im:
         assert im.size == (480, 360)
 
 

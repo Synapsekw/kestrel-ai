@@ -10,17 +10,21 @@ cached JPEG (q85, 4:2:0, no EXIF) and turns any exception here into a placeholde
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from PIL import Image as PILImage
 from PIL import ImageOps
 
 from app.db.models import FindingAttachment
 from app.reports.snapshots import MISSING, SnapshotUnavailable, out_of
-from app.reports.snapshots.image_crop import too_large
 
 PAPER = (255, 255, 255)
 UNREADABLE = "The photo file cannot be read."
+OUTSIDE_FINDINGS = "The photo is not inside the project's findings folder."
+
+
+def _too_large() -> str:
+    return f"The photo is too large to print (over {PILImage.MAX_IMAGE_PIXELS // 1_000_000} MP)"
 
 
 def _path(handle, spec) -> Path:
@@ -33,10 +37,16 @@ def _path(handle, spec) -> Path:
         if row.finding_id != spec.finding_id:
             raise SnapshotUnavailable("The photo does not belong to this finding.")
         rel = row.path
+    # Cheap refusal before touching the filesystem: an absolute path, a ".." component or a path
+    # that does not start under "findings/" (FindingAttachment.path is always written as
+    # "findings/<finding_id>/<id>.<ext>", forward slashes) is refused without a resolve() call.
+    rel_parts = PurePath(rel)
+    if rel_parts.is_absolute() or ".." in rel_parts.parts or not rel.startswith("findings/"):
+        raise SnapshotUnavailable(OUTSIDE_FINDINGS)
     root = (handle.folder / "findings").resolve()
     path = (handle.folder / rel).resolve()
     if not path.is_relative_to(root):
-        raise SnapshotUnavailable("The photo is not inside the project's findings folder.")
+        raise SnapshotUnavailable(OUTSIDE_FINDINGS)
     if not path.is_file():
         raise SnapshotUnavailable("The photo file is missing.")
     return path
@@ -71,22 +81,25 @@ def render(handle, spec) -> PILImage.Image:
             # check the pixel count explicitly instead.
             limit = PILImage.MAX_IMAGE_PIXELS
             if limit is not None and im.size[0] * im.size[1] > limit:
-                raise SnapshotUnavailable(too_large())
-            if im.format == "JPEG":
+                raise SnapshotUnavailable(_too_large())
+            if im.format in ("JPEG", "MPO"):
                 im.draft("RGB", (side, side))  # square request: still covers `out` after a 90deg turn
             upright = ImageOps.exif_transpose(im)
-            if upright.mode in ("RGBA", "LA", "P"):
-                rgba = upright.convert("RGBA")
-                flat = PILImage.new("RGB", rgba.size, PAPER)
-                flat.paste(rgba, mask=rgba.getchannel("A"))
-                upright = flat
+            has_alpha = upright.mode in ("RGBA", "LA", "P")
+            # Fit to `out` before flattening alpha onto white: flattening needs a same-size white
+            # canvas and a paste, which is wasteful at full decoded size for a large PNG/WebP with
+            # alpha (no JPEG draft to shrink it first). Converting mode (not resizing) is cheap, so
+            # convert, then contain, then flatten the now print-sized image.
+            prepped = upright.convert("RGBA") if has_alpha else upright.convert("RGB")
+            fitted_raw = ImageOps.contain(prepped, (out_w, out_h), PILImage.Resampling.LANCZOS)
+            if has_alpha:
+                flat = PILImage.new("RGB", fitted_raw.size, PAPER)
+                flat.paste(fitted_raw, mask=fitted_raw.getchannel("A"))
+                fitted = flat
             else:
-                upright = upright.convert("RGB")
-            fitted = ImageOps.contain(upright, (out_w, out_h), PILImage.Resampling.LANCZOS)
+                fitted = fitted_raw
     except PILImage.DecompressionBombError:
-        raise SnapshotUnavailable(
-            f"The photo is too large to print (over {PILImage.MAX_IMAGE_PIXELS // 1_000_000} MP)"
-        ) from None
+        raise SnapshotUnavailable(_too_large()) from None
     except (OSError, SyntaxError, ValueError):
         # Covers PIL.UnidentifiedImageError (an OSError subclass) and any other decode failure on a
         # row whose file exists but is not a readable image.

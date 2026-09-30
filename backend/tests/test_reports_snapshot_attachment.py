@@ -150,5 +150,5 @@ def test_an_over_limit_photo_is_refused_even_between_1x_and_2x(
     PILImage.new("RGB", (1000, 900), (10, 20, 30)).save(src, "JPEG", quality=90)  # 900,000 px
     aid = attachments.add(handle, f.id, str(src)).id  # inspected under the real (huge) default limit
     monkeypatch.setattr(attachment.PILImage, "MAX_IMAGE_PIXELS", 800_000)  # 900,000 px is 1.125x this
-    with pytest.raises(SnapshotUnavailable):
+    with pytest.warns(PILImage.DecompressionBombWarning), pytest.raises(SnapshotUnavailable):
         attachment.render(handle, _spec(f.id, aid))
