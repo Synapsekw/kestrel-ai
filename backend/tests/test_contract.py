@@ -229,6 +229,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # generated logo id that is not an asset of the project, is `invalid_report`.
     "createReport": {422},
     "patchReport": {422},
+    # Reports R1: a generated path is never a readable logo (`asset_invalid`, details {reason}).
+    "createReportAsset": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
