@@ -40,8 +40,8 @@ describe("printTheme", () => {
   });
 
   it("scales a millimetre to the column, never above real size", () => {
-    expect(mmVar("A4")).toBe("min(calc((100cqw - 48px) / 210), 1mm)");
-    expect(mmVar("Letter")).toBe("min(calc((100cqw - 48px) / 215.9), 1mm)");
+    expect(mmVar("A4")).toBe("min(calc(100cqw / 210), 1mm)");
+    expect(mmVar("Letter")).toBe("min(calc(100cqw / 215.9), 1mm)");
   });
 
   it("tints a data colour at 12 % and refuses anything but #rrggbb", () => {

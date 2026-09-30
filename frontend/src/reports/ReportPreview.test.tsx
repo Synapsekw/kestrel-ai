@@ -197,6 +197,6 @@ describe("ReportPreview", () => {
   it("sizes the sheets for the paper", () => {
     setup({ paper: "Letter" });
     const column = screen.getByTestId("preview-column");
-    expect(column.style.getPropertyValue("--mm")).toBe("min(calc((100cqw - 48px) / 215.9), 1mm)");
+    expect(column.style.getPropertyValue("--mm")).toBe("min(calc(100cqw / 215.9), 1mm)");
   });
 });

@@ -121,9 +121,13 @@ export function contentWidthMm(size: PaperSize): number {
   return r4(paperOf(size).width_mm - 2 * PRINT.margin);
 }
 
-/** The value of `--mm` inside the preview's `container-type: inline-size` scroller (48px = its px-6 gutters). */
+/**
+ * The value of `--mm` inside the preview's `container-type: inline-size` scroller. `cqw` is a
+ * percentage of the container's content box, which already excludes the scroller's px-6 gutters,
+ * so a sheet is exactly the column wide (never above real size).
+ */
 export function mmVar(size: PaperSize): string {
-  return `min(calc((100cqw - 48px) / ${paperOf(size).width_mm}), 1mm)`;
+  return `min(calc(100cqw / ${paperOf(size).width_mm}), 1mm)`;
 }
 
 /** A data colour (#rrggbb) as a translucent fill: the severity pill's 12 % tint. */
