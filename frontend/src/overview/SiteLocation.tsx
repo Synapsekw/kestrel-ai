@@ -1,7 +1,7 @@
 import type { Finding } from "@/api/findings";
 import type { OverviewSite } from "@/api/overview";
 import type { CSSProperties } from "react";
-import { cx, GlassPanel, useSeverityScale } from "@/ui";
+import { cx, GlassPanel, severityOf, useSeverityScale } from "@/ui";
 import { niceScale, siteFrame } from "./siteGeometry";
 
 /** Spec 2026-09-30-project-landing §5.3 and D8: where the site is, drawn from our own geometry (no basemap). */
@@ -69,7 +69,7 @@ export function SiteLocation({
         })}
         {located.map((f) => {
           const p = frame.project(f.lon!, f.lat!);
-          const colour = scale.find((l) => l.level === f.severity)?.colour;
+          const colour = severityOf(scale, f.severity)?.colour;
           return (
             <circle
               key={f.id}
@@ -77,7 +77,7 @@ export function SiteLocation({
               cx={p.x}
               cy={p.y}
               r={dot * 1.4}
-              className="fill-[color:var(--c)] stroke-bg"
+              className={cx(colour ? "fill-[color:var(--c)]" : "fill-muted", "stroke-bg")}
               strokeWidth={dot / 2}
               style={colour ? ({ "--c": colour } as CSSProperties) : undefined}
             />
