@@ -15,7 +15,8 @@ export interface OverviewFacts {
   runningJobs: boolean;
 }
 
-export type PaneId = "header" | "hero" | "cloud" | "location" | "findings" | "imagery" | "status" | "firstData";
+export type PaneId =
+  "header" | "hero" | "cloud" | "location" | "findings" | "imagery" | "status" | "firstData";
 export interface Pane {
   id: PaneId;
   col: string;

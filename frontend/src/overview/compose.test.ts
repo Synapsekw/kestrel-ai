@@ -45,14 +45,24 @@ describe("composeOverview", () => {
   });
 
   it("an empty project is the first-data screen only", () => {
-    const f: OverviewFacts = { ...everything, heroKind: null, dataTotal: 0, hasCloud: false, hasImages: false, hasSite: false, findingsTotal: 0 };
+    const f: OverviewFacts = {
+      ...everything,
+      heroKind: null,
+      dataTotal: 0,
+      hasCloud: false,
+      hasImages: false,
+      hasSite: false,
+      findingsTotal: 0,
+    };
     expect(composeOverview(f).panes).toEqual([{ id: "firstData", col: "1 / -1", row: "1 / -1" }]);
   });
 
   it("findings on a cloud with no images: findings and status fill the row, no imagery", () => {
     const f = { ...everything, heroKind: "point_cloud" as const, hasImages: false };
     expect(ids(f)).toEqual(["header", "hero", "location", "findings", "status"]);
-    const cols = composeOverview(f).panes.filter((p) => p.row === "4").map((p) => p.col);
+    const cols = composeOverview(f)
+      .panes.filter((p) => p.row === "4")
+      .map((p) => p.col);
     expect(cols).toEqual(["1 / span 8", "9 / span 4"]);
   });
 
@@ -63,14 +73,28 @@ describe("composeOverview", () => {
   });
 
   it("a drawing only: no bottom row and no empty track", () => {
-    const f: OverviewFacts = { ...everything, heroKind: "drawing", dataTotal: 1, hasCloud: false, hasImages: false, hasSite: false, findingsTotal: 0 };
+    const f: OverviewFacts = {
+      ...everything,
+      heroKind: "drawing",
+      dataTotal: 1,
+      hasCloud: false,
+      hasImages: false,
+      hasSite: false,
+      findingsTotal: 0,
+    };
     const c = composeOverview(f);
     expect(c.panes.map((p) => p.id)).toEqual(["header", "hero"]);
     expect(c.rows).toBe(ROWS_NO_BOTTOM);
   });
 
   it("a running job alone brings the status pane", () => {
-    const f = { ...everything, findingsTotal: 0, hasImages: false, heroKind: "point_cloud" as const, runningJobs: true };
+    const f = {
+      ...everything,
+      findingsTotal: 0,
+      hasImages: false,
+      heroKind: "point_cloud" as const,
+      runningJobs: true,
+    };
     expect(ids(f)).toContain("status");
   });
 
