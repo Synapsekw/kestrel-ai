@@ -118,6 +118,17 @@ try:
 except Exception:
     log.exception("reports router failed to load; report endpoints will be unavailable")
 
+# Project setup (spec 2026-09-30-project-setup section 9, unit S1-U1): project templates and the
+# drop-folder inspect job. Guarded like Reports: the inspect job reads headers with rasterio and
+# laspy (U3), and a broken import costs the setup endpoints, never the app; the new-project page
+# then offers Blank only and still creates the project.
+try:
+    from app.setup.router import router as setup_router
+
+    api_router.include_router(setup_router)
+except Exception:
+    log.exception("setup router failed to load; setup endpoints will be unavailable")
+
 # Reviewing detection runs (plan 2 unit V). It serves map runs and imports the map schemas, so it
 # goes with the maps router: a broken native stack costs the review endpoints, never the app.
 try:
