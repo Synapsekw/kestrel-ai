@@ -16,9 +16,10 @@ import hashlib
 
 from sqlalchemy import func, select
 
-from app.db.models import Finding, Surface
+from app.db.models import CloudMeasurement, Finding, Surface
 from app.measurements.schemas import MeasurementItem
 from app.pointclouds import views
+from app.pointclouds.measure import area_vertices
 from app.reports import blocks
 from app.reports.blocks import Figure
 from app.reports.context import PAGE, ComposeContext, FindingRow
@@ -183,5 +184,48 @@ def fingerprint(ctx: ComposeContext) -> str:
     return h.hexdigest()
 
 
+GONE = "The measurement no longer exists"
+
+
 def measurement_figure(ctx: ComposeContext, row: MeasurementItem) -> Figure | None:
-    return None
+    """The cloud measurement's stored view, the hillshade plan of a cloud DSM covering its centroid,
+    or a placeholder (spec §9.4). `row` is a MeasurementItem with kind "cloud"; always returns a
+    Figure for one (Ruling A7 keeps R2's `-> Figure | None` annotation, but never returns None here).
+    A non-cloud row is a caller bug."""
+    if row.kind != "cloud":
+        raise ValueError(f"measurement_figure is for cloud measurements, not {row.kind!r}")
+    prefix = f"{row.name}: "
+    # Built from row.data_id before the read, so a deleted measurement still gets a well-formed ref.
+    spec = View3dSpec(
+        kind="view3d", subject_kind="cloud_measurement", subject_id=row.id, cloud_id=row.data_id
+    )
+    with ctx.session() as s:
+        m = s.get(CloudMeasurement, row.id)
+        found = None if m is None else (m.point_cloud_id, m.kind, list(m.points or []))
+    if found is None:
+        return _placeholder_figure(ctx, spec, GONE, prefix=prefix)
+    cloud_id, kind, points = found
+    link = deep_link(ctx.handle.id, cloud_id)
+    view = views.stored_view(ctx.handle, "cloud_measurement", row.id)
+    if view is not None:
+        if view.meta.stale:
+            warn(ctx, STALE, link)
+        return _view_figure(ctx, spec, view, prefix=prefix)
+    warn(ctx, MISSING_CODE, link)
+    if points:
+        (cx, cy), geometry = fallback_geometry(kind, points)
+        surface = covering_surface(ctx.handle, cloud_id, cx, cy)
+        if surface is not None:
+            return _plan_figure(ctx, surface, geometry, prefix=prefix)
+    return _placeholder_figure(ctx, spec, view3d.NO_VIEW["cloud_measurement"], prefix=prefix)
+
+
+def fallback_geometry(kind: str, points: list[dict]) -> tuple[tuple[float, float], dict]:
+    """(centroid XY, drawn geometry): an area's closed outline, else a pin at the centroid (Ruling 4)."""
+    cx = sum(float(p["x"]) for p in points) / len(points)
+    cy = sum(float(p["y"]) for p in points) / len(points)
+    if kind == "area":
+        ring = [[float(p["x"]), float(p["y"])] for p in area_vertices(points)]
+        if len(ring) >= 3:
+            return (cx, cy), {"type": "Polygon", "coordinates": [[*ring, ring[0]]]}
+    return (cx, cy), {"type": "Point", "coordinates": [cx, cy]}
