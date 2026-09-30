@@ -3219,6 +3219,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/overview/site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Where the site is. It returns the bounds of the hero map, else of the newest ready point cloud, else of the photos' GPS points, plus at most 500 evenly spread photo points. It makes one bounded primary-key read of `image` and never scans it. */
+        get: operations["getOverviewSite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/search": {
         parameters: {
             query?: never;
@@ -10107,6 +10126,57 @@ export interface components {
             /** @description an in-app path the banner's button opens, or null */
             action?: string | null;
         };
+        /** @description what the Overview's big pane shows; the first of a ready map, a ready point cloud, the photos, a ready drawing */
+        OverviewHero: {
+            /** @enum {string} */
+            kind: "map" | "point_cloud" | "images" | "drawing";
+            /** @description null for `images`: the client reads the newest frames */
+            id: string | null;
+        };
+        /**
+         * @example {
+         *       "center": [
+         *         20.4612,
+         *         44.8125
+         *       ],
+         *       "bounds_wgs84": [
+         *         20.4581,
+         *         44.8103,
+         *         20.4643,
+         *         44.8147
+         *       ],
+         *       "source": "map",
+         *       "area_m2": 240500,
+         *       "photo_points": [
+         *         [
+         *           20.459,
+         *           44.811
+         *         ],
+         *         [
+         *           20.46,
+         *           44.811
+         *         ],
+         *         [
+         *           20.461,
+         *           44.812
+         *         ]
+         *       ],
+         *       "photo_points_total": 1280
+         *     }
+         */
+        OverviewSite: {
+            /** @description [lon, lat], the middle of `bounds_wgs84` */
+            center: number[] | null;
+            /** @description [minlon, minlat, maxlon, maxlat] */
+            bounds_wgs84: number[] | null;
+            /** @enum {string|null} */
+            source: "map" | "point_cloud" | "images" | null;
+            /** @description geodesic area of `bounds_wgs84`; the client labels it approximate */
+            area_m2: number | null;
+            photo_points: number[][];
+            /** @description estimated number of photos with GPS */
+            photo_points_total: number;
+        };
         /**
          * @example {
          *       "findings": {
@@ -10162,6 +10232,10 @@ export interface components {
          *         "previous_net_m3": 1307.6
          *       },
          *       "hero_map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "hero": {
+         *         "kind": "map",
+         *         "id": "a0000000-6666-4000-8000-000000000001"
+         *       },
          *       "banners": [
          *         {
          *           "kind": "types_to_classify",
@@ -10178,6 +10252,7 @@ export interface components {
             latest_volume: components["schemas"]["OverviewVolume"] | null;
             /** @description the newest ready map, shown as tiles only */
             hero_map_id: string | null;
+            hero: components["schemas"]["OverviewHero"] | null;
             banners: components["schemas"]["OverviewBanner"][];
         };
         /**
@@ -19911,6 +19986,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectOverview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getOverviewSite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the site location */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewSite"];
                 };
             };
             404: components["responses"]["NotFound"];
