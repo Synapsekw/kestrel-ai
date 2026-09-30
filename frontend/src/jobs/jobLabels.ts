@@ -127,22 +127,22 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       if (job.params?.purpose === "starter_model") return model(str(job.result, "model_id"));
       return { label: "Open images", to: `${p}/images` };
     case "results_export":
-      return null; // it already lives on the Export screen that started it
+      return null; // it already lives in Reports → Data exports, which started it
     case "map_import":
       return { label: "Open maps", to: `${p}/maps` };
     case "map_detect":
       return { label: "Open runs", to: `${p}/runs` };
     case "map_export":
-      // Its files and "show in folder" live in `ExportJobs` on the Export screen (widened to list
-      // map exports alongside results exports), not on the Maps screen that started it.
-      return { label: "Open export", to: `${p}/export` };
+      // Its files and "show in folder" live in Past exports under Reports → Data exports, not on
+      // the Map workspace that started it.
+      return { label: "Open data exports", to: `${p}/reports/exports` };
     case "accept_above":
     case "recount":
       return { label: "Open runs", to: `${p}/runs` };
     case "area_recount":
       return { label: "Open analytics", to: `${p}/analytics` };
     case "detect_export":
-      return { label: "Open export", to: `${p}/export` };
+      return { label: "Open data exports", to: `${p}/reports/exports` };
     case "pointcloud_import":
     case "pointcloud_export":
       return { label: "Open point clouds", to: `${p}/clouds` };
@@ -170,12 +170,19 @@ export function resultsExportSummary(job: Job): string | null {
   return `${imageCount} image${imageCount === 1 ? "" : "s"}, ${boxCount} box${boxCount === 1 ? "" : "es"}`;
 }
 
-/** A job that writes files under `exports/`: a results export, a map export or a detection export. */
+/** A job that writes files under `exports/` with a `{folder, files}` result: a results, map,
+ * detection, volume or point cloud export. */
 function isFileExport(job: Job): boolean {
-  return job.type === "results_export" || job.type === "map_export" || job.type === "detect_export";
+  return (
+    job.type === "results_export" ||
+    job.type === "map_export" ||
+    job.type === "detect_export" ||
+    job.type === "volume_export" ||
+    job.type === "pointcloud_export"
+  );
 }
 
-/** The file list of a finished results or map export, project-relative to its folder; [] when not
+/** The file list of a finished file export, project-relative to its folder; [] when not
  * available. */
 export function resultsExportFiles(job: Job): string[] {
   const files = job.result?.files;
@@ -184,7 +191,7 @@ export function resultsExportFiles(job: Job): string[] {
     : [];
 }
 
-/** The folder a finished results or map export wrote into (project-relative), or null. */
+/** The folder a finished file export wrote into (project-relative), or null. */
 export function resultsExportFolder(job: Job): string | null {
   const folder = job.result?.folder;
   return isFileExport(job) && job.state === "succeeded" && typeof folder === "string" ? folder : null;

@@ -25,6 +25,8 @@ export const legacyProjectRedirects: RouteObject[] = [
   },
   { path: "datasets", element: <Redirect to={(p) => `/models/datasets?project=${p.projectId}`} /> },
   { path: "train", element: <Redirect to={() => "/models/training"} /> },
+  // The Export screen is Reports → Data exports (reports spec §13).
+  { path: "export", element: <Redirect to={(p) => `/p/${p.projectId}/reports/exports`} /> },
 ];
 
 /** Old app addresses. */

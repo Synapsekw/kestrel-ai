@@ -45,21 +45,24 @@ describe("DetectExportForm", () => {
     expect(Object.values(useJobsStore.getState().jobs)[0]?.type).toBe("detect_export");
   });
 
-  it("exports the PDF report of the chosen source", async () => {
+  it("exports the CSV of the chosen source", async () => {
     const { requests } = renderForm();
-    fireEvent.click(screen.getByRole("radio", { name: /PDF/ }));
     await screen.findByRole("option", { name: /Flight A/ });
     fireEvent.change(screen.getByLabelText("Sources"), { target: { value: "src-map" } });
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(posted(requests)).toHaveLength(1));
-    expect(posted(requests)[0].body).toEqual({ format: "pdf", source_id: "src-map" });
+    expect(posted(requests)[0].body).toEqual({ format: "csv", source_id: "src-map" });
   });
 
-  it("says what each format holds", () => {
+  it("offers no PDF: the per-source report is a Survey count report now", () => {
     renderForm();
     expect(screen.getByText(/One row per source, class and site area/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: /PDF/ }));
-    expect(screen.getByText(/One report per source/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /PDF/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/One report per source/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create a Survey count report" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/reports?new=builtin-survey-counts`,
+    );
   });
 
   it("waits for a source before exporting", async () => {

@@ -1,7 +1,13 @@
 import type { Job } from "@contract/client";
 import { RevealButton } from "@/exports/RevealButton";
 import { JobCard } from "@/jobs/JobCard";
-import { resultsExportFiles, resultsExportFolder, resultsExportSummary, stateLabel } from "@/jobs/jobLabels";
+import {
+  jobTitle,
+  resultsExportFiles,
+  resultsExportFolder,
+  resultsExportSummary,
+  stateLabel,
+} from "@/jobs/jobLabels";
 import { formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob } from "@/store/jobs";
 import { Alert, EmptyState, Pill, SkeletonRows } from "@/ui";
@@ -37,6 +43,7 @@ function ExportJobRow({ projectId, job }: { projectId: string; job: Job }) {
         >
           {stateLabel(job.state)}
         </Pill>
+        <span className="text-xs font-medium text-ink">{jobTitle(job)}</span>
         <span className="text-xs tabular-nums text-muted">{formatLocalDate(job.created_at)}</span>
         {summary && <span className="text-xs tabular-nums text-ink">{summary}</span>}
         {folder && (

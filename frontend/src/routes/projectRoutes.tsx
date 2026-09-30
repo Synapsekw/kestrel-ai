@@ -7,7 +7,6 @@ import { MeasurementsScreen } from "@/measurements/MeasurementsScreen";
 import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
-import { ExportScreen } from "@/screens/ExportScreen";
 import { MapEvaluateRoute } from "@/screens/MapEvaluateScreen";
 import { RunsScreen } from "@/screens/RunsScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
@@ -80,12 +79,13 @@ export const projectRoutes: RouteObject[] = [
       </Later>
     ),
   },
+  // Reports (R7 swaps both for ReportsTab); Data exports is the old Export screen (reports spec §13).
   { path: "reports", element: <ReportsPlaceholder /> },
+  { path: "reports/exports", element: <ReportsPlaceholder /> },
   { path: "settings", element: <SettingsScreen /> },
   // Secondary routes without a tab: the tab strip's More menu and the palette reach them.
   { path: "runs", element: <RunsScreen /> },
   { path: "review", element: <ReviewRoute /> },
   { path: "analytics", element: <AnalyticsScreen /> },
   { path: "site-areas", element: <SiteAreasScreen /> },
-  { path: "export", element: <ExportScreen /> },
 ];

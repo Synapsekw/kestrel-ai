@@ -4,11 +4,16 @@ import { evidencePath } from "./evidence";
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MAP_SOURCE = "50000000-3333-4000-8000-000000000002";
 
-test("the counts export as a CSV of every source, or a PDF report of one", async ({ page }) => {
-  await page.goto(`/p/${P}/export`);
+test("the counts export as a CSV of every source or of one; the PDF is a Survey count report", async ({ page }) => {
+  await page.goto(`/p/${P}/reports/exports`);
   const counts = page.getByRole("region", { name: "Counts" });
   await expect(counts).toBeVisible();
   await expect(counts).toContainText("Photos count detections");
+  await expect(counts.getByRole("radio", { name: /PDF/ })).toHaveCount(0);
+  await expect(counts.getByRole("link", { name: "Create a Survey count report" })).toHaveAttribute(
+    "href",
+    `/p/${P}/reports?new=builtin-survey-counts`,
+  );
   await page.screenshot({ path: evidencePath("detection-workspace", "export.png"), fullPage: true });
 
   const exported = () =>
@@ -18,9 +23,11 @@ test("the counts export as a CSV of every source, or a PDF report of one", async
   await counts.getByRole("button", { name: "Export" }).click();
   expect((await posted).postDataJSON()).toEqual({ format: "csv" });
 
-  await counts.getByRole("radio", { name: "Report (PDF)" }).click();
   await counts.getByLabel("Sources").selectOption(MAP_SOURCE);
   posted = exported();
   await counts.getByRole("button", { name: "Export" }).click();
-  expect((await posted).postDataJSON()).toEqual({ format: "pdf", source_id: MAP_SOURCE });
+  expect((await posted).postDataJSON()).toEqual({ format: "csv", source_id: MAP_SOURCE });
+
+  await counts.getByRole("link", { name: "Create a Survey count report" }).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/reports\\?new=builtin-survey-counts$`));
 });
