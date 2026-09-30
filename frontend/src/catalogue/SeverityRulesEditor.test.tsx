@@ -116,6 +116,29 @@ describe("SeverityRulesEditor", () => {
     expect(screen.getByRole("button", { name: "Add rule" })).toHaveFocus();
   });
 
+  it("tells assistive tech about the move shortcut on the condition and severity controls", () => {
+    renderRules([rule("A", 1), rule("B", 2)]);
+    for (const n of [1, 2]) {
+      for (const f of ["condition", "severity"]) {
+        expect(screen.getByLabelText(`Rule ${n} ${f}`)).toHaveAttribute(
+          "aria-keyshortcuts",
+          "Alt+ArrowUp Alt+ArrowDown",
+        );
+      }
+    }
+  });
+
+  it("re-announces an identical message with a fresh node", () => {
+    renderRules([rule("A", 1), rule("B", 2), rule("C", 3)]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove rule 1" }));
+    const first = screen.getByRole("status").firstChild;
+    expect(screen.getByRole("status")).toHaveTextContent("Rule 1 removed");
+    fireEvent.click(screen.getByRole("button", { name: "Remove rule 1" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Rule 1 removed");
+    expect(screen.getByRole("status").firstChild).not.toBe(first);
+    expect(first?.isConnected).toBe(false);
+  });
+
   it("a rule whose level left the scale is flagged and keeps its value until changed", () => {
     const onRules = renderRules([rule("Wide", 4)], { scale: DEFAULT_SEVERITY_SCALE.slice(0, 3) });
     const select = screen.getByLabelText("Rule 1 severity");

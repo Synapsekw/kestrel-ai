@@ -172,6 +172,17 @@ describe("TypeEditor: definition and severity rules", () => {
     });
   });
 
+  it("mentions the Alt+arrow shortcut only once there are two rules to reorder", () => {
+    renderEditor();
+    const hint = /Alt\+↑ and Alt\+↓ move the focused rule/;
+    expect(screen.getByText(/Read in this order to suggest a severity/)).toBeInTheDocument();
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    expect(screen.getByText(hint)).toBeInTheDocument();
+  });
+
   it("counts the definition's characters against 1000", () => {
     renderEditor();
     expect(screen.getByText("0 / 1000")).toBeInTheDocument();

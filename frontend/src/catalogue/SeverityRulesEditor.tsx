@@ -10,6 +10,8 @@ import {
   type RuleDraft,
 } from "./severityRulesModel";
 
+const MOVE_SHORTCUTS = "Alt+ArrowUp Alt+ArrowDown";
+
 export interface SeverityRulesEditorProps {
   rules: RuleDraft[];
   onChange: (rules: RuleDraft[]) => void;
@@ -30,7 +32,8 @@ export function SeverityRulesEditor({ rules, onChange, defaultSeverity }: Severi
   const list = useRef<HTMLOListElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const pending = useRef<PendingFocus | null>(null);
-  const [announce, setAnnounce] = useState("");
+  const [announce, setAnnounce] = useState({ text: "", n: 0 });
+  const say = (text: string) => setAnnounce((a) => ({ text, n: a.n + 1 }));
 
   useLayoutEffect(() => {
     const p = pending.current;
@@ -52,7 +55,7 @@ export function SeverityRulesEditor({ rules, onChange, defaultSeverity }: Severi
     if (to < 0 || to >= rules.length) return;
     pending.current = { key: rules[i].key, el };
     onChange(moveRule(rules, i, to));
-    setAnnounce(`Rule moved to position ${to + 1} of ${rules.length}`);
+    say(`Rule moved to position ${to + 1} of ${rules.length}`);
   };
 
   const add = () => {
@@ -65,7 +68,7 @@ export function SeverityRulesEditor({ rules, onChange, defaultSeverity }: Severi
     const next = rules[i + 1] ?? rules[i - 1] ?? null;
     pending.current = { key: next?.key ?? null, el: null };
     onChange(rules.filter((_, j) => j !== i));
-    setAnnounce(`Rule ${i + 1} removed`);
+    say(`Rule ${i + 1} removed`);
   };
 
   const onRowKeyDown = (i: number) => (e: KeyboardEvent<HTMLLIElement>) => {
@@ -98,6 +101,7 @@ export function SeverityRulesEditor({ rules, onChange, defaultSeverity }: Severi
                   <Input
                     dense
                     aria-label={`Rule ${n} condition`}
+                    aria-keyshortcuts={MOVE_SHORTCUTS}
                     placeholder="For example: wider than 5 mm"
                     maxLength={MAX_WHEN}
                     value={r.when}
@@ -108,6 +112,7 @@ export function SeverityRulesEditor({ rules, onChange, defaultSeverity }: Severi
                   <Select
                     dense
                     aria-label={`Rule ${n} severity`}
+                    aria-keyshortcuts={MOVE_SHORTCUTS}
                     invalid={stale}
                     aria-describedby={stale ? staleId : undefined}
                     wrapperClassName="min-w-0 flex-1"
@@ -159,7 +164,8 @@ export function SeverityRulesEditor({ rules, onChange, defaultSeverity }: Severi
         <span className="text-xs text-muted">{`${rules.length} of ${MAX_RULES}`}</span>
       </div>
       <p role="status" aria-live="polite" className="sr-only">
-        {announce}
+        {/* A fresh node per announcement, so an identical message is read out again. */}
+        <span key={announce.n}>{announce.text}</span>
       </p>
     </div>
   );

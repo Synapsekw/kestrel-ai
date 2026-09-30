@@ -262,7 +262,8 @@ export function TypeEditor({ type, types, onSaved, onUseExisting, onClose }: Typ
         <InspectorSection title="Severity rules">
           <div className="flex flex-col gap-2">
             <p className="text-xs text-muted">
-              Read in this order to suggest a severity. Alt+↑ and Alt+↓ move the focused rule.
+              Read in this order to suggest a severity.
+              {draft.rules.length >= 2 && " Alt+↑ and Alt+↓ move the focused rule."}
             </p>
             <SeverityRulesEditor
               rules={draft.rules}

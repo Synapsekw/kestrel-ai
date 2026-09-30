@@ -90,6 +90,18 @@ test("the type editor saves a definition and ordered severity rules", async ({ p
   await page.getByLabel("Rule 2 condition", { exact: true }).fill("Wider than 5 mm");
   await page.getByLabel("Rule 2 severity", { exact: true }).selectOption("4");
 
+  // Alt+Down on a native select must move the rule, not open its dropdown, and focus stays put.
+  await page.getByLabel("Rule 1 severity", { exact: true }).focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(page.getByLabel("Rule 2 condition", { exact: true })).toHaveValue("Hairline, under 0.3 mm");
+  await expect(page.getByLabel("Rule 2 severity", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Rule 2 severity", { exact: true })).toHaveValue("1");
+  await expect(page.getByRole("status").filter({ hasText: "Rule moved to position 2 of 2" })).toBeAttached();
+  // ...and back again, so the order below is the one the save asserts.
+  await page.keyboard.press("Alt+ArrowUp");
+  await expect(page.getByLabel("Rule 1 severity", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Rule 1 condition", { exact: true })).toHaveValue("Hairline, under 0.3 mm");
+
   await page.getByLabel("Rule 2 condition", { exact: true }).press("Alt+ArrowUp");
   await expect(page.getByLabel("Rule 1 condition", { exact: true })).toHaveValue("Wider than 5 mm");
   await expect(page.getByLabel("Rule 1 condition", { exact: true })).toBeFocused();
