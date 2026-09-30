@@ -157,7 +157,9 @@ describe("reports requests", () => {
 
     const { api: apiFalse, requests: falseReq } = client();
     await listReports(apiFalse, "p1", undefined, { includeArchived: false });
-    expect(falseReq.map((r) => r.url)).toEqual(["/api/v1/projects/p1/reports?limit=50&include_archived=false"]);
+    expect(falseReq.map((r) => r.url)).toEqual([
+      "/api/v1/projects/p1/reports?limit=50&include_archived=false",
+    ]);
   });
 });
 
@@ -168,7 +170,11 @@ describe("versionBlocksLoader pagination (Ruling R-3)", () => {
     generated_at: "2026-09-29T00:00:00Z",
     theme_version: "v1",
     sections: [
-      { key: "summary", title: "Summary", blocks: [{ kind: "para", text: "Part one.", style: "body" } as Block] },
+      {
+        key: "summary",
+        title: "Summary",
+        blocks: [{ kind: "para", text: "Part one.", style: "body" } as Block],
+      },
     ],
     next_cursor: "p2",
   };
@@ -178,7 +184,11 @@ describe("versionBlocksLoader pagination (Ruling R-3)", () => {
     generated_at: "2026-09-29T00:00:00Z",
     theme_version: "v1",
     sections: [
-      { key: "summary", title: "Summary", blocks: [{ kind: "para", text: "Part two.", style: "body" } as Block] },
+      {
+        key: "summary",
+        title: "Summary",
+        blocks: [{ kind: "para", text: "Part two.", style: "body" } as Block],
+      },
       {
         key: "appendix",
         title: "Appendix",
@@ -287,7 +297,10 @@ describe("canonical snapshot spec", () => {
   });
 
   it("builds the snapshot URL, with the token only when a backend is given", () => {
-    const ref = { key: "abc123", spec: { kind: "volume_plan", measurement_id: "m1" } } as unknown as SnapshotRef;
+    const ref = {
+      key: "abc123",
+      spec: { kind: "volume_plan", measurement_id: "m1" },
+    } as unknown as SnapshotRef;
     const param = specParam(ref.spec);
     expect(snapshotUrl("p1", ref)).toBe(`/api/v1/projects/p1/report-snapshots/abc123?spec=${param}`);
     expect(snapshotUrl("p1", ref, { baseUrl: "http://127.0.0.1:8765/", token: "t k" })).toBe(
@@ -296,7 +309,10 @@ describe("canonical snapshot spec", () => {
   });
 
   it("encodeURIComponent's the project id and the snapshot key", () => {
-    const ref = { key: "a/b c", spec: { kind: "volume_plan", measurement_id: "m1" } } as unknown as SnapshotRef;
+    const ref = {
+      key: "a/b c",
+      spec: { kind: "volume_plan", measurement_id: "m1" },
+    } as unknown as SnapshotRef;
     const param = specParam(ref.spec);
     expect(snapshotUrl("p/1", ref)).toBe(
       `/api/v1/projects/${encodeURIComponent("p/1")}/report-snapshots/${encodeURIComponent("a/b c")}?spec=${param}`,

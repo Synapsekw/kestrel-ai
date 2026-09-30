@@ -136,7 +136,11 @@ export function tint(hex: string, alpha: number = PRINT.tint): string {
 
 /** Font size, leading (the body's 13/9.5 ratio) and colour for printed text. */
 export function textStyle(sizePt: number, colour: string = PRINT.ink): CSSProperties {
-  return { fontSize: pt(sizePt), lineHeight: pt(sizePt * (PRINT.size.leading / PRINT.size.body)), color: colour };
+  return {
+    fontSize: pt(sizePt),
+    lineHeight: pt(sizePt * (PRINT.size.leading / PRINT.size.body)),
+    color: colour,
+  };
 }
 
 /** `F-0042` (DESIGN.md Copy); a string number is printed as given. */

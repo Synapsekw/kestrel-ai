@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { PRINT, PRINT_THEME, contentWidthMm, findingLabel, mm, mmVar, paperOf, pt, textStyle, tint } from "./printTheme";
+import {
+  PRINT,
+  PRINT_THEME,
+  contentWidthMm,
+  findingLabel,
+  mm,
+  mmVar,
+  paperOf,
+  pt,
+  textStyle,
+  tint,
+} from "./printTheme";
 
 function luminance(hex: string): number {
   const n = parseInt(hex.slice(1), 16);
@@ -59,7 +70,8 @@ describe("printTheme", () => {
   });
 
   it("keeps text colours at 4.5:1 and marks at 3:1 on white paper (spec §10.1)", () => {
-    for (const c of [PRINT.ink, PRINT.muted, PRINT.accent, PRINT.danger]) expect(contrast(c, PRINT.paper)).toBeGreaterThanOrEqual(4.5);
+    for (const c of [PRINT.ink, PRINT.muted, PRINT.accent, PRINT.danger])
+      expect(contrast(c, PRINT.paper)).toBeGreaterThanOrEqual(4.5);
     for (const c of [PRINT.teal, PRINT.tone.good]) expect(contrast(c, PRINT.paper)).toBeGreaterThanOrEqual(3);
     // PRINT.ungraded is decoration: the word "Ungraded" beside the dot carries the meaning.
   });

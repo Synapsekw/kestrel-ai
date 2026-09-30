@@ -81,7 +81,9 @@ describe("ChartBlock", () => {
         },
       }),
     );
-    expect(screen.getByRole("img", { name: "Stacked bar chart of Open, Closed (findings)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Stacked bar chart of Open, Closed (findings)" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Open").length).toBeGreaterThan(0);
   });
 

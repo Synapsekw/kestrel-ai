@@ -3,7 +3,11 @@ import { MM_PER_PT, PRINT, mm, textStyle } from "../../printTheme";
 import { CHART_WIDTH_MM, chartLayout, type ChartKind } from "./chartGeometry";
 import { Dot } from "./marks";
 
-const NAME: Record<ChartKind, string> = { bar: "Bar chart", stacked_bar: "Stacked bar chart", line: "Line chart" };
+const NAME: Record<ChartKind, string> = {
+  bar: "Bar chart",
+  stacked_bar: "Stacked bar chart",
+  line: "Line chart",
+};
 const svgPt = (p: number) => p * MM_PER_PT;
 const tick = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
@@ -35,7 +39,14 @@ export function ChartBlock({ block }: { block: BlockOf<"chart"> }) {
         <title>{label}</title>
         {l.ticks.map((t) => (
           <g key={t.value}>
-            <line x1={l.plot.x} x2={l.plot.x + l.plot.w} y1={t.y} y2={t.y} stroke={PRINT.rule} strokeWidth={0.2} />
+            <line
+              x1={l.plot.x}
+              x2={l.plot.x + l.plot.w}
+              y1={t.y}
+              y2={t.y}
+              stroke={PRINT.rule}
+              strokeWidth={0.2}
+            />
             <text x={l.plot.x - 1.5} y={t.y + 0.9} textAnchor="end" fontSize={svgPt(7)} fill={PRINT.muted}>
               {tick(t.value)}
             </text>
