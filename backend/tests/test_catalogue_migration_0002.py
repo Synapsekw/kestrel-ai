@@ -80,7 +80,7 @@ def test_a_0001_catalogue_upgrades_keeps_its_types_and_gains_the_built_ins(tmp_p
     cat = open_catalogue(tmp_path / "appdata")
     try:
         with cat.engine.connect() as conn:
-            assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+            assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() >= "0002"
         with cat.session() as s:
             assert s.get(CatalogueType, "t1").name == "Crack"
             ids = [r.id for r in s.execute(select(ReportTemplate).order_by(ReportTemplate.id)).scalars()]

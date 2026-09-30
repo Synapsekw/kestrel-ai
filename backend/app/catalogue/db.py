@@ -1,10 +1,11 @@
 """The catalogue database (`catalogue.db`): catalogue types, the severity scale and a key/value
-meta table (spec 2026-09-26-foundation section 7.1)."""
+meta table (spec 2026-09-26-foundation section 7.1), report templates (revision 0002) and project
+templates (revision 0003)."""
 
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, Index, Integer, String, false, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, Index, Integer, String, Text, false, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.db.base import UTCDateTime, new_id, utcnow
@@ -27,12 +28,16 @@ class CatalogueType(CatalogueBase):
     hotkey: Mapped[str | None] = mapped_column(String(1), nullable=True)  # 1-9 or a-z
     group: Mapped[str | None] = mapped_column(String, nullable=True)  # "Concrete defects"
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    origin: Mapped[str] = mapped_column(String, default="user")  # user | migrated
+    origin: Mapped[str] = mapped_column(String, default="user")  # user | migrated | template
+    # Project setup (spec 2026-09-30-project-setup section 5, revision 0003): what the anomaly looks
+    # like, and ordered `{when, severity}` rules (at most 8; S2 applies them).
+    definition: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity_rules: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
     __table_args__ = (
         CheckConstraint("kind IN ('defect', 'object')", name="ck_catalogue_type_kind"),
-        CheckConstraint("origin IN ('user', 'migrated')", name="ck_catalogue_type_origin"),
+        CheckConstraint("origin IN ('user', 'migrated', 'template')", name="ck_catalogue_type_origin"),
         Index("ux_catalogue_type_live_name", "name_key", unique=True, sqlite_where=text("archived = 0")),
         Index(
             "ux_catalogue_type_live_hotkey",
@@ -73,3 +78,23 @@ class ReportTemplate(CatalogueBase):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
     __table_args__ = (Index("ix_report_template_list", "builtin", "name", "id"),)
+
+
+class ProjectTemplate(CatalogueBase):
+    """A project template (spec 2026-09-30-project-setup section 5, catalogue revision 0003): slots
+    and anomaly types that pre-fill the new-project page; never stored on a project.
+
+    The three built-ins (`builtin=True`, fixed ids from app/setup/builtins.py) are seeded by the
+    migration and never edited. `config` is a TemplateConfig dumped as JSON. `name_key` is
+    `normalise_name(name)`, unique, so "Tower checks" and "tower_checks" are one name."""
+
+    __tablename__ = "project_template"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(80))
+    name_key: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    config: Mapped[Any] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ux_project_template_name_key", "name_key", unique=True),)
