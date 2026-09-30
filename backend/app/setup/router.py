@@ -5,8 +5,7 @@ modules.
 each with 501 stubs; an owner rewrites its module and drops `STUBS`, and
 `tests/test_contract.py::EXPECTED_STUBS` follows through `stub_operation_ids()`. `app/api.py`
 includes this router in a guarded block, so a broken import costs the setup endpoints, never the
-app. The one S1 operation outside this package, `POST /catalogue/types/ensure`, is a stub in
-`app/catalogue/router.py` (U2), and `stub_operation_ids()` collects it too.
+app.
 """
 
 from types import ModuleType

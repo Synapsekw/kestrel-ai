@@ -239,6 +239,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # R3: a schema-valid `spec` string that is not a base64url snapshot spec (`invalid_snapshot_spec`),
     # or a generated key that does not match the spec (`snapshot_key_mismatch`).
     "getReportSnapshot": {400},
+    # S1-U2: a schema-valid template type list can still name a severity level the live scale does
+    # not have (`invalid_severity_rule`, `severity_unknown`) or a name that normalises to nothing
+    # (`type_name_blank`, 422 here: the operation declares only 422 and 503).
+    "ensureCatalogueTypes": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
