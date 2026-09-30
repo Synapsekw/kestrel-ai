@@ -225,6 +225,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (a section twice, a date range backwards, a blank name) is `invalid_template`.
     "createReportTemplate": {422},
     "patchReportTemplate": {422},
+    # Reports R1: a whitespace title, or a config that breaks a rule the schema cannot state, or a
+    # generated logo id that is not an asset of the project, is `invalid_report`.
+    "createReport": {422},
+    "patchReport": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
