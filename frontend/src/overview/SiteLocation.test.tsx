@@ -20,9 +20,9 @@ describe("SiteLocation", () => {
     const none = { ...exampleFinding, id: "f-n", severity: null, lon: 20.4615, lat: 44.8127 };
     render(<SiteLocation site={exampleSite} pins={[known, none]} />);
     const [a, b] = screen.getAllByTestId("site-pin");
-    expect((a as SVGElement).style.getPropertyValue("--c")).not.toBe("");
+    expect((a as unknown as SVGElement).style.getPropertyValue("--c")).not.toBe("");
     expect(a).toHaveClass("fill-[color:var(--c)]");
-    expect((b as SVGElement).style.getPropertyValue("--c")).toBe("");
+    expect((b as unknown as SVGElement).style.getPropertyValue("--c")).toBe("");
     expect(b).toHaveClass("fill-muted");
     expect(b).not.toHaveClass("fill-[color:var(--c)]");
   });
