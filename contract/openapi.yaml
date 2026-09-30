@@ -91,6 +91,7 @@ tags:
   - name: findings
   - name: data
   - name: workspace
+  - name: reports
 
 paths:
   /api/v1/agent/chat:
@@ -5511,6 +5512,449 @@ paths:
         "204": { description: deleted }
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
+  # ------------------------------------------------------------------ reports (R0, spec 2026-09-26-reports §14)
+  /api/v1/projects/{projectId}/reports:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [reports]
+      operationId: listReports
+      summary: |
+        The project's reports, most recently updated first, each with its newest version (whatever
+        its state). Archived reports are left out unless `include_archived` is true.
+      parameters:
+        - { name: include_archived, in: query, required: false, schema: { type: boolean }, description: "false when absent" }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: reports
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [reports]
+      operationId: createReport
+      summary: |
+        Create a report. Its config is copied from `template_id` (a built-in id or an app-wide
+        template; `builtin-full` when absent) with the project-only fields cleared and the cover
+        title set to `title`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "a blank title or a template config that cannot be used (`code` is `invalid_report`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+    get:
+      tags: [reports]
+      operationId: getReport
+      responses:
+        "200":
+          description: the report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [reports]
+      operationId: patchReport
+      summary: "Rename the report or replace its whole config. Every invalid field is listed with its path."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportPatch" }
+      responses:
+        "200":
+          description: the updated report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "`code` is `invalid_report`, details `{errors: [{path, message}]}` (a section twice, a backwards date range, a logo of another project, a blank title)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [reports]
+      operationId: deleteReport
+      summary: "Archive the report when it has versions or files on disk; otherwise delete it."
+      responses:
+        "204": { description: archived or deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/duplicate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+    post:
+      tags: [reports]
+      operationId: duplicateReport
+      summary: "A new report with a copy of the config, titled `<title> (copy)`; versions are not copied."
+      responses:
+        "201":
+          description: the copy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/outline:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+    get:
+      tags: [reports]
+      operationId: getReportOutline
+      summary: "The enabled sections with block counts and etags, the finding count, warnings and the deltas. Aggregates only."
+      responses:
+        "200":
+          description: the outline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportOutline" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/sections/{sectionKey}/blocks:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+      - $ref: "#/components/parameters/sectionKey"
+    get:
+      tags: [reports]
+      operationId: listReportSectionBlocks
+      summary: "A keyset page of one section's blocks; a section that is not enabled answers 404."
+      parameters:
+        - $ref: "#/components/parameters/blocksLimit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: blocks
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlockPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/report-snapshots/{snapshotKey}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/snapshotKey"
+    get:
+      tags: [reports]
+      operationId: getReportSnapshot
+      summary: |
+        One report figure as a JPEG (q 85, 4:2:0, no EXIF) from the snapshot cache, rendered
+        synchronously on a miss and bounded like a tile. The server recomputes the key from `spec`
+        and the sources and refuses a mismatch.
+      parameters:
+        - $ref: "#/components/parameters/snapshotSpec"
+      responses:
+        "200":
+          description: JPEG bytes
+          headers:
+            Cache-Control: { schema: { type: string }, description: "private, max-age=31536000, immutable" }
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "400":
+          description: "`spec` is not base64url JSON of a SnapshotSpec (`code` is `invalid_snapshot_spec`), or the key does not match it (`snapshot_key_mismatch`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/renders:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+    post:
+      tags: [reports]
+      operationId: createReportRender
+      summary: |
+        Render the report as a new version (a `report_render` job): compose, snapshots, the PDF in
+        parts when large, and the chosen tables. A version row appears at once in state `rendering`
+        and gets its number when the files are in place.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenderRequest" }
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a render of this report is running (`code` is `render_running`, details `{job_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+    get:
+      tags: [reports]
+      operationId: listReportVersions
+      summary: "The report's versions, newest first, rendering and failed rows included."
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: versions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportVersionPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/versions/{versionNumber}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+      - $ref: "#/components/parameters/versionNumber"
+    get:
+      tags: [reports]
+      operationId: getReportVersion
+      responses:
+        "200":
+          description: the version with its files
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportVersion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [reports]
+      operationId: patchReportVersion
+      summary: "Mark the version Issued, or unissue it."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportVersionPatch" }
+      responses:
+        "200":
+          description: the version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportVersion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [reports]
+      operationId: deleteReportVersion
+      summary: "Delete a version that was never issued, with its folder."
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the version is issued (`code` is `issued_version`); unissue it first"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/reports/{reportId}/versions/{versionNumber}/document:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/reportId"
+      - $ref: "#/components/parameters/versionNumber"
+    get:
+      tags: [reports]
+      operationId: getReportVersionDocument
+      summary: "The version's frozen document, paged across sections, for viewing an old version in the preview."
+      parameters:
+        - $ref: "#/components/parameters/blocksLimit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: a page of the document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportDocumentPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/open:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [reports]
+      operationId: openProjectFile
+      summary: "Open a file of the project (a report PDF, CSV or XLSX) with its default application. The path is relative to the project folder."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RevealRequest" }
+      responses:
+        "204": { description: the application was started }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the path leaves the project folder, is a folder, or is not a document type that may be opened (`code` is `conflict`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/report-assets:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [reports]
+      operationId: createReportAsset
+      summary: "Import a logo: copied into the project as a PNG of at most 1200 px a side. Importing the same picture again returns the existing asset."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportAssetCreate" }
+      responses:
+        "201":
+          description: the asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportAsset" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "not a readable JPEG, PNG or WebP of at most 20 MB (`code` is `asset_invalid`, details `{reason}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/report-assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetId"
+    get:
+      tags: [reports]
+      operationId: getReportAsset
+      summary: "The logo's PNG bytes, for the cover in the live preview (`CoverLogo.asset_id`). The file name is content-addressed, so the answer never changes."
+      responses:
+        "200":
+          description: PNG bytes
+          headers:
+            Cache-Control: { schema: { type: string }, description: "private, max-age=31536000, immutable" }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/report-templates:
+    get:
+      tags: [reports]
+      operationId: listReportTemplates
+      summary: "App-wide templates, built-ins first, then by name. When the catalogue is unavailable only the four built-ins are listed."
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: templates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportTemplatePage" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [reports]
+      operationId: createReportTemplate
+      summary: "Save a section layout as a template. Project-only fields (data items, logo, report date) are cleared."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportTemplateCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportTemplate" }
+        "422":
+          description: "`code` is `invalid_template`, details `{errors: [{path, message}]}`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/report-templates/{templateId}:
+    parameters:
+      - $ref: "#/components/parameters/templateId"
+    get:
+      tags: [reports]
+      operationId: getReportTemplate
+      responses:
+        "200":
+          description: the template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportTemplate" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [reports]
+      operationId: patchReportTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportTemplatePatch" }
+      responses:
+        "200":
+          description: the updated template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportTemplate" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in template is never changed (`code` is `builtin_template`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`code` is `invalid_template`, details `{errors: [{path, message}]}`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [reports]
+      operationId: deleteReportTemplate
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in template is never deleted (`code` is `builtin_template`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
 
 components:
   securitySchemes:
@@ -5792,6 +6236,49 @@ components:
       required: false
       description: "the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server"
       schema: { type: string, maxLength: 200 }
+    reportId:
+      name: reportId
+      in: path
+      required: true
+      schema: { type: string }
+    sectionKey:
+      name: sectionKey
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/SectionKey" }
+    versionNumber:
+      name: versionNumber
+      in: path
+      required: true
+      description: "a numbered version; a rendering or failed row has no number"
+      schema: { type: integer, minimum: 1 }
+    snapshotKey:
+      name: snapshotKey
+      in: path
+      required: true
+      description: "the first 32 hex digits of sha256(canonical spec + source version + renderer version)"
+      schema: { type: string, pattern: "^[0-9a-f]{32}$" }
+    snapshotSpec:
+      name: spec
+      in: query
+      required: true
+      description: "base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces"
+      schema: { type: string, minLength: 1, maxLength: 16384, pattern: "^[A-Za-z0-9_-]+$" }
+    templateId:
+      name: templateId
+      in: path
+      required: true
+      schema: { type: string }
+    assetId:
+      name: assetId
+      in: path
+      required: true
+      schema: { type: string }
+    blocksLimit:
+      name: limit
+      in: query
+      description: "at most 50 blocks a page; 50 when absent"
+      schema: { type: integer, minimum: 1, maximum: 50 }
 
   responses:
     Error:
@@ -5927,6 +6414,14 @@ components:
                 another anchor kind), bad_view_image (422: not a 1600 x 1000 PNG or JPEG of at most
                 6 MiB; details `{reason}`), no_view (404: no report view is stored). A 501
                 not_implemented for an option of an existing operation carries details `{option, unit}`.
+                Reports: invalid_report and invalid_template (422: a body the schema cannot judge,
+                such as a section listed twice or a backwards date range; details
+                `{errors: [{path, message}]}`), builtin_template (409: a built-in template is never
+                changed or deleted), asset_invalid (422: not a readable JPEG, PNG or WebP of at most
+                20 MB; details `{reason}`), render_running (409: a render of this report is running;
+                details `{job_id}`), issued_version (409: an issued version is never deleted),
+                invalid_snapshot_spec and snapshot_key_mismatch (400: the snapshot `spec` does not
+                decode, or does not match the key).
             message: { type: string }
             details:
               type: object

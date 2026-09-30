@@ -261,9 +261,110 @@ def test_the_models_leave_cross_field_rules_to_their_owners():
     raw = schemas.ReportConfig().model_dump(mode="json", by_alias=True)
     raw["sections"] = [raw["sections"][0]] * 8
     raw["filters"]["date"] = {"rule": "range", "from": "2026-09-30", "to": "2026-09-01", "days": None}
-    schemas.ReportConfig.model_validate(raw)
+    config = schemas.ReportConfig.model_validate(raw)
+    # The eight duplicated sections are kept exactly as given: pydantic does not dedupe or reorder.
+    assert [s.key for s in config.sections] == [raw["sections"][0]["key"]] * 8
+    # The backwards date range keeps its from/to values: pydantic does not swap or reject them.
+    assert (config.filters.date.from_.isoformat(), config.filters.date.to.isoformat()) == (
+        "2026-09-30",
+        "2026-09-01",
+    )
 
 
 def test_config_models_forbid_unknown_keys():
     with pytest.raises(ValueError):
         schemas.ReportPaper.model_validate({"size": "A4", "orientation": "portrait", "margin": 5})
+
+
+# ------------------------------------------------------------------------------ Task 3: operations
+
+P = "/api/v1/projects/{projectId}"
+R = P + "/reports/{reportId}"
+V = R + "/versions/{versionNumber}"
+T = "/api/v1/report-templates"
+
+# operationId -> (method, path, owning unit)
+REPORT_OPERATIONS = {
+    "listReports": ("get", P + "/reports", "R1"),
+    "createReport": ("post", P + "/reports", "R1"),
+    "getReport": ("get", R, "R1"),
+    "patchReport": ("patch", R, "R1"),
+    "deleteReport": ("delete", R, "R1"),
+    "duplicateReport": ("post", R + "/duplicate", "R1"),
+    "openProjectFile": ("post", P + "/open", "R1"),
+    "createReportAsset": ("post", P + "/report-assets", "R1"),
+    "getReportAsset": ("get", P + "/report-assets/{assetId}", "R1"),
+    "listReportTemplates": ("get", T, "R1"),
+    "createReportTemplate": ("post", T, "R1"),
+    "getReportTemplate": ("get", T + "/{templateId}", "R1"),
+    "patchReportTemplate": ("patch", T + "/{templateId}", "R1"),
+    "deleteReportTemplate": ("delete", T + "/{templateId}", "R1"),
+    "getReportOutline": ("get", R + "/outline", "R2"),
+    "listReportSectionBlocks": ("get", R + "/sections/{sectionKey}/blocks", "R2"),
+    "getReportSnapshot": ("get", P + "/report-snapshots/{snapshotKey}", "R3"),
+    "createReportRender": ("post", R + "/renders", "R5"),
+    "listReportVersions": ("get", R + "/versions", "R5"),
+    "getReportVersion": ("get", V, "R5"),
+    "patchReportVersion": ("patch", V, "R5"),
+    "deleteReportVersion": ("delete", V, "R5"),
+    "getReportVersionDocument": ("get", V + "/document", "R5"),
+}
+# statuses each operation must declare besides its success and `default` (Ruling 7, R1, R5)
+DECLARED = {
+    "createReport": {"404", "422", "503"},
+    "patchReport": {"404", "422"},
+    "createReportTemplate": {"422", "503"},
+    "patchReportTemplate": {"404", "409", "422", "503"},
+    "deleteReportTemplate": {"404", "409", "503"},
+    "createReportAsset": {"422"},
+    "getReportAsset": {"404"},
+    "openProjectFile": {"404", "409"},
+    "getReportSnapshot": {"400", "404"},
+    "createReportRender": {"404", "409"},
+    "deleteReportVersion": {"404", "409"},
+}
+
+
+def test_the_reports_tag_has_exactly_these_operations(spec):
+    ops = _operations(spec)
+    tagged = {op_id for op_id, (_, _, op) in ops.items() if "reports" in op.get("tags", [])}
+    assert tagged == set(REPORT_OPERATIONS)
+    for op_id, (method, path, _) in REPORT_OPERATIONS.items():
+        assert ops[op_id][:2] == (method, path), op_id
+        assert ops[op_id][2]["responses"]["default"] == {"$ref": "#/components/responses/Error"}
+    assert "reports" in {t["name"] for t in spec["tags"]}
+
+
+@pytest.mark.parametrize("op_id", sorted(DECLARED))
+def test_the_owner_refusals_are_declared(spec, op_id):
+    assert DECLARED[op_id] <= set(_operations(spec)[op_id][2]["responses"]), op_id
+
+
+def test_pages_of_blocks_are_capped_at_50(spec):
+    limit = spec["components"]["parameters"]["blocksLimit"]
+    assert (limit["name"], limit["in"], limit["schema"]["maximum"]) == ("limit", "query", 50)
+    for op_id in ("listReportSectionBlocks", "getReportVersionDocument"):
+        refs = [p.get("$ref") for p in _operations(spec)[op_id][2]["parameters"]]
+        assert "#/components/parameters/blocksLimit" in refs, op_id
+
+
+def test_the_snapshot_is_a_jpeg_keyed_by_its_spec(spec):
+    op = _operations(spec)["getReportSnapshot"][2]
+    assert "image/jpeg" in op["responses"]["200"]["content"]
+    assert spec["components"]["parameters"]["snapshotSpec"]["required"] is True
+    assert spec["components"]["parameters"]["snapshotKey"]["schema"]["pattern"] == "^[0-9a-f]{32}$"
+
+
+def test_the_reports_error_codes_are_documented(spec):
+    text = _schemas(spec)["Error"]["properties"]["error"]["properties"]["code"]["description"]
+    for code in (
+        "invalid_report",
+        "invalid_template",
+        "builtin_template",
+        "asset_invalid",
+        "render_running",
+        "issued_version",
+        "invalid_snapshot_spec",
+        "snapshot_key_mismatch",
+    ):
+        assert code in text, code

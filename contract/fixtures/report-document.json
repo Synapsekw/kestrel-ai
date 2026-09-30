@@ -117,6 +117,30 @@
           ],
           "rows": [["F-0042", {"text": "Major", "dot": "#ff9c3a"}], ["F-0043", "Ungraded"]],
           "repeat_header": true
+        },
+        {
+          "kind": "figure",
+          "snapshot": {
+            "key": "00000000000000000000000000000008",
+            "spec": {
+              "kind": "map",
+              "item_id": "m0000000-6666-4000-8000-000000000001",
+              "geometry": {"type": "Polygon", "coordinates": [[[583100.0, 3265400.0], [583200.0, 3265400.0], [583200.0, 3265480.0], [583100.0, 3265400.0]]]},
+              "colour": "#6a5cff",
+              "label": null,
+              "min_extent_m": 40.0,
+              "out": [1200, 900],
+              "scale_bar": true,
+              "north": true,
+              "inset": false
+            },
+            "width_px": 1200,
+            "height_px": 900,
+            "missing_reason": null
+          },
+          "caption": "Findings overview map",
+          "width_mm": 170.0,
+          "height_mm": 105.0
         }
       ]
     },

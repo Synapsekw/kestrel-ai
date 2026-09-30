@@ -3930,6 +3930,323 @@ export interface paths {
         patch: operations["patchMapMeasurement"];
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The project's reports, most recently updated first, each with its newest version (whatever
+         *     its state). Archived reports are left out unless `include_archived` is true.
+         */
+        get: operations["listReports"];
+        put?: never;
+        /**
+         * Create a report. Its config is copied from `template_id` (a built-in id or an app-wide
+         *     template; `builtin-full` when absent) with the project-only fields cleared and the cover
+         *     title set to `title`.
+         */
+        post: operations["createReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getReport"];
+        put?: never;
+        post?: never;
+        /** Archive the report when it has versions or files on disk; otherwise delete it. */
+        delete: operations["deleteReport"];
+        options?: never;
+        head?: never;
+        /** Rename the report or replace its whole config. Every invalid field is listed with its path. */
+        patch: operations["patchReport"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new report with a copy of the config, titled `<title> (copy)`; versions are not copied. */
+        post: operations["duplicateReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/outline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        /** The enabled sections with block counts and etags, the finding count, warnings and the deltas. Aggregates only. */
+        get: operations["getReportOutline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/sections/{sectionKey}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                sectionKey: components["parameters"]["sectionKey"];
+            };
+            cookie?: never;
+        };
+        /** A keyset page of one section's blocks; a section that is not enabled answers 404. */
+        get: operations["listReportSectionBlocks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/report-snapshots/{snapshotKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description the first 32 hex digits of sha256(canonical spec + source version + renderer version) */
+                snapshotKey: components["parameters"]["snapshotKey"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One report figure as a JPEG (q 85, 4:2:0, no EXIF) from the snapshot cache, rendered
+         *     synchronously on a miss and bounded like a tile. The server recomputes the key from `spec`
+         *     and the sources and refuses a mismatch.
+         */
+        get: operations["getReportSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/renders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render the report as a new version (a `report_render` job): compose, snapshots, the PDF in
+         *     parts when large, and the chosen tables. A version row appears at once in state `rendering`
+         *     and gets its number when the files are in place.
+         */
+        post: operations["createReportRender"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        /** The report's versions, newest first, rendering and failed rows included. */
+        get: operations["listReportVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/versions/{versionNumber}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                /** @description a numbered version; a rendering or failed row has no number */
+                versionNumber: components["parameters"]["versionNumber"];
+            };
+            cookie?: never;
+        };
+        get: operations["getReportVersion"];
+        put?: never;
+        post?: never;
+        /** Delete a version that was never issued, with its folder. */
+        delete: operations["deleteReportVersion"];
+        options?: never;
+        head?: never;
+        /** Mark the version Issued, or unissue it. */
+        patch: operations["patchReportVersion"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reports/{reportId}/versions/{versionNumber}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                /** @description a numbered version; a rendering or failed row has no number */
+                versionNumber: components["parameters"]["versionNumber"];
+            };
+            cookie?: never;
+        };
+        /** The version's frozen document, paged across sections, for viewing an old version in the preview. */
+        get: operations["getReportVersionDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a file of the project (a report PDF, CSV or XLSX) with its default application. The path is relative to the project folder. */
+        post: operations["openProjectFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/report-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import a logo: copied into the project as a PNG of at most 1200 px a side. Importing the same picture again returns the existing asset. */
+        post: operations["createReportAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/report-assets/{assetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetId: components["parameters"]["assetId"];
+            };
+            cookie?: never;
+        };
+        /** The logo's PNG bytes, for the cover in the live preview (`CoverLogo.asset_id`). The file name is content-addressed, so the answer never changes. */
+        get: operations["getReportAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/report-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** App-wide templates, built-ins first, then by name. When the catalogue is unavailable only the four built-ins are listed. */
+        get: operations["listReportTemplates"];
+        put?: never;
+        /** Save a section layout as a template. Project-only fields (data items, logo, report date) are cleared. */
+        post: operations["createReportTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/report-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getReportTemplate"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteReportTemplate"];
+        options?: never;
+        head?: never;
+        patch: operations["patchReportTemplate"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4013,6 +4330,14 @@ export interface components {
                  *     another anchor kind), bad_view_image (422: not a 1600 x 1000 PNG or JPEG of at most
                  *     6 MiB; details `{reason}`), no_view (404: no report view is stored). A 501
                  *     not_implemented for an option of an existing operation carries details `{option, unit}`.
+                 *     Reports: invalid_report and invalid_template (422: a body the schema cannot judge,
+                 *     such as a section listed twice or a backwards date range; details
+                 *     `{errors: [{path, message}]}`), builtin_template (409: a built-in template is never
+                 *     changed or deleted), asset_invalid (422: not a readable JPEG, PNG or WebP of at most
+                 *     20 MB; details `{reason}`), render_running (409: a render of this report is running;
+                 *     details `{job_id}`), issued_version (409: an issued version is never deleted),
+                 *     invalid_snapshot_spec and snapshot_key_mismatch (400: the snapshot `spec` does not
+                 *     decode, or does not match the key).
                  */
                 code: string;
                 message: string;
@@ -12696,6 +13021,18 @@ export interface components {
         tilePreview: string;
         /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
         frameKey: string;
+        reportId: string;
+        sectionKey: components["schemas"]["SectionKey"];
+        /** @description a numbered version; a rendering or failed row has no number */
+        versionNumber: number;
+        /** @description the first 32 hex digits of sha256(canonical spec + source version + renderer version) */
+        snapshotKey: string;
+        /** @description base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces */
+        snapshotSpec: string;
+        templateId: string;
+        assetId: string;
+        /** @description at most 50 blocks a page; 50 when absent */
+        blocksLimit: number;
     };
     requestBodies: never;
     headers: never;
@@ -21040,6 +21377,735 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    listReports: {
+        parameters: {
+            query?: {
+                /** @description false when absent */
+                include_archived?: boolean;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description reports */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a blank title or a template config that cannot be used (`code` is `invalid_report`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description archived or deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description `code` is `invalid_report`, details `{errors: [{path, message}]}` (a section twice, a backwards date range, a logo of another project, a blank title) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    duplicateReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the copy */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getReportOutline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the outline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOutline"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listReportSectionBlocks: {
+        parameters: {
+            query?: {
+                /** @description at most 50 blocks a page; 50 when absent */
+                limit?: components["parameters"]["blocksLimit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                sectionKey: components["parameters"]["sectionKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description blocks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getReportSnapshot: {
+        parameters: {
+            query: {
+                /** @description base64url (no padding) of the canonical JSON of the SnapshotSpec: sorted keys and no spaces */
+                spec: components["parameters"]["snapshotSpec"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description the first 32 hex digits of sha256(canonical spec + source version + renderer version) */
+                snapshotKey: components["parameters"]["snapshotKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG bytes */
+            200: {
+                headers: {
+                    /** @description private, max-age=31536000, immutable */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description `spec` is not base64url JSON of a SnapshotSpec (`code` is `invalid_snapshot_spec`), or the key does not match it (`snapshot_key_mismatch`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createReportRender: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a render of this report is running (`code` is `render_running`, details `{job_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listReportVersions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportVersionPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getReportVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                /** @description a numbered version; a rendering or failed row has no number */
+                versionNumber: components["parameters"]["versionNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the version with its files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportVersion"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteReportVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                /** @description a numbered version; a rendering or failed row has no number */
+                versionNumber: components["parameters"]["versionNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the version is issued (`code` is `issued_version`); unissue it first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchReportVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                /** @description a numbered version; a rendering or failed row has no number */
+                versionNumber: components["parameters"]["versionNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportVersionPatch"];
+            };
+        };
+        responses: {
+            /** @description the version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportVersion"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getReportVersionDocument: {
+        parameters: {
+            query?: {
+                /** @description at most 50 blocks a page; 50 when absent */
+                limit?: components["parameters"]["blocksLimit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                reportId: components["parameters"]["reportId"];
+                /** @description a numbered version; a rendering or failed row has no number */
+                versionNumber: components["parameters"]["versionNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of the document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDocumentPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    openProjectFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevealRequest"];
+            };
+        };
+        responses: {
+            /** @description the application was started */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the path leaves the project folder, is a folder, or is not a document type that may be opened (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createReportAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportAssetCreate"];
+            };
+        };
+        responses: {
+            /** @description the asset */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportAsset"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description not a readable JPEG, PNG or WebP of at most 20 MB (`code` is `asset_invalid`, details `{reason}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getReportAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetId: components["parameters"]["assetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PNG bytes */
+            200: {
+                headers: {
+                    /** @description private, max-age=31536000, immutable */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listReportTemplates: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description templates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportTemplatePage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportTemplate"];
+                };
+            };
+            /** @description `code` is `invalid_template`, details `{errors: [{path, message}]}` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the template */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportTemplate"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in template is never deleted (`code` is `builtin_template`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportTemplatePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated template */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportTemplate"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in template is never changed (`code` is `builtin_template`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `code` is `invalid_template`, details `{errors: [{path, message}]}` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };
