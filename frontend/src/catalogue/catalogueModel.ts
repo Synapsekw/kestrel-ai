@@ -1,5 +1,6 @@
 import type { CatalogueType, CatalogueTypeCreate, CatalogueTypePatch, TypeKind } from "@/api/catalogue";
 import { normaliseName } from "./normaliseName";
+import { MAX_DEFINITION, rulesOf, sameRules, toRules, type RuleDraft } from "./severityRulesModel";
 
 export type KindFilter = "all" | TypeKind;
 
@@ -55,6 +56,10 @@ export interface TypeDraft {
   group: string;
   defaultSeverity: number | null;
   hotkey: string;
+  /** What the anomaly looks like (S1 §5); trimmed on save, empty means none. */
+  definition: string;
+  /** Ordered severity rules (S1 §5). */
+  rules: RuleDraft[];
 }
 
 export function nextTypeColour(types: CatalogueType[]): string {
@@ -72,6 +77,8 @@ export function draftOf(type: CatalogueType | null, types: CatalogueType[]): Typ
       group: "",
       defaultSeverity: null,
       hotkey: "",
+      definition: "",
+      rules: [],
     };
   }
   return {
@@ -81,7 +88,18 @@ export function draftOf(type: CatalogueType | null, types: CatalogueType[]): Typ
     group: type.group ?? "",
     defaultSeverity: type.default_severity ?? null,
     hotkey: type.hotkey ?? "",
+    // `??`: an answer from a catalogue without migration 0003 has neither field (S1 §11).
+    definition: type.definition ?? "",
+    rules: rulesOf(type.severity_rules),
   };
+}
+
+/**
+ * False for an answer from a catalogue whose migration 0003 did not run: the editor then hides the
+ * definition and the rules for that type and never sends them (S1 §11). A new type shows them.
+ */
+export function supportsDefinition(type: CatalogueType | null): boolean {
+  return type === null || (type.definition !== undefined && type.severity_rules !== undefined);
 }
 
 /** A live type other than `selfId` whose name normalises to the draft's. */
@@ -96,6 +114,9 @@ export function validateTypeDraft(d: TypeDraft, types: CatalogueType[], selfId?:
   if (!name) return "Give the type a name.";
   if (name.length > 60) return "Keep the name to 60 characters or fewer.";
   if (!/^#[0-9a-f]{6}$/i.test(d.colour)) return "Choose a colour.";
+  if (d.definition.trim().length > MAX_DEFINITION) {
+    return `Keep the definition to ${MAX_DEFINITION} characters or fewer.`;
+  }
   const clash = findClash(d, types, selfId);
   if (clash) return `"${clash.name}" already exists. Open it instead of creating a second one.`;
   if (d.hotkey) {
@@ -106,8 +127,9 @@ export function validateTypeDraft(d: TypeDraft, types: CatalogueType[], selfId?:
   return null;
 }
 
+/** Definition and rules are left out when empty, so the body of a plain type is what it always was. */
 export function toCreate(d: TypeDraft): CatalogueTypeCreate {
-  return {
+  const body: CatalogueTypeCreate = {
     name: d.name.trim(),
     colour: d.colour,
     kind: d.kind,
@@ -115,18 +137,27 @@ export function toCreate(d: TypeDraft): CatalogueTypeCreate {
     default_severity: d.defaultSeverity,
     hotkey: d.hotkey || null,
   };
+  const definition = d.definition.trim();
+  if (definition) body.definition = definition;
+  if (d.rules.length > 0) body.severity_rules = toRules(d.rules);
+  return body;
 }
 
+/** Only what changed; the rules go as the whole ordered list when any of them changed or moved. */
 export function toPatch(d: TypeDraft, t: CatalogueType): CatalogueTypePatch {
   const patch: CatalogueTypePatch = {};
   const name = d.name.trim();
   const group = d.group.trim() || null;
   const hotkey = d.hotkey || null;
+  const definition = d.definition.trim() || null;
+  const rules = toRules(d.rules);
   if (name !== t.name) patch.name = name;
   if (d.colour !== t.colour) patch.colour = d.colour;
   if (d.kind !== t.kind) patch.kind = d.kind;
   if (group !== (t.group ?? null)) patch.group = group;
   if (d.defaultSeverity !== (t.default_severity ?? null)) patch.default_severity = d.defaultSeverity;
   if (hotkey !== (t.hotkey ?? null)) patch.hotkey = hotkey;
+  if (definition !== (t.definition?.trim() || null)) patch.definition = definition;
+  if (!sameRules(rules, t.severity_rules ?? [])) patch.severity_rules = rules;
   return patch;
 }

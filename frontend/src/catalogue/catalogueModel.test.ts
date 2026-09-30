@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CatalogueType } from "@/api/catalogue";
 import { exampleTypes, TYPE_ID } from "@/test/appSectionFixtures";
 import {
   DEFAULT_FILTERS,
@@ -8,6 +9,7 @@ import {
   KIND_OPTIONS,
   migratedCount,
   nextTypeColour,
+  supportsDefinition,
   toCreate,
   toPatch,
   validateTypeDraft,
@@ -47,6 +49,8 @@ describe("drafts", () => {
       group: "",
       defaultSeverity: null,
       hotkey: "",
+      definition: "",
+      rules: [],
     });
   });
 
@@ -102,6 +106,88 @@ describe("drafts", () => {
   it("picks the next colour among live types only", () => {
     expect(nextTypeColour(exampleTypes)).toBe("#eab308");
     expect(nextTypeColour([])).toBe("#f97316");
+  });
+
+  it("copies definition and rules from a type, and reads an answer without them as empty", () => {
+    const ruled: CatalogueType = {
+      ...crack,
+      definition: "A linear fracture.",
+      severity_rules: [{ when: "Wider than 5 mm", severity: 4 }],
+    };
+    const d = draftOf(ruled, exampleTypes);
+    expect(d.definition).toBe("A linear fracture.");
+    expect(d.rules.map(({ when, severity }) => ({ when, severity }))).toEqual([
+      { when: "Wider than 5 mm", severity: 4 },
+    ]);
+
+    const legacy: Partial<CatalogueType> = { ...crack };
+    delete legacy.definition;
+    delete legacy.severity_rules;
+    const old = draftOf(legacy as CatalogueType, exampleTypes);
+    expect(old.definition).toBe("");
+    expect(old.rules).toEqual([]);
+    expect(toPatch(old, legacy as CatalogueType)).toEqual({});
+    expect(supportsDefinition(legacy as CatalogueType)).toBe(false);
+    expect(supportsDefinition(crack)).toBe(true);
+    expect(supportsDefinition(null)).toBe(true);
+  });
+
+  it("patches the definition and the whole rule list only when they changed", () => {
+    const ruled: CatalogueType = {
+      ...crack,
+      definition: "A linear fracture.",
+      severity_rules: [
+        { when: "Wider than 5 mm", severity: 4 },
+        { when: "Hairline", severity: 1 },
+      ],
+    };
+    const d = draftOf(ruled, exampleTypes);
+    expect(toPatch(d, ruled)).toEqual({});
+    expect(toPatch({ ...d, definition: " A linear fracture. " }, ruled)).toEqual({});
+    expect(toPatch({ ...d, definition: "  " }, ruled)).toEqual({ definition: null });
+    expect(toPatch({ ...d, definition: "Any fracture." }, ruled)).toEqual({ definition: "Any fracture." });
+    expect(toPatch({ ...d, rules: [d.rules[1], d.rules[0]] }, ruled)).toEqual({
+      severity_rules: [
+        { when: "Hairline", severity: 1 },
+        { when: "Wider than 5 mm", severity: 4 },
+      ],
+    });
+    expect(toPatch({ ...d, rules: [{ ...d.rules[0], severity: 3 }, d.rules[1]] }, ruled)).toEqual({
+      severity_rules: [
+        { when: "Wider than 5 mm", severity: 3 },
+        { when: "Hairline", severity: 1 },
+      ],
+    });
+    expect(toPatch({ ...d, rules: [] }, ruled)).toEqual({ severity_rules: [] });
+    // A type from before 0003 after migration: nothing to send until something changes.
+    const old: CatalogueType = { ...crack, definition: null, severity_rules: [] };
+    expect(toPatch(draftOf(old, exampleTypes), old)).toEqual({});
+  });
+
+  it("creates with a definition and rules only when given", () => {
+    const blank = { ...draftOf(null, exampleTypes), name: "Rust" };
+    expect(toCreate(blank)).not.toHaveProperty("definition");
+    expect(toCreate(blank)).not.toHaveProperty("severity_rules");
+    expect(toCreate({ ...blank, definition: "   " })).not.toHaveProperty("definition");
+    expect(
+      toCreate({
+        ...blank,
+        definition: " Orange-brown flaking. ",
+        rules: [{ key: "k", when: " Section loss ", severity: 4 }],
+      }),
+    ).toMatchObject({
+      name: "Rust",
+      definition: "Orange-brown flaking.",
+      severity_rules: [{ when: "Section loss", severity: 4 }],
+    });
+  });
+
+  it("refuses a definition over 1000 characters", () => {
+    const blank = { ...draftOf(null, exampleTypes), name: "Rust" };
+    expect(validateTypeDraft({ ...blank, definition: "x".repeat(1000) }, exampleTypes)).toBeNull();
+    expect(validateTypeDraft({ ...blank, definition: "x".repeat(1001) }, exampleTypes)).toBe(
+      "Keep the definition to 1000 characters or fewer.",
+    );
   });
 });
 
