@@ -221,6 +221,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`model_or_provider_required`), a blank cloud query (`query_required`), no class mapped
     # (`unmapped_classes`), no stored key (`conflict` 409) or missing weights (`model_unavailable`).
     "detectImageBatch": {409, 422},
+    # Reports R1: a schema-valid template whose config breaks a rule the schema cannot state
+    # (a section twice, a date range backwards, a blank name) is `invalid_template`.
+    "createReportTemplate": {422},
+    "patchReportTemplate": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

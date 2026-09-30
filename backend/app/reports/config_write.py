@@ -48,6 +48,9 @@ def config_problems(config: ReportConfig, *, prefix: str = "config") -> list[dic
         if key in seen:
             errors.append({"path": f"{prefix}.sections.{i}.key", "message": f"{key} appears twice."})
         seen.add(key)
+    statuses = [str(getattr(s, "value", s)) for s in config.filters.statuses]
+    if len(statuses) != len(set(statuses)):  # the contract's `uniqueItems: true`, pydantic cannot state it
+        errors.append({"path": f"{prefix}.filters.statuses", "message": "List each status once."})
     date = config.filters.date
     if date is not None:
         rule = str(getattr(date.rule, "value", date.rule))
