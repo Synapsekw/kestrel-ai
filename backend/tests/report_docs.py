@@ -78,7 +78,7 @@ def section(key: str, title: str, blocks: list[dict]) -> dict:
     return {"key": key, "title": title, "blocks": blocks}
 
 
-def document(sections: list[dict], version: int | None = 3):
+def document(sections: list[dict], version: int | None = 3, paper: str | None = None):
     from app.reports.schemas import ReportDocument
     from app.reports.theme import THEME_VERSION
 
@@ -90,6 +90,8 @@ def document(sections: list[dict], version: int | None = 3):
     }
     if version is not None:
         body["version"] = version
+    if paper is not None:
+        body["paper"] = {"size": paper}
     return ReportDocument.model_validate(body)
 
 
