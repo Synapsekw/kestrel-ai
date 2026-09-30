@@ -7,6 +7,7 @@ test("the old Export address opens Reports → Data exports and posts the chosen
   await expect(page).toHaveURL(new RegExp(`/p/${P}/reports/exports$`));
   const panel = page.getByRole("region", { name: "Data exports" });
   await expect(panel).toBeVisible();
+  await expect(panel.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("radio", { name: "Data exports" })).toBeChecked();
   await expect(panel.getByRole("heading", { name: "Past exports" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Model for other applications" })).toHaveCount(0);
