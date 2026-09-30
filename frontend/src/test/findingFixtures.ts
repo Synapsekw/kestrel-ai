@@ -9,7 +9,7 @@ import type {
   FindingDetail,
   FindingSummary,
 } from "@/api/findings";
-import type { ProjectOverview } from "@/api/overview";
+import type { OverviewSite, ProjectOverview } from "@/api/overview";
 import { exampleProject, IMAGE_ID, MAP_ID, MODEL_ID, SOURCE_ID, type FakeRoute } from "./fixtures";
 
 export const FINDING_ID = "f0000000-9999-4000-8000-000000000217";
@@ -148,6 +148,7 @@ export const fullOverview: ProjectOverview = {
     previous_net_m3: 12893,
   },
   hero_map_id: MAP_ID,
+  hero: { kind: "map", id: MAP_ID },
   banners: [],
 };
 
@@ -156,7 +157,45 @@ export const emptyOverview: ProjectOverview = {
   data: { image_sets: 0, images: 0, maps: 0, elevations: 0, point_clouds: 0, drawings: 0 },
   latest_volume: null,
   hero_map_id: null,
+  hero: null,
   banners: [],
+};
+
+export const cloudOnlyOverview: ProjectOverview = {
+  ...fullOverview,
+  data: { image_sets: 1, images: 40, maps: 0, elevations: 0, point_clouds: 1, drawings: 0 },
+  hero_map_id: null,
+  hero: { kind: "point_cloud", id: "c0000000-1111-4000-8000-000000000001" },
+};
+
+export const imagesOnlyOverview: ProjectOverview = {
+  ...fullOverview,
+  data: { image_sets: 1, images: 1284, maps: 0, elevations: 0, point_clouds: 0, drawings: 0 },
+  latest_volume: null,
+  hero_map_id: null,
+  hero: { kind: "images", id: null },
+};
+
+export const exampleSite: OverviewSite = {
+  center: [20.4612, 44.8125],
+  bounds_wgs84: [20.4581, 44.8103, 20.4643, 44.8147],
+  source: "map",
+  area_m2: 241000,
+  photo_points: [
+    [20.459, 44.811],
+    [20.46, 44.811],
+    [20.461, 44.812],
+  ],
+  photo_points_total: 1280,
+};
+
+export const noSite: OverviewSite = {
+  center: null,
+  bounds_wgs84: null,
+  source: null,
+  area_m2: null,
+  photo_points: [],
+  photo_points_total: 0,
 };
 
 export const exampleActivity: Activity[] = [

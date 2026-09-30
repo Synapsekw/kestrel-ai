@@ -104,6 +104,7 @@ export const exampleOverview: components["schemas"]["ProjectOverview"] = {
   data: { image_sets: 2, images: 1284, maps: 3, elevations: 1, point_clouds: 2, drawings: 0 },
   latest_volume: null,
   hero_map_id: null,
+  hero: null,
   banners: [],
 };
 
