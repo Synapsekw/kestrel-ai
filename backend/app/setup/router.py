@@ -23,6 +23,6 @@ for _module in ROUTE_MODULES:
 
 
 def stub_operation_ids() -> set[str]:
-    """Every S1 operation still answered by a 501 stub, the catalogue's `ensure` included."""
+    """Every S1 operation still answered by a 501 stub."""
     modules = (*ROUTE_MODULES, catalogue_routes)
     return {op_id for module in modules for _, _, op_id in getattr(module, "STUBS", ())}

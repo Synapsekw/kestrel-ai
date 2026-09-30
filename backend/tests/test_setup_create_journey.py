@@ -23,6 +23,7 @@ def test_a_builtin_template_becomes_a_project_with_its_types_and_hotkeys(client,
     preview = _ensure(client, specs, dry_run=True)
     assert all(i["id"] is None and i["created"] for i in preview)
     items = _ensure(client, specs)
+    assert all(i["created"] and i["id"] for i in items)
     ids = [i["id"] for i in items]
     hotkeys = {i: s["hotkey"] for i, s in zip(ids, specs, strict=True)}
     r = client.post(

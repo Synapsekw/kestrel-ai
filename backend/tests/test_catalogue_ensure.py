@@ -141,6 +141,19 @@ def test_dry_run_writes_nothing(cat):
     assert service.get_type(cat, old.id).archived is True
 
 
+def test_a_dry_run_reports_names_that_normalise_alike_as_one_new_type(cat):
+    before = _count(cat)
+    items = ensure(cat, spec("Weld crack"), spec("weld_crack"), dry_run=True)
+    assert [(i.id, i.created) for i in items] == [(None, True), (None, False)]
+    assert items[1].conflict is None
+    assert _count(cat) == before
+
+
+def test_a_dry_run_checks_a_later_spec_against_the_first_one_planned(cat):
+    items = ensure(cat, spec("Weld crack"), spec("weld_crack", kind="object"), dry_run=True)
+    assert items[1].conflict.kind == "defect"
+
+
 def test_an_invalid_spec_refuses_the_whole_request_before_writing(cat):
     old = _archived(cat, "Bird nest")
     before = _count(cat)

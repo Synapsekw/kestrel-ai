@@ -121,6 +121,7 @@ def ensure_template_types(
             live, archived = _by_key(s, {key for _, key, _ in checked})
             taken = _live_hotkeys(s)
             out: list[EnsuredType] = []
+            planned: dict[str, CatalogueTypeSpec] = {}  # dry run: the first spec to miss each key
             for spec, key, rules in checked:
                 row = live.get(key)
                 if row is None and key in archived:
@@ -137,9 +138,30 @@ def ensure_template_types(
                         EnsuredType(name=row.name, id=row.id, created=False, conflict=_conflict(row, spec))
                     )
                 elif dry_run:
-                    out.append(
-                        EnsuredType(name=" ".join(spec.name.split()), id=None, created=True, conflict=None)
-                    )
+                    first = planned.get(key)
+                    if first is None:
+                        planned[key] = spec
+                        out.append(
+                            EnsuredType(
+                                name=" ".join(spec.name.split()), id=None, created=True, conflict=None
+                            )
+                        )
+                    else:  # the real run would have created it from `first`; compare against that
+                        colour_differs = (
+                            spec.colour is not None
+                            and first.colour is not None
+                            and spec.colour.lower() != first.colour.lower()
+                        )
+                        conflict = None
+                        if spec.kind != first.kind or colour_differs:
+                            conflict = TypeConflict(
+                                kind=first.kind, colour=(first.colour or service._next_colour(s)).lower()
+                            )
+                        out.append(
+                            EnsuredType(
+                                name=" ".join(first.name.split()), id=None, created=False, conflict=conflict
+                            )
+                        )
                 else:
                     row = _new_row(s, spec, key, rules, taken)
                     live[key] = row
