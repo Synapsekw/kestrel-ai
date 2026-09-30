@@ -47,13 +47,18 @@ def test_r9_stubs_say_no_data(handle):
 
 
 def test_figure_hooks_are_empty_stubs(handle):
+    """image and map are still R2's stubs; cloud is real (R9-C) -- a cloud finding with no stored
+    view and no covering cloud DSM prints its placeholder figure, and `measurement_figure` stays
+    R2's stub until R9-C's Task 4."""
     t, c = add_type(handle, "crack"), add_cloud(handle)
     add_finding(handle, t, anchor="cloud", target=c)
     ctx = ctx_for(handle, config())
     row = next(iter_findings(ctx))
     assert image.finding_figures(ctx, row) == [] and image.photos(ctx, row, 4) == []
     assert image.comments(ctx, row, "all") == [] and map_figures.finding_figures(ctx, row) == []
-    assert cloud.finding_figures(ctx, row) == [] and cloud.measurement_figure(ctx, object()) is None
+    assert cloud.measurement_figure(ctx, object()) is None
+    (fig,) = cloud.finding_figures(ctx, row)
+    assert fig.snapshot.missing_reason is not None
 
 
 def test_compose_keeps_config_order_skips_disabled_and_is_deterministic(handle):
