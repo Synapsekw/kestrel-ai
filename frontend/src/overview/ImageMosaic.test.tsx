@@ -12,6 +12,7 @@ describe("ImageMosaic", () => {
     renderWithProviders(<ImageMosaic projectId={PROJECT_ID} images={images} />, { api: fakeClient([]).api });
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(5);
+    expect(links[0]).toHaveAccessibleName(`Open photo ${exampleImage.file_name}`);
     expect(links[0]).toHaveAttribute("href", `/p/${PROJECT_ID}/images/img-0`);
   });
 });

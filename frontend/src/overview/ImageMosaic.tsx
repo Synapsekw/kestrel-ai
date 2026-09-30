@@ -26,6 +26,7 @@ export function ImageMosaic({
         {shown.map((img, i) => (
           <Link
             key={img.id}
+            aria-label={`Open photo ${img.file_name}`}
             to={`/p/${projectId}/images/${img.id}`}
             className={cx(
               "relative overflow-hidden rounded-sm bg-surface-2",

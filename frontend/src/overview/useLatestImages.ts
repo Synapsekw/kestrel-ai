@@ -12,22 +12,22 @@ export const LATEST_IMAGES = 8;
 export function useLatestImages(projectId: string, enabled: boolean) {
   const api = useApi();
   const dataRev = useChangesStore((s) => s.dataRevision);
-  const [state, setState] = useState<{ images: ImageRow[] | null; failed: boolean }>({
-    images: null,
-    failed: false,
-  });
+  const [state, setState] = useState<{ projectId: string; images: ImageRow[]; failed: boolean } | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let live = true;
     fetchLatestImages(api, projectId, LATEST_IMAGES)
-      .then((images) => live && setState({ images, failed: false }))
+      .then((images) => live && setState({ projectId, images, failed: false }))
       .catch((e: unknown) => {
         pushLog(`latest images unavailable: ${messageOf(e, String(e))}`);
-        if (live) setState({ images: [], failed: true });
+        if (live) setState({ projectId, images: [], failed: true });
       });
     return () => {
       live = false;
     };
   }, [api, projectId, enabled, dataRev]);
-  return state;
+  // A read that belongs to another project is never shown: null until this project's read lands.
+  return state && state.projectId === projectId
+    ? { images: state.images, failed: state.failed }
+    : { images: null as ImageRow[] | null, failed: false };
 }

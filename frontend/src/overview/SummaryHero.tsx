@@ -51,6 +51,7 @@ export function SummaryHero({
       aria-label="Project data"
       className={cx("grid min-h-0 place-items-center p-6", className)}
     >
+      {present.length === 0 && <p className="text-sm text-muted">No data yet.</p>}
       <ul className="flex flex-col gap-2 text-base">
         {present.map((k) => (
           <li key={k.key}>
