@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useReducer, useRef } from "react";
 import type { Block, BlockPage, LoadBlocks, OutlineSection } from "@/api/reports";
 import { messageOf } from "@/api/errors";
 
@@ -81,33 +81,36 @@ export function sectionsReducer(state: SectionState, a: SectionAction): SectionS
 /** Blocks per section, keyed by etag; `request` asks for the next page when a section is near. */
 export function useSectionBlocks(loadBlocks: LoadBlocks) {
   const [state, dispatch] = useReducer(sectionsReducer, {});
+  // `latest` is advanced by every action as it is sent, never synced from `state` in an effect: a
+  // section's effect (a child) runs before this hook's effects (the parent), so a request made as a
+  // page lands would see the old entry, and a sync would roll back a "start" made in the same commit.
   const latest = useRef(state);
-  useEffect(() => {
-    latest.current = state;
-  }, [state]);
+  const send = useCallback((a: SectionAction) => {
+    latest.current = sectionsReducer(latest.current, a);
+    dispatch(a);
+  }, []);
 
   const request = useCallback(
     (section: OutlineSection) => {
       const e = entryOf(latest.current, section);
       if (e.status !== "idle" || e.done) return;
-      // Mark synchronously so a second call in the same tick is a no-op.
-      latest.current = sectionsReducer(latest.current, { type: "start", section });
-      dispatch({ type: "start", section });
+      // Marked synchronously, so a second call in the same tick is a no-op.
+      send({ type: "start", section });
       const { key, etag } = section;
       const cursor = e.cursor;
       loadBlocks(key, cursor).then(
-        (page) => dispatch({ type: "page", key, etag, cursor, page }),
+        (page) => send({ type: "page", key, etag, cursor, page }),
         (err: unknown) =>
-          dispatch({ type: "fail", key, etag, error: messageOf(err, "could not load this section") }),
+          send({ type: "fail", key, etag, error: messageOf(err, "could not load this section") }),
       );
     },
-    [loadBlocks],
+    [loadBlocks, send],
   );
 
-  const retry = useCallback((section: OutlineSection) => {
-    latest.current = sectionsReducer(latest.current, { type: "retry", key: section.key, etag: section.etag });
-    dispatch({ type: "retry", key: section.key, etag: section.etag });
-  }, []);
+  const retry = useCallback(
+    (section: OutlineSection) => send({ type: "retry", key: section.key, etag: section.etag }),
+    [send],
+  );
 
   const get = useCallback((section: OutlineSection) => entryOf(state, section), [state]);
   return { entryOf: get, request, retry };
