@@ -9157,7 +9157,14 @@ export interface components {
          *       "hotkey": "c",
          *       "group": "Concrete defects",
          *       "archived": false,
-         *       "origin": "user"
+         *       "origin": "user",
+         *       "definition": "A fine dark line in concrete, straight or branching.",
+         *       "severity_rules": [
+         *         {
+         *           "when": "Wider than 3 mm or leaking",
+         *           "severity": 4
+         *         }
+         *       ]
          *     }
          */
         CatalogueType: {
@@ -9172,10 +9179,14 @@ export interface components {
             group: string | null;
             archived: boolean;
             /**
-             * @description `migrated` when the foundation migration created it from a project class
+             * @description `migrated` when the foundation migration created it from a project class; `template` when project setup created it from a template
              * @enum {string}
              */
-            origin: "user" | "migrated";
+            origin: "user" | "migrated" | "template";
+            /** @description what the anomaly looks like, in a sentence or two */
+            definition: string | null;
+            /** @description in order; the first rule that matches sets a finding's severity (applied by S2) */
+            severity_rules: components["schemas"]["SeverityRule"][];
         };
         /**
          * @example {
@@ -9189,7 +9200,9 @@ export interface components {
          *           "hotkey": "c",
          *           "group": "Concrete defects",
          *           "archived": false,
-         *           "origin": "user"
+         *           "origin": "user",
+         *           "definition": "A fine dark line in concrete, straight or branching.",
+         *           "severity_rules": []
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
@@ -9200,7 +9213,9 @@ export interface components {
          *           "hotkey": "1",
          *           "group": "Machinery",
          *           "archived": false,
-         *           "origin": "migrated"
+         *           "origin": "migrated",
+         *           "definition": null,
+         *           "severity_rules": []
          *         }
          *       ],
          *       "next_cursor": null,
@@ -9235,6 +9250,10 @@ export interface components {
             hotkey?: string | null;
             /** @description null when absent */
             group?: string | null;
+            /** @description null when absent */
+            definition?: string | null;
+            /** @description in order; empty when absent */
+            severity_rules?: components["schemas"]["SeverityRule"][];
         };
         /**
          * @description every field is optional; a field that is sent replaces the stored one
@@ -9251,6 +9270,8 @@ export interface components {
             hotkey?: string | null;
             group?: string | null;
             archived?: boolean;
+            definition?: string | null;
+            severity_rules?: components["schemas"]["SeverityRule"][];
         };
         /**
          * @description the patched type, plus whether to offer the findings backfill
@@ -9264,6 +9285,8 @@ export interface components {
          *       "group": "Concrete defects",
          *       "archived": false,
          *       "origin": "migrated",
+         *       "definition": null,
+         *       "severity_rules": [],
          *       "backfill_candidates": true
          *     }
          */
@@ -12838,6 +12861,19 @@ export interface components {
         ReportAssetCreate: {
             /** @description an absolute path to a JPEG, PNG or WebP picked with the file dialog */
             path: string;
+        };
+        /**
+         * @description one of a type's ordered severity rules: a finding that matches `when` gets `severity` (S2 applies them; the first match wins)
+         * @example {
+         *       "when": "Section loss or holes through the member",
+         *       "severity": 4
+         *     }
+         */
+        SeverityRule: {
+            /** @description the condition in plain words */
+            when: string;
+            /** @description a level on the current severity scale */
+            severity: number;
         };
     };
     responses: {
@@ -18934,7 +18970,7 @@ export interface operations {
                 /** @description matches the normalised name or the group */
                 q?: string;
                 kind?: components["schemas"]["CatalogueKind"];
-                origin?: "user" | "migrated";
+                origin?: "user" | "migrated" | "template";
                 /** @description false when absent */
                 include_archived?: boolean;
                 limit?: components["parameters"]["limit"];

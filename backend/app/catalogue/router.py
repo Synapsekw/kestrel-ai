@@ -1,7 +1,5 @@
 """The catalogue endpoints (spec 2026-09-26-foundation sections 7 and 13)."""
 
-from typing import Literal
-
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.catalogue import project_types, service
@@ -15,6 +13,7 @@ from app.catalogue.schemas import (
     SeverityLevelOut,
     SeverityScale,
     TypeKind,
+    TypeOrigin,
 )
 from app.catalogue.usage import projects_using_level
 from app.errors import AppError
@@ -45,7 +44,7 @@ def publish_catalogue_changed(request: Request, payload: dict) -> None:
 def list_catalogue_types(
     q: str | None = Query(None, max_length=64),
     kind: TypeKind | None = None,
-    origin: Literal["user", "migrated"] | None = None,
+    origin: TypeOrigin | None = None,
     include_archived: bool = False,
     limit: int | None = Query(None, ge=1),
     cursor: str | None = None,
@@ -74,7 +73,9 @@ def complete_catalogue_classification(
 def create_catalogue_type(
     body: CatalogueTypeCreate, request: Request, cat: CatalogueHandle = Depends(get_catalogue)
 ) -> CatalogueTypeOut:
-    ref = service.create_type(cat, **body.model_dump())
+    # `definition` and `severity_rules` reach the service with U2 (plan 2026-09-30-setup-u2), which
+    # deletes this `exclude`; until then they are validated and not stored.
+    ref = service.create_type(cat, **body.model_dump(exclude={"definition", "severity_rules"}))
     publish_catalogue_changed(request, {"type_ids": [ref.id]})
     return CatalogueTypeOut.from_ref(ref)
 

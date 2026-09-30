@@ -3824,7 +3824,7 @@ paths:
       parameters:
         - { name: q, in: query, required: false, schema: { type: string, maxLength: 64 }, description: matches the normalised name or the group }
         - { name: kind, in: query, required: false, schema: { $ref: "#/components/schemas/CatalogueKind" } }
-        - { name: origin, in: query, required: false, schema: { type: string, enum: [user, migrated] } }
+        - { name: origin, in: query, required: false, schema: { type: string, enum: [user, migrated, template] } }
         - { name: include_archived, in: query, required: false, schema: { type: boolean }, description: false when absent }
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/cursor"
@@ -10405,7 +10405,7 @@ components:
     CatalogueType:
       type: object
       description: an app-wide defect or object type in `catalogue.db`; never deleted, only archived
-      required: [id, name, colour, kind, default_severity, hotkey, group, archived, origin]
+      required: [id, name, colour, kind, default_severity, hotkey, group, archived, origin, definition, severity_rules]
       properties:
         id: { type: string }
         name: { type: string }
@@ -10415,8 +10415,14 @@ components:
         hotkey: { type: [string, "null"], description: "live only inside a type picker, never at workspace level" }
         group: { type: [string, "null"] }
         archived: { type: boolean }
-        origin: { type: string, enum: [user, migrated], description: "`migrated` when the foundation migration created it from a project class" }
-      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user }
+        origin: { type: string, enum: [user, migrated, template], description: "`migrated` when the foundation migration created it from a project class; `template` when project setup created it from a template" }
+        definition: { type: [string, "null"], maxLength: 1000, description: "what the anomaly looks like, in a sentence or two" }
+        severity_rules:
+          type: array
+          maxItems: 8
+          description: "in order; the first rule that matches sets a finding's severity (applied by S2)"
+          items: { $ref: "#/components/schemas/SeverityRule" }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user, definition: "A fine dark line in concrete, straight or branching.", severity_rules: [{ when: "Wider than 3 mm or leaking", severity: 4 }] }
     CatalogueTypePage:
       type: object
       required: [items, next_cursor]
@@ -10428,8 +10434,8 @@ components:
         needs_classification: { type: boolean, description: "true after migration merged project classes in as `object` types, until `POST /catalogue/classification/done`; absent means false" }
       example:
         items:
-          - { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user }
-          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", kind: object, default_severity: null, hotkey: "1", group: Machinery, archived: false, origin: migrated }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user, definition: "A fine dark line in concrete, straight or branching.", severity_rules: [] }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", kind: object, default_severity: null, hotkey: "1", group: Machinery, archived: false, origin: migrated, definition: null, severity_rules: [] }
         next_cursor: null
         needs_classification: true
     CatalogueTypeCreate:
@@ -10442,6 +10448,12 @@ components:
         default_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: null when absent }
         hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$", description: null when absent }
         group: { type: [string, "null"], maxLength: 64, description: null when absent }
+        definition: { type: [string, "null"], maxLength: 1000, description: "null when absent" }
+        severity_rules:
+          type: array
+          maxItems: 8
+          description: "in order; empty when absent"
+          items: { $ref: "#/components/schemas/SeverityRule" }
       example: { name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects }
     CatalogueTypePatch:
       type: object
@@ -10454,6 +10466,11 @@ components:
         hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$" }
         group: { type: [string, "null"], maxLength: 64 }
         archived: { type: boolean }
+        definition: { type: [string, "null"], maxLength: 1000 }
+        severity_rules:
+          type: array
+          maxItems: 8
+          items: { $ref: "#/components/schemas/SeverityRule" }
       example: { kind: defect, default_severity: 2 }
     CatalogueTypeUpdated:
       description: the patched type, plus whether to offer the findings backfill
@@ -10463,7 +10480,7 @@ components:
           required: [backfill_candidates]
           properties:
             backfill_candidates: { type: boolean, description: "true when the kind changed from `object` to `defect`: offer `POST /catalogue/types/{typeId}/backfill`" }
-      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: migrated, backfill_candidates: true }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: migrated, definition: null, severity_rules: [], backfill_candidates: true }
     SeverityLevel:
       type: object
       required: [level, name, colour]
@@ -13797,3 +13814,13 @@ components:
       required: [path]
       properties:
         path: { type: string, minLength: 1, description: "an absolute path to a JPEG, PNG or WebP picked with the file dialog" }
+    # ------------------------------------------------------------ project setup (S1-U1)
+    SeverityRule:
+      type: object
+      additionalProperties: false
+      description: "one of a type's ordered severity rules: a finding that matches `when` gets `severity` (S2 applies them; the first match wins)"
+      required: [when, severity]
+      properties:
+        when: { type: string, minLength: 1, maxLength: 200, pattern: '\S', description: "the condition in plain words" }
+        severity: { type: integer, minimum: 1, maximum: 9, description: "a level on the current severity scale" }
+      example: { when: "Section loss or holes through the member", severity: 4 }

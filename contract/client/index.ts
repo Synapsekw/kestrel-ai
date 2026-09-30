@@ -345,3 +345,5 @@ export type ReportTemplate = Schemas["ReportTemplate"];
 export type ReportTemplatePage = Schemas["ReportTemplatePage"];
 export type ReportAsset = Schemas["ReportAsset"];
 export type RenderRequest = Schemas["RenderRequest"];
+// Project setup (plan 2026-09-30-setup-u1).
+export type SeverityRule = Schemas["SeverityRule"];
