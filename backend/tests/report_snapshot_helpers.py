@@ -5,10 +5,12 @@ fuzzy pixel match (`near`) for edges an exact `getpixel` would flake on (roundin
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 import rasterio
 from geotiffs import make_geotiff
+from PIL import Image as PILImage
 
 from app.db.models import GeoMap
 from app.maps.startup import map_raster_path
@@ -72,3 +74,65 @@ def near(img, xy, colour, r: int = 2) -> bool:
             if 0 <= px < img.width and 0 <= py < img.height and img.getpixel((px, py)) == colour:
                 return True
     return False
+
+
+# --- R3 T3: image crop --------------------------------------------------------------------------
+
+
+def write_grey(path: Path, size: tuple[int, int], fmt: str = "JPEG", colour=(128, 128, 128)) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    PILImage.new("RGB", size, colour).save(path, fmt)
+    return path
+
+
+def add_image(handle, name: str, size: tuple[int, int], *, fmt: str = "JPEG") -> str:
+    """A grey photo at `<project>/images/<name>` and its Image row; returns the image id."""
+    from app.db.models import Image, Source
+
+    write_grey(Path(handle.folder) / "images" / name, size, fmt)
+    with handle.session() as s:
+        src = Source(folder="C:/flights/r3", site="R3")
+        s.add(src)
+        s.flush()
+        row = Image(path=f"images/{name}", width=size[0], height=size[1], source_id=src.id)
+        s.add(row)
+        s.flush()
+        return row.id
+
+
+def add_box(handle, image_id: str, *, shape="box", x=0.0, y=0.0, w=0.0, h=0.0, angle=0.0, points=None) -> str:
+    from app.db.models import Box
+
+    with handle.session() as s:
+        box = Box(
+            image_id=image_id,
+            class_id="c-crack",
+            x=x,
+            y=y,
+            w=w,
+            h=h,
+            angle=angle,
+            shape=shape,
+            points=points,
+            provenance_kind="person",
+            review_state="accepted",
+        )
+        s.add(box)
+        s.flush()
+        return box.id
+
+
+def image_crop_spec(image_id: str, ring, **overrides) -> SimpleNamespace:
+    fields = dict(
+        kind="image_crop",
+        image_id=image_id,
+        annotation_id=None,
+        ring=ring,
+        colour="#ff0000",
+        label=None,
+        context=3.0,
+        out=[1200, 900],
+        inset=False,
+    )
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
