@@ -16,6 +16,7 @@ folder is a not-recognised row, never a failed job.
 from __future__ import annotations
 
 import itertools
+import logging
 import os
 import stat
 import time
@@ -25,8 +26,17 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.jobs.registry import register_job_type
 from app.setup.builtins import BUILTIN_TEMPLATES
-from app.setup.classify import HEADER_IMAGE_EXTS, UNKNOWN, Classified, HeaderReader, classify, lens_of
+from app.setup.classify import (
+    HEADER_IMAGE_EXTS,
+    UNKNOWN,
+    Classified,
+    HeaderReader,
+    RealHeaderReader,
+    classify,
+    lens_of,
+)
 from app.setup.schemas import (
     InspectBucket,
     InspectNotRecognised,
@@ -423,3 +433,65 @@ def dump_result(result: InspectResult) -> dict:
     for bucket in data["buckets"]:
         bucket["match"] = {k: v for k, v in bucket["match"].items() if v is not None}
     return data
+
+
+# ------------------------------------------------------------------------------------------ job
+
+log = logging.getLogger(__name__)
+
+#: Seam: tests hand the job a counting reader.
+reader_factory: Callable[[], HeaderReader] = RealHeaderReader
+
+
+def template_config(ctx, template_id: str | None) -> dict | None:
+    """The named template's config: a built-in from code, any other id from the catalogue. None
+    (buckets stay unassigned; the page re-assigns locally) when it cannot be read, never a failure."""
+    if not template_id:
+        return None
+    for template in BUILTIN_TEMPLATES:
+        if template["id"] == template_id:
+            return template["config"]
+    catalogue = getattr(ctx.runner, "catalogue", None)
+    if catalogue is None:
+        ctx.log.info("catalogue unavailable: template %s not read; buckets left unassigned", template_id)
+        return None
+    try:
+        from app.catalogue.db import ProjectTemplate
+
+        with catalogue.session() as s:
+            row = s.get(ProjectTemplate, template_id)
+            return dict(row.config) if row is not None else None
+    except Exception:
+        log.exception("project template %s could not be read; buckets left unassigned", template_id)
+        return None
+
+
+def _run_pipeline(ctx) -> dict:
+    params = ctx.params
+    config = template_config(ctx, params.get("template_id"))
+    result = inspect_paths(
+        list(params["paths"]),
+        reader_factory(),
+        check_cancelled=ctx.check_cancelled,
+        progress=ctx.progress,
+        template_config=config,
+    )
+    sorted_files = sum(b.count for b in result.buckets)
+    ctx.log.info(
+        "setup inspect: %d file(s) in %d bucket(s), %d not recognised, truncated=%s",
+        sorted_files,
+        len(result.buckets),
+        result.not_recognised.count,
+        result.truncated,
+    )
+    return dump_result(result)
+
+
+#: Offline seam (ADR 2026-09-21-gotcha-contract-jobs-need-offline-seams): the shared `app` test
+#: fixture replaces it, so a generated POST /setup/inspect never walks the test machine's drive.
+run_pipeline = _run_pipeline
+
+
+@register_job_type("setup_inspect")
+def run_setup_inspect(ctx) -> dict:
+    return run_pipeline(ctx)

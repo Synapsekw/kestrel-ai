@@ -124,6 +124,16 @@ def app(settings, monkeypatch):
     # (ADR 2026-09-21-gotcha-contract-jobs-need-offline-seams). The fake imports laspy only when
     # a job actually converts.
     monkeypatch.setattr("app.pointclouds.converter.run_converter", fake_run_converter)
+
+    # A generated POST /setup/inspect (schemathesis posts `C:\`, `/`) must never walk a real drive
+    # in the background (ADR 2026-09-21-gotcha-contract-jobs-need-offline-seams); S1-U3's tests
+    # re-enable it (`live_inspect`).
+    def no_setup_inspect(ctx):
+        from app.jobs.cancellation import JobFailure
+
+        raise JobFailure("Folder inspection is disabled in tests.")
+
+    monkeypatch.setattr("app.setup.inspect_job.run_pipeline", no_setup_inspect)
     return created
 
 
