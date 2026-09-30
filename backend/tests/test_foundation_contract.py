@@ -150,7 +150,7 @@ def test_a_project_has_no_kind_but_a_summary_and_a_migration_state(spec):
 def test_a_project_is_created_with_catalogue_type_ids(spec):
     create = _schemas(spec)["ProjectCreate"]
     assert create["required"] == ["name", "folder"]  # `type_ids` is empty when absent (BK)
-    assert set(create["properties"]) == {"name", "folder", "type_ids"}
+    assert set(create["properties"]) == {"name", "folder", "type_ids", "hotkeys"}  # hotkeys: S1-U1
     assert "additionalProperties" not in create  # the kind shim's extra fields must stay accepted
 
 

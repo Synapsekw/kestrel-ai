@@ -97,3 +97,46 @@ class SeverityLevelOut(BaseModel):
 
 class SeverityScale(BaseModel):
     levels: list[SeverityLevelOut] = Field(min_length=1, max_length=9)
+
+
+# ------------------------------------------------------------------------------ project setup (S1)
+# `POST /catalogue/types/ensure` (spec 2026-09-30-project-setup section 6). U2 builds the route.
+MAX_ENSURE_TYPES = 64
+
+
+class CatalogueTypeSpec(BaseModel):
+    """A type as a project template names it. A request needs only `name` and `kind`; the defaults
+    make a dump carry every key, as a `ProjectTemplate` answer must."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64, pattern=NOT_BLANK)
+    kind: TypeKind
+    colour: str | None = Field(None, pattern=HEX)
+    default_severity: int | None = Field(None, ge=1, le=9)
+    hotkey: str | None = Field(None, pattern=HOTKEY)
+    definition: str | None = Field(None, max_length=DEFINITION_MAX)
+    severity_rules: list[SeverityRule] = Field(default_factory=list, max_length=MAX_SEVERITY_RULES)
+
+
+class EnsureTypesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    types: list[CatalogueTypeSpec] = Field(min_length=1, max_length=MAX_ENSURE_TYPES)
+    dry_run: bool = False
+
+
+class TypeConflict(BaseModel):
+    kind: TypeKind
+    colour: str = Field(pattern=HEX)
+
+
+class EnsuredType(BaseModel):
+    name: str
+    id: str | None
+    created: bool
+    conflict: TypeConflict | None
+
+
+class EnsureTypesResult(BaseModel):
+    items: list[EnsuredType] = Field(max_length=MAX_ENSURE_TYPES)

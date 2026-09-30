@@ -4588,6 +4588,10 @@ export interface components {
             folder: string;
             /** @description catalogue type ids to start with, in list order; empty when absent */
             type_ids?: string[];
+            /** @description type id to the project's hotkey for it (a digit 1-9 or a letter); null or a type left out means no project hotkey; the same meaning as in `PUT /projects/{projectId}/types`; empty when absent */
+            hotkeys?: {
+                [key: string]: string | null;
+            };
         };
         /**
          * @example {
@@ -12874,6 +12878,328 @@ export interface components {
             when: string;
             /** @description a level on the current severity scale */
             severity: number;
+        };
+        /**
+         * @description a catalogue type as a project template names it, matched to the catalogue by normalised name. A request needs only `name` and `kind`; inside a `ProjectTemplate` the server sends every property.
+         * @example {
+         *       "name": "Corrosion",
+         *       "kind": "defect",
+         *       "colour": "#c2410c",
+         *       "default_severity": 2,
+         *       "hotkey": "1",
+         *       "definition": "Rust on steel members, fixings or plates.",
+         *       "severity_rules": []
+         *     }
+         */
+        CatalogueTypeSpec: {
+            name: string;
+            kind: components["schemas"]["CatalogueKind"];
+            /** @description null when absent; the catalogue picks one for a new type */
+            colour?: string | null;
+            /** @description null when absent */
+            default_severity?: number | null;
+            /** @description the project hotkey the template gives the type; null when absent */
+            hotkey?: string | null;
+            /** @description what the anomaly looks like; null when absent */
+            definition?: string | null;
+            /** @description in order; empty when absent */
+            severity_rules?: components["schemas"]["SeverityRule"][];
+        };
+        EnsureTypesRequest: {
+            types: components["schemas"]["CatalogueTypeSpec"][];
+            /** @description false when absent; true writes nothing and answers what Create would do */
+            dry_run?: boolean;
+        };
+        /** @description the catalogue's own kind and colour for a matched type whose kind or colour differs from the template's; the catalogue wins */
+        TypeConflict: {
+            kind: components["schemas"]["CatalogueKind"];
+            colour: string;
+        };
+        EnsuredType: {
+            /** @description the name as requested */
+            name: string;
+            /** @description the catalogue type id; null only for a miss in a dry run */
+            id: string | null;
+            /** @description true when the type was created by this call, or would be in a dry run */
+            created: boolean;
+            conflict: components["schemas"]["TypeConflict"] | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "name": "Corrosion",
+         *           "id": "c1a2b3c4-0000-4000-8000-000000000021",
+         *           "created": false,
+         *           "conflict": {
+         *             "kind": "object",
+         *             "colour": "#f97316"
+         *           }
+         *         },
+         *         {
+         *           "name": "Cracked weld",
+         *           "id": "c1a2b3c4-0000-4000-8000-000000000022",
+         *           "created": true,
+         *           "conflict": null
+         *         }
+         *       ]
+         *     }
+         */
+        EnsureTypesResult: {
+            /** @description one per requested type, in request order */
+            items: components["schemas"]["EnsuredType"][];
+        };
+        /**
+         * @description the existing importer a slot feeds: images `POST /sources` (one per folder), map `/maps`, elevation `/elevations`, pointcloud `/pointclouds`, drawing `/drawing-inspections` then `/drawings`; video waits for video import (S4)
+         * @enum {string}
+         */
+        SlotRoute: "images" | "map" | "elevation" | "pointcloud" | "drawing" | "video";
+        /** @description narrows a route: `raster` tells orthomosaics from elevation models, `thermal` tells thermal photos from visual ones; an absent key matches either */
+        SlotMatch: {
+            /** @enum {string} */
+            raster?: "ortho" | "elevation";
+            thermal?: boolean;
+        };
+        TemplateSlot: {
+            /** @description unique within the template */
+            key: string;
+            label: string;
+            route: components["schemas"]["SlotRoute"];
+            /** @description an empty required slot warns on the setup page; it never blocks Create */
+            required: boolean;
+            /** @description file extensions, lower case, without the dot */
+            accepts: string[];
+            match: components["schemas"]["SlotMatch"] | null;
+        };
+        /** @description versioned so later sub-projects can add to it. Repeated slot keys, type names (after normalising) or hotkeys are refused with `invalid_template`. */
+        TemplateConfig: {
+            /** @constant */
+            config_version: 1;
+            slots: components["schemas"]["TemplateSlot"][];
+            types: components["schemas"]["CatalogueTypeSpec"][];
+        };
+        ProjectTemplate: {
+            /** @description builtin-mapping, builtin-vertical, builtin-confined, or a UUID */
+            id: string;
+            name: string;
+            description: string;
+            /** @description a built-in is never changed or deleted */
+            builtin: boolean;
+            config: components["schemas"]["TemplateConfig"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "builtin-vertical",
+         *           "name": "Vertical asset inspection",
+         *           "description": "Visual and thermal photos, point clouds and drawings for towers, masts, poles and other tall structures.",
+         *           "builtin": true,
+         *           "config": {
+         *             "config_version": 1,
+         *             "slots": [
+         *               {
+         *                 "key": "visual",
+         *                 "label": "Visual photos",
+         *                 "route": "images",
+         *                 "required": true,
+         *                 "accepts": [
+         *                   "jpg",
+         *                   "jpeg"
+         *                 ],
+         *                 "match": {
+         *                   "thermal": false
+         *                 }
+         *               },
+         *               {
+         *                 "key": "thermal",
+         *                 "label": "Thermal photos",
+         *                 "route": "images",
+         *                 "required": false,
+         *                 "accepts": [
+         *                   "jpg",
+         *                   "jpeg"
+         *                 ],
+         *                 "match": {
+         *                   "thermal": true
+         *                 }
+         *               },
+         *               {
+         *                 "key": "point_cloud",
+         *                 "label": "3D point cloud",
+         *                 "route": "pointcloud",
+         *                 "required": false,
+         *                 "accepts": [
+         *                   "las",
+         *                   "laz"
+         *                 ],
+         *                 "match": null
+         *               },
+         *               {
+         *                 "key": "drawings",
+         *                 "label": "Asset drawings",
+         *                 "route": "drawing",
+         *                 "required": false,
+         *                 "accepts": [
+         *                   "pdf",
+         *                   "dxf",
+         *                   "xml"
+         *                 ],
+         *                 "match": null
+         *               }
+         *             ],
+         *             "types": [
+         *               {
+         *                 "name": "Corrosion",
+         *                 "kind": "defect",
+         *                 "colour": "#c2410c",
+         *                 "default_severity": 2,
+         *                 "hotkey": "1",
+         *                 "definition": "Rust on steel members, fixings or plates.",
+         *                 "severity_rules": []
+         *               },
+         *               {
+         *                 "name": "Bird nest",
+         *                 "kind": "object",
+         *                 "colour": "#84cc16",
+         *                 "default_severity": 2,
+         *                 "hotkey": "5",
+         *                 "definition": "A nest built on the structure, a platform or equipment.",
+         *                 "severity_rules": []
+         *               }
+         *             ]
+         *           },
+         *           "created_at": "2026-09-30T00:00:00Z",
+         *           "updated_at": "2026-09-30T00:00:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        ProjectTemplatePage: {
+            /** @description built-ins first, then by name */
+            items: components["schemas"]["ProjectTemplate"][];
+        };
+        ProjectTemplateCreate: {
+            name: string;
+            /** @description empty when absent */
+            description?: string;
+            config: components["schemas"]["TemplateConfig"];
+        };
+        /** @description every field is optional; a field that is sent replaces the stored one */
+        ProjectTemplatePatch: {
+            name?: string;
+            description?: string;
+            config?: components["schemas"]["TemplateConfig"];
+        };
+        SetupInspectRequest: {
+            /** @description absolute paths of dropped files or folders */
+            paths: string[];
+            /** @description assigns each bucket's `slot_key` for this template; absent leaves every `slot_key` null */
+            template_id?: string;
+        };
+        /** @description files of one route and match in one folder */
+        InspectBucket: {
+            route: components["schemas"]["SlotRoute"];
+            match: components["schemas"]["SlotMatch"];
+            /** @description the template slot the bucket fills; null without a template or when no slot takes it */
+            slot_key: string | null;
+            /** @description absolute path of the folder that holds the files */
+            folder: string;
+            /** @description absolute paths to import one by one (map, elevation, pointcloud, drawing, video); empty for `images`, which import the whole folder */
+            files: string[];
+            /** @description every file in the bucket, beyond the listed ones */
+            count: number;
+            bytes: number;
+            /** @description file names to show */
+            samples: string[];
+            /** @description the CRS of the first header read, such as EPSG:32633; null when there is none */
+            crs: string | null;
+        };
+        InspectSkipped: {
+            name: string;
+            /** @description unknown type, could not read header, not supported yet, not found */
+            reason: string;
+        };
+        InspectNotRecognised: {
+            count: number;
+            samples: components["schemas"]["InspectSkipped"][];
+        };
+        /**
+         * @description the `result` of a `setup_inspect` job (read through `GET /library/jobs/{jobId}`)
+         * @example {
+         *       "buckets": [
+         *         {
+         *           "route": "images",
+         *           "match": {
+         *             "thermal": false
+         *           },
+         *           "slot_key": "visual",
+         *           "folder": "E:\\Deliveries\\Tower 14\\DCIM",
+         *           "files": [],
+         *           "count": 212,
+         *           "bytes": 1484000000,
+         *           "samples": [
+         *             "DJI_0001_V.JPG",
+         *             "DJI_0003_V.JPG"
+         *           ],
+         *           "crs": null
+         *         },
+         *         {
+         *           "route": "images",
+         *           "match": {
+         *             "thermal": true
+         *           },
+         *           "slot_key": "thermal",
+         *           "folder": "E:\\Deliveries\\Tower 14\\DCIM",
+         *           "files": [],
+         *           "count": 212,
+         *           "bytes": 412000000,
+         *           "samples": [
+         *             "DJI_0002_T.JPG",
+         *             "DJI_0004_T.JPG"
+         *           ],
+         *           "crs": null
+         *         },
+         *         {
+         *           "route": "pointcloud",
+         *           "match": {},
+         *           "slot_key": "point_cloud",
+         *           "folder": "E:\\Deliveries\\Tower 14\\LiDAR",
+         *           "files": [
+         *             "E:\\Deliveries\\Tower 14\\LiDAR\\tower.laz"
+         *           ],
+         *           "count": 1,
+         *           "bytes": 98000000,
+         *           "samples": [
+         *             "tower.laz"
+         *           ],
+         *           "crs": "EPSG:32633"
+         *         }
+         *       ],
+         *       "not_recognised": {
+         *         "count": 1,
+         *         "samples": [
+         *           {
+         *             "name": "Thumbs.db",
+         *             "reason": "unknown type"
+         *           }
+         *         ]
+         *       },
+         *       "suggested_template_id": "builtin-vertical",
+         *       "truncated": false
+         *     }
+         */
+        InspectResult: {
+            buckets: components["schemas"]["InspectBucket"][];
+            not_recognised: components["schemas"]["InspectNotRecognised"];
+            /** @description the built-in whose required slots the most buckets fill; null when none fits */
+            suggested_template_id: string | null;
+            /** @description true when the walk stopped at 50,000 files */
+            truncated: boolean;
         };
     };
     responses: {
