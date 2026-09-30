@@ -77,6 +77,14 @@ class SnapshotResult:
     missing_reason: str | None
 
 
+def _clamp_out(size: tuple[int, int]) -> tuple[int, int]:
+    """Each side clamped to check_limits' own 16-2400 bounds, so a spec that has not (yet) been
+    through check_limits — e.g. a missing source, where render_result never calls check_limits —
+    cannot produce a placeholder outside the sizes a real render is ever allowed."""
+    w, h = size
+    return (min(max(int(w), MIN_OUT), MAX_OUT), min(max(int(h), MIN_OUT), MAX_OUT))
+
+
 def output_size(spec) -> tuple[int, int]:
     """The figure's pixel size, known before rendering (plan ruling 6)."""
     kind = getattr(spec, "kind", None)
@@ -87,7 +95,7 @@ def output_size(spec) -> tuple[int, int]:
     if kind == "volume_plan":
         return volume_plan.OUT
     try:
-        return out_of(spec)
+        return _clamp_out(out_of(spec))
     except (TypeError, ValueError, IndexError):
         return DEFAULT_OUT
 

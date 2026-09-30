@@ -271,6 +271,25 @@ def test_output_sizes_are_known_before_rendering():
     assert output_size(pair) == (1000, 750)
 
 
+def test_output_size_clamps_an_absurd_out_to_the_check_limits_bounds():
+    """render.py ~80: a spec that has not yet been through check_limits (a raw namespace spec, not
+    R0's validated model) can carry an absurd `out`. output_size must clamp each side to the same
+    16-2400 bounds check_limits enforces, so a huge placeholder cannot be produced for a missing
+    source (render_result calls output_size before check_limits ever runs when the source is
+    missing)."""
+    assert output_size(image_crop_spec("i", [[1.0, 1.0]], out=[99999, 900])) == (2400, 900)
+    assert output_size(image_crop_spec("i", [[1.0, 1.0]], out=[900, 1])) == (900, 16)
+    assert output_size(image_crop_spec("i", [[1.0, 1.0]], out=[-5, 900])) == (16, 900)
+
+
+def test_a_missing_source_with_an_absurd_out_gets_a_clamped_placeholder(tmp_path):
+    spec = ns(kind="attachment", finding_id="f", attachment_id="a", out=[99999, 900])
+    result = render_result(SimpleNamespace(folder=tmp_path), spec)
+    assert result.missing_reason is not None
+    with PILImage.open(result.path) as im:
+        assert im.size == (2400, 900)
+
+
 @pytest.mark.parametrize(
     "spec",
     [
