@@ -102,6 +102,19 @@ def test_an_explicit_bbox_is_clipped_to_the_common_area(handle):
     add_geomap(handle, name="B", captured_on=date(2026, 9, 1))
     a, b = survey_pairs.survey_maps(handle)
     far = (a.bounds[2] + 1, a.bounds[1], a.bounds[2] + 2, a.bounds[3])
-    assert survey_pairs.frame(a, b, far, None) is None
+    # A bbox outside the common area falls back to the automatic frame: the maps do overlap.
+    assert survey_pairs.frame(a, b, far, None) == pytest.approx(survey_pairs.frame(a, b, None, None))
     inner = (a.bounds[0], a.bounds[1], (a.bounds[0] + a.bounds[2]) / 2, a.bounds[3])
     assert survey_pairs.frame(a, b, inner, None) == pytest.approx(inner)
+
+
+def test_a_frame_that_cannot_be_projected_prints_the_no_common_area_row(handle, monkeypatch):
+    add_geomap(handle, name="Aug", captured_on=date(2026, 8, 1))
+    add_geomap(handle, name="Sep", captured_on=date(2026, 9, 1))
+    a, b = survey_pairs.survey_maps(handle)
+    box = survey_pairs.frame(a, b, None, None)
+    assert survey_pairs._frame_ring(box, a.crs_wkt) is not None
+    monkeypatch.setattr(map_geo, "to_crs", lambda *args: None)
+    assert survey_pairs._frame_ring(box, a.crs_wkt) is None
+    [row] = survey_pairs.pair_blocks(make_ctx(handle), a, b, box, "both")
+    assert row.kind == "figure_row" and len(row.figures) == 2

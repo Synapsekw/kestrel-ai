@@ -18,7 +18,7 @@ from app.reports.figures import map_geo
 from app.reports.sections import comparison, measurements, object_counts
 from app.reports.templates.builtins import BUILTIN_TEMPLATES
 
-STUB_TEXTS = (measurements.EMPTY, comparison.ONE_SURVEY, object_counts.EMPTY)
+STUB_TEXTS = (measurements.EMPTY, comparison.ONE_SURVEY, comparison.NO_PAIR, object_counts.EMPTY)
 
 
 def test_the_three_sections_are_r9ms():

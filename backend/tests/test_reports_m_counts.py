@@ -49,9 +49,9 @@ def test_a_survey_on_another_model_is_marked_and_not_charted(handle, project):
     classes = survey_counts.chosen_classes(data, [exc])
     _, rows = survey_counts.class_table(data, classes, verified_only=False)
     assert rows[0][-1].endswith(" *")
-    assert survey_counts.not_comparable_notes(data)[0].startswith("* 01 Oct 2026: different model")
+    assert survey_counts.not_comparable_notes(data)[0].startswith("* 1 Oct 2026: different model")
     labels, series = survey_counts.chart_series(data, classes, verified_only=False)
-    assert labels == ["14 Aug 2026", "21 Sep 2026", "01 Oct 2026"]
+    assert labels == ["14 Aug 2026", "21 Sep 2026", "1 Oct 2026"]
     assert series[0][2] == [6, 8, None]
 
 
@@ -95,10 +95,22 @@ def test_photo_batches_are_detections_and_uncounted_batches_say_so(handle, proje
     head, rows = survey_counts.photo_table(handle, None, verified_only=False)
     assert head == ["Photo batch", "Captured", "Class", "Detections", "Verified"]
     assert rows == [
-        ["Flight A", "01 Mar 2026", "excavator", "12", "3"],
-        ["Flight B", "02 Mar 2026", "not counted", "", ""],
+        ["Flight A", "1 Mar 2026", "excavator", "12", "3"],
+        ["Flight B", "2 Mar 2026", "not counted", "", ""],
     ]
     assert "detections, not objects" in survey_counts.PHOTO_NOTE
+
+
+def test_verified_only_photo_batches_drop_the_detections_column(handle, project):
+    exc = _classes(project)["excavator"]
+    photo_batch(handle, label="Flight A", captured_on=date(2026, 3, 1), counts={exc: 12}, verified={exc: 3})
+    photo_batch(handle, label="Flight B", captured_on=date(2026, 3, 2), counts=None)
+    head, rows = survey_counts.photo_table(handle, None, verified_only=True)
+    assert head == ["Photo batch", "Captured", "Class", "Verified"]
+    assert rows == [
+        ["Flight A", "1 Mar 2026", "excavator", "3"],
+        ["Flight B", "2 Mar 2026", "not counted", ""],
+    ]
 
 
 def test_counts_never_read_a_detection_table(handle, project, app):

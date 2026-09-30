@@ -123,17 +123,20 @@ def area_table(
 
 
 def photo_table(handle, type_ids: list[str] | None, verified_only: bool) -> tuple[list[str], list[list[str]]]:
-    head = ["Photo batch", "Captured", "Class", "Detections", "Verified"]
+    """One row per batch and class: detections, never objects. With `verified_only` the Detections
+    column is dropped (as `area_table` drops Total)."""
+    head = ["Photo batch", "Captured", "Class", *([] if verified_only else ["Detections"]), "Verified"]
     rows = []
     for b in analytics.photo_batches(handle):
         src = b.source.row
         label = src.label or src.site or src.folder
         when = day_text(src.captured_on) if src.captured_on else "—"
         if b.run is None:
-            rows.append([label, when, "not counted", "", ""])
+            rows.append([label, when, "not counted", *([""] * (len(head) - 3))])
             continue
         for cc in b.classes:
             if type_ids and cc.class_id not in type_ids:
                 continue
-            rows.append([label, when, cc.name, "" if verified_only else str(cc.total), str(cc.verified)])
+            nums = [str(cc.verified)] if verified_only else [str(cc.total), str(cc.verified)]
+            rows.append([label, when, cc.name, *nums])
     return head, rows

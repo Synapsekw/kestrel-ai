@@ -32,7 +32,7 @@ def test_per_class_per_survey_then_per_area_then_photo_batches(handle, project):
     surveys, areas, photos = _tables(doc)
     assert surveys.rows == [[project["classes"][0]["name"], "4 (2)"]]
     assert areas.rows == [["Whole", project["classes"][0]["name"], "3", "1"]]
-    assert photos.rows[0][:4] == ["Flight A", "01 Mar 2026", project["classes"][0]["name"], "9"]
+    assert photos.rows[0][:4] == ["Flight A", "1 Mar 2026", project["classes"][0]["name"], "9"]
 
 
 def test_photo_batches_are_detections_never_objects(handle, project):
@@ -76,4 +76,23 @@ def test_type_ids_filter_every_table(handle, project):
 
 def test_nothing_counted_says_so(handle):
     doc = object_counts.compose(make_ctx(handle, "object_counts"))
-    assert "No counts yet: run detection on a map or a photo batch." in _texts(doc)
+    assert [(b.kind, b.text, b.style) for b in doc.blocks] == [
+        ("para", "No counts yet: run detection on a map or a photo batch.", "note")
+    ]
+
+
+def test_the_section_opens_without_a_title_heading(handle, project):
+    exc = project["classes"][0]["id"]
+    map_run(handle, map_id=add_geomap(handle, name="Sep", captured_on=date(2026, 9, 1)), counts={exc: 4})
+    doc = object_counts.compose(make_ctx(handle, "object_counts"))
+    assert not [b for b in doc.blocks if b.kind == "heading" and b.level == 1]
+    assert doc.blocks[0].kind == "heading" and doc.blocks[0].level == 2
+
+
+def test_verified_only_photo_batches_have_no_detections_column(handle, project):
+    exc = project["classes"][0]["id"]
+    photo_batch(handle, label="Flight A", captured_on=date(2026, 3, 1), counts={exc: 9}, verified={exc: 2})
+    doc = object_counts.compose(make_ctx(handle, "object_counts", verified_only=True))
+    [photos] = _tables(doc)
+    assert [c.label for c in photos.columns] == ["Photo batch", "Captured", "Class", "Verified"]
+    assert photos.rows == [["Flight A", "1 Mar 2026", project["classes"][0]["name"], "2"]]

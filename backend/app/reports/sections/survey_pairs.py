@@ -95,12 +95,16 @@ def finding_centre(handle, a_id: str, b_id: str) -> tuple[float, float] | None:
 def frame(a: SurveyMap, b: SurveyMap, given: BBox | None, centre: tuple[float, float] | None) -> BBox | None:
     """The comparison frame (Ruling 11): the WGS84 intersection of the two footprints, narrowed to
     an explicit `bbox_wgs84` when given, else shrunk to a 4:3 window around the findings' centre
-    (falling back to the common area's own centre). `None` when the footprints do not overlap."""
+    (falling back to the common area's own centre). An explicit bbox that misses the common area
+    falls back to that automatic frame: the maps do overlap, so "no common area" would be false.
+    `None` only when the footprints do not overlap."""
     common = map_geo.intersect(a.bounds, b.bounds)
     if common is None:
         return None
     if given is not None:
-        return map_geo.intersect(given, common)
+        clipped = map_geo.intersect(given, common)
+        if clipped is not None:
+            return clipped
     inside = centre if centre is not None and map_geo.contains(common, *centre) else None
     return map_geo.aspect_4_3(common, inside)
 
@@ -109,41 +113,50 @@ def _label(m: SurveyMap) -> str:
     return f"{m.name} · {map_geo.day_text(m.day)}"
 
 
-def _frame_ring(bbox: BBox, wkt: str | None) -> list[list[float]]:
+def _frame_ring(bbox: BBox, wkt: str | None) -> list[list[float]] | None:
+    """The WGS84 frame's corners in the map's own CRS; None when they cannot be projected (never
+    WGS84 degrees passed off as native coordinates)."""
     lo_x, lo_y, hi_x, hi_y = bbox
     corners = [[lo_x, lo_y], [hi_x, lo_y], [hi_x, hi_y], [lo_x, hi_y]]
-    return map_geo.to_crs(corners, WGS84, wkt) or corners
+    return map_geo.to_crs(corners, WGS84, wkt)
+
+
+def _own_footprints(ctx: ComposeContext, a: SurveyMap, b: SurveyMap) -> list[Block]:
+    return [
+        blocks.figure_row(
+            [
+                map_specs.map_figure(
+                    ctx,
+                    map_id=m.id,
+                    geometry=map_geo.polygon(m.ring),
+                    colour=map_specs.MEASURE_COLOUR,
+                    caption=f"{_label(m)} — {NO_COMMON}",
+                    size_mm=map_specs.HALF_MM,
+                )
+                for m in (a, b)
+            ]
+        )
+    ]
 
 
 def pair_blocks(ctx: ComposeContext, a: SurveyMap, b: SurveyMap, bbox: BBox | None, mode: str) -> list[Block]:
-    """The blocks for one pair (Ruling 12). No common area: one `figure_row` of each survey's own
-    footprint, captioned "no common area" (Ruling 11). Otherwise: one `pair` figure per requested
-    mode (`both` prints swipe then side_by_side)."""
-    if bbox is None:
-        return [
-            blocks.figure_row(
-                [
-                    map_specs.map_figure(
-                        ctx,
-                        map_id=m.id,
-                        geometry=map_geo.polygon(m.ring),
-                        colour=map_specs.MEASURE_COLOUR,
-                        caption=f"{_label(m)} — {NO_COMMON}",
-                        size_mm=map_specs.HALF_MM,
-                    )
-                    for m in (a, b)
-                ]
-            )
-        ]
+    """The blocks for one pair (Ruling 12). No common area (or a frame that cannot be projected into
+    either map's CRS): one `figure_row` of each survey's own footprint, captioned "no common area"
+    (Ruling 11). Otherwise: one `pair` figure per requested mode (`both` prints swipe then
+    side_by_side)."""
+    a_ring = _frame_ring(bbox, a.crs_wkt) if bbox is not None else None
+    b_ring = _frame_ring(bbox, b.crs_wkt) if bbox is not None else None
+    if bbox is None or a_ring is None or b_ring is None:
+        return _own_footprints(ctx, a, b)
     caption = f"A: {_label(a)}   B: {_label(b)}"
     modes = ["swipe", "side_by_side"] if mode == "both" else [mode]
     return [
         map_specs.pair_figure(
             ctx,
             a_id=a.id,
-            a_ring=_frame_ring(bbox, a.crs_wkt),
+            a_ring=a_ring,
             b_id=b.id,
-            b_ring=_frame_ring(bbox, b.crs_wkt),
+            b_ring=b_ring,
             bbox_wgs84=bbox,
             mode=m,
             caption=caption,

@@ -7,17 +7,18 @@ from __future__ import annotations
 from app.reports import blocks
 from app.reports.context import ComposeContext
 from app.reports.schemas import ReportSectionDoc
-from app.reports.sections import survey_counts, survey_pairs
+from app.reports.sections import m_etag, survey_counts, survey_pairs
 
 KEY = "comparison"
 TITLE = "Survey comparison"
 USES_FINDINGS = False
 ONE_SURVEY = "One survey so far: nothing to compare."
+NO_PAIR = "No comparison pair could be drawn."
 
 
 def compose(ctx: ComposeContext) -> ReportSectionDoc:
     opts = ctx.options(KEY)
-    out: list = [blocks.heading(TITLE, level=1)]
+    out: list = []
 
     maps = survey_pairs.survey_maps(ctx.handle)
     if opts.pairs == "auto":
@@ -28,9 +29,10 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
             ctx.warn("pair_missing", "{n} comparison pair(s) name a map that is not ready.", count=missing)
 
     if not pairs:
-        out.append(blocks.para(ONE_SURVEY, style="body"))
+        out.append(blocks.para(ONE_SURVEY if len(maps) < 2 else NO_PAIR, style="note"))
     for a, b, given in pairs:
-        centre = None if given else survey_pairs.finding_centre(ctx.handle, a.id, b.id)
+        # One AVG per pair; also used when an explicit bbox misses the common area (M6 fallback).
+        centre = survey_pairs.finding_centre(ctx.handle, a.id, b.id)
         bbox = survey_pairs.frame(a, b, given, centre)
         out.append(blocks.heading(f"{a.name} → {b.name}", level=2))
         out += survey_pairs.pair_blocks(ctx, a, b, bbox, opts.mode)
@@ -39,6 +41,13 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
         out += _chart(ctx)
 
     return ReportSectionDoc(key=KEY, title=TITLE, blocks=out)
+
+
+def fingerprint(ctx: ComposeContext) -> str:
+    """R2's etag hook: runs, site areas, the survey maps' footprints, and the findings' mean position
+    on survey maps (the pair frame's centre; USES_FINDINGS is False, so the finding aggregate does
+    not join this etag by itself)."""
+    return m_etag.comparison(ctx)
 
 
 def _chart(ctx: ComposeContext) -> list:

@@ -8,9 +8,8 @@ from __future__ import annotations
 
 from app.reports import blocks
 from app.reports.context import ComposeContext
-from app.reports.figures import map_specs
 from app.reports.schemas import ReportSectionDoc
-from app.reports.sections import measure_figures, measure_rows, volume_block
+from app.reports.sections import m_etag, measure_figures, measure_rows, volume_block
 
 KEY = "measurements"
 TITLE = "Measurements"
@@ -19,11 +18,11 @@ EMPTY = "No measurements match."
 
 
 def compose(ctx: ComposeContext) -> ReportSectionDoc:
-    opts = map_specs.options_of(ctx, KEY)
-    kinds = set(opts.get("kinds") or measure_rows.ORDER)
-    snapshots = opts.get("snapshots", True) is not False
-    ids = set(opts["measurement_ids"]) if opts.get("measurement_ids") else None
-    out = [blocks.heading(TITLE, level=1)]
+    opts = ctx.options(KEY)
+    kinds = set(opts.kinds)
+    snapshots = opts.snapshots
+    ids = set(opts.measurement_ids) if opts.measurement_ids else None
+    out: list = []
     stale = 0
     for group in measure_rows.ORDER:
         if group not in kinds:
@@ -46,8 +45,14 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
             out.append(blocks.heading(measure_rows.TITLES[group], level=2))
             out.append(measure_rows.table(rows))
             out.extend(after)
-    if len(out) == 1:
-        out.append(blocks.para(EMPTY, style="body"))
+    if not out:
+        out.append(blocks.para(EMPTY, style="note"))
     if stale:
         ctx.warn("volume_stale", "{n} volume measurements are stale", count=stale)
     return ReportSectionDoc(key=KEY, title=TITLE, blocks=out)
+
+
+def fingerprint(ctx: ComposeContext) -> str:
+    """R2's etag hook: aggregates over the measurement tables plus what the volume blocks and the
+    figure targets read (surfaces, the runs volumes mask with, map footprints)."""
+    return m_etag.measurements(ctx)

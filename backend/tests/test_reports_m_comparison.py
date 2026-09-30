@@ -38,7 +38,7 @@ def test_auto_pairs_print_a_swipe_and_a_side_by_side_per_pair(handle, project):
     figures = _blocks(doc, "figure")
     assert [f.snapshot.spec.mode for f in figures] == ["swipe", "side_by_side"] * 2
     [chart] = _blocks(doc, "chart")
-    assert chart.chart == "line" and chart.x_labels == ["01 Jul 2026", "01 Aug 2026", "01 Sep 2026"]
+    assert chart.chart == "line" and chart.x_labels == ["1 Jul 2026", "1 Aug 2026", "1 Sep 2026"]
     assert chart.series[0].values == [7, 8, 9]
 
 
@@ -61,3 +61,32 @@ def test_an_explicit_pair_with_a_missing_map_is_skipped_with_a_warning(handle):
     doc = comparison.compose(ctx)
     assert len(_blocks(doc, "figure")) == 1
     assert any(w.code == "pair_missing" for w in ctx.warnings)
+
+
+def test_an_explicit_pair_list_that_draws_nothing_says_so_not_one_survey(handle):
+    a = add_geomap(handle, name="Aug", captured_on=date(2026, 8, 1))
+    add_geomap(handle, name="Sep", captured_on=date(2026, 9, 1))
+    for pairs in ([], [{"item_a": a, "item_b": "gone"}]):
+        doc = comparison.compose(make_ctx(handle, "comparison", pairs=pairs, counts_chart=False))
+        texts = [getattr(b, "text", "") for b in doc.blocks]
+        assert comparison.NO_PAIR in texts and ONE_SURVEY not in texts
+
+
+def test_the_section_opens_without_a_title_heading(handle):
+    add_geomap(handle, name="Aug", captured_on=date(2026, 8, 1))
+    add_geomap(handle, name="Sep", captured_on=date(2026, 9, 1))
+    doc = comparison.compose(make_ctx(handle, "comparison"))
+    assert not [b for b in doc.blocks if b.kind == "heading" and b.level == 1]
+    assert doc.blocks[0].kind == "heading" and doc.blocks[0].level == 2
+
+
+def test_an_explicit_bbox_outside_the_common_area_falls_back_to_the_automatic_frame(handle):
+    a = add_geomap(handle, name="Aug", captured_on=date(2026, 8, 1))
+    b = add_geomap(handle, name="Sep", captured_on=date(2026, 9, 1))
+    far = [100.0, 0.0, 100.001, 0.001]
+    doc = comparison.compose(
+        make_ctx(handle, "comparison", pairs=[{"item_a": a, "item_b": b, "bbox_wgs84": far}], mode="swipe")
+    )
+    [fig] = _blocks(doc, "figure")
+    assert fig.snapshot.spec.kind == "pair" and "no common area" not in fig.caption
+    assert _blocks(doc, "figure_row") == []

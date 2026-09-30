@@ -7,7 +7,7 @@ from __future__ import annotations
 from app.reports import blocks
 from app.reports.context import ComposeContext
 from app.reports.schemas import ReportSectionDoc
-from app.reports.sections import survey_counts
+from app.reports.sections import m_etag, survey_counts
 
 KEY = "object_counts"
 TITLE = "Object counts"
@@ -37,7 +37,7 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
     opts = _options(ctx)
     type_ids = opts.type_ids
     verified_only = opts.verified_only
-    out = [blocks.heading(TITLE, level=1)]
+    out: list = []
 
     data = survey_counts.load(ctx.handle)
     classes = survey_counts.chosen_classes(data, type_ids)
@@ -59,7 +59,12 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
         out.append(blocks.para(survey_counts.PHOTO_NOTE, style="note"))
         out.append(_table(phead, prows, text_cols=3))
 
-    if len(out) == 1:
-        out.append(blocks.para(EMPTY, style="body"))
+    if not out:
+        out.append(blocks.para(EMPTY, style="note"))
 
     return ReportSectionDoc(key=KEY, title=TITLE, blocks=out)
+
+
+def fingerprint(ctx: ComposeContext) -> str:
+    """R2's etag hook: the run rows the counts live on, site areas, survey maps and the classes."""
+    return m_etag.counts(ctx)
