@@ -20,21 +20,18 @@ export function ActivityFeed({
   projectId,
   items,
   failed,
+  bare = false,
 }: {
   projectId: string;
   items: Activity[];
   /** The activity read failed: say so in this block only. */
   failed: boolean;
+  /** Render without the pane wrapper so it can nest (Status pane). */
+  bare?: boolean;
 }) {
   const nowMs = useNow(60_000);
-  return (
-    <GlassPanel
-      variant="pane"
-      as="section"
-      aria-labelledby="overview-activity"
-      className="stagger animate-rise col-span-12 px-4 py-3.5 lg:col-span-4"
-      style={stagger(7)}
-    >
+  const content = (
+    <>
       <h2 id="overview-activity" className="text-xs text-muted">
         Activity
       </h2>
@@ -74,6 +71,26 @@ export function ActivityFeed({
           })}
         </ul>
       )}
+      {bare && (
+        <Link
+          to={`/p/${projectId}/findings`}
+          className={cx("mt-2 inline-block rounded-sm px-1 text-xs text-accent-ink", focusRing)}
+        >
+          All activity →
+        </Link>
+      )}
+    </>
+  );
+  if (bare) return <section aria-labelledby="overview-activity">{content}</section>;
+  return (
+    <GlassPanel
+      variant="pane"
+      as="section"
+      aria-labelledby="overview-activity"
+      className="stagger animate-rise col-span-12 px-4 py-3.5 lg:col-span-4"
+      style={stagger(7)}
+    >
+      {content}
     </GlassPanel>
   );
 }
