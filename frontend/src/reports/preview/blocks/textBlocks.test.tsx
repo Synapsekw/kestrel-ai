@@ -72,9 +72,17 @@ describe("text blocks", () => {
   it("prints severity as a word next to its dot, and Ungraded without a level", () => {
     render(<SeverityMark level={3} name="Major" colour="#FF9C3A" />);
     render(<SeverityMark level={null} name={null} colour={null} />);
-    render(<SeverityMark level={2} name={null} colour="#E2BF2E" />);
     expect(screen.getByText("Major")).toBeInTheDocument();
     expect(screen.getByText("Ungraded")).toBeInTheDocument();
-    expect(screen.getByText("Level 2")).toBeInTheDocument();
+  });
+
+  it("prints Ungraded with the grey dot when a level has no severity name (contract: null prints Ungraded)", () => {
+    const { container } = render(<SeverityMark level={2} name={null} colour="#E2BF2E" />);
+    const mark = container.querySelector("[data-severity]") as HTMLElement;
+    expect(mark).toHaveTextContent("Ungraded");
+    expect(mark).toHaveAttribute("data-severity", "ungraded");
+    expect(screen.queryByText("Level 2")).toBeNull();
+    const dot = mark.querySelector('[aria-hidden="true"]') as HTMLElement;
+    expect(dot.style.background).toBe("rgb(154, 152, 176)");
   });
 });

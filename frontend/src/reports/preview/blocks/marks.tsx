@@ -31,9 +31,10 @@ export function SeverityMark({
   name: string | null;
   colour: string | null;
 }) {
-  const graded = level !== null;
+  // Contract (`FindingHead.severity_name`): a null name prints "Ungraded", whatever the level.
+  const graded = level !== null && name !== null;
   const c = graded && colour ? colour : PRINT.ungraded;
-  const word = graded ? (name ?? `Level ${level}`) : "Ungraded";
+  const word = graded ? name : "Ungraded";
   return (
     <span
       data-severity={graded ? String(level) : "ungraded"}
