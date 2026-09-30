@@ -56,7 +56,7 @@ describe("SaveTemplateDialog", () => {
     expect(body.name).toBe("North yard layout");
     expect(body.description).toBe("Monthly");
     expect(body.config.filters.data_item_ids).toBeNull();
-    expect(body.config.cover).not.toHaveProperty("logo_asset_id");
+    expect(body.config.cover.logo_asset_id).toBeNull();
     expect(useToastStore.getState().toasts.at(-1)?.text).toBe('Template "North yard layout" saved');
   });
 

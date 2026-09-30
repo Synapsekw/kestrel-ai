@@ -12,20 +12,6 @@ export interface SaveTemplateDialogProps {
   defaultName: string;
 }
 
-/**
- * `portableConfig` (Task 2) nulls the project-only fields so the result stays a valid `ReportConfig`
- * for the builder's own state. A saved template's wire body goes further for `cover.logo_asset_id`:
- * the field is dropped outright, not sent as `null` — a template never had a logo (R1 Ruling 2).
- */
-function templateWireConfig(c: ReportConfig): ReportConfig {
-  const portable = portableConfig(c);
-  const { title, subtitle, site, client, author, report_date } = portable.cover;
-  return {
-    ...portable,
-    cover: { title, subtitle, site, client, author, report_date } as ReportConfig["cover"],
-  };
-}
-
 /** Spec §12: name and description; says that data-item filters are not kept (Ruling 15). */
 export function SaveTemplateDialog({ open, onClose, config, defaultName }: SaveTemplateDialogProps) {
   const api = useApi();
@@ -44,7 +30,7 @@ export function SaveTemplateDialog({ open, onClose, config, defaultName }: SaveT
       await createTemplate(api, {
         name: n,
         description: description.trim(),
-        config: templateWireConfig(config),
+        config: portableConfig(config),
       });
       toast("ok", `Template "${n}" saved`);
       onClose();
