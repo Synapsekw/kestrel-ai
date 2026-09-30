@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useToastStore } from "@/ui/toastStore";
 import {
   applyEffects,
+  autoProbeSettled,
   isSoftwareRenderer,
   measureFrames,
   p95,
@@ -106,6 +107,24 @@ describe("the frame probe", () => {
     const measure = vi.fn(async () => frames(30));
     expect(await runAutoProbe(measure)).toBeNull();
     expect(measure).not.toHaveBeenCalled();
+  });
+
+  it("autoProbeSettled resolves at once with no probe, and only after a running probe decides", async () => {
+    let settled = false;
+    await autoProbeSettled().then(() => (settled = true));
+    expect(settled).toBe(true);
+    applyEffects();
+    let release: (v: number[]) => void = () => {};
+    const run = runAutoProbe(() => new Promise<number[]>((r) => (release = r)));
+    settled = false;
+    const waiting = autoProbeSettled().then(() => (settled = true));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release(frames(16));
+    await run;
+    await waiting;
+    expect(settled).toBe(true);
   });
 
   it("keeps full effects under the budget and probes only once per session", async () => {

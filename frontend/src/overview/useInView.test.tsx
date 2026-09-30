@@ -40,7 +40,18 @@ describe("useInView", () => {
     expect(observed).toHaveLength(0);
     act(() => getByText("mount").click());
     expect(observed).toEqual([getByTestId("late")]);
+    // Unknown until the observer's first callback, so a caller can hold a skeleton instead of flashing.
+    expect(getByTestId("v")).toHaveTextContent("null");
     act(() => fire(true));
+    expect(getByTestId("v")).toHaveTextContent("true");
+    act(() => fire(false));
+    expect(getByTestId("v")).toHaveTextContent("false");
+  });
+
+  it("counts as in view where IntersectionObserver does not exist", () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const { getByText, getByTestId } = render(<Probe />);
+    act(() => getByText("mount").click());
     expect(getByTestId("v")).toHaveTextContent("true");
   });
 });
