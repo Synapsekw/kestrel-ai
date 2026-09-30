@@ -113,6 +113,21 @@ def test_xlsx_text_that_starts_with_equals_stays_text(handle, findings, tmp_path
     assert cell.value == "=1+1" and cell.data_type == "s"
 
 
+def test_xlsx_drops_control_characters_instead_of_failing(handle, findings, tmp_path):
+    path = tmp_path / "findings.xlsx"
+    scale = _scale(handle)
+    source = [
+        {**r, "note": "a\x0bb"}
+        for r in rows.export_rows(handle, [findings[0]], scale=scale, version_number=1)
+    ]
+    xlsx_out.write_xlsx(
+        path, source, scale=scale, measurements=None, counts=[], report_info=[("Report", "x\x00y")]
+    )
+    wb = load_workbook(path)
+    assert wb["Findings"].cell(row=2, column=EXPECTED_COLUMNS.index("note") + 1).value == "ab"
+    assert wb["Report"]["B1"].value == "xy"
+
+
 def test_read_scale_falls_back_when_the_catalogue_breaks():
     """`rows.py` has no local `severity_scale`/`Level`; the fallback lives in `context.read_scale`
     (Ruling P4). A broken catalogue session still yields the built-in 1-4 scale."""

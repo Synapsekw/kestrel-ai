@@ -148,11 +148,22 @@ def test_a_failure_marks_the_version_failed(live_render, handle, report, fakes, 
     assert "renderer exploded" in row.stats["error"] and _partials(handle, report) == []
 
 
-def test_disk_full_fails_with_a_plain_message(live_render, handle, report, fakes, monkeypatch):
+class _WinDiskFull(OSError):
+    winerror = 112  # ERROR_DISK_FULL, as Windows reports it
+
+
+def _disk_full_error(kind: str) -> OSError:
+    if kind == "errno":
+        return OSError(errno.ENOSPC, "No space left on device")
+    return _WinDiskFull("There is not enough space on the disk")
+
+
+@pytest.mark.parametrize("kind", ["errno", "winerror"])
+def test_disk_full_fails_with_a_plain_message(live_render, handle, report, fakes, monkeypatch, kind):
     fakes["doc"] = fake_document(report["id"], figures=0)
 
     def full(*a, **k):
-        raise OSError(errno.ENOSPC, "No space left on device")
+        raise _disk_full_error(kind)
 
     monkeypatch.setattr("app.reports.pdf.document.render_pdf", full)
     ctx, vid = _ctx(handle, report)
@@ -160,6 +171,68 @@ def test_disk_full_fails_with_a_plain_message(live_render, handle, report, fakes
         render_job.run_report_render(ctx)
     assert _row(handle, vid).stats["error"].startswith("The disk is full")
     assert _partials(handle, report) == []
+
+
+@pytest.mark.parametrize("kind", ["errno", "winerror"])
+def test_disk_full_while_reserving_the_partial_folder_is_plain(
+    live_render, handle, report, fakes, monkeypatch, kind
+):
+    fakes["doc"] = fake_document(report["id"], figures=0)
+
+    def full(*a, **k):
+        raise _disk_full_error(kind)
+
+    monkeypatch.setattr(render_job, "_reserve_partial_folder", full)
+    ctx, vid = _ctx(handle, report)
+    with pytest.raises(JobFailure, match="disk is full"):
+        render_job.run_report_render(ctx)
+    assert _row(handle, vid).stats["error"].startswith("The disk is full")
+
+
+def test_the_render_prints_the_config_frozen_at_click_time(live_render, handle, report, fakes, monkeypatch):
+    """The version row froze report.config at click time; an edit made before the job runs must not
+    reach the printed document (the stored config and the printed one agree)."""
+    from app.reports.models import Report
+
+    fakes["doc"] = fake_document(report["id"], figures=0)
+    seen = {}
+    real_fake_compose = render_job.compose_in
+
+    def spy(cctx, **kw):
+        seen["config"] = cctx.config.model_dump(mode="json", by_alias=True)
+        return real_fake_compose(cctx, **kw)
+
+    monkeypatch.setattr(render_job, "compose_in", spy)
+    ctx, vid = _ctx(handle, report)
+    with handle.session() as s:
+        row = s.get(Report, report["id"])
+        edited = json.loads(json.dumps(row.config))
+        edited["sections"][0]["enabled"] = not edited["sections"][0]["enabled"]
+        row.config = edited
+    render_job.run_report_render(ctx)
+    stored = _row(handle, vid).config
+    assert stored == report["config"] and seen["config"] == stored
+
+
+def test_a_render_whose_version_row_is_gone_fails_plainly(live_render, handle, report, fakes):
+    fakes["doc"] = fake_document(report["id"], figures=0)
+    ctx, vid = _ctx(handle, report)
+    versions.discard(handle, vid)
+    with pytest.raises(JobFailure):
+        render_job.run_report_render(ctx)
+    assert _partials(handle, report) == []
+
+
+def test_a_cancel_survives_a_failing_discard(live_render, handle, report, fakes, monkeypatch):
+    fakes["doc"] = fake_document(report["id"], figures=2)
+
+    def broken_discard(*a, **k):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(versions, "discard", broken_discard)
+    ctx, _ = _ctx(handle, report, cancel_at=1)
+    with pytest.raises(JobCancelled):
+        render_job.run_report_render(ctx)
 
 
 def test_a_finding_deleted_between_compose_and_render_is_skipped(
@@ -180,7 +253,7 @@ def test_a_finding_deleted_between_compose_and_render_is_skipped(
     render_job.run_report_render(ctx)
     row = _row(handle, vid)
     assert row.stats["finding_count"] == 1
-    assert any(w["code"] == "findings_deleted" for w in row.stats["warnings"])
+    assert any(w["code"] == "finding_deleted" for w in row.stats["warnings"])
     doc = json.loads((handle.folder / row.folder / "document.json").read_text("utf-8"))
     printed = [
         blk["finding_id"] for sec in doc["sections"] for blk in sec["blocks"] if blk["kind"] == "finding"

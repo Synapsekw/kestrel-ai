@@ -278,8 +278,8 @@ def _run_pipeline(ctx: JobContext) -> dict:
     progress = _Progress(ctx)
 
     progress.phase("compose", 0.0, "composing the report")
-    title, raw_config = versions.report_title_and_config(handle, report_id)
-    config = ReportConfig.model_validate(raw_config)
+    title = versions.report_title(handle, report_id)
+    config = ReportConfig.model_validate(versions.rendering_config(handle, version_id))  # frozen at click
     number = versions.next_number(handle, report_id)
     generated_at = datetime.now(UTC)  # the one clock read (spec §8.1)
     baseline = resolve_baseline(handle, report_id)
@@ -302,8 +302,13 @@ def _run_pipeline(ctx: JobContext) -> dict:
     )
 
     root = versions.reports_root(handle, report_id)
-    root.mkdir(parents=True, exist_ok=True)
-    partial, _stamp, _n = _reserve_partial_folder(root, _now_local())
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        partial, _stamp, _n = _reserve_partial_folder(root, _now_local())
+    except OSError as e:
+        if _disk_full(e):
+            raise JobFailure(DISK_FULL) from e
+        raise
     try:
         paths = _render_snapshots(handle, doc, ctx, progress, warnings)
         ctx.check_cancelled()
@@ -314,7 +319,7 @@ def _run_pipeline(ctx: JobContext) -> dict:
             ids = [i for i in ids if i in states]
             warnings.append(
                 {
-                    "code": "findings_deleted",
+                    "code": "finding_deleted",
                     "message": f"{len(missing)} finding(s) were deleted during the render and were left out.",
                     "count": len(missing),
                     "link": None,
@@ -391,7 +396,10 @@ def run_report_render(ctx: JobContext) -> dict:
     try:
         return run_pipeline(ctx)
     except JobCancelled:
-        versions.discard(ctx.project, version_id)
+        try:
+            versions.discard(ctx.project, version_id)
+        except Exception:
+            ctx.log.exception("could not discard cancelled version %s", version_id)
         raise
     except JobFailure as e:
         _settle_failed(ctx, version_id, str(e))

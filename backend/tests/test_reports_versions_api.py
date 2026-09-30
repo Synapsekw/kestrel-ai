@@ -146,6 +146,27 @@ def test_document_pages_by_fifty(client, handle, project_id, report):
     assert client.get(url, params={"limit": 51}).status_code == 422
 
 
+@pytest.mark.parametrize("i", ["x", -1, 1.5, True])
+def test_a_bad_document_cursor_is_422(client, handle, project_id, report, i):
+    from app.pagination import encode_cursor
+
+    _ready_version(handle, report["id"])
+    url = f"{_base(project_id, report['id'])}/versions/1/document"
+    r = client.get(url, params={"cursor": encode_cursor(i=i)})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+def test_a_version_without_its_document_is_404(client, handle, project_id, report):
+    _ready_version(handle, report["id"])
+    (versions.reports_root(handle, report["id"]) / "v001" / "document.json").unlink()
+    r = client.get(f"{_base(project_id, report['id'])}/versions/1/document")
+    assert r.status_code == 404 and r.json()["error"] == {
+        "code": "not_found",
+        "message": "report version document 1 not found",
+        "details": r.json()["error"].get("details"),
+    }
+
+
 def test_versions_list_pages_newest_first(client, handle, project_id, report):
     for n in (1, 2, 3):
         _ready_version(handle, report["id"], n)

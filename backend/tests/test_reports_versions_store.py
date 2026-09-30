@@ -116,3 +116,31 @@ def test_a_new_rendering_row_clears_earlier_failures(handle, report):
     versions.clear_failed(handle, report["id"])
     with handle.session() as s:
         assert s.get(ReportVersion, old) is None
+
+
+def test_a_second_promote_of_the_same_number_fails_with_a_neutral_message(handle, report):
+    first = versions.create_rendering_row(handle, report["id"], label=None)
+    second = versions.create_rendering_row(handle, report["id"], label=None)
+    kw = dict(files=[], stats={}, baseline_version_id=None, states=[], report_id=report["id"], number=1)
+    final = versions.promote(handle, version_id=first, partial=_partial(handle, report["id"]), **kw)
+    final.rename(final.with_name("moved"))  # so the rename passes and the unique index is the guard
+    partial = _partial(handle, report["id"], ".partial-2026-09-30_100001")
+    with pytest.raises(JobFailure, match="could not be saved"):
+        versions.promote(handle, version_id=second, partial=partial, **kw)
+    assert not (versions.reports_root(handle, report["id"]) / "v001").exists()
+
+
+class _Runner:
+    def is_live(self, job_id):
+        return False
+
+    def submit(self, *a, **k):
+        raise RuntimeError("runner stopped")
+
+
+def test_start_render_discards_the_row_when_submit_fails(handle, report):
+    with pytest.raises(RuntimeError, match="runner stopped"):
+        versions.start_render(handle, _Runner(), report["id"], formats=["pdf"], label=None)
+    with handle.session() as s:
+        q = select(ReportVersion).where(ReportVersion.report_id == report["id"])
+        assert s.execute(q).scalars().all() == []

@@ -32,6 +32,7 @@ def write_xlsx(
 ) -> int:
     from openpyxl import Workbook
     from openpyxl.cell import WriteOnlyCell
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
@@ -39,6 +40,8 @@ def write_xlsx(
     bold = Font(bold=True)
 
     def cell(ws, value, *, font=None, fill=None):
+        if isinstance(value, str):
+            value = ILLEGAL_CHARACTERS_RE.sub("", value)  # one control character must not fail the render
         c = WriteOnlyCell(ws, value=value)
         if isinstance(value, str) and value.startswith("="):
             c.data_type = "s"  # a note like "=1+1" is text, never a formula (Review Focus 4)

@@ -61,12 +61,21 @@ def next_number(handle, report_id: str) -> int:
     return max(top or 0, on_disk) + 1
 
 
-def report_title_and_config(handle, report_id: str) -> tuple[str, dict]:
+def report_title(handle, report_id: str) -> str:
     with handle.session() as s:
         report = s.get(ReportRow, report_id)
         if report is None:
             raise JobFailure("The report was deleted before it could be rendered.")
-        return report.title, dict(report.config)
+        return report.title
+
+
+def rendering_config(handle, version_id: str) -> dict:
+    """The config frozen on the version row at click time, so the stored and printed configs agree."""
+    with handle.session() as s:
+        row = s.get(ReportVersionRow, version_id)
+        if row is None:
+            raise JobFailure("The render was cancelled before it started.")
+        return dict(row.config)
 
 
 def create_rendering_row(handle, report_id: str, *, label: str | None) -> str:
@@ -136,13 +145,19 @@ def start_render(handle, runner, report_id: str, *, formats: list[str], label: s
             mark_failed(handle, version_id, INTERRUPTED)  # left over from an earlier process
         clear_failed(handle, report_id)
         version_id = create_rendering_row(handle, report_id, label=label)
-        job = runner.submit(
-            handle,
-            "report_render",
-            {"report_id": report_id, "version_id": version_id, "formats": formats, "label": label},
-        )
+        try:
+            job = runner.submit(
+                handle,
+                "report_render",
+                {"report_id": report_id, "version_id": version_id, "formats": formats, "label": label},
+            )
+        except BaseException:
+            discard(handle, version_id)
+            raise
         with handle.session() as s:
-            s.get(ReportVersionRow, version_id).job_id = job.id
+            row = s.get(ReportVersionRow, version_id)
+            if row is not None:  # a job that already finished and was discarded leaves no row
+                row.job_id = job.id
         return job
 
 
@@ -206,7 +221,9 @@ def promote(
                 )
     except IntegrityError as e:
         shutil.rmtree(final, ignore_errors=True)
-        raise JobFailure(f"Version {number} already exists for this report. Render again.") from e
+        raise JobFailure(
+            "The version could not be saved (it changed during the render). Render again."
+        ) from e
     except BaseException:
         shutil.rmtree(final, ignore_errors=True)
         raise
@@ -314,6 +331,16 @@ def _parsed(path: str, _mtime_ns: int, _size: int) -> rs.ReportDocument:
     return rs.ReportDocument.model_validate_json(Path(path).read_bytes())
 
 
+def _block_index(cursor: str | None) -> int:
+    """The `i` of a document cursor: an int >= 0, else the same 422 as any other bad cursor."""
+    if not cursor:
+        return 0
+    i = decode_cursor(cursor, "i")["i"]
+    if not isinstance(i, int) or isinstance(i, bool) or i < 0:
+        raise AppError("validation_error", "invalid cursor", 422)
+    return i
+
+
 def document_page(
     handle, report_id: str, number: int, *, cursor: str | None, limit: int | None
 ) -> rs.ReportDocumentPage:
@@ -324,10 +351,10 @@ def document_page(
     try:
         st = path.stat()
     except FileNotFoundError:
-        raise AppError("not_found", f"version {number} has no document.json", 404) from None
+        raise not_found("report version document", str(number)) from None
     doc = _parsed(str(path), st.st_mtime_ns, st.st_size)
     n = max(1, min(DOCUMENT_MAX_LIMIT, limit or DOCUMENT_MAX_LIMIT))
-    start = int(decode_cursor(cursor, "i").get("i", 0)) if cursor else 0
+    start = _block_index(cursor)
     stop = start + n
     out, i = [], 0
     for sec in doc.sections:
