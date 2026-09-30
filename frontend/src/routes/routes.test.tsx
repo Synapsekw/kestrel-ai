@@ -57,6 +57,9 @@ const CASES: [string, string][] = [
   [`/p/${P}/datasets?dataset=d1`, `/models/datasets?dataset=d1&project=${P}`],
   [`/p/${P}/train`, "/models/training"],
   [`/p/${P}/train?job=j1`, "/models/training?job=j1"],
+  // Reports spec §13: the Export screen is Reports → Data exports.
+  [`/p/${P}/export`, `/p/${P}/reports/exports`],
+  [`/p/${P}/export?job=j1`, `/p/${P}/reports/exports?job=j1`],
   ["/library", "/models/library"],
   ["/library?model=m1", "/models/library?model=m1"],
 ];

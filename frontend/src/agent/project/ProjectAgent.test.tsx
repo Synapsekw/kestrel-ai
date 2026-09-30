@@ -391,4 +391,8 @@ describe("screenRoute", () => {
     expect(screenRoute("p1", { screen: "train", image_id: null })).toBe("/models/training");
     expect(screenRoute("p1", { screen: "models", image_id: null })).toBe("/models/library");
   });
+
+  it("sends the export screen to Reports → Data exports (reports spec §13)", () => {
+    expect(screenRoute("p1", { screen: "export", image_id: null })).toBe("/p/p1/reports/exports");
+  });
 });

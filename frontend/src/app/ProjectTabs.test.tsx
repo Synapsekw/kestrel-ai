@@ -79,7 +79,7 @@ describe("ProjectTabs", () => {
       within(menu)
         .getAllByRole("menuitem")
         .map((i) => i.textContent),
-    ).toEqual(["Runs", "Review", "Detect", "Analytics", "Site areas", "Export", "Project settings"]);
+    ).toEqual(["Runs", "Review", "Detect", "Analytics", "Site areas", "Project settings"]);
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Analytics" }));
     expect(screen.getByTestId("where")).toHaveTextContent(`/p/${PROJECT_ID}/analytics`);
   });

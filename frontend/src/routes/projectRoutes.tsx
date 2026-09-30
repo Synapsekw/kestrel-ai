@@ -79,7 +79,9 @@ export const projectRoutes: RouteObject[] = [
       </Later>
     ),
   },
+  // Reports (R7 swaps both for ReportsTab); Data exports is the old Export screen (reports spec §13).
   { path: "reports", element: <ReportsPlaceholder /> },
+  { path: "reports/exports", element: <ReportsPlaceholder /> },
   { path: "settings", element: <SettingsScreen /> },
   // Secondary routes without a tab: the tab strip's More menu and the palette reach them.
   { path: "runs", element: <RunsScreen /> },

@@ -127,22 +127,22 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       if (job.params?.purpose === "starter_model") return model(str(job.result, "model_id"));
       return { label: "Open images", to: `${p}/images` };
     case "results_export":
-      return null; // it already lives on the Export screen that started it
+      return null; // it already lives in Reports → Data exports, which started it
     case "map_import":
       return { label: "Open maps", to: `${p}/maps` };
     case "map_detect":
       return { label: "Open runs", to: `${p}/runs` };
     case "map_export":
-      // Its files and "show in folder" live in `ExportJobs` on the Export screen (widened to list
-      // map exports alongside results exports), not on the Maps screen that started it.
-      return { label: "Open export", to: `${p}/export` };
+      // Its files and "show in folder" live in Past exports under Reports → Data exports, not on
+      // the Map workspace that started it.
+      return { label: "Open data exports", to: `${p}/reports/exports` };
     case "accept_above":
     case "recount":
       return { label: "Open runs", to: `${p}/runs` };
     case "area_recount":
       return { label: "Open analytics", to: `${p}/analytics` };
     case "detect_export":
-      return { label: "Open export", to: `${p}/export` };
+      return { label: "Open data exports", to: `${p}/reports/exports` };
     case "pointcloud_import":
     case "pointcloud_export":
       return { label: "Open point clouds", to: `${p}/clouds` };

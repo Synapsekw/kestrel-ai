@@ -80,14 +80,19 @@ describe("job labels", () => {
         "p",
       ),
     ).toEqual({ label: "Open runs", to: "/p/p/runs" });
-    // A map export's files live in the Export screen's job list (widened to include map exports),
-    // not on the Maps screen that started it.
+    // Map and detection exports list their files under Reports → Data exports (reports spec §13).
     expect(
       resultTarget(
         { ...runningJob, type: "map_export", state: "succeeded", result: { folder: "exports/x" } },
         "p",
       ),
-    ).toEqual({ label: "Open export", to: "/p/p/export" });
+    ).toEqual({ label: "Open data exports", to: "/p/p/reports/exports" });
+    expect(
+      resultTarget(
+        { ...runningJob, type: "detect_export", state: "succeeded", result: { folder: "exports/x" } },
+        "p",
+      ),
+    ).toEqual({ label: "Open data exports", to: "/p/p/reports/exports" });
   });
 
   it("titles a results export and summarises its result", () => {
