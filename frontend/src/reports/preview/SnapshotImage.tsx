@@ -65,6 +65,7 @@ export function SnapshotImage({
               variant="secondary"
               icon="refresh"
               onClick={retry}
+              aria-label={`Retry ${alt}`}
               style={{ color: PRINT.ink, background: PRINT.paper, borderColor: PRINT.rule }}
             >
               Retry

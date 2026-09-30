@@ -75,11 +75,14 @@ describe("figure blocks", () => {
     const first = screen.getByRole("img", { name: "Crane" });
     fireEvent.error(first);
     expect(screen.getByRole("img", { name: "Crane: The snapshot could not be loaded." })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    // The accessible name is specific to the figure, so it never collides with a section's own Retry.
+    const retryButton = screen.getByRole("button", { name: "Retry Crane" });
+    expect(retryButton).toHaveTextContent("Retry");
+    fireEvent.click(retryButton);
     const again = screen.getByRole("img", { name: "Crane" });
     expect(again).not.toBe(first);
     expect(again).toHaveAttribute("src", "snap://s6");
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry Crane" })).toBeNull();
     expect(screen.getByTestId("snapshot-skeleton")).toBeInTheDocument();
   });
 
@@ -91,7 +94,7 @@ describe("figure blocks", () => {
     act(() => io.show(() => true));
     expect(screen.getByRole("img", { name: "Image crop: The source image was moved" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /^Plan: Snapshots show/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Retry/ })).toBeNull();
   });
 
   it("keys a row's figures by position, so a repeated snapshot key is not a duplicate React key", () => {
