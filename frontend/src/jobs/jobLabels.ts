@@ -35,6 +35,7 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   assist_acquire: "Smart polygon model",
   elevation_import: "Elevation import",
   drawing_import: "Drawing import",
+  report_render: "Report",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -158,6 +159,10 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "elevation_import":
     case "drawing_import":
       return { label: "Open maps", to: `${p}/maps` };
+    case "report_render": {
+      const report = str(job.params, "report_id");
+      return { label: "Open report", to: report ? `${p}/reports/${report}` : `${p}/reports` };
+    }
   }
 }
 

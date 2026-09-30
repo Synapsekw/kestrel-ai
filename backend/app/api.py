@@ -108,6 +108,16 @@ try:
 except Exception:
     log.exception("detection export router failed to load; detection exports will be unavailable")
 
+# Reports (spec 2026-09-26-reports section 14, unit R0). Guarded like the detect-export router: a
+# broken import (reportlab, fonts, a renderer) costs the report endpoints, never the app. reportlab
+# and openpyxl are imported only inside the render job.
+try:
+    from app.reports.router import router as reports_router
+
+    api_router.include_router(reports_router)
+except Exception:
+    log.exception("reports router failed to load; report endpoints will be unavailable")
+
 # Reviewing detection runs (plan 2 unit V). It serves map runs and imports the map schemas, so it
 # goes with the maps router: a broken native stack costs the review endpoints, never the app.
 try:
