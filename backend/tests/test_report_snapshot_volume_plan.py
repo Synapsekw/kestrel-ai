@@ -89,7 +89,7 @@ def test_the_r9_stubs_are_placeholders_until_replaced(handle):
     photo = ns(kind="attachment", finding_id="f", attachment_id="a", out=[480, 360])
     view = ns(kind="view3d", subject_kind="finding", subject_id="f", cloud_id="c")
     assert attachment.source_version(handle, photo) == f"missing:{attachment.REASON}"
-    assert view3d.source_version(handle, view) == f"missing:{view3d.REASON}"
+    assert view3d.source_version(handle, view) == f"missing:{view3d.GONE['finding']}"
     assert view3d.OUT == (1600, 1000) and view3d.JPEG_QUALITY == 88
     for module, spec in ((attachment, photo), (view3d, view)):
         with pytest.raises(SnapshotUnavailable):
