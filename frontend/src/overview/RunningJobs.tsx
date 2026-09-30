@@ -41,18 +41,24 @@ export function RunningJobs({
   projectId,
   bare = false,
   hideWhenIdle = false,
+  activeOnly = false,
 }: {
   projectId: string;
   bare?: boolean;
   hideWhenIdle?: boolean;
+  /** Only queued and running jobs: no "Last finished" card (the Overview's compact Status pane). */
+  activeOnly?: boolean;
 }) {
   const jobs = useJobsStore((s) => s.jobs);
   const { running, done } = useMemo(() => {
     const mine = Object.values(jobs)
       .filter((j) => j.project_id === projectId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return { running: mine.filter(isActiveJob), done: mine.find((j) => j.state === "succeeded") };
-  }, [jobs, projectId]);
+    return {
+      running: mine.filter(isActiveJob),
+      done: activeOnly ? undefined : mine.find((j) => j.state === "succeeded"),
+    };
+  }, [jobs, projectId, activeOnly]);
 
   if (running.length === 0 && !done) {
     if (hideWhenIdle) return null;
