@@ -153,7 +153,11 @@ export async function sectionListOrder(page: Page): Promise<SectionKey[]> {
     .sectionRows(page)
     .evaluateAll((rows) => rows.map((row) => row.querySelector('[role="switch"]')?.textContent ?? ""));
   const keys = Object.keys(SECTION_LABEL) as SectionKey[];
-  return names.map((t) => keys.find((k) => t.trim() === SECTION_LABEL[k])!);
+  return names.map((t) => {
+    const key = keys.find((k) => t.trim() === SECTION_LABEL[k]);
+    if (!key) throw new Error(`SectionList row with an unknown switch label: "${t.trim()}"`);
+    return key;
+  });
 }
 
 /** Moves `key` up with Alt+↑ on its reorder handle until it sits above `above`. */

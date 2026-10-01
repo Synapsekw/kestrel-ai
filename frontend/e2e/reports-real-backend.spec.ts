@@ -103,6 +103,7 @@ test("flow 1: Full inspection report, photos off, Measurements above the table, 
   expect(pdf.pages).toBeGreaterThanOrEqual(4); // cover + summary + three finding pages at least
   for (const f of v1.files as Json[]) expect(existsSync(join(seeded.folder, v1.folder, f.name))).toBe(true);
   expect(findingPagesOptions(v1.config).photos_max).toBe(0);
+  expect(v1.config.filters.statuses).toContain("closed"); // ruling R10-3
   expect(sectionKeys(v1.config).indexOf("measurements")).toBeLessThan(
     sectionKeys(v1.config).indexOf("findings_table"),
   );
@@ -116,7 +117,9 @@ test("flow 1: Full inspection report, photos off, Measurements above the table, 
   expect(findingShape(live)).toEqual(findingShape(frozen));
   await loadFindingPages(page);
   for (const { number } of findingShape(frozen)) {
-    await expect(ui.preview(page)).toContainText(`F-${String(number).padStart(4, "0")}`);
+    await expect(ui.previewSection(page, "finding_pages")).toContainText(
+      `F-${String(number).padStart(4, "0")}`,
+    );
   }
 
   await openHistory(page);
