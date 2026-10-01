@@ -465,3 +465,29 @@ def test_html_format_is_labelled_image_contact_sheet():
     from app.exports.job import FORMAT_LABEL
 
     assert FORMAT_LABEL["html"] == "Image contact sheet (HTML)"
+
+
+def test_sweep_removes_a_report_partial_folder(handle):
+    from app.exports.job import sweep_partial_exports
+
+    report_dir = handle.folder / "reports" / "r1"
+    partial = report_dir / ".partial-2026-09-30_101500"
+    partial.mkdir(parents=True)
+    _age(partial)
+    kept = report_dir / "v001"
+    kept.mkdir()
+    sweep_partial_exports(handle)
+    assert not partial.exists() and kept.is_dir()
+
+
+def test_sweep_keeps_report_partials_while_a_render_is_active(handle):
+    from app.db.models import Job
+    from app.exports.job import sweep_partial_exports
+
+    partial = handle.folder / "reports" / "r1" / ".partial-2026-09-30_101500"
+    partial.mkdir(parents=True)
+    _age(partial)
+    with handle.session() as s:
+        s.add(Job(type="report_render", state="running"))
+    sweep_partial_exports(handle)
+    assert partial.exists()
