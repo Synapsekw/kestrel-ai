@@ -6,16 +6,24 @@ locator on the newest such map. Only specs are built here; R3 renders them.
 
 A figure module may also define `warnings(ctx) -> None`; the outline calls it (plan R2 Ruling 11),
 and `fingerprint(ctx) -> str`; finding_pages appends it to the section etag, so an input the figures
-read that no finding row carries can still move the preview. Neither hook is defined here: every
-input this module reads (the finding's own anchor fields, and the map it resolves to) already
-lives on the finding row or the map row, both already covered by the section's normal etag."""
+read that no finding row carries can still move the preview. Only `fingerprint` is defined here: the
+anchor fields live on the finding row, but the map a figure resolves to (`covering_map` reads
+`bounds_wgs84`, `to_crs` reads `crs_wkt`) can be re-georeferenced without touching any finding."""
 
 from __future__ import annotations
 
 from app.reports.context import ComposeContext, FindingRow
 from app.reports.figures import map_geo, map_specs
 from app.reports.schemas import Figure
+from app.reports.sections import m_etag
 from app.workspace.frame import WGS84
+
+
+def fingerprint(ctx: ComposeContext) -> str:
+    """Digest over GeoMap(id, status, bounds_wgs84, crs_wkt) ordered by id (a column select of tens of
+    rows): a re-georeference changes no finding row, so this is what moves the finding_pages etag."""
+    with ctx.session() as s:
+        return m_etag.maps(s)
 
 
 def finding_figures(ctx: ComposeContext, finding: FindingRow) -> list[Figure]:
