@@ -2,8 +2,10 @@
 
 One run through the installed app built at `8aead7b`
 (`E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-8aead7b.exe`, SHA256
-`a46309311a58f40b31469cd631a3208fbd9661cced957f769c6054680fd70c7c`). Install it first. Part A is the
-Reports run; Part B carries the operator checks still open from the I/M/C wave (no later progress
+`a46309311a58f40b31469cd631a3208fbd9661cced957f769c6054680fd70c7c`). Install it first. This
+installer was built from `main` at `ff443e5` plus this unit, so it predates and lacks the S1-U6
+project-setup changes (merge `7bfb2b5b`); this walkthrough needs only Reports and I/M/C. Part A
+is the Reports run; Part B carries the operator checks still open from the I/M/C wave (no later progress
 entry records their results).
 
 ## Part A — Reports
@@ -92,7 +94,8 @@ the merged UI's (R6/R7/R8); the screenshots in this folder come from the opt-in 
     finding. Figures (including 3D views at 170 mm wide) print sharp.
 15. Print one finding page in greyscale (or preview it greyscale).
     Expect: every severity reads as a word next to a dot ("Moderate"), never colour alone.
-16. Click **Show in folder** on v1 (installed app only: Open PDF and Reveal use Windows), then open `findings.xlsx`.
+16. Click **Show in folder** on v1 (installed app only: Open PDF and Reveal use Windows), then
+    open `findings.xlsx`.
     Expect: Explorer shows the version folder (`reports\<id>\v001\` with the PDF, `findings.xlsx` and
     `document.json`); the workbook has Findings (frozen header, autofilter, severity cells filled with
     the scale colour; a note typed as `=1+1` stays text), Measurements and Report sheets.
@@ -156,21 +159,22 @@ the merged UI's (R6/R7/R8); the screenshots in this folder come from the opt-in 
 These four are from "Checks only you can do" in `docs/evidence/imc/walkthrough.md`; step numbers
 refer to that walkthrough.
 
-1. **C-G pending operator checks.** Criterion 4 chimney row and criterion 5 hand check: IMC walkthrough step 84.
-   Criterion 7 (photo link by eye): IMC walkthrough step 85. Criterion 8 (image to cloud by hand): IMC walkthrough step 86. Record the
-   results in `docs/evidence/clouds/README.md` and `docs/progress.md`.
+1. **C-G pending operator checks.** Criterion 4 chimney row and criterion 5 hand check: IMC
+   walkthrough step 84. Criterion 7 (photo link by eye): IMC walkthrough step 85. Criterion 8
+   (image to cloud by hand): IMC walkthrough step 86. Record the results in
+   `docs/evidence/clouds/README.md` and `docs/progress.md`.
 2. **M-X real-data checks.** M-X's acceptance ran on synthetic stand-ins, so these need your data:
-   DSM import against the cloud's DSM (Z within about 2 cm, IMC walkthrough step 58), a real DXF placed by its CRS
-   (within 10 cm, IMC walkthrough step 59), and a scanned PDF aligned by four points (IMC walkthrough step 60). Also confirm DXF
-   linework click-to-select in the installed app (IMC walkthrough step 38); M-W5 left it untested and M-X only tried
-   it in dev.
-3. **I-E capture map at scale.** On the installed WebView2 build, open a capture map with about 20,000
-   points (**Shift+M**) and drag-pan and zoom it (IMC walkthrough step 28). Headless tests on SwiftShader locked at
-   10,000 points or more, so the pan was never measured. Note whether your real GPU also stutters; if
-   it does, that is I-FB's clustering / level-of-detail work.
-4. **Resized input fields.** C-G fixed the shared `ui/Input` and `ui/Slider` overflow; the fix changes
-   every sized input and slider. Eyeball: Catalogue types, Sources survey date, Site areas rename, Map
-   layers and drawings, and the cloud height offset (IMC walkthrough step 81).
+   DSM import against the cloud's DSM (Z within about 2 cm, IMC walkthrough step 58), a real DXF
+   placed by its CRS (within 10 cm, IMC walkthrough step 59), and a scanned PDF aligned by four
+   points (IMC walkthrough step 60). Also confirm DXF linework click-to-select in the installed
+   app (IMC walkthrough step 38); M-W5 left it untested and M-X only tried it in dev.
+3. **I-E capture map at scale.** On the installed WebView2 build, open a capture map with about
+   20,000 points (**Shift+M**) and drag-pan and zoom it (IMC walkthrough step 28). Headless tests
+   on SwiftShader locked at 10,000 points or more, so the pan was never measured. Note whether your
+   real GPU also stutters; if it does, that is I-FB's clustering / level-of-detail work.
+4. **Resized input fields.** C-G fixed the shared `ui/Input` and `ui/Slider` overflow; the fix
+   changes every sized input and slider. Eyeball: Catalogue types, Sources survey date, Site areas
+   rename, Map layers and drawings, and the cloud height offset (IMC walkthrough step 81).
 
 ## Operator-visible rulings
 

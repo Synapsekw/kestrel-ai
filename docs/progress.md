@@ -26,7 +26,9 @@ ok; vitest 580 files / 4065 tests passed; build ok; e2e 178 passed, 7 skipped (p
 1.0 m); `e2e:reports` 5 passed, 1 skipped (the scale spec, runs only with `E2E_FRAME_BUDGET=1`)
 (5782/5783, 31.3 s).
 
-**Frozen sidecar** (`backend\scripts\build.ps1`, 3,632.1 MB in 14,548 files, 238 s):
+**Frozen sidecar** (`backend\scripts\build.ps1`, 3,632.1 MB in 14,548 files, 238 s; the worktree's
+git-ignored `backend/starter_weights` and `backend/third_party/potreeconverter` were copied from the
+main checkout before `build.ps1`):
 `smoke_frozen.ps1 -SamWeights E:\Dev\Yolo\models\sam2.1_t.pt` → `smoke ok` in 44.04 s: geo ok 32633
 15.000325 45.000216; design ok 10 185 surface 64x64; drawings ok 200x100 2; volumes ok pdf 2038 xlsx
 523.6 delaunay 2; reports ok fonts 3 gradient 1 jpeg 1 chart 1 xlsx Major pdf 21424; pointcloud ok
@@ -42,7 +44,13 @@ render.edl=false` (EDL cannot render to a target: known engine limit).
 **Installer** (built at `8aead7b`, not installed — the operator installs):
 `E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-8aead7b.exe`, 1977282128 bytes (1,885.7 MB),
 SHA256 `a46309311a58f40b31469cd631a3208fbd9661cced957f769c6054680fd70c7c`, without a WebView2
-bootstrapper (`build:installer` took 487 s).
+bootstrapper (`build:installer` took 487 s). The 8aead7b installer was built from `main` at
+`ff443e5` plus this unit, so it predates and lacks the S1-U6 project-setup changes (merge `7bfb2b5b`).
+
+**§18 criterion 3 (byte-identical output).** Proven by
+`backend/tests/test_reports_pdf_document.py::test_sha256_is_stable_twice_and_across_processes` and
+`backend/tests/test_reports_pdf_parts.py::test_parts_are_deterministic` (there is no golden-sha256
+PDF test); both ran in the pytest count above.
 
 **Left for the operator:** install, then run `docs/evidence/reports/combined-walkthrough.md`,
 including R10's "Checks only you can do" and Part B.
