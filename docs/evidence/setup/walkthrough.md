@@ -11,8 +11,13 @@ Every expected text below was checked against the merged code. You need:
 - for steps 15, 33 and 37, an orthomosaic GeoTIFF and a DSM GeoTIFF in one folder;
 - optionally a folder with a `.las`, a `.dwg`, an `.mp4` and a `Thumbs.db` (steps 12 and 13).
 
-Screenshots of the automated runs are next to this file (`setup-sorted.png`,
-`overview-after-create.png`, `setup-notice-failed.png`, and the `-real` pair from the real backend).
+Screenshots of the automated runs are next to this file:
+
+- `setup-sorted.png`: the Data card after sorting a delivery folder (mocked backend): Visual and Thermal photos each show `100MEDIA`, 2 photos, Ready; Asset drawings shows the PDF; the video is under Not used; the summary says 3 of 4 slots.
+- `overview-after-create.png`: the new project's Overview (mocked backend) right after Create, with imports starting ("Importing (+2)" in the header) and no setup notice.
+- `setup-notice-failed.png`: the Overview with "Setup: 1 import failed", Visual photos and Thermal photos each with the reason and a Retry.
+- `setup-sorted-real.png`: the same Data card sorted by the real backend (1 visual photo, 1 thermal photo, the drawing, 1 file not recognised).
+- `overview-after-create-real.png`: the real project's Overview after both imports finished and the page was reloaded: Images 2, the two photos shown, no setup notice. The Jobs card is not in the shot because the jobs had already finished.
 
 ## The page and its templates
 
@@ -49,7 +54,7 @@ Screenshots of the automated runs are next to this file (`setup-sorted.png`,
    Expect: the draft is intact; the result appears when the sort is done. **Discard draft** mid-sort
    cancels the sort.
 10. Drop or browse to a single photo file (not its folder).
-    Expect: the slot and the summary say "The whole folder <name> will be imported", before you create.
+    Expect: the slot and the summary say "The whole folder 100MEDIA will be imported", before you create.
 11. Drop more than 16 items.
     Expect: a notice says how many were left out and to drop the rest when the sort finishes.
 12. Drop a folder with a `.las`: 3D point cloud fills and the photo slots keep theirs. Drop a folder with
@@ -97,7 +102,7 @@ Screenshots of the automated runs are next to this file (`setup-sorted.png`,
 ## Create a project from a delivery folder
 
 24. With the Vertical template, a name, a folder and the sorted delivery folder, click **Create project**.
-    Expect: the new project's Overview opens straight away. For a moment "Setup: starting n imports…"
+    Expect: the new project's Overview opens straight away. For a moment "Setup: starting 3 imports…"
     may show; then it goes, and the Jobs card shows Import (and Drawing import) running.
 25. Open **Jobs**.
     Expect: one Import job for the photos folder (not two), and the drawing's jobs. At most 4 drawings
@@ -119,14 +124,14 @@ Screenshots of the automated runs are next to this file (`setup-sorted.png`,
     with the reason and a **Retry** on each. Rename the folder back and click **Retry** on either slot:
     the notice goes away and one Import job starts in Jobs.
 30. Start another project and drop a folder that holds the multi-page PDF, then create it.
-    Expect: "Setup: 1 drawing needs your choice" with the file name, "This PDF has n pages. Choose the
+    Expect: "Setup: 1 drawing needs your choice" with the file name, "This PDF has 12 pages. Choose the
     page to import." and **Finish drawing import**. Clicking it opens Add data, Drawing with the file
     already filled in; choose a page and import.
 31. With a notice showing, click **Dismiss** (the x), open another screen and come back.
     Expect: the notice stays gone; the jobs are unaffected.
 32. Drop a folder that holds more than 200 files for one non-photo slot, then create.
-    Expect: the notice names the rest even if nothing else needs you: "Setup: n files not started", with
-    "<n> more files in <folder> were not started — import them from the Maps tab" (Point clouds for a
+    Expect: the notice names the rest even if nothing else needs you: "Setup: 40 files not started", with
+    "40 more files in E:\Delivery\Plans were not started — import them from the Maps tab" (Point clouds for a
     point cloud).
 
 ## Other templates and choices
@@ -144,7 +149,7 @@ Screenshots of the automated runs are next to this file (`setup-sorted.png`,
     Expect: every import was still started (Jobs), and the Overview shows no failure.
 37. Put an orthomosaic GeoTIFF inside the photos folder (for example `DCIM\...\products\ortho.tif`),
     start a Mapping and survey project from the delivery folder and create it.
-    Expect: the Map import starts; the photos do not, and the Overview says "Photos in <folder> were
+    Expect: the Map import starts; the photos do not, and the Overview says "Photos in E:\Delivery\DCIM were
     not imported: the folder also holds GeoTIFFs, which a photo import would take as photos. Move the
     GeoTIFFs out of it, then Retry." Move the GeoTIFF out and click **Retry**: one Import job starts,
     and no GeoTIFF appears among the photos.
@@ -194,6 +199,8 @@ Items for later work, nothing here blocks S1.
 - U5 deferred: arrow keys on the template radio group; the catalogue picker is silent at 64 types; the
   overflow notice is lost when you leave mid-sort; duplicate bucket labels across DJI cards; the
   severity select shows "No default" for an out-of-scale default; e2e files need prettier.
-- U6 minors left as they are: a start after dismiss while an old run is still in flight could patch
-  colliding unit ids; the evidence screenshots are cropped to the viewport because the app scrolls
-  inside a container (see the task report).
+- `playwright.real-backend.config.ts` (the maps real-backend suite) still hard-codes the main
+  checkout's venv path; the setup config now walks up to the first `backend/.venv`.
+- U6 minors: a start after dismiss while an old run is still in flight could patch colliding unit ids;
+  `main()` of the e2e data script raises IndexError without an argument; the real-backend Catalogue
+  check has no hotkey or count-of-7 assertion.

@@ -263,8 +263,10 @@ test("setup journey: vertical template, visual and thermal in one folder, Create
   const w = await serveSetup(page);
   await setUp(page);
   await expect(setupUi.sharedFolderNote(page)).toBeVisible();
+  if (process.env.E2E_CAPTURE_EVIDENCE === "1")
+    await setupUi.slot(page, "Visual photos").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await entrancesDone(page);
-  await page.screenshot({ path: evidencePath("setup", "setup-sorted.png"), fullPage: true });
+  await page.screenshot({ path: evidencePath("setup", "setup-sorted.png") });
 
   // The response, not the request: the fake records the POST in its route handler, which runs after
   // the request event fires, so only the response proves the build request is in `w.posted`.

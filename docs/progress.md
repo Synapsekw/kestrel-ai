@@ -24,13 +24,13 @@ and Retry). Real backend (`pnpm -C frontend e2e:setup`, opt-in; built bundle + F
 data folder, ports 5852/5853): 1 passed, test 3.5 s, whole run 15.4 s; one source with 2 images, the
 one-page PDF built unattended, 7 types with hotkeys 1–7 on the project and in the Catalogue. The
 generated JPEGs are about 300–430 KB each (random noise, plan-mandated), in a temp dir. Screenshots in
-`docs/evidence/setup/` (taken at viewport height: the app scrolls inside a container, so the lower
-part of the page is not in the frame).
+`docs/evidence/setup/` (viewport-height shots: the sorted ones are scrolled to the Data card, the real
+Overview shot is taken after a reload with Images 2; captions in the walkthrough).
 
 **§13 success criteria.**
 | # | Evidence |
 | --- | --- |
-| 1 | real-backend journey + walkthrough steps 1–28 |
+| 1 | real-backend journey (sort, Create, one source with 2 images, the drawing built, 7 types with hotkeys, the Catalogue: walkthrough steps 2, 4, 7, 24–28) + walkthrough steps 1–28 |
 | 2 | U3's classifier tests (`backend/tests/test_setup_classify.py`: `test_raster_rules`, `test_a_raster_keeps_its_crs_and_a_tiff_photo_follows_its_name`, `test_a_sampled_photo_reads_one_header`, `test_video_is_coming_until_s4_flips_one_line`; `test_setup_classify_real.py`) + walkthrough steps 15 and 33 |
 | 3 | U3's header-read counting tests (`test_setup_inspect_sort.py`: `test_3000_dji_jpegs_open_only_20_headers`, `test_the_header_sample_is_per_folder`, `test_real_reader_opens_only_20_of_30_photos`); U6 reads no file in the frontend (budget) |
 | 4 | U2/U5 template tests (`test_setup_builtins.py`, `test_project_templates.py`; `frontend/src/setup/TemplateCard.test.tsx`: "choosing a template fills the slots and the types", "renames a saved template from its menu and reloads the list", "deletes a saved template after asking; …") + walkthrough steps 2–5 |
@@ -66,11 +66,12 @@ DSM named after the file (U6-2). Imports start one request at a time, drawings l
 - U5 `createProject.ts` (and its test) is replaced by `useCreateProject` and deleted.
 - U5 `model.ts`, `Checklist`, `SummaryCard`, `SlotGrid`, `TypeRow`, `draftStore` and `remap` changed in Task 12 and the fix wave (Create held while sorting, whole-folder note, truncated wording, severity rules in TypeRow, rule problems hold Create).
 
-**Gate (gate1 at e194ab58, suites one at a time; run by the controller; the controller updates this
-line if the final gate differs):** contract check ok; ruff check + format ok; pytest 5170 passed, 17
-skipped, 17 deselected; frontend lint + tokens ok; vitest 585 files / 4109 tests passed; build ok; e2e
-179 passed, 2 skipped (ports 5850/5851; `setup-real-backend` is one of them); `cargo test` skipped (no
-frozen sidecar). The two setup specs were re-run on `0e7335a5` as above.
+**Gate (final, gate2 at 232b1da6, suites one at a time, run by the controller):** contract check ok;
+ruff check + format ok; pytest 5170 passed, 17 skipped, 17 deselected; frontend lint + tokens ok;
+vitest 585 files / 4114 tests passed; build ok; e2e 179 passed, 2 skipped (ports 5850/5851;
+`setup-real-backend` is one of them); `cargo test` skipped (no frozen sidecar). Evidence re-run after
+the screenshot fix: `setup-journey.spec.ts` 2 passed (14.7 s, 5850/5851); `e2e:setup` 1 passed (test
+3.4 s, run 15.2 s, 5852/5853); each also run with `E2E_CAPTURE_EVIDENCE=1`.
 
 **Follow-ups.**
 - A skipped photo bucket nested in (or sharing) a dispatched photo folder is still imported, because photo import is per folder; the page does not say so.
@@ -81,7 +82,8 @@ frozen sidecar). The two setup specs were re-run on `0e7335a5` as above.
 - A legacy migrated type with a non-hex colour makes ensure answer 500 (`TypeConflict.colour` must be hex).
 - Quiet-ignore DJI sidecars (`.MRK .nav .obs .bin .SRT`) and `Thumbs.db` instead of listing them as Not recognised; drop `samples` for non-image buckets (worst case about 5–8 MB).
 - U5 deferred: template radiogroup arrow keys; catalogue picker silent at 64 types; overflow notice lost on leave mid-sort; duplicate bucket labels across DJI cards; severity select "No default" for an out-of-scale default; e2e prettier.
-- U6 minors: a start after dismiss while an old run is in flight could patch colliding unit ids; `main()` of the e2e data script raises IndexError without an argument; the real-backend Catalogue check has no hotkey or count-of-7 assertion; the evidence screenshots are viewport-height only.
+- `playwright.real-backend.config.ts` (maps real-backend suite) still hard-codes the main checkout's venv path; the setup config now walks up to the first `backend/.venv`.
+- U6 minors: a start after dismiss while an old run is in flight could patch colliding unit ids; `main()` of the e2e data script raises IndexError without an argument; the real-backend Catalogue check has no hotkey or count-of-7 assertion.
 
 **Left for the operator:** the walkthrough, including "Checks only you can do". No installer was
 built (programme ruling R9).

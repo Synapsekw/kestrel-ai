@@ -67,8 +67,10 @@ test("real backend: a vertical asset project from one delivery folder", async ({
   await expect(setupUi.slot(page, "Thermal photos")).toContainText("1");
   await expect(setupUi.slot(page, "Asset drawings")).toContainText("1");
   await expect(setupUi.sharedFolderNote(page)).toBeVisible();
+  if (process.env.E2E_CAPTURE_EVIDENCE === "1")
+    await setupUi.slot(page, "Visual photos").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await entrancesDone(page);
-  await page.screenshot({ path: evidencePath("setup", "setup-sorted-real.png"), fullPage: true });
+  await page.screenshot({ path: evidencePath("setup", "setup-sorted-real.png") });
 
   const created = page.waitForResponse(
     (r) => new URL(r.url()).pathname === "/api/v1/projects" && r.request().method() === "POST",
@@ -119,6 +121,11 @@ test("real backend: a vertical asset project from one delivery folder", async ({
     VERTICAL_TYPES.map(([name, , , hotkey]) => [name, hotkey]),
   );
   await expect(setupUi.notice(page)).toHaveCount(0);
+  if (process.env.E2E_CAPTURE_EVIDENCE === "1") {
+    // Both jobs are done: reload so the Overview reads the landed data, then wait for it to show.
+    await page.reload();
+    await expect(page.getByRole("tab", { name: "Images 2" })).toBeVisible();
+  }
   await entrancesDone(page);
   await page.screenshot({ path: evidencePath("setup", "overview-after-create-real.png"), fullPage: true });
 
