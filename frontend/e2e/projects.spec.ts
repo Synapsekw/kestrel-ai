@@ -25,11 +25,11 @@ test("the projects list shows cards and creates a project without a kind", async
   await page.screenshot({ path: evidencePath("foundation-s1", "projects-list.png"), fullPage: true });
 
   await page.getByRole("button", { name: "New project" }).click();
-  const dialog = page.getByRole("dialog", { name: "New project" });
-  await dialog.getByLabel("Name").fill("Tower Q3");
-  await dialog.locator("#project-folder").fill("E:\\Projects\\Tower-Q3");
+  await expect(page).toHaveURL(/\/projects\/new$/);
+  await page.locator("#project-name").fill("Tower Q3");
+  await page.locator("#project-folder").fill("E:\\Projects\\Tower-Q3");
   const created = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/v1/projects"));
-  await dialog.getByRole("button", { name: "Create project" }).click();
+  await page.getByRole("button", { name: "Create project" }).click();
   const body = (await created).postDataJSON() as Record<string, unknown>;
   expect(body).toMatchObject({ name: "Tower Q3", folder: "E:\\Projects\\Tower-Q3" });
   expect(Array.isArray(body.type_ids)).toBe(true);
