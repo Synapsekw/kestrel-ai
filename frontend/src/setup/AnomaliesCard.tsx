@@ -4,7 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { normaliseName } from "@/catalogue/normaliseName";
-import { fetchPickableTypes } from "@/screens/projects/catalogueTypes";
+import { fetchPickableTypes } from "./catalogueTypes";
 import { Button } from "@/ui";
 import { CataloguePicker } from "./CataloguePicker";
 import { useSetupDraft } from "./draftStore";

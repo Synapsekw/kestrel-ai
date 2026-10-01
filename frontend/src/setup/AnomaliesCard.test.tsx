@@ -145,12 +145,10 @@ describe("AnomaliesCard", () => {
   });
 
   it("a row expands to edit its definition and shows its rules", () => {
-    useSetupDraft
-      .getState()
-      .addType({
-        ...typeSpec("Corrosion", "defect", 2, "1"),
-        severity_rules: [{ when: "section loss visible", severity: 3 }],
-      });
+    useSetupDraft.getState().addType({
+      ...typeSpec("Corrosion", "defect", 2, "1"),
+      severity_rules: [{ when: "section loss visible", severity: 3 }],
+    });
     renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Details of Corrosion" }));
     fireEvent.change(screen.getByLabelText("Definition"), { target: { value: "Flaking on steel." } });

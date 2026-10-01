@@ -118,7 +118,13 @@ export function routeInfo(pathname: string): RouteInfo {
     layout: "page",
     transitionKey: parts.slice(0, 2).join("/"),
   });
-  if (!head || head === "projects") return { ...app("projects", "Projects"), transitionKey: "projects" };
+  if (!head || head === "projects") {
+    const creating = second === "new";
+    return {
+      ...app("projects", creating ? "New project" : "Projects"),
+      transitionKey: creating ? "projects/new" : "projects",
+    };
+  }
   if (head === "p" && second) {
     const seg = parts[2] ?? "overview";
     const tab = PROJECT_TABS.find((t) => t.id === seg) ?? null;

@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router-dom";
 import { NotFound } from "@/app/NotFound";
 import { Shell } from "@/app/Shell";
 import { ProjectsScreen } from "@/screens/ProjectsScreen";
+import { SetupPage } from "@/setup/SetupPage";
 import { appRoutes } from "./appRoutes";
 import { legacyAppRedirects, legacyProjectRedirects } from "./legacyRedirects";
 import { projectRoutes } from "./projectRoutes";
@@ -15,6 +16,7 @@ export const routeTree: RouteObject[] = [
     children: [
       { index: true, element: <Redirect to={() => "/projects"} /> },
       { path: "projects", element: <ProjectsScreen /> },
+      { path: "projects/new", element: <SetupPage /> },
       ...appRoutes,
       ...legacyAppRedirects,
       {
