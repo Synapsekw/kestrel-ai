@@ -225,6 +225,23 @@ export function templateLabel(templateId: string | null, templates: readonly Pro
   return templates.find((t) => t.id === templateId)?.name ?? "Blank";
 }
 
+/** Folder names (once each) of non-skipped, assigned photo buckets that import their whole folder; one slot's when `slotKey` is given. */
+export function wholeFolderNames(buckets: readonly DraftBucket[], slotKey?: string): string[] {
+  return [
+    ...new Set(
+      buckets
+        .filter(
+          (b) =>
+            b.wholeFolder &&
+            !b.skipped &&
+            b.slot_key !== null &&
+            (slotKey === undefined || b.slot_key === slotKey),
+        )
+        .map((b) => folderName(b.folder)),
+    ),
+  ];
+}
+
 export interface ChecklistModel {
   templateName: string;
   /** The name-and-folder problem, or null when both are fine. */
@@ -260,13 +277,7 @@ export function checklistOf(
     typeCount: d.types.length,
     clashes: clashLines(d.types),
     sorting: d.inspect !== null,
-    wholeFolders: [
-      ...new Set(
-        d.buckets
-          .filter((b) => b.wholeFolder && !b.skipped && b.slot_key !== null)
-          .map((b) => folderName(b.folder)),
-      ),
-    ],
+    wholeFolders: wholeFolderNames(d.buckets),
   };
 }
 

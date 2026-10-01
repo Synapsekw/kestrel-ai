@@ -24,7 +24,10 @@ export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeR
   // The editor works on keyed drafts; the draft store only ever receives plain rules. A template switch
   // gives the row a new React key, so the drafts start afresh from the new type.
   const [rules, setRules] = useState<RuleDraft[]>(() => rulesOf(type.severity_rules));
-  const rulesProblem = validateRules(rules, scale);
+  // The message waits until the operator has left a condition, so Add rule does not open on an error.
+  const [touched, setTouched] = useState(false);
+  const problem = validateRules(rules, scale);
+  const rulesProblem = problem !== null && (touched || !open) ? problem : null;
   const detailsId = useId();
   const note = conflict ? conflictText(type, conflict) : null;
   return (
@@ -92,12 +95,13 @@ export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeR
         />
         <IconButton icon="trash" size="sm" label={`Remove ${type.name}`} onClick={onRemove} />
       </div>
-      {(note || clashWith) && (
+      {(note || clashWith || (!open && rulesProblem)) && (
         <p className="flex flex-col gap-0.5 text-2xs">
           {note && <span className="text-warn">{note}</span>}
           {clashWith && (
             <span className="text-danger">{`Hotkey ${(type.hotkey ?? "").toUpperCase()} is also used by ${clashWith}.`}</span>
           )}
+          {!open && rulesProblem && <span className="text-danger">{rulesProblem}</span>}
         </p>
       )}
       {open && (
@@ -115,14 +119,15 @@ export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeR
               onChange={(e) => onChange({ definition: e.target.value || null })}
             />
           </Field>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5" onBlur={() => setTouched(true)}>
             <p className="text-xs font-medium text-muted">Severity rules</p>
             <SeverityRulesEditor
               rules={rules}
               defaultSeverity={type.default_severity ?? null}
               onChange={(next) => {
                 setRules(next);
-                onChange({ severity_rules: toRules(next) });
+                // A blank condition stays in the editor only; ensure refuses it, so the draft never holds one.
+                onChange({ severity_rules: toRules(next).filter((r) => r.when !== "") });
               }}
             />
             {rulesProblem && <p className="text-xs text-danger">{rulesProblem}</p>}

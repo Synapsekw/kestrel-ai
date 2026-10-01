@@ -163,15 +163,27 @@ describe("AnomaliesCard", () => {
     renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Details of Corrosion" }));
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
-    expect(
-      screen.getByText("Rule 1 needs a condition. Say when it applies, or remove it."),
-    ).toBeInTheDocument();
+    const need = "Rule 1 needs a condition. Say when it applies, or remove it.";
+    // A blank rule is not in the draft, and no error shows until the condition has been left.
+    expect(useSetupDraft.getState().types[0].severity_rules).toEqual([]);
+    expect(screen.queryByText(need)).toBeNull();
+    fireEvent.focusOut(screen.getByLabelText("Rule 1 condition"));
+    expect(screen.getByText(need)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Rule 1 condition"), { target: { value: " wider than 5 mm " } });
     fireEvent.change(screen.getByLabelText("Rule 1 severity"), { target: { value: "4" } });
     expect(useSetupDraft.getState().types[0].severity_rules).toEqual([
       { when: "wider than 5 mm", severity: 4 },
     ]);
     expect(screen.queryByText(/needs a condition/)).toBeNull();
+  });
+
+  it("shows a blank rule's problem on the collapsed row", () => {
+    useSetupDraft.getState().addType(typeSpec("Corrosion", "defect", 2, "1"));
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Details of Corrosion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Details of Corrosion" }));
+    expect(row("Corrosion")).toHaveTextContent("Rule 1 needs a condition.");
   });
 
   it("removing a type marks the list edited", () => {

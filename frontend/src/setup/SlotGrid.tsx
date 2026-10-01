@@ -9,7 +9,7 @@ import {
   bucketLabel,
   countLabel,
   sizeLabel,
-  folderName,
+  wholeFolderNames,
   skippedBuckets,
   slotFills,
   unusedBuckets,
@@ -185,7 +185,7 @@ function SlotTile({
               <BucketRow key={b.id} bucket={b} moves={moves(b)} onDragStart={onDragStart} />
             ))}
           </ul>
-          {[...new Set(buckets.filter((b) => b.wholeFolder).map((b) => folderName(b.folder)))].map((name) => (
+          {wholeFolderNames(buckets, slot.key).map((name) => (
             <p key={name} className="text-xs text-warn">
               {wholeFolderText(name)}
             </p>

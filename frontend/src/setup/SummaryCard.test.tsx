@@ -149,6 +149,7 @@ describe("SummaryCard", () => {
     expect(popover).toHaveTextContent("Give the project a name.");
     expect(within(bar).getByRole("button", { name: "Create project" })).toBeDisabled();
   });
+
   it("holds Create while a sort is running, with a warn line, and frees it when the sort ends", () => {
     store().setName("Site");
     store().setFolder("E:\\Projects\\Site");
