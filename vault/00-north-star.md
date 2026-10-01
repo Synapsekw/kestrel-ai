@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-28
+last-updated: 2026-10-01
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -76,6 +76,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Point clouds (S1) — import LAS/LAZ, 3D viewer, measurements, map ↔ 3D, LAZ export | merged/pushed to `main` (`0af7084`), acceptance + fixes `ab3fa34`; CI green; installed 2026-09-26 (build of `3ad69e4`) | chimney import 9.5 s; 195 M points in 58.9 s (converter peak 8.98 GB); viewer settled < 0.7 s; picks within 0.002 mm; LAZ export 1.8 s. §17.10 rim u 0.171 m vs ≤ 0.05 m (data-limited, operator decision). 1974 backend, 995 frontend, 93 browser, 8 Rust tests. See [[2026-09-26-0404-point-clouds-s1]] |
 | Foundation of the inspection platform (F): Aero glass UI, projects without kind, catalogue, findings, Models section, migration | merged/pushed to `main` (`09fb538..f3ff568`); installed 2026-09-27 | 11 units via parallel worktrees. 2576 backend, 1622 frontend, 103 browser, 8 Rust tests; smoke ok (CUDA); the smoke run caught and fixed an unbundled catalogue migration. Migration dry run on copies of AHTest, Ahmadia and acceptance: all reach `0010`/v2, 120,278 boxes rewritten, 0 unmapped, originals unchanged. **Not yet opened by the operator.** See [[2026-09-27-1030-foundation-inspection-platform]] |
 | I/M/C wave: Images, Maps and Point clouds workspaces (39 units + IMC-X) | merged/pushed to `main` (`4ebcac1..ad4e548`); installer built (`c4080c7`), **not installed** | all 39 units plus the IMC-X close-out merged via per-unit worktrees. IMC-X gate: 3946 backend, 3535 frontend, 162 browser, 8 Rust; frozen smoke ok (SAM on CUDA, drawings, pypdfium2). **CI frontend e2e red on `main` since `81b0310` (perf budgets on the slow runner); fix in flight.** See [[2026-09-27-2140-imc-wave-part-1]], [[2026-09-28-1905-imc-wave-part-2]] |
+| Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); **not installed** | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -87,15 +88,22 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **I/M/C wave complete on `main`** (2026-09-28, `4f68d13..ad4e548`, 15 merges, pushed). The CI flakes were fixed first (`c1bdc0b`; one was a real `useUrlState` race). Then the remaining 12 units merged: M-W3/W4/W5/W6, C-R1/M1/P1/L1, I-FW, and the evidence units I-E, M-X and C-G. IMC-X (`ad4e548`) closed the programme with contract prose fixes, the full gate (3946 backend, 3535 frontend, 162 browser, cargo 8/8), a frozen sidecar smoke (SAM on CUDA, `drawings ok`) and one installer, `E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-c4080c7.exe` (**not installed**). Combined walkthrough: `docs/evidence/imc/walkthrough.md`. Operator retired resume-interrupted-run and bulk-undo of accepted labels. See [[2026-09-28-1905-imc-wave-part-2]].
+**Shipped last:** **Project landing (Overview v2) on `main`** (2026-10-01, `35534daf..335c37fb`, pushed).
+- The Overview now fills the window. A data-driven grid (`composeOverview`) picks the hero (map, then point cloud, then photo mosaic, then drawing) and drops any pane that has nothing to show.
+- New panes: a header with coordinates and only non-zero figures, an offline site-location SVG, a budgeted live 3D preview with a static fallback, latest imagery, a Status pane, and a first-data screen for empty projects.
+- Backend: `ProjectOverview.hero` and `GET /overview/site`, which reads at most 500 photo points by rowid and never scans `image`.
+- Gate: 4787 backend, 3769 frontend and 167 browser tests. **No installer built.**
+See [[2026-10-01-1842-overview-landing]].
+
+Previously: **I/M/C wave complete on `main`** (2026-09-28, `4f68d13..ad4e548`, 15 merges, pushed). The CI flakes were fixed first (`c1bdc0b`; one was a real `useUrlState` race). Then the remaining 12 units merged: M-W3/W4/W5/W6, C-R1/M1/P1/L1, I-FW, and the evidence units I-E, M-X and C-G. IMC-X (`ad4e548`) closed the programme with contract prose fixes, the full gate (3946 backend, 3535 frontend, 162 browser, cargo 8/8), a frozen sidecar smoke (SAM on CUDA, `drawings ok`) and one installer, `E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-c4080c7.exe` (**not installed**). Combined walkthrough: `docs/evidence/imc/walkthrough.md`. Operator retired resume-interrupted-run and bulk-undo of accepted labels. See [[2026-09-28-1905-imc-wave-part-2]].
 
 Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`4ebcac1..7c1200b`). See [[2026-09-27-2140-imc-wave-part-1]].
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight:** nothing. CI on `main` is green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
+**In flight:** Overview v2 needs the operator's check on real projects (§5). The Reports (R) wave is being merged on `main` by a parallel session (`r-r*` merges). Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
-**Next:** Reports (R): plans from `docs/superpowers/specs/2026-09-26-reports-design.md`, then build. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
+**Next:** The operator runs the Overview v2 walkthrough in [[2026-10-01-1842-overview-landing]] and rules on its three design calls. The Reports (R) wave continues. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
 
 Before that: **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
 - **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
@@ -235,6 +243,21 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Overview v2 (opened 2026-10-01)
+
+- **Operator decisions:**
+  - D7: Activity and Running jobs now sit in one Status pane, and the old 8-row activity pane is gone.
+  - No place name in the header (reverse geocoding was deferred).
+  - RecentFindings scrolls inside its pane instead of clipping by rows.
+- **Unverified on real data or a GPU:** the live point-cloud preview (e2e proves it only under SwiftShader), the map hero with real tiles, the photo-GPS location plot, and the layout on a 1366×768 laptop.
+- **Parked:**
+  - There are no Prism examples for the four Overview data states.
+  - The imagery pane flashes for one frame when the images read comes back empty.
+  - `site.py` sets `source` for a map with null bounds. The result is still correct.
+  - Antimeridian area.
+  - Untested: SummaryHero "No data yet." and the RunningJobs `bare` defaults.
+- **Check to automate:** add the U+FFFD byte grep to `frontend lint` ([[2026-10-01-gotcha-subagent-non-ascii-commits-as-replacement-char]]).
 
 ### I/M/C wave (opened 2026-09-27)
 

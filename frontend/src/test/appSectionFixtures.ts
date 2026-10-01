@@ -18,6 +18,8 @@ export const exampleTypes: S["CatalogueType"][] = [
     group: null,
     archived: false,
     origin: "migrated",
+    definition: null,
+    severity_rules: [],
   },
   {
     id: TYPE_ID(2),
@@ -29,6 +31,8 @@ export const exampleTypes: S["CatalogueType"][] = [
     group: null,
     archived: false,
     origin: "migrated",
+    definition: null,
+    severity_rules: [],
   },
   {
     id: TYPE_ID(3),
@@ -40,6 +44,8 @@ export const exampleTypes: S["CatalogueType"][] = [
     group: "Concrete defects",
     archived: false,
     origin: "user",
+    definition: null,
+    severity_rules: [],
   },
   {
     id: TYPE_ID(4),
@@ -51,6 +57,8 @@ export const exampleTypes: S["CatalogueType"][] = [
     group: "Concrete defects",
     archived: true,
     origin: "user",
+    definition: null,
+    severity_rules: [],
   },
 ];
 

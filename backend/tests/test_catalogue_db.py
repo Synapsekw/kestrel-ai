@@ -84,11 +84,15 @@ def test_kind_is_defect_or_object(cat):
         s.flush()
 
 
-def test_the_catalogue_history_has_one_head_at_0002():
-    """0002 is Reports' `report_template` (plan 2026-09-30-reports-r0)."""
+def test_the_catalogue_history_has_one_head_and_0003_is_on_it():
+    """0002 is Reports' `report_template` (plan 2026-09-30-reports-r0); 0003 is project setup's type
+    fields and `project_template` (plan 2026-09-30-setup-u1). A later revision keeps this passing."""
     cfg = Config(str(MIGRATIONS / "alembic.ini"))
     cfg.set_main_option("script_location", str(MIGRATIONS))
-    assert ScriptDirectory.from_config(cfg).get_heads() == ["0002"]
+    script = ScriptDirectory.from_config(cfg)
+    heads = script.get_heads()
+    assert len(heads) == 1, heads
+    assert "0003" in {rev.revision for rev in script.walk_revisions(base="base", head=heads[0])}
 
 
 def test_the_app_opens_the_catalogue(client):

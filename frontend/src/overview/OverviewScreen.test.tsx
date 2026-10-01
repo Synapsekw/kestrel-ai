@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { errorBody, fakeClient, PROJECT_ID, runningJob, type FakeRoute } from "@/test/fixtures";
+import { errorBody, exampleImage, fakeClient, PROJECT_ID, runningJob, type FakeRoute } from "@/test/fixtures";
 import {
   baseRoutes,
+  cloudOnlyOverview,
   emptyOverview,
   exampleActivity,
   exampleFinding,
+  exampleSite,
   fullOverview,
+  imagesOnlyOverview,
 } from "@/test/findingFixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
@@ -17,6 +20,9 @@ vi.mock("./MapHero", () => ({
   MapHero: ({ hasData }: { hasData: boolean }) => (
     <div data-testid="map-hero" data-has-data={String(hasData)} />
   ),
+}));
+vi.mock("./CloudPreview", () => ({
+  CloudPreview: ({ variant }: { variant: string }) => <div data-testid={`cloud-${variant}`} />,
 }));
 vi.mock("@/app/effects", async (orig) => ({
   ...(await orig<object>()),
@@ -30,8 +36,12 @@ function renderOverview(overview: object | FakeRoute, extra: FakeRoute[] = []) {
     "method" in overview ? (overview as FakeRoute) : { method: "GET", path: /\/overview$/, body: overview };
   const { api, requests } = fakeClient(
     baseRoutes([
-      overviewRoute,
       ...extra,
+      // Before `/overview$/`, so the more specific site read wins.
+      { method: "GET", path: /\/overview\/site$/, body: exampleSite },
+      overviewRoute,
+      { method: "GET", path: /\/pointclouds$/, body: { items: [] } },
+      { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null } },
       { method: "GET", path: /\/findings$/, body: { items: [exampleFinding], next_cursor: null } },
       { method: "GET", path: /\/activity$/, body: { items: exampleActivity, next_cursor: null } },
       { method: "GET", path: /\/jobs$/, body: { items: [], next_cursor: null } },
@@ -46,7 +56,15 @@ function renderOverview(overview: object | FakeRoute, extra: FakeRoute[] = []) {
   return requests;
 }
 
-const overviewReads = (requests: { url: string }[]) => requests.filter((r) => r.url.includes("/overview"));
+const overviewReads = (requests: { url: string }[]) => requests.filter((r) => /\/overview(\?|$)/.test(r.url));
+
+const imagesRoute: FakeRoute = {
+  method: "GET",
+  path: /\/images$/,
+  body: { items: [exampleImage], next_cursor: null },
+};
+
+const panes = () => [...document.querySelectorAll("[data-pane]")].map((e) => e.getAttribute("data-pane"));
 
 describe("OverviewScreen", () => {
   beforeEach(() => {
@@ -57,8 +75,16 @@ describe("OverviewScreen", () => {
   it("shows the full dashboard from one overview read and bounded lists", async () => {
     const requests = renderOverview(fullOverview);
     expect(await screen.findByText("Open findings")).toBeInTheDocument();
-    // F13: StatTile renders the number twice (count-up + screen-reader copy).
-    expect(screen.getByText("Open findings").closest("[data-glass]")).toHaveTextContent("47");
+    // The header strip carries the figures: the value, its link and the danger tone.
+    const open = screen.getByText("Open findings").closest("a")!;
+    expect(open).toHaveTextContent("47");
+    expect(open).toHaveAttribute("href", `/p/${PROJECT_ID}/findings?status=open`);
+    const critical = within(screen.getByRole("heading", { name: "Ahmadia" }).closest("[data-glass]")!)
+      .getByText("Critical")
+      .closest("a")!;
+    expect(critical).toHaveTextContent("5");
+    expect(critical.querySelector(".text-danger")).toHaveTextContent("5");
+    expect(screen.getByText("Images")).toBeInTheDocument();
     expect(screen.getByText("Stockpile volume")).toBeInTheDocument();
     expect(screen.getByTestId("map-hero")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Critical: 5 open" })).toHaveAttribute(
@@ -84,9 +110,11 @@ describe("OverviewScreen", () => {
     expect(jobsQ.get("limit")).toBe("10");
   });
 
-  it("tells the map hero whether the project holds any data", async () => {
-    renderOverview(fullOverview);
-    expect(await screen.findByTestId("map-hero")).toHaveAttribute("data-has-data", "true");
+  it("a map hero without a map id falls through to the summary hero", async () => {
+    renderOverview({ ...fullOverview, hero: { kind: "map", id: null } });
+    await waitFor(() => expect(panes()).toContain("hero"));
+    expect(await screen.findByRole("link", { name: /1,284 photos/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("map-hero")).not.toBeInTheDocument();
   });
 
   it("keeps the last dashboard with a Retry notice when a refresh fails", async () => {
@@ -116,14 +144,10 @@ describe("OverviewScreen", () => {
     renderOverview(emptyOverview, [
       { method: "GET", path: /\/findings$/, body: { items: [], next_cursor: null } },
     ]);
-    expect(await screen.findByText("Reviewed")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "No findings yet. Mark a defect in a workspace, or accept an AI detection of a defect type.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Nothing is running.")).toBeInTheDocument();
-    expect(screen.getByTestId("map-hero")).toHaveAttribute("data-has-data", "false");
+    expect(await screen.findByRole("heading", { name: "Add the first survey" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add data" })).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("map-hero")).not.toBeInTheDocument();
   });
 
   it("lists this project's running job with its progress", async () => {
@@ -213,5 +237,128 @@ describe("OverviewScreen", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("Overview v2 layout", () => {
+  beforeEach(() => {
+    useJobsStore.setState({ jobs: {} });
+    useChangesStore.setState({ findingsRevision: 0, dataRevision: 0 });
+  });
+
+  it("everything: map hero, cloud tile, location, findings, imagery, status", async () => {
+    renderOverview(fullOverview, [imagesRoute]);
+    await waitFor(() => expect(panes()).toContain("location"));
+    await waitFor(() => expect(panes()).toContain("imagery"));
+    expect(panes()).toEqual(["header", "hero", "cloud", "location", "findings", "imagery", "status"]);
+    // Settled, not the loading skeleton: the location is drawn from /overview/site and the header
+    // carries its coordinates.
+    expect(await screen.findAllByTestId("photo-point")).not.toHaveLength(0);
+    expect(screen.getByText(/44\.8125° N 20\.4612° E/)).toBeInTheDocument();
+    expect(screen.getByTestId("map-hero")).toBeInTheDocument();
+    expect(screen.getByTestId("cloud-tile")).toBeInTheDocument();
+  });
+
+  it("no ortho: the cloud is the hero and there is no cloud tile", async () => {
+    renderOverview(cloudOnlyOverview);
+    await waitFor(() => expect(screen.getByTestId("cloud-hero")).toBeInTheDocument());
+    expect(screen.queryByTestId("cloud-tile")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("map-hero")).not.toBeInTheDocument();
+  });
+
+  it("images only: the mosaic is the hero and there is no separate imagery pane", async () => {
+    renderOverview(imagesOnlyOverview, [imagesRoute]);
+    await waitFor(() => expect(panes()).toContain("hero"));
+    expect(await screen.findByRole("region", { name: "Latest photos" })).toBeInTheDocument();
+    expect(panes()).not.toContain("imagery");
+  });
+
+  it("an empty project is the first-data screen and nothing else", async () => {
+    renderOverview(emptyOverview);
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Add the first survey" })).toBeInTheDocument(),
+    );
+    expect(panes()).toEqual(["firstData"]);
+  });
+
+  it("a failed site read drops the location pane and keeps the page", async () => {
+    renderOverview(fullOverview, [
+      { method: "GET", path: /\/overview\/site$/, status: 500, body: errorBody("internal", "boom") },
+    ]);
+    await waitFor(() => expect(panes()).toContain("hero"));
+    await waitFor(() => expect(panes()).not.toContain("location"));
+    expect(screen.queryByText(/Couldn't load the overview/)).not.toBeInTheDocument();
+  });
+
+  it("a failed latest-images read shows the summary hero, never an empty mosaic", async () => {
+    renderOverview(imagesOnlyOverview, [
+      { method: "GET", path: /\/images$/, status: 500, body: errorBody("internal", "boom") },
+    ]);
+    expect(await screen.findByRole("region", { name: "Project data" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /1,284 photos/ })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Latest photos" })).not.toBeInTheDocument();
+  });
+
+  it("an empty latest-images page drops the imagery pane instead of leaving an empty grid", async () => {
+    renderOverview(fullOverview);
+    await waitFor(() => expect(panes()).toContain("location"));
+    // The default /images route answers with no rows.
+    await waitFor(() => expect(panes()).not.toContain("imagery"));
+  });
+
+  it("with images, the imagery pane shows", async () => {
+    renderOverview(fullOverview, [imagesRoute]);
+    await waitFor(() => expect(panes()).toContain("imagery"));
+    expect(await screen.findByRole("heading", { name: /Latest imagery/ })).toBeInTheDocument();
+  });
+
+  it("a first import in progress (a source row, no images yet) is still the first-data screen", async () => {
+    renderOverview({
+      ...emptyOverview,
+      data: { image_sets: 1, images: 0, maps: 0, elevations: 0, point_clouds: 0, drawings: 0 },
+    });
+    await waitFor(() => expect(panes()).toEqual(["firstData"]));
+  });
+
+  it("a site without bounds has no location pane (SiteLocation draws nothing without them)", async () => {
+    renderOverview(fullOverview, [
+      { method: "GET", path: /\/overview\/site$/, body: { ...exampleSite, bounds_wgs84: null } },
+    ]);
+    await waitFor(() => expect(screen.getByText(/44\.8125° N 20\.4612° E/)).toBeInTheDocument());
+    expect(panes()).not.toContain("location");
+  });
+
+  it("the location pane pins open findings only, not closed ones", async () => {
+    const at = { lon: 20.4612, lat: 44.8125 };
+    renderOverview(fullOverview, [
+      {
+        method: "GET",
+        path: /\/findings$/,
+        body: {
+          items: [
+            { ...exampleFinding, ...at, id: "f-open" },
+            { ...exampleFinding, ...at, id: "f-closed", status: "closed" },
+          ],
+          next_cursor: null,
+        },
+      },
+    ]);
+    await waitFor(() => expect(screen.getAllByTestId("site-pin")).toHaveLength(1));
+  });
+
+  it("with no findings yet, the findings pane offers to run detection", async () => {
+    renderOverview({ ...imagesOnlyOverview, findings: emptyOverview.findings }, [imagesRoute]);
+    expect(await screen.findByText("No findings yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Run detection" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/runs`,
+    );
+  });
+
+  it("the grid takes the full width: no max-width cap", async () => {
+    renderOverview(fullOverview);
+    const grid = await screen.findByTestId("overview-grid");
+    expect(grid.className).not.toMatch(/max-w-/);
+    expect(grid.className).not.toMatch(/mx-auto/);
   });
 });

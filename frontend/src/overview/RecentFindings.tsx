@@ -19,6 +19,7 @@ export function RecentFindings({
   total,
   types,
   labels,
+  className,
 }: {
   projectId: string;
   findings: Finding[];
@@ -27,16 +28,17 @@ export function RecentFindings({
   total: number;
   types: ReadonlyMap<string, ClassDef>;
   labels: ReadonlyMap<string, string>;
+  className?: string;
 }) {
   return (
     <GlassPanel
       variant="pane"
       as="section"
       aria-labelledby="overview-recent"
-      className="stagger animate-rise col-span-12 overflow-hidden lg:col-span-8"
+      className={cx("stagger animate-rise flex h-full min-h-0 flex-col overflow-hidden", className)}
       style={stagger(7)}
     >
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
         <h2 id="overview-recent" className="text-base font-semibold text-ink">
           Recent findings
         </h2>
@@ -57,7 +59,7 @@ export function RecentFindings({
           No findings yet. Mark a defect in a workspace, or accept an AI detection of a defect type.
         </p>
       ) : (
-        <ul aria-label="Recent findings">
+        <ul aria-label="Recent findings" className="min-h-0 overflow-y-auto">
           {findings.map((f, i) => {
             const t = types.get(f.type_id);
             const loc = findingLocation(f, labels);

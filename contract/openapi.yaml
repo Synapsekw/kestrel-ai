@@ -92,6 +92,7 @@ tags:
   - name: data
   - name: workspace
   - name: reports
+  - name: setup
 
 paths:
   /api/v1/agent/chat:
@@ -158,7 +159,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         "409":
-          description: the folder already contains a project (`code` is `already_exists`)
+          description: "the folder already contains a project (`code` is `already_exists`), or two types were given one hotkey (`code` is `hotkey_conflict`, details `{type_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`), or a `hotkeys` key is not one of `type_ids` (`code` is `hotkey_invalid`, details `{type_ids}`); nothing is created and the folder is not touched"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3824,7 +3830,7 @@ paths:
       parameters:
         - { name: q, in: query, required: false, schema: { type: string, maxLength: 64 }, description: matches the normalised name or the group }
         - { name: kind, in: query, required: false, schema: { $ref: "#/components/schemas/CatalogueKind" } }
-        - { name: origin, in: query, required: false, schema: { type: string, enum: [user, migrated] } }
+        - { name: origin, in: query, required: false, schema: { type: string, enum: [user, migrated, template] } }
         - { name: include_archived, in: query, required: false, schema: { type: boolean }, description: false when absent }
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/cursor"
@@ -3858,6 +3864,37 @@ paths:
               schema: { $ref: "#/components/schemas/CatalogueType" }
         "409":
           description: "the name exists (`code` is `type_exists`, details `{type_id}`), or the hotkey is taken (`code` is `hotkey_conflict`, details `{type_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalogue/types/ensure:
+    post:
+      tags: [catalogue]
+      operationId: ensureCatalogueTypes
+      summary: |
+        Resolve a project template's types against the catalogue, in one transaction (spec
+        2026-09-30-project-setup section 6). Each spec is matched by normalised name, archived
+        types included. A match is reused and left unchanged, except that an archived match is
+        unarchived (its catalogue hotkey is cleared when a live type now holds it); a kind or colour
+        that differs from the spec is reported as `conflict`, and the catalogue wins. A miss creates
+        the type from the spec with `origin: template`. With `dry_run: true` nothing is written and
+        a miss has `id: null`. Items come back in request order. Setup calls it on Create, and as a
+        dry run while the anomaly list settles, so conflicts show before anything is created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnsureTypesRequest" }
+      responses:
+        "200":
+          description: one item per requested type, in request order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnsureTypesResult" }
+        "422":
+          description: "a severity rule names a level that is not on the scale (`code` is `invalid_severity_rule`, details `{name, severity}`), a default severity is above the scale (`code` is `severity_unknown`), or a name is empty once normalised, such as `_-_` (`code` is `type_name_blank`, details `{name}`); nothing was written"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4487,6 +4524,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProjectOverview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/overview/site:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [data]
+      operationId: getOverviewSite
+      summary: Where the site is. It returns the bounds of the hero map, else of the newest ready point cloud, else of the photos' GPS points, plus at most 500 evenly spread photo points. It makes one bounded primary-key read of `image` and never scans it.
+      responses:
+        "200":
+          description: the site location
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OverviewSite" }
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/search:
@@ -5961,6 +6013,138 @@ paths:
         "503": { $ref: "#/components/responses/CatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/project-templates:
+    get:
+      tags: [setup]
+      operationId: listProjectTemplates
+      summary: "Project templates for the new-project page: the three built-ins first, then the operator's own by name. A template pre-fills the page; it is never stored on the project."
+      responses:
+        "200":
+          description: every template; there are few, so the list is not paged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTemplatePage" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [setup]
+      operationId: createProjectTemplate
+      summary: "Save slots and anomaly types as a reusable template (Save as my template). Names are unique after normalising, like catalogue type names; the project name, folder and files are never part of a template."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectTemplateCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTemplate" }
+        "409":
+          description: "a template with that normalised name exists (`code` is `template_name_taken`, details `{template_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/project-templates/{templateId}:
+    parameters:
+      - $ref: "#/components/parameters/templateId"
+    patch:
+      tags: [setup]
+      operationId: patchProjectTemplate
+      summary: "Rename a saved template, or replace its description or config. Built-ins are read-only."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectTemplatePatch" }
+      responses:
+        "200":
+          description: the updated template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectTemplate" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in template is never changed (`code` is `template_builtin`), or the new name is taken (`code` is `template_name_taken`, details `{template_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [setup]
+      operationId: deleteProjectTemplate
+      summary: "Delete a saved template. Projects made from it are not affected: a template is never stored on a project."
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in template is never deleted (`code` is `template_builtin`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/setup/inspect:
+    post:
+      tags: [setup]
+      operationId: startSetupInspect
+      summary: |
+        Sort dropped files and folders into buckets by route (spec 2026-09-30-project-setup section
+        7): a `setup_inspect` job on the model library's runner, because no project exists yet. Read
+        it with `GET /library/jobs/{jobId}`; its `result` is an `InspectResult`. Only extensions and
+        headers are read, never pixels, raster bodies or points: at most 20 photos per folder, one
+        header per GeoTIFF or LAS/LAZ file, the root element of an XML file. The walk stops early, at
+        50,000 files, 10,000 folders or 500 buckets, and sets `truncated`. A path that is relative, missing or unreadable is not refused: it
+        is listed under `not_recognised` with its reason. With `template_id`, each bucket's
+        `slot_key` is assigned for that template; an unknown id leaves every `slot_key` null.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupInspectRequest" }
+      responses:
+        "202":
+          description: inspect job queued in the library runner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+              example:
+                job:
+                  id: "j0000000-4444-4000-8000-000000000050"
+                  project_id: library
+                  type: setup_inspect
+                  state: queued
+                  progress: 0
+                  message: ""
+                  log_path: "runs/j0000000-4444-4000-8000-000000000050/job.log"
+                  params: { paths: ["E:\\Deliveries\\Tower 14"], template_id: builtin-vertical }
+                  result: null
+                  error: null
+                  created_at: "2026-09-30T10:00:00Z"
+                  started_at: null
+                  finished_at: null
+        "422":
+          description: "the body is malformed (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -6427,6 +6611,13 @@ components:
                 details `{job_id}`), issued_version (409: an issued version is never deleted),
                 invalid_snapshot_spec and snapshot_key_mismatch (400: the snapshot `spec` does not
                 decode, or does not match the key).
+                Project setup: template_builtin (409: a built-in project template is never changed
+                or deleted), template_name_taken (409: a project template with that normalised name
+                exists; details `{template_id}`), invalid_template (also 422 for a project template
+                whose config repeats a slot key, a type name or a hotkey; details
+                `{errors: [{path, message}]}`), invalid_severity_rule (422: a severity rule names a
+                level that is not on the scale; details `{name, severity}`), type_name_blank (422: a
+                type name is empty once normalised; details `{name}`).
             message: { type: string }
             details:
               type: object
@@ -6566,6 +6757,10 @@ components:
           uniqueItems: true
           description: catalogue type ids to start with, in list order; empty when absent
           items: { type: string }
+        hotkeys:
+          type: object
+          description: "type id to the project's hotkey for it (a digit 1-9 or a letter); null or a type left out means no project hotkey; the same meaning as in `PUT /projects/{projectId}/types`; empty when absent"
+          additionalProperties: { type: [string, "null"], pattern: "^[1-9A-Za-z]$" }
       example:
         name: Ahmadia
         folder: "E:\\Projects\\Ahmadia"
@@ -10232,7 +10427,7 @@ components:
         accepted_warnings: { type: array, items: { type: string } }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile, report_render]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile, report_render, setup_inspect]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -10253,7 +10448,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label})"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id})"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
@@ -10405,7 +10600,7 @@ components:
     CatalogueType:
       type: object
       description: an app-wide defect or object type in `catalogue.db`; never deleted, only archived
-      required: [id, name, colour, kind, default_severity, hotkey, group, archived, origin]
+      required: [id, name, colour, kind, default_severity, hotkey, group, archived, origin, definition, severity_rules]
       properties:
         id: { type: string }
         name: { type: string }
@@ -10415,8 +10610,14 @@ components:
         hotkey: { type: [string, "null"], description: "live only inside a type picker, never at workspace level" }
         group: { type: [string, "null"] }
         archived: { type: boolean }
-        origin: { type: string, enum: [user, migrated], description: "`migrated` when the foundation migration created it from a project class" }
-      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user }
+        origin: { type: string, enum: [user, migrated, template], description: "`migrated` when the foundation migration created it from a project class; `template` when project setup created it from a template" }
+        definition: { type: [string, "null"], maxLength: 1000, description: "what the anomaly looks like, in a sentence or two" }
+        severity_rules:
+          type: array
+          maxItems: 8
+          description: "in order; the first rule that matches sets a finding's severity (applied by S2)"
+          items: { $ref: "#/components/schemas/SeverityRule" }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user, definition: "A fine dark line in concrete, straight or branching.", severity_rules: [{ when: "Wider than 3 mm or leaking", severity: 4 }] }
     CatalogueTypePage:
       type: object
       required: [items, next_cursor]
@@ -10428,8 +10629,8 @@ components:
         needs_classification: { type: boolean, description: "true after migration merged project classes in as `object` types, until `POST /catalogue/classification/done`; absent means false" }
       example:
         items:
-          - { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user }
-          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", kind: object, default_severity: null, hotkey: "1", group: Machinery, archived: false, origin: migrated }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user, definition: "A fine dark line in concrete, straight or branching.", severity_rules: [] }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", kind: object, default_severity: null, hotkey: "1", group: Machinery, archived: false, origin: migrated, definition: null, severity_rules: [] }
         next_cursor: null
         needs_classification: true
     CatalogueTypeCreate:
@@ -10442,6 +10643,12 @@ components:
         default_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: null when absent }
         hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$", description: null when absent }
         group: { type: [string, "null"], maxLength: 64, description: null when absent }
+        definition: { type: [string, "null"], maxLength: 1000, description: "null when absent" }
+        severity_rules:
+          type: array
+          maxItems: 8
+          description: "in order; empty when absent; a level not on the scale is refused with 422 `invalid_severity_rule`, details `{name, severity}`"
+          items: { $ref: "#/components/schemas/SeverityRule" }
       example: { name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects }
     CatalogueTypePatch:
       type: object
@@ -10454,6 +10661,12 @@ components:
         hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$" }
         group: { type: [string, "null"], maxLength: 64 }
         archived: { type: boolean }
+        definition: { type: [string, "null"], maxLength: 1000 }
+        severity_rules:
+          type: array
+          maxItems: 8
+          description: "a level not on the scale is refused with 422 `invalid_severity_rule`, details `{name, severity}`"
+          items: { $ref: "#/components/schemas/SeverityRule" }
       example: { kind: defect, default_severity: 2 }
     CatalogueTypeUpdated:
       description: the patched type, plus whether to offer the findings backfill
@@ -10463,7 +10676,7 @@ components:
           required: [backfill_candidates]
           properties:
             backfill_candidates: { type: boolean, description: "true when the kind changed from `object` to `defect`: offer `POST /catalogue/types/{typeId}/backfill`" }
-      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: migrated, backfill_candidates: true }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: migrated, definition: null, severity_rules: [], backfill_candidates: true }
     SeverityLevel:
       type: object
       required: [level, name, colour]
@@ -11038,9 +11251,46 @@ components:
         tone: { type: string, enum: [info, warn, danger] }
         message: { type: string }
         action: { type: [string, "null"], description: "an in-app path the banner's button opens, or null" }
+    OverviewHero:
+      type: object
+      description: what the Overview's big pane shows; the first of a ready map, a ready point cloud, the photos, a ready drawing
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [map, point_cloud, images, drawing] }
+        id: { type: [string, "null"], description: "null for `images`: the client reads the newest frames" }
+    OverviewSite:
+      type: object
+      required: [center, bounds_wgs84, source, area_m2, photo_points, photo_points_total]
+      properties:
+        center:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+          description: "[lon, lat], the middle of `bounds_wgs84`"
+        bounds_wgs84:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+          description: "[minlon, minlat, maxlon, maxlat]"
+        source: { type: [string, "null"], enum: [map, point_cloud, images, null] }
+        area_m2: { type: [number, "null"], description: geodesic area of `bounds_wgs84`; the client labels it approximate }
+        photo_points:
+          type: array
+          maxItems: 500
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        photo_points_total: { type: integer, minimum: 0, description: estimated number of photos with GPS }
+      example:
+        center: [20.4612, 44.8125]
+        bounds_wgs84: [20.4581, 44.8103, 20.4643, 44.8147]
+        source: map
+        area_m2: 240500
+        photo_points: [[20.4590, 44.8110], [20.4600, 44.8110], [20.4610, 44.8120]]
+        photo_points_total: 1280
     ProjectOverview:
       type: object
-      required: [findings, data, latest_volume, hero_map_id, banners]
+      required: [findings, data, latest_volume, hero_map_id, hero, banners]
       properties:
         findings: { $ref: "#/components/schemas/FindingSummary" }
         data: { $ref: "#/components/schemas/OverviewDataCounts" }
@@ -11049,6 +11299,10 @@ components:
             - $ref: "#/components/schemas/OverviewVolume"
             - type: "null"
         hero_map_id: { type: [string, "null"], description: "the newest ready map, shown as tiles only" }
+        hero:
+          oneOf:
+            - $ref: "#/components/schemas/OverviewHero"
+            - type: "null"
         banners: { type: array, items: { $ref: "#/components/schemas/OverviewBanner" } }
       example:
         findings:
@@ -11062,6 +11316,7 @@ components:
         data: { image_sets: 3, images: 3299, maps: 2, elevations: 1, point_clouds: 1, drawings: 0 }
         latest_volume: { measurement_id: "v0000000-1111-4000-8000-000000000001", name: "North stockpile", net_m3: 1520.4, previous_net_m3: 1307.6 }
         hero_map_id: "a0000000-6666-4000-8000-000000000001"
+        hero: { kind: map, id: "a0000000-6666-4000-8000-000000000001" }
         banners:
           - { kind: types_to_classify, tone: info, message: "12 types came from your existing projects. Mark which are defects.", action: /catalogue }
     ProjectSearchResult:
@@ -13797,3 +14052,240 @@ components:
       required: [path]
       properties:
         path: { type: string, minLength: 1, description: "an absolute path to a JPEG, PNG or WebP picked with the file dialog" }
+    # ------------------------------------------------------------ project setup (S1-U1)
+    SeverityRule:
+      type: object
+      additionalProperties: false
+      description: "one of a type's ordered severity rules: a finding that matches `when` gets `severity` (S2 applies them; the first match wins)"
+      required: [when, severity]
+      properties:
+        when: { type: string, minLength: 1, maxLength: 200, pattern: '\S', description: "the condition in plain words" }
+        severity: { type: integer, minimum: 1, maximum: 9, description: "a level on the current severity scale" }
+      example: { when: "Section loss or holes through the member", severity: 4 }
+    CatalogueTypeSpec:
+      type: object
+      additionalProperties: false
+      description: "a catalogue type as a project template names it, matched to the catalogue by normalised name. A request needs only `name` and `kind`; inside a `ProjectTemplate` the server sends every property."
+      required: [name, kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '\S' }
+        kind: { $ref: "#/components/schemas/CatalogueKind" }
+        colour: { type: [string, "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "null when absent; the catalogue picks one for a new type" }
+        default_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "null when absent" }
+        hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$", description: "the project hotkey the template gives the type; null when absent" }
+        definition: { type: [string, "null"], maxLength: 1000, description: "what the anomaly looks like; null when absent" }
+        severity_rules:
+          type: array
+          maxItems: 8
+          description: "in order; empty when absent"
+          items: { $ref: "#/components/schemas/SeverityRule" }
+      example: { name: Corrosion, kind: defect, colour: "#c2410c", default_severity: 2, hotkey: "1", definition: "Rust on steel members, fixings or plates.", severity_rules: [] }
+    EnsureTypesRequest:
+      type: object
+      additionalProperties: false
+      required: [types]
+      properties:
+        types:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items: { $ref: "#/components/schemas/CatalogueTypeSpec" }
+        dry_run: { type: boolean, description: "false when absent; true writes nothing and answers what Create would do" }
+    TypeConflict:
+      type: object
+      description: "the catalogue's own kind and colour for a matched type whose kind or colour differs from the template's; the catalogue wins"
+      required: [kind, colour]
+      properties:
+        kind: { $ref: "#/components/schemas/CatalogueKind" }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+    EnsuredType:
+      type: object
+      required: [name, id, created, conflict]
+      properties:
+        name: { type: string, description: "the name as requested" }
+        id: { type: [string, "null"], description: "the catalogue type id; null only for a miss in a dry run" }
+        created: { type: boolean, description: "true when the type was created by this call, or would be in a dry run" }
+        conflict:
+          oneOf:
+            - $ref: "#/components/schemas/TypeConflict"
+            - type: "null"
+    EnsureTypesResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 64
+          description: one per requested type, in request order
+          items: { $ref: "#/components/schemas/EnsuredType" }
+      example:
+        items:
+          - { name: Corrosion, id: "c1a2b3c4-0000-4000-8000-000000000021", created: false, conflict: { kind: object, colour: "#f97316" } }
+          - { name: "Cracked weld", id: "c1a2b3c4-0000-4000-8000-000000000022", created: true, conflict: null }
+    SlotRoute:
+      type: string
+      enum: [images, map, elevation, pointcloud, drawing, video]
+      description: "the existing importer a slot feeds: images `POST /sources` (one per folder), map `/maps`, elevation `/elevations`, pointcloud `/pointclouds`, drawing `/drawing-inspections` then `/drawings`; video waits for video import (S4)"
+    SlotMatch:
+      type: object
+      additionalProperties: false
+      description: "narrows a route: `raster` tells orthomosaics from elevation models, `thermal` tells thermal photos from visual ones; an absent key matches either"
+      properties:
+        raster: { type: string, enum: [ortho, elevation] }
+        thermal: { type: boolean }
+    TemplateSlot:
+      type: object
+      additionalProperties: false
+      required: [key, label, route, required, accepts, match]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,31}$", description: "unique within the template" }
+        label: { type: string, minLength: 1, maxLength: 48 }
+        route: { $ref: "#/components/schemas/SlotRoute" }
+        required: { type: boolean, description: "an empty required slot warns on the setup page; it never blocks Create" }
+        accepts:
+          type: array
+          minItems: 1
+          maxItems: 12
+          description: "file extensions, lower case, without the dot"
+          items: { type: string, pattern: "^[a-z0-9]{1,10}$" }
+        match:
+          oneOf:
+            - $ref: "#/components/schemas/SlotMatch"
+            - type: "null"
+    TemplateConfig:
+      type: object
+      additionalProperties: false
+      description: "versioned so later sub-projects can add to it. Repeated slot keys, type names (after normalising) or hotkeys are refused with `invalid_template`."
+      required: [config_version, slots, types]
+      properties:
+        config_version: { type: integer, const: 1 }
+        slots:
+          type: array
+          maxItems: 16
+          items: { $ref: "#/components/schemas/TemplateSlot" }
+        types:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/CatalogueTypeSpec" }
+    ProjectTemplate:
+      type: object
+      required: [id, name, description, builtin, config, created_at, updated_at]
+      properties:
+        id: { type: string, description: "builtin-mapping, builtin-vertical, builtin-confined, or a UUID" }
+        name: { type: string }
+        description: { type: string }
+        builtin: { type: boolean, description: "a built-in is never changed or deleted" }
+        config: { $ref: "#/components/schemas/TemplateConfig" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProjectTemplatePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: built-ins first, then by name
+          items: { $ref: "#/components/schemas/ProjectTemplate" }
+      example:
+        items:
+          - id: builtin-vertical
+            name: Vertical asset inspection
+            description: "Visual and thermal photos, point clouds and drawings for towers, masts, poles and other tall structures."
+            builtin: true
+            config:
+              config_version: 1
+              slots:
+                - { key: visual, label: Visual photos, route: images, required: true, accepts: [jpg, jpeg], match: { thermal: false } }
+                - { key: thermal, label: Thermal photos, route: images, required: false, accepts: [jpg, jpeg], match: { thermal: true } }
+                - { key: point_cloud, label: 3D point cloud, route: pointcloud, required: false, accepts: [las, laz], match: null }
+                - { key: drawings, label: Asset drawings, route: drawing, required: false, accepts: [pdf, dxf, xml], match: null }
+              types:
+                - { name: Corrosion, kind: defect, colour: "#c2410c", default_severity: 2, hotkey: "1", definition: "Rust on steel members, fixings or plates.", severity_rules: [] }
+                - { name: Bird nest, kind: object, colour: "#84cc16", default_severity: 2, hotkey: "5", definition: "A nest built on the structure, a platform or equipment.", severity_rules: [] }
+            created_at: "2026-09-30T00:00:00Z"
+            updated_at: "2026-09-30T00:00:00Z"
+    ProjectTemplateCreate:
+      type: object
+      additionalProperties: false
+      required: [name, config]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80, pattern: '\S' }
+        description: { type: string, maxLength: 300, description: "empty when absent" }
+        config: { $ref: "#/components/schemas/TemplateConfig" }
+    ProjectTemplatePatch:
+      type: object
+      additionalProperties: false
+      description: every field is optional; a field that is sent replaces the stored one
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80, pattern: '\S' }
+        description: { type: string, maxLength: 300 }
+        config: { $ref: "#/components/schemas/TemplateConfig" }
+    SetupInspectRequest:
+      type: object
+      additionalProperties: false
+      required: [paths]
+      properties:
+        paths:
+          type: array
+          minItems: 1
+          maxItems: 16
+          description: "absolute paths of dropped files or folders"
+          items: { type: string, minLength: 1 }
+        template_id: { type: string, minLength: 1, description: "assigns each bucket's `slot_key` for this template; absent leaves every `slot_key` null" }
+    InspectBucket:
+      type: object
+      description: "files of one route and match in one folder"
+      required: [route, match, slot_key, folder, files, count, bytes, samples, crs]
+      properties:
+        route: { $ref: "#/components/schemas/SlotRoute" }
+        match: { $ref: "#/components/schemas/SlotMatch" }
+        slot_key: { type: [string, "null"], description: "the template slot the bucket fills; null without a template or when no slot takes it" }
+        folder: { type: string, description: "absolute path of the folder that holds the files" }
+        files:
+          type: array
+          maxItems: 200
+          description: "absolute paths to import one by one (map, elevation, pointcloud, drawing, video); empty for `images`, which import the whole folder"
+          items: { type: string }
+        count: { type: integer, minimum: 0, description: "every file in the bucket, beyond the listed ones" }
+        bytes: { type: integer, minimum: 0 }
+        samples:
+          type: array
+          maxItems: 200
+          description: file names to show
+          items: { type: string }
+        crs: { type: [string, "null"], description: "the CRS of the first header read, such as EPSG:32633; null when there is none" }
+    InspectSkipped:
+      type: object
+      required: [name, reason]
+      properties:
+        name: { type: string }
+        reason: { type: string, description: "unknown type, could not read header, not supported yet, not found" }
+    InspectNotRecognised:
+      type: object
+      required: [count, samples]
+      properties:
+        count: { type: integer, minimum: 0 }
+        samples:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/InspectSkipped" }
+    InspectResult:
+      type: object
+      description: "the `result` of a `setup_inspect` job (read through `GET /library/jobs/{jobId}`)"
+      required: [buckets, not_recognised, suggested_template_id, truncated]
+      properties:
+        buckets:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/InspectBucket" }
+        not_recognised: { $ref: "#/components/schemas/InspectNotRecognised" }
+        suggested_template_id: { type: [string, "null"], description: "the built-in whose required slots the most buckets fill; null when none fits" }
+        truncated: { type: boolean, description: "true when the walk stopped early: at 50,000 files, 10,000 folders or 500 buckets" }
+      example:
+        buckets:
+          - { route: images, match: { thermal: false }, slot_key: visual, folder: "E:\\Deliveries\\Tower 14\\DCIM", files: [], count: 212, bytes: 1484000000, samples: [DJI_0001_V.JPG, DJI_0003_V.JPG], crs: null }
+          - { route: images, match: { thermal: true }, slot_key: thermal, folder: "E:\\Deliveries\\Tower 14\\DCIM", files: [], count: 212, bytes: 412000000, samples: [DJI_0002_T.JPG, DJI_0004_T.JPG], crs: null }
+          - { route: pointcloud, match: {}, slot_key: point_cloud, folder: "E:\\Deliveries\\Tower 14\\LiDAR", files: ["E:\\Deliveries\\Tower 14\\LiDAR\\tower.laz"], count: 1, bytes: 98000000, samples: [tower.laz], crs: "EPSG:32633" }
+        not_recognised: { count: 1, samples: [{ name: Thumbs.db, reason: unknown type }] }
+        suggested_template_id: builtin-vertical
+        truncated: false
