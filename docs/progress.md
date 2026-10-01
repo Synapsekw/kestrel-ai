@@ -9,6 +9,52 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Reports closes — 2026-10-01 (`task/r-x`, unit R-X)
+
+Sub-project R is merged (`main` at `ff443e5`, R10 included). R-X ran the full gate on the combined
+tree, froze the sidecar, ran the frozen smoke (now with a real report render), built one installer and
+wrote the combined walkthrough `docs/evidence/reports/combined-walkthrough.md` (Reports 26 steps plus
+4 carried I/M/C checks).
+
+**Changes in this unit.** `smoke_frozen.ps1` step 5c renders one report through the API in its own
+project (`report ok v1 …`); `Get-CatalogueTypeId` takes a kind; `tests/test_scripts_routes.py` pins
+it (commit `8aead7b`). No gate or packaging fix was needed.
+
+**Gate (at `8aead7b`, suites one at a time):** contract check ok; ruff check + format ok (930 files);
+pytest 5181 passed, 14 skipped, 18 deselected (34:58); frontend lint (0 errors, 22 warnings) + tokens
+ok; vitest 580 files / 4065 tests passed; build ok; e2e 178 passed, 7 skipped (ports 5780/5781,
+1.0 m); `e2e:reports` 5 passed, 1 skipped (the scale spec, runs only with `E2E_FRAME_BUDGET=1`)
+(5782/5783, 31.3 s).
+
+**Frozen sidecar** (`backend\scripts\build.ps1`, 3,632.1 MB in 14,548 files, 238 s; the worktree's
+git-ignored `backend/starter_weights` and `backend/third_party/potreeconverter` were copied from the
+main checkout before `build.ps1`):
+`smoke_frozen.ps1 -SamWeights E:\Dev\Yolo\models\sam2.1_t.pt` → `smoke ok` in 44.04 s: geo ok 32633
+15.000325 45.000216; design ok 10 185 surface 64x64; drawings ok 200x100 2; volumes ok pdf 2038 xlsx
+523.6 delaunay 2; reports ok fonts 3 gradient 1 jpeg 1 chart 1 xlsx Major pdf 21424; pointcloud ok
+50000 32639 BROTLI laz 50000; startup ok; health ok; cuda True NVIDIA GeForce RTX 5070 Ti; starter ok
+3; library ok; import ok 3 images; cloud ok 50000 206; report ok v1 8 pages pdf xlsx (report step
+1.82 s); model ok yolo11n-coco 80 classes; alias ok; predict ok 0 boxes cuda; sam ok cuda 10 vertices
+encode 514 ms decode 123 ms; dataset ok train 2 val 1; worker ok mAP50 0.0; font ok; export ok
+weights.onnx 10.1 MB; keyring skip (a key is already stored for anthropic; not touching it).
+`cargo test` (frozen sidecar present): 8 passed. `check:webview`: `webview ok points=49797 red=0.037
+green=0.038 edl=on pins=50 capture=1600x1000 colours=3`, with IMC-X's known `webview WARN capture
+render.edl=false` (EDL cannot render to a target: known engine limit).
+
+**Installer** (built at `8aead7b`, not installed — the operator installs):
+`E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-8aead7b.exe`, 1977282128 bytes (1,885.7 MB),
+SHA256 `a46309311a58f40b31469cd631a3208fbd9661cced957f769c6054680fd70c7c`, without a WebView2
+bootstrapper (`build:installer` took 487 s). The 8aead7b installer was built from `main` at
+`ff443e5` plus this unit, so it predates and lacks the S1-U6 project-setup changes (merge `7bfb2b5b`).
+
+**§18 criterion 3 (byte-identical output).** Proven by
+`backend/tests/test_reports_pdf_document.py::test_sha256_is_stable_twice_and_across_processes` and
+`backend/tests/test_reports_pdf_parts.py::test_parts_are_deterministic` (there is no golden-sha256
+PDF test); both ran in the pytest count above.
+
+**Left for the operator:** install, then run `docs/evidence/reports/combined-walkthrough.md`,
+including R10's "Checks only you can do" and Part B.
+
 ## Project setup lands — 2026-10-01 (`task/s-u6`, unit S1-U6 evidence)
 
 Sub-project S1 (spec `docs/superpowers/specs/2026-09-30-project-setup-design.md`, index

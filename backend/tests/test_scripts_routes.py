@@ -88,3 +88,23 @@ def test_python_script_creates_projects_via_the_catalogue(script: str) -> None:
     assert '"type_ids"' in body, f"{script} does not send type_ids on POST /projects: {body}"
     assert '"kind"' not in body, f"{script} still sends kind on POST /projects: {body}"
     assert '"classes"' not in body, f"{script} still sends classes on POST /projects: {body}"
+
+
+def test_frozen_smoke_renders_a_report() -> None:
+    """R4's in-process `reports-selftest`, then one real `report_render` through the API (plan
+    2026-09-30-reports-r10, ruling R-X-1), in a project of its own after the photo import."""
+    text = (SCRIPTS / "smoke_frozen.ps1").read_text("utf-8")
+    assert "reports-selftest" in text and '"reports ok"' in text
+    for fragment in (
+        'Get-CatalogueTypeId "crack"',
+        '"defect"',
+        '/reports"',
+        '/renders"',
+        '/versions/1"',
+        'Write-Host "report ok v1',
+    ):
+        assert fragment in text, f"smoke_frozen.ps1 lacks {fragment}"
+    lines = text.splitlines()
+    imported = next(i for i, line in enumerate(lines) if 'Write-Host "import ok' in line)
+    rendered = next(i for i, line in enumerate(lines) if 'Write-Host "report ok v1' in line)
+    assert rendered > imported, "the report render must come after the photo import"
