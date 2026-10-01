@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ProjectOverview } from "@/api/overview";
 import { Alert, buttonClass } from "@/ui";
 import { AdoptionBanner } from "./AdoptionBanner";
+import { SetupNotice } from "./SetupNotice";
 
 type Banner = ProjectOverview["banners"][number];
 
@@ -35,6 +36,7 @@ export function Banners({ projectId, banners }: { projectId: string; banners: Ba
             {b.message}
           </Alert>
         ))}
+      <SetupNotice projectId={projectId} />
       <AdoptionBanner projectId={projectId} />
     </div>
   );
