@@ -154,7 +154,7 @@ describe("ReportHistory", () => {
         method: "DELETE",
         path: /\/versions\/\d+$/,
         status: 409,
-        body: errorBody("issued_version", "v2 was issued, so it is kept"),
+        body: errorBody("issued_version", "v2 was issued, so it is kept."),
       },
     ]);
     await screen.findByText("ahmadia-site-inspection-v002.pdf");
@@ -164,7 +164,9 @@ describe("ReportHistory", () => {
         name: "Delete version",
       }),
     );
-    expect(await screen.findByText(/was issued, so it is kept\. Unissue it first/)).toBeInTheDocument();
+    expect(
+      await screen.findByText("v2 was issued, so it is kept. Unissue it first to delete it."),
+    ).toBeInTheDocument();
   });
 
   it("opens the PDF with the default application", async () => {

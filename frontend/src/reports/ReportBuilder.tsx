@@ -1,11 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiFailure, codeOf, messageOf } from "@/api/errors";
 import { useReportActions, versionOutline, type ReportConfig, type ReportVersion } from "@/api/reports";
 import { pushLog } from "@/app/diagnostics";
 import { Alert, Button, Icon, Input, Skeleton, cx, focusRing, toast } from "@/ui";
 import { normaliseSections, type RenderFormat } from "./builderModel";
-import { versionName } from "./format";
+import { versionName, withoutStop } from "./format";
 import { ReportPreview, type ReportPreviewHandle } from "./ReportPreview";
 import { RenderButton } from "./RenderButton";
 import { ReportHistory } from "./ReportHistory";
@@ -38,6 +38,11 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
   const [formats, setFormats] = useState<RenderFormat[]>(["pdf"]);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+  /** Render stopped because the last change was not saved; the copy follows the save error. */
+  const [saveBlocked, setSaveBlocked] = useState(false);
+  const centre = useRef<HTMLDivElement>(null);
+  /** The version left with Back to draft, so focus can land somewhere sensible afterwards. */
+  const leftVersion = useRef<number | null>(null);
   const back = `/p/${projectId}/reports`;
 
   // Any edit returns the preview to the draft (R-7.3).
@@ -60,11 +65,10 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
   async function render() {
     setRendering(true);
     setRenderError(null);
+    setSaveBlocked(false);
     try {
       if (!(await draft.flush())) {
-        setRenderError(
-          "The report was not rendered because its last change was not saved. Fix the setting named above, then render again.",
-        );
+        setSaveBlocked(true);
         return;
       }
       const { job } = await actions.render(reportId, { formats });
@@ -79,12 +83,29 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
         toast("info", "This report is already rendering; its progress is in History.");
       } else {
         pushLog(`render failed to start: ${messageOf(e, String(e))}`);
-        setRenderError(`${messageOf(e, "The render did not start")}. Try Render again.`);
+        setRenderError(`${withoutStop(messageOf(e, "The render did not start"))}. Try Render again.`);
       }
     } finally {
       setRendering(false);
     }
   }
+
+  function backToDraft() {
+    leftVersion.current = viewing?.number ?? null;
+    setViewing(null);
+  }
+
+  // Back to draft unmounts the banner that held focus: put it on the History row's View button when
+  // History is open, else on the preview pane.
+  useEffect(() => {
+    const n = leftVersion.current;
+    if (n === null || viewing) return;
+    leftVersion.current = null;
+    const view = historyOpen
+      ? document.querySelector<HTMLElement>(`[data-view-version="${n}"]`)
+      : null;
+    (view ?? centre.current)?.focus();
+  }, [viewing, historyOpen]);
 
   const backLink = (
     <Link
@@ -116,9 +137,18 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
   }
 
   const config = draft.config;
-  const unsaved = draft.saveState === "pending" || draft.saveState === "saving";
+  // While a change is unsaved (or its save failed) the outline's count is stale: say it is counting.
+  const unsaved =
+    draft.saveState === "pending" || draft.saveState === "saving" || draft.saveState === "error";
   const matchCount = unsaved ? null : (draft.outline?.finding_count ?? null);
   const saveText = SAVE_TEXT[draft.saveState];
+  const blockedText =
+    saveBlocked && draft.saveState === "error"
+      ? draft.saveErrorCode === "invalid_report"
+        ? "The report was not rendered because its last change was not saved. Fix the setting named above, then render again."
+        : `The report could not be saved: ${withoutStop(draft.saveError ?? "the save failed")}. Try Render again.`
+      : null;
+  const alertText = renderError ?? blockedText;
   const viewed = viewing && typeof viewing.number === "number" ? { v: viewing, n: viewing.number } : null;
 
   return (
@@ -129,6 +159,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
           aria-label="Report title"
           dense
           value={draft.title}
+          maxLength={200}
           invalid={!draft.title.trim()}
           onChange={(e) => setTitle(e.target.value)}
           className="w-72"
@@ -138,7 +169,11 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
             Not saved: {draft.saveError}
           </p>
         ) : (
-          saveText && <span className="text-xs text-muted">{saveText}</span>
+          saveText && (
+            <span role="status" className="text-xs text-muted">
+              {saveText}
+            </span>
+          )
         )}
         <span className="flex-1" />
         <WarningsChip warnings={draft.outline?.warnings ?? []} />
@@ -161,9 +196,9 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
           busy={rendering}
         />
       </header>
-      {renderError && (
+      {alertText && (
         <Alert tone="danger" className="mx-4 mt-3">
-          {renderError}
+          {alertText}
         </Alert>
       )}
       <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_320px]">
@@ -174,7 +209,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
             onShow={(key) => previewRef.current?.scrollToSection(key)}
           />
         </aside>
-        <div className="flex min-h-0 flex-col">
+        <div ref={centre} tabIndex={-1} className="flex min-h-0 flex-col focus:outline-none">
           {viewed ? (
             <>
               <Alert
@@ -182,7 +217,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
                 role="status"
                 className="mx-4 mt-3 shrink-0"
                 actions={
-                  <Button size="sm" variant="secondary" icon="arrow-left" onClick={() => setViewing(null)}>
+                  <Button size="sm" variant="secondary" icon="arrow-left" onClick={backToDraft}>
                     Back to draft
                   </Button>
                 }
@@ -225,6 +260,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
         // View v<n> is a toggle (aria-pressed): pressing the shown version again returns to the draft.
         onView={(v) => setViewing((cur) => (cur && cur.number === v.number ? null : v))}
         viewing={viewed?.n ?? null}
+        onDeleted={(n) => setViewing((cur) => (cur && cur.number === n ? null : cur))}
       />
       {templateOpen && (
         <SaveTemplateDialog

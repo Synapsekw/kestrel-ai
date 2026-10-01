@@ -76,12 +76,13 @@ let current: ReportConfig;
 function routes(
   opts: {
     renderStatus?: number;
-    patchStatus?: number;
+    patchStatus?: number | (() => number);
     warnings?: ReportWarning[];
     versions?: ReportVersion[];
   } = {},
 ): FakeRoute[] {
   let outlineCalls = 0;
+  let patchStatus = 200;
   return [
     {
       method: "GET",
@@ -111,6 +112,7 @@ function routes(
       },
     },
     { method: "GET", path: /\/versions$/, body: { items: opts.versions ?? [], next_cursor: null } },
+    { method: "DELETE", path: /\/versions\/\d+$/, status: 204 },
     {
       method: "POST",
       path: /\/renders$/,
@@ -126,9 +128,14 @@ function routes(
     {
       method: "PATCH",
       path: /\/reports\/[^/]+$/,
-      status: opts.patchStatus ?? 200,
+      status: () => {
+        const s = opts.patchStatus ?? 200;
+        patchStatus = typeof s === "function" ? s() : s;
+        return patchStatus;
+      },
       body: (r) => {
-        if ((opts.patchStatus ?? 200) !== 200)
+        if (patchStatus === 500) return errorBody("internal", "The project folder is busy.");
+        if (patchStatus !== 200)
           return errorBody("invalid_report", "The report is not valid", {
             errors: [{ path: "config.filters.date.days", message: "must be at least 1" }],
           });
@@ -289,6 +296,63 @@ describe("ReportBuilder", () => {
     expect(requests.some((r) => r.url.endsWith("/renders"))).toBe(false);
   });
 
+  it("a refused save shows Counting findings… rather than the last saved count", async () => {
+    setup({ patchStatus: 422 });
+    expect(await screen.findByText("38 findings match")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Appendix" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Not saved/);
+    expect(screen.getByText("Counting findings…")).toBeInTheDocument();
+    expect(screen.queryByText("38 findings match")).toBeNull();
+  });
+
+  it("a save that failed for another reason is retried by Render, which then goes ahead", async () => {
+    let calls = 0;
+    const requests = setup({ patchStatus: () => (++calls === 1 ? 500 : 200) });
+    await screen.findByRole("region", { name: "Preview" });
+    fireEvent.click(screen.getByRole("switch", { name: "Appendix" }));
+    expect(await screen.findByText(/Not saved: The project folder is busy\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Render" }));
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/renders"))).toBe(true));
+    expect(requests.filter((r) => r.method === "PATCH")).toHaveLength(2);
+    expect(screen.queryByText(/was not rendered/)).toBeNull();
+  });
+
+  it("a save that keeps failing for another reason says so and asks to render again", async () => {
+    const requests = setup({ patchStatus: 500 });
+    await screen.findByRole("region", { name: "Preview" });
+    fireEvent.click(screen.getByRole("switch", { name: "Appendix" }));
+    await screen.findByText(/Not saved/);
+    fireEvent.click(screen.getByRole("button", { name: "Render" }));
+    expect(
+      await screen.findByText("The report could not be saved: The project folder is busy. Try Render again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Fix the setting named above/)).toBeNull();
+    expect(requests.some((r) => r.url.endsWith("/renders"))).toBe(false);
+  });
+
+  it("a render that does not start says why without a doubled full stop", async () => {
+    const { api } = fakeClient(
+      routes().map((r) =>
+        r.method === "POST"
+          ? { ...r, status: 500, body: errorBody("internal", "The renderer is missing.") }
+          : r,
+      ),
+    );
+    renderWithProviders(<ReportBuilder projectId={PROJECT_ID} reportId={REPORT_ID} />, { api });
+    await screen.findByRole("region", { name: "Preview" });
+    fireEvent.click(screen.getByRole("button", { name: "Render" }));
+    expect(await screen.findByText("The renderer is missing. Try Render again.")).toBeInTheDocument();
+  });
+
+  it("the save status is announced and the title is bounded", async () => {
+    setup();
+    await screen.findByRole("region", { name: "Preview" });
+    expect(screen.getByRole("textbox", { name: "Report title" })).toHaveAttribute("maxLength", "200");
+    fireEvent.click(screen.getByRole("switch", { name: "Appendix" }));
+    expect(screen.getByText("Saving…")).toHaveAttribute("role", "status");
+    await waitFor(() => expect(screen.getByText("Saved")).toHaveAttribute("role", "status"));
+  });
+
   it("History toggles the drawer", async () => {
     setup();
     await screen.findByRole("region", { name: "Preview" });
@@ -353,6 +417,34 @@ describe("ReportBuilder", () => {
     expect(screen.getByRole("region", { name: "Preview" })).toHaveAttribute("data-pages", "40");
     expect(seen.latest).toBe(draftLoader);
     expect(screen.getByRole("button", { name: "View v3" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("Back to draft moves focus to the History View button while History is open", async () => {
+    await viewV3();
+    fireEvent.click(await screen.findByRole("button", { name: "Back to draft" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "View v3" })).toHaveFocus());
+  });
+
+  it("Back to draft with History closed moves focus to the preview pane", async () => {
+    await viewV3();
+    fireEvent.click(screen.getByRole("button", { name: "Close history" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Back to draft" }));
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toContainElement(screen.getByRole("region", { name: "Preview" }));
+  });
+
+  it("deleting the version being viewed returns the preview to the draft", async () => {
+    const requests = await viewV3();
+    await screen.findByText("Viewing v3 (read only)");
+    const rows = within(screen.getByRole("dialog", { name: "History" })).getAllByRole("button", {
+      name: "Delete version",
+    });
+    fireEvent.click(rows[1]); // v3 is the second row (newest first)
+    const confirm = await screen.findByRole("dialog", { name: "Delete v3?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Delete version" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
+    await waitFor(() => expect(screen.queryByText("Viewing v3 (read only)")).toBeNull());
+    expect(screen.getByRole("region", { name: "Preview" })).toHaveAttribute("data-pages", "40");
   });
 
   it("an edit while viewing a version returns the preview to the draft", async () => {

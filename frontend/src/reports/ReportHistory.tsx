@@ -6,7 +6,15 @@ import { formatBytes } from "@/clouds/format";
 import { RevealButton } from "@/exports/RevealButton";
 import { JobCard } from "@/jobs/JobCard";
 import { Alert, Button, Dialog, IconButton, Pill, Skeleton, type PillTone } from "@/ui";
-import { pagesLabel, shortDate, versionError, versionName, versionPages, versionParts } from "./format";
+import {
+  pagesLabel,
+  shortDate,
+  versionError,
+  versionName,
+  versionPages,
+  versionParts,
+  withoutStop,
+} from "./format";
 import type { VersionHistory } from "./useVersionHistory";
 
 const STATE_TONE: Record<ReportVersion["state"], PillTone> = {
@@ -29,6 +37,8 @@ export interface ReportHistoryProps {
   onView?: (v: ReportVersion) => void;
   /** The version number currently shown read-only in the preview (T9); marks its `View v<n>` pressed. */
   viewing?: number | null;
+  /** Called with a version's number once it is deleted (T9 leaves its read-only view). */
+  onDeleted?: (n: number) => void;
 }
 
 /**
@@ -37,7 +47,15 @@ export interface ReportHistoryProps {
  * issued only), and (R-7.3, when `onView` is given) View v<n> to preview that version read-only. A
  * running render shows its JobCard.
  */
-export function ReportHistory({ projectId, versions, open, onClose, onView, viewing }: ReportHistoryProps) {
+export function ReportHistory({
+  projectId,
+  versions,
+  open,
+  onClose,
+  onView,
+  viewing,
+  onDeleted,
+}: ReportHistoryProps) {
   const api = useApi();
   const panel = useRef<HTMLElement>(null);
   const [confirm, setConfirm] = useState<ReportVersion | null>(null);
@@ -61,12 +79,13 @@ export function ReportHistory({ projectId, versions, open, onClose, onView, view
     setDeleteError(null);
     try {
       await deleteVersion(api, projectId, versions.reportId, confirm.number);
+      onDeleted?.(confirm.number);
       setConfirm(null);
       versions.reload();
     } catch (e) {
       setDeleteError(
         codeOf(e) === "issued_version"
-          ? `${messageOf(e, "This version was issued, so it is kept")}. Unissue it first to delete it.`
+          ? `${withoutStop(messageOf(e, "This version was issued, so it is kept"))}. Unissue it first to delete it.`
           : messageOf(e, "could not delete the version"),
       );
     } finally {
@@ -249,6 +268,7 @@ function VersionRow({
               size="sm"
               variant={viewing === n ? "secondary" : "ghost"}
               aria-pressed={viewing === n}
+              data-view-version={n}
               onClick={() => onView(v)}
             >
               {`View ${versionName(n)}`}

@@ -130,6 +130,71 @@ describe("useReportDraft", () => {
     expect(ok).toBe(false);
   });
 
+  it("flush re-sends a save that failed, and reports success once it lands", async () => {
+    let calls = 0;
+    const rs = routes().map((r) =>
+      r.method === "PATCH"
+        ? {
+            ...r,
+            status: () => (++calls === 1 ? 500 : 200),
+            body: (req: RecordedRequest) =>
+              calls === 1
+                ? errorBody("internal", "The disk is busy.")
+                : { ...report(), ...(req.body as object) },
+          }
+        : r,
+    );
+    const { result, requests } = setup(rs);
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    act(() => result.current.edit(disable("appendix")));
+    await waitFor(() => expect(result.current.saveState).toBe("error"));
+    expect(result.current.saveErrorCode).toBe("internal");
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.flush();
+    });
+    expect(ok).toBe(true);
+    expect(patches(requests)).toHaveLength(2);
+    const body = patches(requests)[1].body as { config: { sections: { key: string; enabled: boolean }[] } };
+    expect(body.config.sections.find((s) => s.key === "appendix")?.enabled).toBe(false);
+    expect(result.current.saveState).toBe("saved");
+    expect(result.current.saveErrorCode).toBeNull();
+  });
+
+  it("a save that failed is re-sent when the builder closes", async () => {
+    let calls = 0;
+    const rs = routes().map((r) =>
+      r.method === "PATCH"
+        ? {
+            ...r,
+            status: () => (++calls === 1 ? 500 : 200),
+            body: (req: RecordedRequest) =>
+              calls === 1 ? errorBody("internal", "boom") : { ...report(), ...(req.body as object) },
+          }
+        : r,
+    );
+    const { result, unmount, requests } = setup(rs);
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    act(() => result.current.edit(disable("appendix")));
+    await waitFor(() => expect(result.current.saveState).toBe("error"));
+    unmount();
+    await waitFor(() => expect(patches(requests)).toHaveLength(2));
+  });
+
+  it("flush does not report failure when an edit lands during the flush", async () => {
+    const { result, requests } = setup();
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    act(() => result.current.edit(disable("appendix")));
+    let ok = false;
+    await act(async () => {
+      const p = result.current.flush();
+      result.current.edit(disable("summary"));
+      ok = await p;
+    });
+    expect(ok).toBe(true);
+    expect(patches(requests)).toHaveLength(2);
+  });
+
   it("an empty title is kept locally and not sent", async () => {
     const { result, requests } = setup();
     await waitFor(() => expect(result.current.status).toBe("ready"));

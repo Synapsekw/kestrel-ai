@@ -61,6 +61,11 @@ export function matchLine(count: number | null): string {
   return count === 1 ? "1 finding matches" : `${count.toLocaleString("en-GB")} findings match`;
 }
 
+/** A message without its closing full stop, so a sentence can follow it ("… busy. Try again."). */
+export function withoutStop(text: string): string {
+  return text.trim().replace(/\.+$/, "");
+}
+
 /** R1's 422 `invalid_report` carries `details.errors[{path, message}]`; name each field. */
 export function saveErrorText(err: unknown): string {
   const errors = err instanceof ApiFailure ? err.details.errors : undefined;

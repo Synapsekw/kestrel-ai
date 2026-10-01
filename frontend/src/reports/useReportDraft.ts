@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi } from "@/api/client";
-import { messageOf } from "@/api/errors";
+import { codeOf, messageOf } from "@/api/errors";
 import {
   getOutline,
   getReport,
@@ -25,9 +25,14 @@ export interface ReportDraft {
   outline: ReportOutline | null;
   saveState: SaveState;
   saveError: string | null;
+  /** The failed save's error code (`invalid_report` for R1's 422), else null. */
+  saveErrorCode: string | null;
   setTitle: (title: string) => void;
   edit: (change: (c: ReportConfig) => ReportConfig) => void;
-  /** Sends a waiting edit now; true when everything is saved (Render calls it first). */
+  /**
+   * Sends a waiting edit (or re-sends one whose save failed) now, and keeps going while edits land
+   * during it; true when everything is saved (Render calls it first).
+   */
   flush: () => Promise<boolean>;
   reloadOutline: () => void;
 }
@@ -50,10 +55,14 @@ export function useReportDraft(projectId: string, reportId: string): ReportDraft
   const [outline, setOutline] = useState<ReportOutline | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveErrorCode, setSaveErrorCode] = useState<string | null>(null);
   const findingsRevision = useChangesStore((s) => s.findingsRevision);
 
   const latest = useRef<Local | null>(null);
   const pending = useRef<Local | null>(null);
+  /** The body of a save that failed and nothing newer has replaced yet; flush and unmount re-send it. */
+  const failed = useRef<Local | null>(null);
+  const sendSeq = useRef(0);
   const timer = useRef<number | null>(null);
   const inFlight = useRef<Promise<boolean>>(Promise.resolve(true));
   const outlineSeq = useRef(0);
@@ -91,15 +100,18 @@ export function useReportDraft(projectId: string, reportId: string): ReportDraft
     };
   }, [api, projectId, reportId, reloadOutline]);
 
-  /** Takes the waiting edit and sends it after any save in flight. */
+  /** Takes the waiting edit (else a failed one) and sends it after any save in flight. */
   const send = useCallback((): Promise<boolean> => {
     if (timer.current !== null) {
       window.clearTimeout(timer.current);
       timer.current = null;
     }
-    const body = pending.current;
+    // A newer edit supersedes a failed save; with no newer edit, the failed one is sent again.
+    const body = pending.current ?? failed.current;
     if (!body) return inFlight.current;
     pending.current = null;
+    failed.current = null;
+    const seq = ++sendSeq.current;
     const run = inFlight.current.then(async () => {
       if (mounted.current) setSaveState("saving");
       const title = body.title.trim();
@@ -108,17 +120,22 @@ export function useReportDraft(projectId: string, reportId: string): ReportDraft
           ...(title ? { title } : {}),
           config: body.config,
         });
+        failed.current = null;
         if (mounted.current) {
           setReport(saved);
           setSaveError(null);
+          setSaveErrorCode(null);
           setSaveState(pending.current ? "pending" : "saved");
           reloadOutline();
         }
         return true;
       } catch (e) {
         pushLog(`report save failed: ${messageOf(e, String(e))}`);
+        // Kept for a retry unless a newer edit is already queued or waiting to replace it.
+        if (seq === sendSeq.current && pending.current === null) failed.current = body;
         if (mounted.current) {
           setSaveError(saveErrorText(e));
+          setSaveErrorCode(codeOf(e));
           setSaveState("error");
         }
         return false;
@@ -159,14 +176,14 @@ export function useReportDraft(projectId: string, reportId: string): ReportDraft
     [schedule],
   );
 
-  // An edit still waiting when the builder closes is saved (Review Focus 2).
+  // An edit still waiting (or whose save failed) when the builder closes is saved (Review Focus 2).
   const sendRef = useRef(send);
   useEffect(() => {
     sendRef.current = send;
   });
   useEffect(
     () => () => {
-      if (pending.current) void sendRef.current();
+      if (pending.current || failed.current) void sendRef.current();
     },
     [],
   );
@@ -180,8 +197,11 @@ export function useReportDraft(projectId: string, reportId: string): ReportDraft
   }, [findingsRevision, reloadOutline]);
 
   const flush = useCallback(async () => {
-    const ok = await send();
-    return ok && pending.current === null;
+    // An edit made while a save is in flight is sent too; stop at the first save that fails.
+    for (;;) {
+      if (!(await send())) return false;
+      if (pending.current === null && failed.current === null) return true;
+    }
   }, [send]);
 
   return {
@@ -193,6 +213,7 @@ export function useReportDraft(projectId: string, reportId: string): ReportDraft
     outline,
     saveState,
     saveError,
+    saveErrorCode,
     setTitle,
     edit,
     flush,
