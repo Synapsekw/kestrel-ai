@@ -27,6 +27,8 @@ export const CATALOGUE_PAGE = {
       group: null,
       archived: false,
       origin: "migrated",
+      definition: null,
+      severity_rules: [],
     },
     {
       id: "t-2",
@@ -38,6 +40,8 @@ export const CATALOGUE_PAGE = {
       group: null,
       archived: false,
       origin: "migrated",
+      definition: null,
+      severity_rules: [],
     },
     {
       id: "t-3",
@@ -49,6 +53,8 @@ export const CATALOGUE_PAGE = {
       group: "Concrete defects",
       archived: false,
       origin: "user",
+      definition: null,
+      severity_rules: [],
     },
   ],
   next_cursor: null,

@@ -19,6 +19,7 @@ from app.reports.compose import (
 from app.reports.figures import cloud, image
 from app.reports.figures import map as map_figures
 from app.reports.schemas import ReportSectionDoc
+from app.reports.sections import comparison, measurements, object_counts
 
 KEYS = [
     "cover",
@@ -38,19 +39,24 @@ def test_the_registry_names_all_eight_sections():
         assert mod.KEY == key and mod.TITLE
 
 
-def test_r9_stubs_say_no_data(handle):
+def test_r9m_sections_end_with_their_empty_state_on_an_empty_project(handle):
     ctx = ctx_for(handle, config(sections=("measurements", "comparison", "object_counts")))
-    for key in ("measurements", "comparison", "object_counts"):
+    empty = {
+        "measurements": measurements.EMPTY,
+        "comparison": comparison.ONE_SURVEY,
+        "object_counts": object_counts.EMPTY,
+    }
+    for key, text in empty.items():
         doc = SECTION_COMPOSERS[key](ctx)
         assert isinstance(doc, ReportSectionDoc)
-        assert [b.model_dump() for b in doc.blocks] == [blocks.para("No data", style="note").model_dump()]
+        assert doc.blocks[-1].kind == "para" and doc.blocks[-1].text == text
         assert SECTION_MODULES[key].USES_FINDINGS is False
 
 
 def test_figure_hooks_are_empty_stubs(handle):
-    """image and map are still R2's stubs; cloud's finding and measurement figures are real (R9-C):
-    a cloud finding/measurement with no stored view and no covering cloud DSM prints its placeholder
-    figure (Task 4 replaced the `measurement_figure` stub)."""
+    """A cloud-anchored finding gets no image or map figures, photos or comments; cloud's finding and
+    measurement figures are real (R9-C): with no stored view and no covering cloud DSM each prints its
+    placeholder figure."""
     t, c = add_type(handle, "crack"), add_cloud(handle)
     add_finding(handle, t, anchor="cloud", target=c)
     mid = cloud_measurement(handle, c)

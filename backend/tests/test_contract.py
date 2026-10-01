@@ -19,6 +19,7 @@ from schemathesis.specs.openapi.checks import (
 )
 
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
+from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
 
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
@@ -99,6 +100,10 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 # Reports (plan 2026-09-30-reports-r0 Ruling 1): the STUBS lists of app/reports/routes_*.py, one module per
 # owning unit (R1, R2, R3, R5). An owner rewrites its module and drops STUBS; nothing here changes.
 EXPECTED_STUBS |= reports_stub_operation_ids()
+
+# Project setup (plan 2026-09-30-setup-u1): the STUBS lists of app/setup/routes_*.py (U2 templates, U3
+# inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
+EXPECTED_STUBS |= setup_stub_operation_ids()
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
 # app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
@@ -221,6 +226,16 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`model_or_provider_required`), a blank cloud query (`query_required`), no class mapped
     # (`unmapped_classes`), no stored key (`conflict` 409) or missing weights (`model_unavailable`).
     "detectImageBatch": {409, 422},
+    # Reports R1: a schema-valid template whose config breaks a rule the schema cannot state
+    # (a section twice, a date range backwards, a blank name) is `invalid_template`.
+    "createReportTemplate": {422},
+    "patchReportTemplate": {422},
+    # Reports R1: a whitespace title, or a config that breaks a rule the schema cannot state, or a
+    # generated logo id that is not an asset of the project, is `invalid_report`.
+    "createReport": {422},
+    "patchReport": {422},
+    # Reports R1: a generated path is never a readable logo (`asset_invalid`, details {reason}).
+    "createReportAsset": {422},
     # R3: a schema-valid `spec` string that is not a base64url snapshot spec (`invalid_snapshot_spec`),
     # or a generated key that does not match the spec (`snapshot_key_mismatch`).
     "getReportSnapshot": {400},
@@ -232,7 +247,6 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
 UNDECLARED_REFUSALS: dict[str, set[int]] = {
     "createCatalogueType": {422},
     "patchCatalogueType": {422},
-    "createProject": {422},
 }
 
 
