@@ -227,3 +227,27 @@ test("flow 3: save as template → a second project's report has the same sectio
   await expect(ui.dataItems(page).getByRole("checkbox", { checked: true })).toHaveCount(0);
   await page.screenshot({ path: evidencePath("reports", "template-second-project.png"), fullPage: true });
 });
+
+test("flow 4: /export redirects to Data exports, and a results export still writes its files", async ({
+  page,
+  request,
+}) => {
+  const { pid } = seeded;
+  await page.goto(`/p/${pid}/export`);
+  await expect(page).toHaveURL(new RegExp(`/p/${pid}/reports/exports$`));
+  await expect(page.getByRole("radio", { name: "Data exports" })).toBeChecked();
+  await expect(ui.results(page)).toBeVisible();
+
+  const posted = page.waitForResponse(
+    (r) => r.request().method() === "POST" && new URL(r.url()).pathname.endsWith(`/projects/${pid}/exports`),
+  );
+  await ui.results(page).getByRole("button", { name: "Export", exact: true }).click();
+  const res = await posted;
+  expect(res.status(), await res.text()).toBe(202);
+  const job = await waitJob(request, pid, ((await res.json()) as Json).job.id);
+  const { folder, files } = job.result as { folder: string; files: string[] };
+  expect(files.length).toBeGreaterThan(0);
+  for (const f of files) expect(existsSync(join(seeded.folder, folder, f))).toBe(true);
+  await expect(page.getByRole("heading", { name: "Past exports" })).toBeVisible();
+  await page.screenshot({ path: evidencePath("reports", "data-exports-real.png"), fullPage: true });
+});
