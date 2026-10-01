@@ -70,6 +70,9 @@ const STARTERS: Record<ImportRoute, Starter> = {
   drawing: startDrawing,
 };
 
+/** Drawings in flight at once: each polls its inspection every second for up to ten minutes. */
+export const DRAWING_CONCURRENCY = 4;
+
 const RANK: Record<UnitState, number> = { started: 0, pending: 1, needs_choice: 2, failed: 3 };
 
 /**
@@ -104,11 +107,16 @@ export const useSetupImports = create<SetupImportsState>((set, get) => {
     }
   };
 
-  // Plan ruling U6-3: one request at a time; drawings last and together (each waits on its inspect).
+  // Plan ruling U6-3: one request at a time; drawings last, a few at a time (each waits on its inspect).
   const runAll = async (api: ApiClient, projectId: string, units: ImportUnit[]) => {
     for (const u of units.filter((x) => x.route !== "drawing")) await run(api, projectId, u);
     useChangesStore.getState().bumpData();
-    await Promise.all(units.filter((x) => x.route === "drawing").map((u) => run(api, projectId, u)));
+    const drawings = units.filter((x) => x.route === "drawing");
+    let next = 0;
+    const worker = async () => {
+      while (next < drawings.length) await run(api, projectId, drawings[next++]);
+    };
+    await Promise.all(Array.from({ length: Math.min(DRAWING_CONCURRENCY, drawings.length) }, worker));
   };
 
   return {

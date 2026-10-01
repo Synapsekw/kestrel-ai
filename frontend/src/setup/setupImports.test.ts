@@ -1,10 +1,27 @@
+import { createApiClient } from "@contract/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
-import { errorBody, exampleGeoMap, exampleSource, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
+import {
+  BUILD_JOB,
+  DRAWING_ID,
+  INSPECT_JOB,
+  bigPdfInspection,
+  drawingJob,
+} from "@/mapws/drawings/testFixtures";
+import {
+  errorBody,
+  exampleGeoMap,
+  exampleSource,
+  fakeClient,
+  fakeFetch,
+  PROJECT_ID,
+  runningJob,
+} from "@/test/fixtures";
 import { bucket, draft, heldClient, PHOTOS, slot } from "@/test/setupDispatchFixtures";
 import { planImports } from "./importPlan";
-import { slotImports, useSetupImports } from "./setupImports";
+import { drawingWait } from "./drawingSetup";
+import { DRAWING_CONCURRENCY, slotImports, useSetupImports } from "./setupImports";
 
 const MAP_JOB = { ...runningJob, id: "j-map", type: "map_import" as const };
 const short = (url: string) => url.replace(`/api/v1/projects/${PROJECT_ID}`, "");
@@ -184,5 +201,77 @@ describe("useSetupImports", () => {
     expect(requests).toEqual([]);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("keeps at most DRAWING_CONCURRENCY drawings in flight at once", async () => {
+    const saved = { ...drawingWait };
+    Object.assign(drawingWait, { sleep: async () => {} });
+    const { fetch: inner } = fakeFetch([
+      {
+        method: "POST",
+        path: /\/drawing-inspections$/,
+        status: 202,
+        body: { inspection: bigPdfInspection, job: drawingJob(INSPECT_JOB, "running") },
+      },
+      { method: "GET", path: /\/drawing-inspections\/[^/]+$/, body: bigPdfInspection },
+      {
+        method: "POST",
+        path: /\/drawings$/,
+        status: 202,
+        body: { drawing: { id: DRAWING_ID }, job: drawingJob(BUILD_JOB, "queued") },
+      },
+    ]);
+    let open: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    let inFlight = 0;
+    let peak = 0;
+    const counting = (async (input: Request | string | URL, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const first = /\/drawing-inspections$/.test(url.pathname);
+      const last = /\/drawings$/.test(url.pathname);
+      if (first) {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await gate;
+      }
+      try {
+        return await inner(input, init);
+      } finally {
+        if (last) inFlight -= 1;
+      }
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: counting });
+    const plan = planImports(
+      draft({
+        slots: [slot("drawings", "Asset drawings", "drawing")],
+        buckets: [
+          bucket({
+            route: "drawing",
+            slot_key: "drawings",
+            folder: "D:\\plans",
+            files: Array.from({ length: 6 }, (_, i) => `D:\\plans\\p${i}.pdf`),
+            count: 6,
+          }),
+        ],
+      }),
+    );
+    expect(plan.units).toHaveLength(6);
+    try {
+      const done = useSetupImports.getState().start(api, PROJECT_ID, plan);
+      await vi.waitFor(() => expect(inFlight).toBe(DRAWING_CONCURRENCY));
+      await new Promise((r) => setTimeout(r, 20)); // a fifth would have started by now
+      expect(peak).toBe(DRAWING_CONCURRENCY);
+      open();
+      await done;
+      expect(peak).toBe(DRAWING_CONCURRENCY);
+      expect(states()).toEqual(["started"]);
+      expect(useSetupImports.getState().byProject[PROJECT_ID].units.map((u) => u.state)).toEqual(
+        Array(6).fill("started"),
+      );
+    } finally {
+      Object.assign(drawingWait, saved);
+    }
   });
 });
