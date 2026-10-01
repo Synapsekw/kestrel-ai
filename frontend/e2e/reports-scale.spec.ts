@@ -39,16 +39,23 @@ test("300 findings: the builder keeps its frame budget while the render job runs
     })
     .toBe("running");
 
+  // The Preview region is its own scroll container (R6 ReportPreview, Ruling 8): the wheel must move it,
+  // or the frames sampled an idle page.
   const preview = ui.preview(page);
   await preview.hover();
+  const scrollTop = () => preview.evaluate((el) => el.scrollTop);
+  const scrollBefore = await scrollTop();
   const frames = measureFrames(page, { durationMs: 3000 });
   for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 600);
   const stats = await frames;
+  const scrollAfter = await scrollTop();
   const state = (await api(request, "GET", `/projects/${pid}/jobs/${job.id}`)).state as string;
   console.log(
     `scale: frames while rendering ${JSON.stringify(stats)}, job ${state} at the end of the sample`,
   );
+  console.log(`scale: preview scrollTop ${scrollBefore} -> ${scrollAfter}`);
   expect(state, "the sample must fall inside the render").toBe("running");
+  expect(scrollAfter, "the wheel events must scroll the preview").toBeGreaterThan(scrollBefore);
   expect(stats.samples).toBeGreaterThan(30);
   expect(stats.p95).toBeLessThanOrEqual(FRAME_BUDGET_MS);
 

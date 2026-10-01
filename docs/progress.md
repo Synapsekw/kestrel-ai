@@ -30,7 +30,7 @@ Screenshots in `docs/evidence/reports/`: `builder.png`, `history-v1.png`, `delta
 | 1 | flow 1: new report to issued v1 inside the project's Reports tab |
 | 2 | flow 1: the live `finding_pages` blocks equal v1's `document.json` (finding numbers and snapshot keys) |
 | 3 | R4 determinism tests (no golden sha256 is committed; the PDF bytes depend on the snapshot cache path): `backend/tests/test_reports_pdf_document.py::test_sha256_is_stable_twice_and_across_processes`, `backend/tests/test_reports_pdf_parts.py::test_parts_are_deterministic`; R3 key-changes-on-mtime: `backend/tests/test_report_snapshot_render.py::test_the_key_changes_when_the_source_mtime_changes`, `backend/tests/test_report_snapshot_image_crop.py::test_the_adapter_keys_on_the_file_and_annotation_and_misses_cleanly` (ruling R10-6) |
-| 4 | `pytest -m perf tests/test_reports_render_scale.py` (RSS sampled every 10 ms): `300-finding render: 34.1 s, 1 PDF part(s), 314 pages, RSS peak +245 MB over 237 MB, stats {'finding_count': 300, 'page_count': 314, 'part_count': 1, 'warnings': [], 'label': None, 'error': None}` (Task 7's run: 36.0 s, +285 MB). `E2E_FRAME_BUDGET=1 … -g "300 findings"` (ports 5774/5775): Task 7 passed with `scale: frames while rendering {"samples":140,"p50":16.7,"p95":16.8,"max":149.9}, job running at the end of the sample`; of four fresh runs on 2026-10-01 one passed (`{"samples":147,"p50":16.7,"p95":33.3,"max":166.7}`) and three failed the 33.4 ms p95 budget (p95 83.3, 49.9 and 150 ms; the first two while another unit's lint/e2e/build ran, the last on a quiet machine). **Open:** the frame budget is not met reliably. |
+| 4 | Memory: `pytest -m perf tests/test_reports_render_scale.py` (RSS sampled every 10 ms): `300-finding render: 34.1 s, 1 PDF part(s), 314 pages, RSS peak +245 MB over 237 MB, stats {'finding_count': 300, 'page_count': 314, 'part_count': 1, 'warnings': [], 'label': None, 'error': None}` (Task 6's run after the 10 ms sampler, `7af7d87c`: 36.0 s, +285 MB). UI, met: `E2E_FRAME_BUDGET=1 … -g "300 findings"` (ports 5774/5775) after the `--mm` fix (`ceb468bd`). Task 6c's three runs had p95 16.8 / 16.7 / 16.8 ms, the last `scale: frames while rendering {"samples":180,"p50":16.7,"p95":16.8,"max":33.4}, job running at the end of the sample`. Two fresh runs on 2026-10-01, with the test now also requiring the 20 wheel events to scroll the preview (scrollTop 0 → 12000 both times), both passed: `scale: frames while rendering {"samples":181,"p50":16.7,"p95":16.7,"max":16.8}, job running at the end of the sample` and `scale: frames while rendering {"samples":181,"p50":16.7,"p95":16.8,"max":16.8}, job running at the end of the sample`. Before the fix, Task 6b (`284d163f`) passed once with `{"samples":140,"p50":16.7,"p95":16.8,"max":149.9}` and three of four later runs failed the 33.4 ms p95 budget (p95 83.3, 49.9 and 150 ms). |
 | 5 | walkthrough step 15 (operator print check); R4 severity-as-word tests `backend/tests/test_reports_pdf_primitives.py::test_severity_tag_prints_its_word_and_survives_a_bad_colour`, `backend/tests/test_reports_pdf_finding.py::test_graded_finding_shows_its_severity_and_status` |
 | 6 | flow 4 (both halves); walkthrough steps 23–25 |
 
@@ -43,11 +43,18 @@ only" consequence of `2026-09-24-pdf-and-xlsx-in-the-frozen-sidecar.md`),
   (`LazyJpeg`) whose bytes are read only at `save()`, with an eager fallback when the lazy XObject
   rejects a JPEG and a grey placeholder if the file vanished before the save. Root cause: reportlab
   ASCII85-encoded every figure at draw time and held them all until save (about 3.75x the part); the
-  300-finding RSS peak went from +436 MB to +285 MB. Pinned by
+  300-finding RSS peak went from +609 MB to +314 MB with a 20 ms sampler (Task 6's probe; the test's
+  old 50 ms sampler read +436 MB → +181 MB, missing the short `save()` spike). Pinned by
   `test_a_figure_embeds_its_jpeg_verbatim_and_holds_no_image_bytes_until_the_pdf_is_written`,
   `test_a_jpeg_the_lazy_xobject_rejects_is_still_drawn_eagerly` and
   `test_a_snapshot_gone_before_the_pdf_is_written_prints_grey_not_a_failed_render`
   (`tests/test_reports_pdf_primitives.py`) and the perf test (`69d24472`, `7af7d87c`).
+- `frontend/src/reports/preview.css` (R6, imported by `ReportPreview.tsx`) registers `@property --mm` as
+  an inherited `<length>`. Root cause: the unregistered `--mm` (`min(100cqw/210, 1mm)`) made every
+  printed length depend on the preview's size container, so each layout re-resolved ~10k objects
+  (110–165 ms full layouts; p95 166.6 ms while scrolling with no render running). Pinned structurally
+  by `frontend/src/reports/previewCss.test.ts` and behaviourally by `e2e/reports-scale.spec.ts`
+  (`ceb468bd`).
 - `backend/app/reports/figures/map.py` (`fingerprint(ctx)` over each map's id, status,
   `bounds_wgs84` and `crs_wkt`), `outline._DATA_COLUMNS` (GeoMap `bounds_wgs84`, `crs_wkt`),
   `sections/measurements.py` + `sections/m_etag.py` (fingerprint over the cloud measurement views'
@@ -62,8 +69,7 @@ passed, GATE_PENDING skipped, GATE_PENDING deselected; frontend lint + tokens GA
 passed; build GATE_PENDING; e2e GATE_PENDING passed, GATE_PENDING skipped (ports 5770/5771); `cargo test`: GATE_PENDING.
 
 **Left for R-X:** freeze the sidecar, `smoke_frozen.ps1` (`reports ok`, `report ok v1 …`), installer,
-combined walkthrough. **Left for the operator:** the walkthrough's "Checks only you can do". **Open:**
-the 300-finding frame budget (criterion 4, UI half) failed three of four fresh runs.
+combined walkthrough. **Left for the operator:** the walkthrough's "Checks only you can do".
 
 ## I/M/C wave closes — 2026-09-28 (`task/imc-x`, programme unit IMC-X)
 

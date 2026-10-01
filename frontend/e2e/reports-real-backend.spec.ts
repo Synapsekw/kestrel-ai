@@ -224,7 +224,13 @@ test("flow 3: save as template → a second project's report has the same sectio
   expect(layout(copy)).toEqual(layout(source));
   expect(copy.filters.data_item_ids ?? null).toBeNull();
   expect(await sectionListOrder(page)).toEqual(sectionKeys(source));
-  await expect(ui.dataItems(page).getByRole("checkbox", { checked: true })).toHaveCount(0);
+  // The template carries no data-item ids (the API config above is the check of that). The second
+  // project has no data items, so its Data items group lists none of the first project's items and
+  // offers the "every data item" default.
+  const dataItems = ui.dataItems(page);
+  await expect(dataItems).toBeVisible();
+  await expect(dataItems.getByRole("checkbox")).toHaveCount(0);
+  await expect(dataItems.getByText("None ticked: every data item.")).toBeVisible();
   await page.screenshot({ path: evidencePath("reports", "template-second-project.png"), fullPage: true });
 });
 

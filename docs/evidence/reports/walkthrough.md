@@ -32,7 +32,9 @@ the merged UI's (R6/R7/R8); the screenshots in this folder come from the opt-in 
    Survey comparison shows a swipe and a side-by-side per consecutive pair of maps ("One survey so far:
    nothing to compare." with a single map; "… — no common area" for maps that do not overlap). Object
    counts lists photo batches as "detections", not objects.
-4. Look at the warnings chip in the top bar.
+4. Look at the warnings chip in the top bar. (For a missing 3D view, either never capture one for
+   the cloud finding, or delete its view file in `<project>\pointclouds\<cloud>\views\` and reopen
+   the report.)
    Expect: "1 warning" (or more). Click it: "1 3D view is missing"; its **Open to fix** link opens
    Point clouds with that finding selected. A 3D view whose pin moved after capture prints with "(out
    of date: the anchor moved after capture)" and the chip says "1 3D view is out of date".
@@ -186,10 +188,12 @@ the merged UI's (R6/R7/R8); the screenshots in this folder come from the opt-in 
 - Plans: `docs/superpowers/plans/2026-09-30-reports-index.md`, `2026-09-30-reports-r0.md` to
   `2026-09-30-reports-r10.md` (R9 as `-r9c`, `-r9i`, `-r9m`); rulings R10-1 to R10-6 in the R10 plan.
 - `docs/progress.md`: no R unit wrote its own entry; this unit's entry "Reports lands — 2026-09-30".
-- `.superpowers/sdd/imc-common/walkthroughs/`: `r-r0.md`, `r-r1.md`, `r-r2.md`, `r-r3.md`,
-  `r-r4.md`, `r-r5.md`, `r-r6.md`, `r-r7.md`, `r-r8.md`, `r-r9c.md`, `r-r9i.md`, `r-r9m.md`.
-- `.superpowers/sdd/imc-common/handoffs.md`: every "Reports" section (from R0, R1, R2, R3, R4, R5,
-  R6, R7, R8, R9-I, R9-M and R9-C).
-- `.superpowers/sdd/2026-09-30-reports-r10/task-3-report.md` (the UI handle → accessible-name table).
+- Dev-only working notes (git-ignored under `.superpowers/sdd/`, not in the repo):
+  - `imc-common/walkthroughs/`: `r-r0.md`, `r-r1.md`, `r-r2.md`, `r-r3.md`, `r-r4.md`, `r-r5.md`,
+    `r-r6.md`, `r-r7.md`, `r-r8.md`, `r-r9c.md`, `r-r9i.md`, `r-r9m.md`.
+  - `imc-common/handoffs.md`: every "Reports" section (from R0, R1, R2, R3, R4, R5, R6, R7, R8,
+    R9-I, R9-M and R9-C).
+  - `2026-09-30-reports-r10/task-3-report.md` (the UI handle → accessible-name table; the tracked
+    equivalent is `frontend/e2e/fixtures/reportsUi.ts`).
 - Screenshots: `builder.png`, `history-v1.png`, `deltas-v2.png`, `template-second-project.png`,
   `data-exports-real.png` (real backend), `data-exports.png` (Prism mock).
