@@ -14,7 +14,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 Sub-project R (spec `docs/superpowers/specs/2026-09-26-reports-design.md`, index
 `docs/superpowers/plans/2026-09-30-reports-index.md`) is merged: R0–R9 on `main` at `b435e184`. R10 adds
 the §17 e2e flows, the §18 checks, two ADRs and the operator walkthrough
-`docs/evidence/reports/walkthrough.md` (21 steps).
+`docs/evidence/reports/walkthrough.md` (26 steps).
 
 **e2e (spec §17).** Flows 1–4 against the real backend (`pnpm -C frontend e2e:reports`, opt-in; built
 bundle + FastAPI on a scratch data folder; ruling R10-1): `5 passed` (seed smoke + flows 1–4; the
@@ -31,8 +31,8 @@ Screenshots in `docs/evidence/reports/`: `builder.png`, `history-v1.png`, `delta
 | 2 | flow 1: the live `finding_pages` blocks equal v1's `document.json` (finding numbers and snapshot keys) |
 | 3 | R4 determinism tests (no golden sha256 is committed; the PDF bytes depend on the snapshot cache path): `backend/tests/test_reports_pdf_document.py::test_sha256_is_stable_twice_and_across_processes`, `backend/tests/test_reports_pdf_parts.py::test_parts_are_deterministic`; R3 key-changes-on-mtime: `backend/tests/test_report_snapshot_render.py::test_the_key_changes_when_the_source_mtime_changes`, `backend/tests/test_report_snapshot_image_crop.py::test_the_adapter_keys_on_the_file_and_annotation_and_misses_cleanly` (ruling R10-6) |
 | 4 | `pytest -m perf tests/test_reports_render_scale.py` (RSS sampled every 10 ms): `300-finding render: 34.1 s, 1 PDF part(s), 314 pages, RSS peak +245 MB over 237 MB, stats {'finding_count': 300, 'page_count': 314, 'part_count': 1, 'warnings': [], 'label': None, 'error': None}` (Task 7's run: 36.0 s, +285 MB). `E2E_FRAME_BUDGET=1 … -g "300 findings"` (ports 5774/5775): Task 7 passed with `scale: frames while rendering {"samples":140,"p50":16.7,"p95":16.8,"max":149.9}, job running at the end of the sample`; of four fresh runs on 2026-10-01 one passed (`{"samples":147,"p50":16.7,"p95":33.3,"max":166.7}`) and three failed the 33.4 ms p95 budget (p95 83.3, 49.9 and 150 ms; the first two while another unit's lint/e2e/build ran, the last on a quiet machine). **Open:** the frame budget is not met reliably. |
-| 5 | walkthrough step 13 (operator print check); R4 severity-as-word tests `backend/tests/test_reports_pdf_primitives.py::test_severity_tag_prints_its_word_and_survives_a_bad_colour`, `backend/tests/test_reports_pdf_finding.py::test_graded_finding_shows_its_severity_and_status` |
-| 6 | flow 4 (both halves); walkthrough steps 18–20 |
+| 5 | walkthrough step 15 (operator print check); R4 severity-as-word tests `backend/tests/test_reports_pdf_primitives.py::test_severity_tag_prints_its_word_and_survives_a_bad_colour`, `backend/tests/test_reports_pdf_finding.py::test_graded_finding_shows_its_severity_and_status` |
+| 6 | flow 4 (both halves); walkthrough steps 23–25 |
 
 **ADRs.** `vault/decisions/2026-09-30-fonts-in-the-frozen-sidecar.md` (supersedes the "Helvetica
 only" consequence of `2026-09-24-pdf-and-xlsx-in-the-frozen-sidecar.md`),

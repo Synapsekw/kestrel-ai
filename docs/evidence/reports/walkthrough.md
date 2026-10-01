@@ -2,18 +2,23 @@
 
 One run through the Reports tab after sub-project R (spec `docs/superpowers/specs/2026-09-26-reports-design.md`).
 You need a project with photos, a map and a point cloud, and at least one finding on each (an image
-box on a defect type, a map pin, a 3D pin), a map measurement, and a site photo you can attach to a
-finding. A second, empty project is used in step 17. Labels are the merged UI's (R6/R7/R8); the
-screenshots in this folder come from the opt-in real-backend e2e (`pnpm -C frontend e2e:reports`).
+box on a defect type, a map pin, a 3D pin), a map measurement, and two site photos and two comments on
+the image finding (added in its finding panel). A second, empty project is used in step 19. Labels are
+the merged UI's (R6/R7/R8); the screenshots in this folder come from the opt-in real-backend e2e
+(`pnpm -C frontend e2e:reports`).
 
 1. Open the project and click the **Reports** tab.
    Expect: the heading "Reports" with a **Reports | Data exports** switch under it; the list says
    "No reports yet", with **New report**.
 2. Click **New report**, pick **Full inspection report** (each choice shows its description, built-ins
-   are marked "Built-in"), keep or type a title, click **Create report**.
+   are marked "Built-in"), keep or type a title, click **Create report**. Then in the settings'
+   **Cover**, click **Choose logo** and pick a PNG (in a browser dev run: type a path and **Add
+   logo**); try a non-image file once.
    Expect: the builder opens: sections left, white A4 sheets in the centre, settings right. The
    filters show a live count, "Counting findings…" then e.g. "3 findings match". Above the sheets:
    "Not rendered yet · about N pages now". Every edit shows "Saving…" then "Saved" next to the title.
+   The logo shows "Logo added · W × H px" and appears top right on the preview's cover on a white
+   chip; the non-image file shows its reason inline under the button and nothing is added.
 3. Scroll the preview.
    Expect: sections and figures load as they come into view (a skeleton first). The cover has the
    violet-to-teal band with the title. The image finding's page shows a 4:3 crop with its outline in
@@ -31,86 +36,107 @@ screenshots in this folder come from the opt-in real-backend e2e (`pnpm -C front
    Expect: "1 warning" (or more). Click it: "1 3D view is missing"; its **Open to fix** link opens
    Point clouds with that finding selected. A 3D view whose pin moved after capture prints with "(out
    of date: the anchor moved after capture)" and the chip says "1 3D view is out of date".
-5. In **Filters**, tick **Closed**.
+5. In Point clouds, build a surface from that cloud, then come back to the report.
+   Expect: the cloud finding's page now prints "Plan view of <surface>: no 3D view saved", a hillshade
+   with the pin, instead of the grey placeholder. The chip still lists the missing 3D view.
+6. In Point clouds, open the **Findings** tab's menu and click **Capture missing views**; wait for
+   "Saving views n / N" to finish. Come back to the report.
+   Expect: every cloud finding's page prints its 3D view ("3D view, captured <date>"); the chip no
+   longer lists 3D views (it disappears if that was the only warning).
+7. In **Filters**, tick **Closed**.
    Expect: the count updates within about half a second; nothing else moves. Pick a level under
-   **Severity at least** (e.g. Moderate): an **Include ungraded findings** checkbox appears, unticked;
-   pick **Any** again before going on.
-6. Open the **Options** of **Finding pages** and set **Photos per finding** to 0.
+   **Severity at least** (e.g. Moderate): an **Include ungraded findings** checkbox appears, unticked.
+   Click a type chip under **Types**, and under **Date** pick a range and set **From** / **To**: the
+   count follows each change. Put **Any**, **All types** and **All dates** back before going on
+   (keep **Closed** ticked).
+8. Open the **Options** of **Finding pages** and set **Photos per finding** to 0.
    Expect: "0 leaves the photos out."; the photo cells disappear from the finding pages in the
    preview. Unticking **Context inset** (if you try it) hides the locator in the corner of the crop.
-7. Focus the **Measurements** row and press **Alt+↑** until it is above **Findings table** (or drag
+9. Focus the **Measurements** row and press **Alt+↑** until it is above **Findings table** (or drag
    its **Reorder Measurements** handle).
    Expect: the row moves; a screen reader hears the new position; the preview's Measurements section
    now comes before the findings table. **Cover** cannot be moved. With **Settings → Reduce motion**
    on, the move is instant. The eye button **Show Measurements in preview** scrolls the preview there.
-8. Switch a section off and on again.
-   Expect: its sheet collapses and returns; the cover stays pinned first when enabled.
-9. Open the chevron next to **Render** (**Render options**; the menu is **Render formats**), tick
-   **XLSX** (**PDF** stays ticked and cannot be unticked), press Escape, click **Render**.
-   Expect: the **History** drawer opens on a job card with phases (compose, snapshots, PDF, tables)
-   and a progress bar that only moves forward; you can keep editing and scrolling while it runs.
-   Clicking **Render** again while it runs only opens History (the API says "This report is already
-   rendering"). An edit made after clicking Render does not change this render: it prints the
-   settings from the moment you clicked.
-10. Start a render and press **Cancel job** on its job card.
+10. Switch a section off and on again.
+    Expect: its sheet collapses and returns; the cover stays pinned first when enabled.
+11. Open the chevron next to **Render** (**Render options**; the menu is **Render formats**), tick
+    **XLSX** (**PDF** stays ticked and cannot be unticked), press Escape, click **Render**.
+    Expect: the **History** drawer opens on a job card with phases (compose, snapshots, PDF, tables)
+    and a progress bar that only moves forward; you can keep editing and scrolling while it runs.
+    Clicking **Render** again while it runs only opens History (the API says "This report is already
+    rendering"). An edit made after clicking Render does not change this render: it prints the
+    settings from the moment you clicked.
+12. Start a render and press **Cancel job** on its job card.
     Expect: the job ends as cancelled; no new version appears in History; the next render still gets
     the next number.
-11. Render again and wait for it to finish (toast "Report rendered"). The History drawer lists it
+13. Render again and wait for it to finish (toast "Report rendered"). The History drawer lists it
     (open it with **History**, close it with **Close history** or Escape).
     Expect: v1, "Ready", with its page count ("10 pages") and files `<project>-<report>-v001.pdf` and
     `findings.xlsx`; the line above the sheets now reads "N pages at the last render · about N pages
     now".
-12. Click **Open PDF** (installed app).
+14. Click **Open PDF** (installed app).
     Expect: the PDF opens in your default viewer: gradient cover with the title, logo chip if set,
     "Draft"; page furniture "Kestrel AI · <project> · page n / N"; bookmarks per section and per
     finding. Figures (including 3D views at 170 mm wide) print sharp.
-13. Print one finding page in greyscale (or preview it greyscale).
+15. Print one finding page in greyscale (or preview it greyscale).
     Expect: every severity reads as a word next to a dot ("Moderate"), never colour alone.
-14. Click **Show in folder** on v1, then open `findings.xlsx`.
+16. Click **Show in folder** on v1, then open `findings.xlsx`.
     Expect: Explorer shows the version folder (`reports\<id>\v001\` with the PDF, `findings.xlsx` and
     `document.json`); the workbook has Findings (frozen header, autofilter, severity cells filled with
     the scale colour; a note typed as `=1+1` stays text), Measurements and Report sheets.
-15. Click **Mark as issued** on v1. Then click **View v1**.
+17. Click **Mark as issued** on v1. Then click **View v1**.
     Expect: v1 shows an "Issued <d Mon>" pill and offers **Unissue** instead of **Mark as issued** and
     **Delete version**: an issued version cannot be deleted (the API refuses with "An issued version
-    cannot be deleted. Unissue it first."). **View v1** shows the frozen v1 read-only with "Viewing v1
-    (read only)" and **Back to draft** (close History first at 1280 px: the drawer covers it). A draft
-    (unissued) version's **Delete version** asks to confirm, then removes the row and its folder.
-16. In the Findings tab, close the map finding and raise the cloud finding's severity. Come back to the
+    cannot be deleted. Unissue it first."; step 22 unissues and deletes it). **View v1** shows the
+    frozen v1 read-only with "Viewing v1 (read only)" and **Back to draft** (close History first at
+    1280 px: the drawer covers it).
+18. In the Findings tab, close the map finding and raise the cloud finding's severity. Come back to the
     report.
     Expect: the executive summary's change cards read Closed 1, Escalated 1, and the line under them
     "1 closed · 1 escalated since v1". Render: v2 appears with the same strip; v1 stays "Issued".
-17. Tick every item under **Data items** in **Filters**, then **Save as template** with a name and
+19. Tick every item under **Data items** in **Filters**, then **Save as template** with a name and
     **Save template**.
     Expect: the dialog says data-item filters, the logo and the report date are not kept. Open the
     second project → Reports → **New report** → your template: the same sections in the same order,
     photos still 0, and no data items ticked. Back on its list, the card's **Actions for <title>** menu
     offers **Duplicate** and **Delete** (never rendered); the first project's report offers
-    **Duplicate** and **Archive**.
-18. Click **Data exports** (or ←/→ on the switch).
+    **Duplicate** and **Archive**. A project with more than 50 reports shows **Load more reports**
+    under the list.
+20. Back in the first project's report, untick the data items, set **Photos per finding** to 2, and
+    under **Comments** pick **Last**, then **All**.
+    Expect: the image finding's page shows its two photos as small cells under the figure, then the
+    comments: only the newest with **Last**, the whole thread with **All**.
+21. Delete one of that finding's photo files in `<project>\findings\<id>\`, come back to the report,
+    and **Render**.
+    Expect: that photo cell shows a grey "photo file is missing" placeholder in the preview; the render
+    still completes (v3) and its PDF prints the same placeholder.
+22. In History, click **Unissue** on v1, then **Delete version** on it and confirm.
+    Expect: the confirmation says its files are removed and the next render still gets the next
+    number; v1's row disappears and its `reports\<id>\v001\` folder is gone.
+23. Click **Data exports** (or ←/→ on the switch).
     Expect: the address is `/p/<project>/reports/exports`; the Counts and Results exports (the HTML
     option reads "Image contact sheet (HTML)"), **Exports in their workspaces** with **Open the Map
     workspace**, **Open Point clouds** and **Open surfaces and volumes**, and **Past exports** (now
     also volume and point-cloud exports, as "Export volumes" / "Point cloud export"). The Counts export
     has no PDF option; **Create a Survey count report** opens the New report dialog with Survey counts
     picked (the `?new=` in the address is dropped). The **More** menu no longer lists "Export".
-19. Run a results export and a counts CSV.
+24. Run a results export and a counts CSV.
     Expect: both finish as jobs and appear in Past exports with **Show in folder**.
-20. Paste an old address `/p/<project>/export`.
+25. Paste an old address `/p/<project>/export`.
     Expect: you land on Reports → Data exports. A finished map export's toast **Open data exports**
     lands there too.
-21. Close the app during a render, then start it again.
+26. Close the app during a render, then start it again.
     Expect: the render shows as "Render failed" ("Interrupted by an application restart. Render the
     report again."); no half-written version is listed and no `.partial-*` folder is left under
     `reports\<id>\`. The next render removes the failed row.
 
 ## Checks only you can do
 
-1. **Print quality (step 12).** Open v1's PDF in your viewer: cover gradient, logo chip, page
+1. **Print quality (step 14).** Open v1's PDF in your viewer: cover gradient, logo chip, page
    furniture, bookmarks, figure sharpness. The e2e checks the files and page counts, not how they look.
-2. **Greyscale legibility (step 13, §18 criterion 5).** Print or preview a finding page in greyscale;
+2. **Greyscale legibility (step 15, §18 criterion 5).** Print or preview a finding page in greyscale;
    every severity must read as its word. The unit test pins the word, not the printed contrast.
-3. **Closing mid-render (step 21).** Quit the installed app while a render runs and start it again;
+3. **Closing mid-render (step 26).** Quit the installed app while a render runs and start it again;
    the version must show as failed with no `.partial-*` folder. Headless tests cannot quit the shell.
 
 ## Operator-visible rulings
@@ -121,7 +147,7 @@ screenshots in this folder come from the opt-in real-backend e2e (`pnpm -C front
   release, marked deprecated. (R8)
 - Word output, in-app PDF viewing and one merged PDF above the part budget are deferred. (spec §20)
 - Reports print in Space Grotesk, which has no Cyrillic, CJK or emoji glyphs: such characters in a
-  title, note or comment print as missing-glyph boxes. (R4, R10)
+  title, note or comment print as missing-glyph boxes. (R4)
 - With the default statuses [open, reviewed], a finding closed since the baseline leaves the filtered
   set and counts as "left the report", not "closed". Tick **Closed** in Filters to count closures.
   (R2, R10)
