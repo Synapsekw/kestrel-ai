@@ -64,9 +64,11 @@ only" consequence of `2026-09-24-pdf-and-xlsx-in-the-frozen-sidecar.md`),
   reach the chip. Pinned by `tests/test_reports_preview_staleness.py` (four tests, including
   `test_the_outline_warns_once_for_missing_and_for_stale_measurement_views`) (`52735827`).
 
-**Gate (at `GATE_PENDING`, suites one at a time):** contract check GATE_PENDING; ruff check + format GATE_PENDING; pytest GATE_PENDING
-passed, GATE_PENDING skipped, GATE_PENDING deselected; frontend lint + tokens GATE_PENDING; vitest GATE_PENDING / GATE_PENDING
-passed; build GATE_PENDING; e2e GATE_PENDING passed, GATE_PENDING skipped (ports 5770/5771); `cargo test`: GATE_PENDING.
+**Gate (at `df3f87df`, suites one at a time; the backend suites ran at `ceb468bd`, and `df3f87df`
+changed no backend or contract file):** contract check ok; ruff check + format ok (930 files); pytest
+5177 passed, 17 skipped, 18 deselected; frontend lint 0 errors (22 warnings) + prettier + tokens ok;
+vitest 567 files / 3917 tests passed; build ok; e2e 175 passed, 7 skipped (ports 5770/5771);
+`cargo test`: skipped (no frozen sidecar).
 
 **Left for R-X:** freeze the sidecar, `smoke_frozen.ps1` (`reports ok`, `report ok v1 …`), installer,
 combined walkthrough. **Left for the operator:** the walkthrough's "Checks only you can do".
