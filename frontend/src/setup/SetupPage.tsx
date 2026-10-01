@@ -5,16 +5,16 @@ import { messageOf } from "@/api/errors";
 import { cancelJob } from "@/api/jobs";
 import { LIBRARY_JOBS } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
-import { Button, toast } from "@/ui";
+import { Button } from "@/ui";
 import type { ProjectTemplate } from "./api";
 import { AnomaliesCard } from "./AnomaliesCard";
 import { BasicsCard } from "./BasicsCard";
-import { createFromDraft } from "./createProject";
 import { DataCard } from "./DataCard";
-import { useSetupDraft, type SetupDraft } from "./draftStore";
+import { useSetupDraft } from "./draftStore";
 import { SummaryCard } from "./SummaryCard";
 import { TemplateCard } from "./TemplateCard";
 import { useTemplateChoice } from "./templateChoice";
+import { useCreateProject } from "./useCreateProject";
 import { useTemplates } from "./useTemplates";
 import { useWide } from "./useWide";
 
@@ -27,18 +27,7 @@ export function SetupPage() {
   const choice = useTemplateChoice();
   const wide = useWide();
 
-  // S-R5 placeholder: ensure + create + open. U6 replaces this handler with runSetup, which starts the imports.
-  const onCreate = useCallback(
-    async (draft: SetupDraft) => {
-      const project = await createFromDraft(api, draft);
-      const sorted = draft.buckets.some((b) => b.slot_key !== null && !b.skipped);
-      useSetupDraft.getState().discard();
-      pushLog(`created project ${project.id} from the setup page`);
-      if (sorted) toast("info", "Project created. Add the sorted data with Add data on the project's tabs.");
-      void navigate(`/p/${project.id}/overview`);
-    },
-    [api, navigate],
-  );
+  const onCreate = useCreateProject();
 
   const onTemplateSaved = useCallback(
     (t: ProjectTemplate) => {

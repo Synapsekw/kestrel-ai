@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
-import { Alert, Button, GlassPanel, Popover, cx } from "@/ui";
+import { Alert, Button, GlassPanel, Popover, cx, useSeverityScale } from "@/ui";
 import type { ProjectTemplate } from "./api";
 import { Checklist } from "./Checklist";
 import { draftSnapshot, useSetupDraft, type SetupDraft } from "./draftStore";
@@ -34,7 +34,8 @@ export function SummaryCard({
   onTemplateSaved,
 }: SummaryCardProps) {
   const draft = useSetupDraft();
-  const model = checklistOf(draft, templateLabel(draft.templateId, templates));
+  const scale = useSeverityScale();
+  const model = checklistOf(draft, templateLabel(draft.templateId, templates), scale);
   const ready = canCreate(model);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

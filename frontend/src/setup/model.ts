@@ -1,8 +1,9 @@
 import type { CatalogueType } from "@/api/catalogue";
 import { TYPE_HOTKEYS, TYPE_PALETTE } from "@/catalogue/catalogueModel";
 import { normaliseName } from "@/catalogue/normaliseName";
+import { rulesOf, validateRules } from "@/catalogue/severityRulesModel";
 import { formatBytes } from "@/clouds/format";
-import type { IconName } from "@/ui";
+import type { IconName, SeverityLevel } from "@/ui";
 import type {
   CatalogueTypeSpec,
   InspectBucket,
@@ -19,7 +20,10 @@ export type DraftType = CatalogueTypeSpec & { key: string };
 export const MAX_TYPES = 64;
 export const ENSURE_DEBOUNCE_MS = 300;
 export const MAX_DROP_PATHS = 16;
-export const TRUNCATED_TEXT = "Stopped at 50,000 files. Drop a narrower folder.";
+export const TRUNCATED_TEXT =
+  "Not everything was sorted: the folder holds more than Kestrel sorts at once. Drop a narrower folder, or add the rest later from the project's tabs.";
+export const SORTING_TEXT = "Sorting files… Create when it finishes";
+export const wholeFolderText = (name: string) => `The whole folder ${name} will be imported`;
 export const VIDEO_NOTE = "Video import is coming";
 export const SAME_FOLDER_NOTE = "Visual and thermal photos in the same folder are imported together.";
 /** The swatch for a type whose colour the server will pick. */
@@ -56,7 +60,7 @@ export function specOf(t: DraftType): CatalogueTypeSpec {
     default_severity: t.default_severity ?? null,
     hotkey: t.hotkey ?? null,
     definition: t.definition ?? null,
-    severity_rules: t.severity_rules ?? [],
+    severity_rules: (t.severity_rules ?? []).map((r) => ({ when: r.when, severity: r.severity })),
   };
 }
 
@@ -222,6 +226,42 @@ export function templateLabel(templateId: string | null, templates: readonly Pro
   return templates.find((t) => t.id === templateId)?.name ?? "Blank";
 }
 
+/** The last two path segments, `parent\name`; the name alone for a root-level folder. */
+function parentAndName(path: string): string {
+  const parts = path
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .filter(Boolean);
+  return parts.slice(-2).join("\\") || path;
+}
+
+/**
+ * Folder names of non-skipped, assigned photo buckets that import their whole folder; one slot's when
+ * `slotKey` is given. One entry per folder path (case and slash insensitive); two different folders
+ * with the same name show as `parent\name`.
+ */
+export function wholeFolderNames(buckets: readonly DraftBucket[], slotKey?: string): string[] {
+  const byPath = new Map<string, string>();
+  for (const b of buckets) {
+    if (!b.wholeFolder || b.skipped || b.slot_key === null) continue;
+    if (slotKey !== undefined && b.slot_key !== slotKey) continue;
+    const key = b.folder
+      .replace(/[\\/]+$/, "")
+      .replace(/\//g, "\\")
+      .toLowerCase();
+    if (!byPath.has(key)) byPath.set(key, b.folder);
+  }
+  const folders = [...byPath.values()];
+  const taken = new Map<string, number>();
+  for (const f of folders) {
+    const n = folderName(f).toLowerCase();
+    taken.set(n, (taken.get(n) ?? 0) + 1);
+  }
+  return folders.map((f) =>
+    (taken.get(folderName(f).toLowerCase()) ?? 0) > 1 ? parentAndName(f) : folderName(f),
+  );
+}
+
 export interface ChecklistModel {
   templateName: string;
   /** The name-and-folder problem, or null when both are fine. */
@@ -231,6 +271,27 @@ export interface ChecklistModel {
   emptyRequired: TemplateSlot[];
   typeCount: number;
   clashes: string[];
+  /** S-R17: a sort is still running, so its results are not yet in the draft. */
+  sorting: boolean;
+  /** Folder names of assigned photo buckets that came from a file, not their folder (U3 F1). */
+  wholeFolders: string[];
+  /** One line per type whose severity rules the Catalogue would refuse ("<type>: <message>"). */
+  rulesProblems: string[];
+}
+
+/**
+ * A rule over 200 characters, or on a level off the scale, stays in the draft and would fail `ensure`
+ * late. Without a scale the level check is skipped (each rule's own level counts as on the scale).
+ */
+function rulesProblemsOf(types: readonly DraftType[], scale?: readonly SeverityLevel[]): string[] {
+  const out: string[] = [];
+  for (const t of types) {
+    const rules = rulesOf(t.severity_rules);
+    const against = scale ?? rules.map((r) => ({ level: r.severity, name: "", colour: "" }));
+    const problem = validateRules(rules, against);
+    if (problem) out.push(`${t.name}: ${problem}`);
+  }
+  return out;
 }
 
 export function checklistOf(
@@ -240,8 +301,10 @@ export function checklistOf(
     slots: readonly TemplateSlot[];
     buckets: readonly DraftBucket[];
     types: readonly DraftType[];
+    inspect: object | null;
   },
   templateName: string,
+  scale?: readonly SeverityLevel[],
 ): ChecklistModel {
   return {
     templateName,
@@ -251,11 +314,22 @@ export function checklistOf(
     emptyRequired: emptyRequired(d.slots, d.buckets),
     typeCount: d.types.length,
     clashes: clashLines(d.types),
+    sorting: d.inspect !== null,
+    wholeFolders: wholeFolderNames(d.buckets),
+    rulesProblems: rulesProblemsOf(d.types, scale),
   };
 }
 
-/** Spec §8: Create needs a valid name and folder and no hotkey clash; an empty required slot only warns (S1-6). */
-export const canCreate = (c: ChecklistModel): boolean => c.basics === null && c.clashes.length === 0;
+/**
+ * Spec §8: Create needs a valid name and folder, no hotkey clash, no rule problem and no sort still running (S-R17: unapplied
+ * results would never be imported); an empty required slot only warns (S1-6).
+ */
+export const canCreate = (c: ChecklistModel): boolean =>
+  c.basics === null && c.clashes.length === 0 && c.rulesProblems.length === 0 && !c.sorting;
 
 export const issueCount = (c: ChecklistModel): number =>
-  (c.basics ? 1 : 0) + c.emptyRequired.length + c.clashes.length;
+  (c.basics ? 1 : 0) +
+  c.emptyRequired.length +
+  c.clashes.length +
+  c.rulesProblems.length +
+  (c.sorting ? 1 : 0);

@@ -202,6 +202,34 @@ describe("setup draft", () => {
     expect(store()).toMatchObject({ truncated: false, suggestedTemplateId: null });
   });
 
+  it("flags a photo bucket whose folder was not itself dropped: the whole folder is imported (U3 F1)", () => {
+    const file = "E:\\D\\DCIM\\100MEDIA\\DJI_0001_V.JPG";
+    const photos = bucket({ route: "images", match: { thermal: false }, folder: "E:\\D\\DCIM\\100MEDIA" });
+    store().beginInspect({ jobId: INSPECT_JOB_ID, slotKey: null, paths: [file] });
+    store().applyInspect(INSPECT_JOB_ID, inspectResult([photos]));
+    expect(store().buckets[0].wholeFolder).toBe(true);
+    // The folder itself, dropped afterwards, was sorted: the flag clears on the same bucket.
+    store().beginInspect({ jobId: INSPECT_JOB_ID_2, slotKey: null, paths: ["E:\\D\\DCIM\\100MEDIA"] });
+    store().applyInspect(INSPECT_JOB_ID_2, inspectResult([photos]));
+    expect(store().buckets).toHaveLength(1);
+    expect(store().buckets[0].wholeFolder).toBeFalsy();
+  });
+
+  it("does not flag a photo bucket under a dropped folder, nor keep a flag once its folder was sorted", () => {
+    const photos = bucket({ route: "images", match: { thermal: false }, folder: "E:\\D\\DCIM\\100MEDIA" });
+    store().beginInspect({ jobId: INSPECT_JOB_ID, slotKey: null, paths: ["E:\\D"] });
+    store().applyInspect(INSPECT_JOB_ID, inspectResult([photos]));
+    expect(store().buckets[0].wholeFolder).toBeFalsy();
+    // A later file drop from that folder does not turn the flag on: the folder was already sorted.
+    store().beginInspect({
+      jobId: INSPECT_JOB_ID_2,
+      slotKey: null,
+      paths: ["E:\\D\\DCIM\\100MEDIA\\DJI_0002_V.JPG"],
+    });
+    store().applyInspect(INSPECT_JOB_ID_2, inspectResult([photos]));
+    expect(store().buckets[0].wholeFolder).toBeFalsy();
+  });
+
   it("Discard clears everything", () => {
     store().setName("Site A");
     store().setFolder("E:\\Projects\\A");

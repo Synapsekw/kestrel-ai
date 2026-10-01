@@ -15,7 +15,9 @@ import {
   MAX_TYPES,
   basicsError,
   bucketLabel,
+  canCreate,
   checklistOf,
+  wholeFolderNames,
   clashLines,
   conflictText,
   countLabel,
@@ -25,6 +27,7 @@ import {
   freeHotkey,
   hotkeyClashes,
   isAbsolutePath,
+  issueCount,
   mergeTypes,
   sharesFolder,
   sizeLabel,
@@ -39,6 +42,16 @@ import { remap } from "./remap";
 let n = 0;
 const key = () => `k${++n}`;
 const draftTypes = (specs: readonly CatalogueTypeSpec[]) => specs.map((s) => toDraftType(s, key()));
+
+describe("specOf rules", () => {
+  it("keeps only when and severity on each rule", () => {
+    const t = {
+      ...toDraftType(typeSpec("Rust", "defect", 2, "A"), "k"),
+      severity_rules: [{ when: "wide", severity: 3, key: "x" } as never],
+    };
+    expect(specOf(t).severity_rules).toEqual([{ when: "wide", severity: 3 }]);
+  });
+});
 
 describe("name and folder (moved from the New project dialog)", () => {
   it("asks for a name, then a folder, then a full folder path", () => {
@@ -176,7 +189,14 @@ describe("slots and buckets", () => {
   it("builds the checklist", () => {
     const buckets = remap([draftBucket(THERMAL)], vertical);
     const model = checklistOf(
-      { name: "", folder: "", slots: vertical, buckets, types: draftTypes(VERTICAL.config.types) },
+      {
+        name: "",
+        folder: "",
+        slots: vertical,
+        buckets,
+        types: draftTypes(VERTICAL.config.types),
+        inspect: null,
+      },
       "Vertical asset inspection",
     );
     expect(model).toEqual({
@@ -187,6 +207,79 @@ describe("slots and buckets", () => {
       emptyRequired: [vertical[0]],
       typeCount: 7,
       clashes: [],
+      sorting: false,
+      wholeFolders: [],
+      rulesProblems: [],
     });
+  });
+
+  it("holds Create for a rule problem, one line per type, and counts it", () => {
+    const base = { name: "Site", folder: "E:\\Projects\\Site", slots: [], buckets: [], inspect: null };
+    const scale = [
+      { level: 1, name: "Minor", colour: "#3fb68e" },
+      { level: 2, name: "Major", colour: "#ff5a4f" },
+    ];
+    const ok = { ...draftTypes([typeSpec("Rust", "defect", 1, "1")])[0] };
+    const tooLong = {
+      ...ok,
+      key: "k2",
+      name: "Crack",
+      hotkey: null,
+      severity_rules: [{ when: "x".repeat(201), severity: 1 }],
+    };
+    const offScale = {
+      ...ok,
+      key: "k3",
+      name: "Leak",
+      hotkey: null,
+      severity_rules: [{ when: "wet", severity: 4 }],
+    };
+    const clean = checklistOf({ ...base, types: [ok] }, "Blank", scale);
+    const bad = checklistOf({ ...base, types: [ok, tooLong, offScale] }, "Blank", scale);
+    expect(clean.rulesProblems).toEqual([]);
+    expect(canCreate(clean)).toBe(true);
+    expect(bad.rulesProblems).toEqual([
+      "Crack: Keep rule 1 to 200 characters or fewer.",
+      "Leak: Rule 1 uses level 4, which is no longer on the severity scale. Choose another level.",
+    ]);
+    expect(canCreate(bad)).toBe(false);
+    expect(issueCount(bad)).toBe(issueCount(clean) + 2);
+    // No scale given: the level check is skipped, the length check is not.
+    expect(checklistOf({ ...base, types: [offScale] }, "Blank").rulesProblems).toEqual([]);
+    expect(checklistOf({ ...base, types: [tooLong] }, "Blank").rulesProblems).toHaveLength(1);
+  });
+
+  it("holds Create while a sort runs, and counts it as something to check", () => {
+    const base = { name: "Site", folder: "E:\\Projects\\Site", slots: [], buckets: [], types: [] };
+    const idle = checklistOf({ ...base, inspect: null }, "Blank");
+    const busy = checklistOf({ ...base, inspect: { jobId: "j", slotKey: null, paths: [] } }, "Blank");
+    expect(canCreate(idle)).toBe(true);
+    expect(canCreate(busy)).toBe(false);
+    expect(busy.sorting).toBe(true);
+    expect(issueCount(busy)).toBe(issueCount(idle) + 1);
+  });
+
+  it("names each whole folder a photo bucket will import, once, skipping skipped and unassigned buckets", () => {
+    const a = draftBucket(VISUAL, { wholeFolder: true, slot_key: "visual" });
+    const b = draftBucket(THERMAL, { wholeFolder: true, slot_key: "thermal" });
+    const skipped = draftBucket(ORTHO, { wholeFolder: true, skipped: true, slot_key: "x" });
+    const unused = draftBucket(ORTHO, { wholeFolder: true, slot_key: null });
+    const m = checklistOf(
+      { name: "", folder: "", slots: vertical, buckets: [a, b, skipped, unused], types: [], inspect: null },
+      "Blank",
+    );
+    expect(m.wholeFolders).toEqual(["100MEDIA"]);
+  });
+
+  it("lists a whole folder once per path, and tells two same-named folders apart", () => {
+    const at = (folder: string) =>
+      draftBucket(VISUAL, { wholeFolder: true, slot_key: "visual", folder, id: folder });
+    const names = (...folders: string[]) => wholeFolderNames(folders.map(at));
+    expect(names("E:\\A\\100MEDIA", "e:/a/100media/")).toEqual(["100MEDIA"]);
+    expect(names("E:\\A\\100MEDIA", "E:\\B\\100MEDIA", "E:\\C\\Other")).toEqual([
+      "A\\100MEDIA",
+      "B\\100MEDIA",
+      "Other",
+    ]);
   });
 });

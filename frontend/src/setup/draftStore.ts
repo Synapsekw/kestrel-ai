@@ -15,6 +15,7 @@ import {
   mergeNotRecognised,
   remap,
   slotFor,
+  underAny,
   type DraftBucket,
 } from "./remap";
 
@@ -148,7 +149,9 @@ export const useSetupDraft = create<SetupDraft & SetupActions>((set, get) => ({
       const run = s.inspect;
       const target = s.slots.find((x) => x.key === run.slotKey) ?? null;
       const incoming: DraftBucket[] = result.buckets.map((b) => {
-        const d = { ...b, id: bucketId(b, run.paths), skipped: false };
+        const d: DraftBucket = { ...b, id: bucketId(b, run.paths), skipped: false };
+        // Photo import is per folder: a bucket sorted from a picked file still imports its whole folder.
+        if (b.route === "images" && !underAny(b.folder, run.paths)) d.wholeFolder = true;
         return { ...d, slot_key: target && canMoveTo(d, target) ? target.key : slotFor(d, s.slots) };
       });
       return {
