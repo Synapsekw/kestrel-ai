@@ -39,6 +39,7 @@ const TYPE_NAME: Record<Job["type"], string> = {
   elevation_import: "Elevation import",
   drawing_import: "Drawing import",
   report_render: "Report",
+  setup_inspect: "Sort dropped files",
 };
 
 function num(v: unknown): number | null {
@@ -142,6 +143,8 @@ export function jobToastText(job: Job): string {
       return job.params?.phase === "build" ? "Drawing imported" : "Drawing file read";
     case "report_render":
       return "Report rendered";
+    case "setup_inspect":
+      return "Dropped files sorted";
   }
 }
 
@@ -162,6 +165,7 @@ const REPORTED_ON: Partial<Record<Job["type"], string>> = {
   library_export: "/models/library",
   library_starter: "/models/library",
   library_adopt: "/models/library",
+  setup_inspect: "/projects/new", // the Data card shows the sorted buckets
 };
 
 /** Job ids whose outcome a mounted component reports itself (e.g. the Clouds screen's ExportWatch). */
