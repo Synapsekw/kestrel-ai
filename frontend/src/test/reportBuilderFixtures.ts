@@ -63,7 +63,12 @@ export function reportConfig(over: Partial<ReportConfig> = {}): ReportConfig {
       {
         key: "finding_pages",
         enabled: true,
-        options: { snapshots: ["image", "map", "cloud"], photos_max: 4, comments: "last", context_inset: true },
+        options: {
+          snapshots: ["image", "map", "cloud"],
+          photos_max: 4,
+          comments: "last",
+          context_inset: true,
+        },
       },
       {
         key: "measurements",
@@ -75,7 +80,11 @@ export function reportConfig(over: Partial<ReportConfig> = {}): ReportConfig {
         },
       },
       { key: "comparison", enabled: false, options: { pairs: "auto", mode: "both", counts_chart: true } },
-      { key: "object_counts", enabled: false, options: { type_ids: null, per_area: true, verified_only: false } },
+      {
+        key: "object_counts",
+        enabled: false,
+        options: { type_ids: null, per_area: true, verified_only: false },
+      },
       { key: "appendix", enabled: true, options: { include_methods: true } },
     ],
     ...over,
@@ -134,7 +143,13 @@ export function version(n: number, over: Partial<ReportVersion> = {}): ReportVer
     job_id: null,
     folder: `reports/${REPORT_ID}/v00${n}`,
     files: [
-      { name: `ahmadia-site-inspection-v00${n}.pdf`, kind: "pdf", bytes: 2_400_000, sha256: "a".repeat(64), pages: 38 },
+      {
+        name: `ahmadia-site-inspection-v00${n}.pdf`,
+        kind: "pdf",
+        bytes: 2_400_000,
+        sha256: "a".repeat(64),
+        pages: 38,
+      },
       { name: "findings.csv", kind: "csv", bytes: 12_000, sha256: "b".repeat(64), pages: null },
     ],
     config: reportConfig(),
@@ -147,7 +162,15 @@ export function version(n: number, over: Partial<ReportVersion> = {}): ReportVer
 
 /** A `ReportVersion["stats"]` with only the given keys set. */
 export function stats(over: Partial<ReportVersion["stats"]> = {}): ReportVersion["stats"] {
-  return { finding_count: null, page_count: null, part_count: null, warnings: [], label: null, error: null, ...over };
+  return {
+    finding_count: null,
+    page_count: null,
+    part_count: null,
+    warnings: [],
+    label: null,
+    error: null,
+    ...over,
+  };
 }
 
 export function renderJob(over: Partial<Job> = {}): Job {
