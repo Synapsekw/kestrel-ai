@@ -93,6 +93,21 @@ describe("ReportFilters", () => {
     expect(last().date).toMatchObject({ rule: "range", from: "2026-09-01", to: "2026-09-30" });
   });
 
+  it("keeps the dates and days inside the contract's bounds", () => {
+    const { last } = setup();
+    fireEvent.change(screen.getByRole("combobox", { name: "Date" }), { target: { value: "range" } });
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "" } });
+    expect(last().date.from).toBeNull();
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "" } });
+    expect(last().date.to).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Date" }), { target: { value: "last_days" } });
+    const days = screen.getByRole("spinbutton", { name: "Days" });
+    expect(days).toHaveAttribute("min", "1");
+    expect(days).toHaveAttribute("max", "3650");
+    fireEvent.change(days, { target: { value: "99999" } });
+    expect(last().date.days).toBe(3650);
+  });
+
   it("lists the data items and treats none ticked as all", async () => {
     const { last, requests } = setup();
     const group = screen.getByRole("group", { name: "Data items" });

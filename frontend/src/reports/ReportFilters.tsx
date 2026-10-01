@@ -32,6 +32,9 @@ import {
 } from "./builderModel";
 import { matchLine } from "./format";
 
+/** The contract's bound on `filters.date.days` (ReportDateFilter: 1–3650). */
+const MAX_DAYS = 3650;
+
 const DATA_ICON: Record<DataItemType, IconName> = {
   image_set: "images",
   map: "map",
@@ -227,7 +230,7 @@ export function ReportFilters({
                 type="date"
                 dense
                 value={date.from ?? ""}
-                onChange={(e) => onChange(setDate(filters, { from: e.target.value }))}
+                onChange={(e) => onChange(setDate(filters, { from: e.target.value || null }))}
               />
             </Field>
             <Field label="To" htmlFor="report-date-to">
@@ -236,7 +239,7 @@ export function ReportFilters({
                 type="date"
                 dense
                 value={date.to ?? ""}
-                onChange={(e) => onChange(setDate(filters, { to: e.target.value }))}
+                onChange={(e) => onChange(setDate(filters, { to: e.target.value || null }))}
               />
             </Field>
           </div>
@@ -247,12 +250,13 @@ export function ReportFilters({
               id="report-date-days"
               type="number"
               min={1}
+              max={MAX_DAYS}
               dense
               className="w-24"
               value={date.days ?? 30}
               onChange={(e) => {
                 const n = Math.round(Number(e.target.value));
-                if (Number.isFinite(n) && n >= 1) onChange(setDate(filters, { days: n }));
+                if (Number.isFinite(n) && n >= 1) onChange(setDate(filters, { days: Math.min(MAX_DAYS, n) }));
               }}
             />
           </Field>

@@ -42,6 +42,11 @@ describe("SaveTemplateDialog", () => {
     expect(dialog()).toHaveTextContent(/Data-item filters, the logo and the report date are not kept/);
   });
 
+  it("bounds the name to the contract's 120 characters", () => {
+    setup();
+    expect(within(dialog()).getByLabelText("Name")).toHaveAttribute("maxLength", "120");
+  });
+
   it("saves the layout without the project-only fields", async () => {
     const { requests, onClose } = setup();
     fireEvent.change(within(dialog()).getByLabelText("Name"), { target: { value: "North yard layout" } });

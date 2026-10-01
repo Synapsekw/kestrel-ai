@@ -64,7 +64,7 @@ export function SaveTemplateDialog({ open, onClose, config, defaultName }: SaveT
     >
       <div className="flex flex-col gap-3">
         <Field label="Name" htmlFor="template-name">
-          <Input id="template-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input id="template-name" maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Description" htmlFor="template-description">
           <Textarea

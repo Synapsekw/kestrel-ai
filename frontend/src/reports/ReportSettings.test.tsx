@@ -7,6 +7,7 @@ import { ApiContext, type ApiContextValue } from "@/api/client";
 import type { ReportConfig } from "@/api/reports";
 import { errorBody, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { LOGO_ASSET_ID, reportConfig } from "@/test/reportBuilderFixtures";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ReportSettings } from "./ReportSettings";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "C:\\logos\\client.png") }));
@@ -124,6 +125,17 @@ describe("ReportSettings", () => {
       }),
     );
     expect(await screen.findByRole("button", { name: "Replace logo" })).toBeInTheDocument();
+  });
+
+  it("a file dialog that does not open says so inline", async () => {
+    vi.mocked(openDialog).mockRejectedValueOnce(new Error("dialog plugin missing"));
+    const { requests } = setup({ mode: "tauri" });
+    fireEvent.click(screen.getByRole("button", { name: "Choose logo" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The file dialog did not open. Try Choose logo again.",
+    );
+    expect(requests.some((r) => r.url.endsWith("/report-assets"))).toBe(false);
+    expect(screen.getByRole("button", { name: "Choose logo" })).toBeEnabled();
   });
 
   it("a refused logo says why and keeps the cover as it was", async () => {

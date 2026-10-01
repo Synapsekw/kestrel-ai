@@ -164,11 +164,19 @@ function LogoPicker({
   }
 
   async function pick() {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({
-      multiple: false,
-      filters: [{ name: "Logo", extensions: ["png", "jpg", "jpeg", "webp"] }],
-    });
+    setError(null);
+    let picked: unknown;
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      picked = await open({
+        multiple: false,
+        filters: [{ name: "Logo", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      });
+    } catch (e) {
+      pushLog(`logo file dialog failed: ${messageOf(e, String(e))}`);
+      setError(`The file dialog did not open. Try ${assetId ? "Replace logo" : "Choose logo"} again.`);
+      return;
+    }
     if (typeof picked === "string") await add(picked);
   }
 

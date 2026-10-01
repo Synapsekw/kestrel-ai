@@ -101,9 +101,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
     const n = leftVersion.current;
     if (n === null || viewing) return;
     leftVersion.current = null;
-    const view = historyOpen
-      ? document.querySelector<HTMLElement>(`[data-view-version="${n}"]`)
-      : null;
+    const view = historyOpen ? document.querySelector<HTMLElement>(`[data-view-version="${n}"]`) : null;
     (view ?? centre.current)?.focus();
   }, [viewing, historyOpen]);
 
