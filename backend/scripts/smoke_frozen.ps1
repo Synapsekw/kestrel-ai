@@ -11,7 +11,7 @@
 
   Prints `geo ok 32633 <lon> <lat>`, `pointcloud ok 50000 32639 BROTLI laz 50000`, `health ok`,
   `cuda True <gpu name>`, `starter ok 3`, `library ok`, `import ok <n> images`,
-  `cloud ok 50000 206`, `predict ok <n> boxes`, `sam ok <device> <n> vertices` and `worker ok`,
+  `cloud ok 50000 206`, `report ok v1 <n> pages pdf xlsx`, `predict ok <n> boxes`, `sam ok <device> <n> vertices` and `worker ok`,
   and exits non-zero on any failure.
   Sample frames are copied out of the read-only source folder first.
 
@@ -137,8 +137,8 @@ function Wait-ApiJob([string] $Jobs, [string] $JobId, [int] $TimeoutSec = 1800) 
 # 409 type_exists reuses the existing live type of that name; a 409 hotkey_conflict retries once
 # without the hotkey. Invoke-Api re-wraps its exception as a plain string, so this talks to the
 # endpoint directly to keep the structured status code and error body.
-function Get-CatalogueTypeId([string] $Name, [string] $Colour, [string] $Hotkey) {
-  $body = [ordered]@{ name = $Name; colour = $Colour; kind = "object" }
+function Get-CatalogueTypeId([string] $Name, [string] $Colour, [string] $Hotkey, [string] $Kind = "object") {
+  $body = [ordered]@{ name = $Name; colour = $Colour; kind = $Kind }
   if ($Hotkey) { $body.hotkey = $Hotkey }
   for ($attempt = 0; $attempt -lt 2; $attempt++) {
     $request = @{
@@ -275,6 +275,32 @@ try {
   if ($status -ne 206 -or $read -ne 22) { throw "octree Range read gave $status with $read bytes" }
   Complete-Step "pointcloud_api"
   Write-Host "cloud ok $($cloud.point_count) $status"
+
+  # 5c. a report render through the API (ruling R-X-1 of plan 2026-09-30-reports-r10): the frozen
+  # report_render job, the guarded reports router, a snapshot from a real photo, fonts and openpyxl.
+  # A project of its own, so the training steps below see the machinery types only.
+  $crackId = Get-CatalogueTypeId "crack" "#ff5a4f" "" "defect"
+  $reportsFolder = Join-Path $WorkDir "reports-project"
+  New-Item -ItemType Directory -Force $reportsFolder | Out-Null
+  $rpProject = Invoke-Api POST "/projects" @{ name = "Frozen smoke reports"; folder = $reportsFolder; type_ids = @($crackId) }
+  $rpImport = Invoke-Api POST "/projects/$($rpProject.id)/sources" @{ folder = $sample; site = "ahmadia" }
+  $job = Wait-ApiJob "/projects/$($rpProject.id)/jobs" $rpImport.job.id
+  if ($job.state -ne "succeeded") { throw "reports import failed: $($job.error)" }
+  $rpImage = (Invoke-Api GET "/projects/$($rpProject.id)/images?limit=1&sort=path").items[0]
+  Invoke-Api POST "/projects/$($rpProject.id)/findings" @{
+    type_id = $crackId; severity = 2
+    anchor  = @{ kind = "image"; image_id = $rpImage.id; box = @{ x = 100; y = 100; w = 200; h = 120 } }
+  } | Out-Null
+  $report = Invoke-Api POST "/projects/$($rpProject.id)/reports" @{ title = "Frozen smoke"; template_id = "builtin-full" }
+  $render = Invoke-Api POST "/projects/$($rpProject.id)/reports/$($report.id)/renders" @{ formats = @("pdf", "xlsx") }
+  $job = Wait-ApiJob "/projects/$($rpProject.id)/jobs" $render.job.id
+  if ($job.state -ne "succeeded") { throw "report render failed: $($job.error)" }
+  $version = Invoke-Api GET "/projects/$($rpProject.id)/reports/$($report.id)/versions/1"
+  $pdf = @($version.files | Where-Object { $_.kind -eq "pdf" })[0]
+  if (-not $pdf -or $pdf.pages -lt 1) { throw "the report render wrote no PDF: $($version | ConvertTo-Json -Depth 6)" }
+  $kinds = (@($version.files | ForEach-Object { $_.kind }) | Sort-Object) -join " "
+  Complete-Step "report"
+  Write-Host "report ok v1 $($pdf.pages) pages $kinds"
 
   $acquire = Invoke-Api POST "/library/starters/yolo11n/acquire" @{}
   $job = Wait-ApiJob "/library/jobs" $acquire.job.id
