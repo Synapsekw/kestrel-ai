@@ -11,7 +11,7 @@ from surfaces import CX, CY, circle, cone, fixture_spec, plane
 from volume_rows import add_surface
 
 from app.db.models import VolumeMeasurement
-from app.reports.snapshots import SnapshotUnavailable, view3d, volume_plan
+from app.reports.snapshots import SnapshotUnavailable, volume_plan
 from app.volumes import jobs_export
 
 BASE = "/api/v1/projects"
@@ -83,11 +83,3 @@ def test_a12_an_input_change_without_a_status_write_is_still_caught(handle, meas
 
     with handle.session() as s:
         assert s.get(VolumeMeasurement, measurement).status == "stale"  # the refresh persisted it
-
-
-def test_the_view3d_stub_is_a_placeholder_until_replaced(handle):
-    view = ns(kind="view3d", subject_kind="finding", subject_id="f", cloud_id="c")
-    assert view3d.source_version(handle, view) == f"missing:{view3d.REASON}"
-    assert view3d.OUT == (1600, 1000) and view3d.JPEG_QUALITY == 88
-    with pytest.raises(SnapshotUnavailable):
-        view3d.render(handle, view)
