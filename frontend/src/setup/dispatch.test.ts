@@ -9,7 +9,7 @@ import {
   type FakeRoute,
   type RecordedRequest,
 } from "@/test/fixtures";
-import { bucket, draft, draftType, heldClient, PHOTOS } from "@/test/setupDispatchFixtures";
+import { bucket, draft, draftType, heldClient, PHOTOS, slot } from "@/test/setupDispatchFixtures";
 import { runSetup, slotImports, useSetupImports } from "./dispatch";
 
 const P = exampleProject.id;
@@ -145,5 +145,19 @@ describe("runSetup", () => {
     release();
     await vi.waitFor(() => expect(states()).toEqual(["started", "started"]));
     expect(requests.filter((r) => r.url.endsWith("/sources"))).toHaveLength(1);
+  });
+
+  it("records omitted files for the notice even when no import starts", async () => {
+    const { api, requests } = fakeClient([CREATE]);
+    const omittedOnly = draft({
+      slots: [slot("drawings", "Asset drawings", "drawing")],
+      buckets: [bucket({ route: "drawing", slot_key: "drawings", folder: "D:\\plans", files: [], count: 5 })],
+    });
+    await expect(runSetup(api, omittedOnly)).resolves.toEqual({ projectId: P });
+    expect(useSetupImports.getState().byProject[P]).toMatchObject({
+      units: [],
+      omitted: [{ slotKey: "drawings", folder: "D:\\plans", count: 5 }],
+    });
+    expect(posts(requests)).toEqual(["/api/v1/projects"]);
   });
 });

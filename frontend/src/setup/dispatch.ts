@@ -37,6 +37,7 @@ export async function runSetup(api: ApiClient, draft: SetupDraft): Promise<{ pro
   if (Object.keys(hotkeys).length > 0) body.hotkeys = hotkeys;
   const project = await unwrap(api.POST("/api/v1/projects", { body }));
   const plan = planImports(draft);
-  if (plan.units.length > 0) void useSetupImports.getState().start(api, project.id, plan);
+  if (plan.units.length > 0 || plan.omitted.length > 0)
+    void useSetupImports.getState().start(api, project.id, plan);
   return { projectId: project.id };
 }
