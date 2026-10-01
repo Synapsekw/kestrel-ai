@@ -30,7 +30,8 @@ def live_render(app, monkeypatch):
 
 
 class RssPeak:
-    """Samples this process's RSS every 50 ms on a thread while the block runs."""
+    """Samples this process's RSS every 10 ms on a thread while the block runs: the PDF save() peak
+    lasts well under a second, and a 50 ms sampler under-read it by ~130 MB."""
 
     def __enter__(self):
         self.proc = psutil.Process()
@@ -41,7 +42,7 @@ class RssPeak:
         return self
 
     def _run(self):
-        while not self._stop.wait(0.05):
+        while not self._stop.wait(0.01):
             self.peak = max(self.peak, self.proc.memory_info().rss)
 
     def __exit__(self, *exc):

@@ -4,8 +4,14 @@ A figure is drawn with canvas.drawImage on the cached JPEG, embedded as /DCTDeco
 it, so a figure costs its file size, not its pixels. The XObject is a LazyJpeg: reportlab's own reads
 the file at draw time, ASCII85-inflated (x1.25), and holds it for the whole build, so with save()'s two
 formatted copies a part peaked at ~4x its embedded JPEG (spec §15); a LazyJpeg reads the file only
-while save() writes it, binary. Only the JPEG header is read here (for the aspect ratio). Anything
-missing or unreadable prints as a grey placeholder with the reason, never an error (spec §16).
+while save() writes it, binary. A JPEG reportlab's header reader refuses falls back to the eager
+drawImage; a file gone by save() (a cache prune) prints a grey block of its size and logs a warning.
+draw_jpeg leans on reportlab internals (`reportlab.lib.utils._digester`, `canvas._doc`,
+`canvas._setXObjects`, PDFImageXObject's attributes), pinned at reportlab==5.0.1 (requirements.txt):
+on drift, test_a_figure_embeds_its_jpeg_verbatim_and_holds_no_image_bytes_until_the_pdf_is_written
+(tests/test_reports_pdf_primitives.py) fails. Only the JPEG header is read here (for the aspect
+ratio). Anything missing or unreadable prints as a grey placeholder with the reason, never an error
+(spec §16).
 
 `figure_flowable` returns a one-column Table (an atomic flowable), not a KeepTogether: Tasks 10 and
 11 place it inside other Table cells, and a KeepTogether inside a Table cell raises LayoutError on
@@ -15,6 +21,7 @@ caption together, the same as KeepTogether would."""
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image as PILImage
@@ -50,8 +57,19 @@ class LazyJpeg(pdfdoc.PDFImageXObject):
         self._dotrans = int(components == 4)
         self._filters = ("DCTDecode",)
 
+    def _bytes(self) -> bytes:
+        try:
+            return self.path.read_bytes()
+        except OSError:
+            log.warning("snapshot %s vanished before the PDF was written; printed grey", self.path)
+            mode = {"DeviceGray": "L", "DeviceRGB": "RGB"}.get(self.colorSpace, "CMYK")
+            grey = {"L": 200, "RGB": (200, 200, 200), "CMYK": (0, 0, 0, 55)}[mode]
+            buf = BytesIO()
+            PILImage.new(mode, (self.width, self.height), grey).save(buf, "JPEG", quality=50)
+            return buf.getvalue()
+
     def format(self, document):
-        self.streamContent = self.path.read_bytes()
+        self.streamContent = self._bytes()
         try:
             return super().format(document)
         finally:
@@ -64,7 +82,12 @@ def draw_jpeg(c, path: Path, x: float, y: float, width: float, height: float) ->
     name = _digester(f"{path}{None}".encode())
     reg = c._doc.getXObjectName(name)
     if c._doc.idToObject.get(reg) is None:
-        obj = LazyJpeg(name, path)
+        try:
+            obj = LazyJpeg(name, path)
+        except Exception as exc:  # a JPEG readJPEGInfo refuses (12-bit, lossless, arithmetic): eager
+            log.warning("snapshot %s embedded eagerly: %s", path, exc)
+            c.drawImage(str(path), x, y, width, height)
+            return
         c._setXObjects(obj)
         c._doc.Reference(obj, reg)
         c._doc.addForm(name, obj)

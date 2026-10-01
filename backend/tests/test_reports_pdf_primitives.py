@@ -105,3 +105,38 @@ def test_a_figure_embeds_its_jpeg_verbatim_and_holds_no_image_bytes_until_the_pd
     assert a.read_bytes() in data and b.read_bytes() in data  # passthrough: the file, byte for byte
     r, g, _ = pixel(path, 0, 0.5, 0.15)
     assert r > 150 and g < 90
+
+
+def test_a_jpeg_the_lazy_xobject_rejects_is_still_drawn_eagerly(tmp_path, monkeypatch):
+    # reportlab's readJPEGInfo can refuse a JPEG PIL opened (12-bit, lossless, arithmetic SOF): the
+    # figure falls back to plain drawImage, never a failed render (spec §16).
+    def refuse(*_a, **_k):
+        raise ValueError("unsupported JPEG SOF")
+
+    monkeypatch.setattr(primitives, "LazyJpeg", refuse)
+    src = jpeg(tmp_path / "s.jpg", 1200, 900, (200, 40, 40))
+    path = _pdf(tmp_path, [primitives.figure_flowable(src, 170 * mm, 105 * mm, "", ST)])
+    assert path.read_bytes().count(b"/DCTDecode") == 1
+    r, g, _ = pixel(path, 0, 0.5, 0.2)
+    assert r > 150 and g < 90
+
+
+def test_a_snapshot_gone_before_the_pdf_is_written_prints_grey_not_a_failed_render(tmp_path, caplog):
+    # The file is read at save(); a cache prune between draw and save leaves a grey figure and a warning.
+    from reportlab.pdfgen.canvas import Canvas
+
+    src = jpeg(tmp_path / "s.jpg", 1200, 900, (200, 40, 40))
+
+    class PruneBeforeSave(Canvas):
+        def save(self):
+            src.unlink()
+            super().save()
+
+    path = tmp_path / "p.pdf"
+    flows = [primitives.figure_flowable(src, 170 * mm, 105 * mm, "", ST)]
+    with caplog.at_level("WARNING", logger=primitives.__name__):
+        SimpleDocTemplate(str(path), pagesize=A4, invariant=1).build(flows, canvasmaker=PruneBeforeSave)
+    assert path.read_bytes().count(b"/Filter [ /DCTDecode ]") == 1
+    r, g, b = pixel(path, 0, 0.5, 0.2)
+    assert abs(r - g) < 12 and abs(g - b) < 12 and 150 < r < 240  # grey, not the photo
+    assert any("vanished" in m for m in caplog.messages)
