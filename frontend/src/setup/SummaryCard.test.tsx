@@ -55,6 +55,20 @@ describe("SummaryCard", () => {
     expect(create()).toBeEnabled();
   });
 
+  it("holds Create and names the type when a severity rule is over 200 characters", () => {
+    renderSummary();
+    act(() => {
+      store().setName("Site A");
+      store().setFolder("E:\\Projects\\A");
+      store().addType({
+        ...typeSpec("Rust", "defect", 1, "1"),
+        severity_rules: [{ when: "x".repeat(201), severity: 1 }],
+      });
+    });
+    expect(checklist()).toHaveTextContent("Rust: Keep rule 1 to 200 characters or fewer.");
+    expect(create()).toBeDisabled();
+  });
+
   it("warns for each empty required slot but still allows Create", () => {
     store().chooseTemplate(VERTICAL, "replace");
     store().setName("Mast");
@@ -148,5 +162,29 @@ describe("SummaryCard", () => {
     const popover = screen.getByRole("dialog", { name: "Setup checklist" });
     expect(popover).toHaveTextContent("Give the project a name.");
     expect(within(bar).getByRole("button", { name: "Create project" })).toBeDisabled();
+  });
+
+  it("holds Create while a sort is running, with a warn line, and frees it when the sort ends", () => {
+    store().setName("Site");
+    store().setFolder("E:\\Projects\\Site");
+    renderSummary();
+    expect(create()).toBeEnabled();
+    expect(checklist()).not.toHaveTextContent("Sorting files");
+    act(() => store().beginInspect({ jobId: "j1", slotKey: null, paths: ["E:\\DCIM"] }));
+    expect(create()).toBeDisabled();
+    expect(within(checklist()).getByText("Sorting files… Create when it finishes")).toBeInTheDocument();
+    act(() => store().clearInspect());
+    expect(create()).toBeEnabled();
+    expect(checklist()).not.toHaveTextContent("Sorting files");
+  });
+
+  it("names the whole folder a picked photo imports, without blocking Create", () => {
+    store().chooseTemplate(VERTICAL, "replace");
+    store().setName("Mast");
+    store().setFolder("E:\\Projects\\Mast");
+    store().setBuckets(remap([draftBucket(VISUAL, { wholeFolder: true })], VERTICAL.config.slots));
+    renderSummary();
+    expect(within(checklist()).getByText("The whole folder 100MEDIA will be imported")).toBeInTheDocument();
+    expect(create()).toBeEnabled();
   });
 });

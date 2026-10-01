@@ -9,6 +9,85 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Project setup lands — 2026-10-01 (`task/s-u6`, unit S1-U6 evidence)
+
+Sub-project S1 (spec `docs/superpowers/specs/2026-09-30-project-setup-design.md`, index
+`docs/superpowers/plans/2026-09-30-setup-index.md`) is complete on this branch: U1–U5 on `main`,
+U6 adds the create-then-import dispatch (`frontend/src/setup/dispatch.ts`, `setupImports.ts`,
+`importPlan.ts`, `drawingSetup.ts`, `useCreateProject.ts`), the Overview's setup notice
+(`frontend/src/overview/SetupNotice.tsx`), the e2e journeys and the combined S1 operator walkthrough
+`docs/evidence/setup/walkthrough.md` (37 steps, U1–U6 merged, de-duplicated).
+
+**e2e (spec §12).** Gate suite: `e2e/setup-journey.spec.ts` 2 passed in 14.9 s (ports 5850/5851; the
+exact request sequence, one `POST /sources` for the shared folder, no video request, a failed import
+and Retry). Real backend (`pnpm -C frontend e2e:setup`, opt-in; built bundle + FastAPI on a scratch
+data folder, ports 5852/5853): 1 passed, test 3.5 s, whole run 15.4 s; one source with 2 images, the
+one-page PDF built unattended, 7 types with hotkeys 1–7 on the project and in the Catalogue. The
+generated JPEGs are about 300–430 KB each (random noise, plan-mandated), in a temp dir. Screenshots in
+`docs/evidence/setup/` (viewport-height shots: the sorted ones are scrolled to the Data card, the real
+Overview shot is taken after a reload with Images 2; captions in the walkthrough).
+
+**§13 success criteria.**
+| # | Evidence |
+| --- | --- |
+| 1 | real-backend journey (sort, Create, one source with 2 images, the drawing built, 7 types with hotkeys, the Catalogue: walkthrough steps 2, 4, 7, 24–28) + walkthrough steps 1–28 |
+| 2 | U3's classifier tests (`backend/tests/test_setup_classify.py`: `test_raster_rules`, `test_a_raster_keeps_its_crs_and_a_tiff_photo_follows_its_name`, `test_a_sampled_photo_reads_one_header`, `test_video_is_coming_until_s4_flips_one_line`; `test_setup_classify_real.py`) + walkthrough steps 15 and 33 |
+| 3 | U3's header-read counting tests (`test_setup_inspect_sort.py`: `test_3000_dji_jpegs_open_only_20_headers`, `test_the_header_sample_is_per_folder`, `test_real_reader_opens_only_20_of_30_photos`); U6 reads no file in the frontend (budget) |
+| 4 | U2/U5 template tests (`test_setup_builtins.py`, `test_project_templates.py`; `frontend/src/setup/TemplateCard.test.tsx`: "choosing a template fills the slots and the types", "renames a saved template from its menu and reloads the list", "deletes a saved template after asking; …") + walkthrough steps 2–5 |
+| 5 | the gate below |
+
+**Rulings (U6).** Drawings start unattended with the Add data dialog's defaults; a multi-page PDF or a
+file needing a CRS ends in "needs your choice" with Finish drawing import (U6-1). Elevations import as
+DSM named after the file (U6-2). Imports start one request at a time, drawings last (U6-3).
+
+**Controller rulings R1–R14.**
+- R1 U6's test builders live in the new `frontend/src/test/setupDispatchFixtures.ts`; `draft()` spreads `emptyDraft()`.
+- R2 `planImports` dispatches through the slot's route, not the bucket's (a moved GeoTIFF goes to elevations).
+- R3 A file path is dispatched once across all buckets and routes; the first bucket wins.
+- R4 `typeSpecs` reuses U5's `specOf`; every rule is reduced to `{when, severity}` so no UI key reaches a strict body.
+- R5 `runSetup` calls U5's `ensureTypes(api, { types })` wrapper.
+- R6 An ensure refusal that names a type is shown as "<name>: <server message>".
+- R7 U5's placeholder `createProject.ts` and its toast are deleted; the log moves into `useCreateProject`.
+- R8 New Task 12: Create disabled while sorting; "Not everything was sorted" wording; whole-folder note for a photo bucket that came from a file; severity rules wired into TypeRow.
+- R9 Task 12 runs after Task 6 and before Task 7, so the e2e sees the final page.
+- R10 A fourth ADR, `photo-import-is-per-folder`, records U3's finding F1.
+- R11 The walkthrough is the combined S1 walkthrough and the evidence lists every follow-up.
+- R12 Order T1→T2→T3→T4→T5→T6→T12→T8→T7→T9→T10→T11, one implementer at a time.
+- R13 The final whole-branch review ran on the code in parallel with the first full gate; Task 11 ran after the fix wave.
+- R14 One fix wave: rule problems hold Create, drawing inspection capped at 4, omitted files noticed even with no unit, whole-folder names de-duplicated by path, python path relative to the config (`KESTREL_PYTHON` override), the T7 "no notice" hardening; the nested skipped photo bucket goes to follow-ups.
+
+**ADRs.** `vault/decisions/2026-09-30-setup-imports-a-shared-thermal-folder-once.md`,
+`2026-09-30-setup-dispatch-lives-in-a-store-not-the-page.md`,
+`2026-09-30-gotcha-ui-only-keys-in-a-strict-request-body.md`,
+`2026-10-01-photo-import-is-per-folder.md`.
+
+**Changes to other units' code.**
+- U5 `specOf` (`frontend/src/setup/model.ts`) strips rule keys to `{when, severity}` (pinned by a `specOf` strip test).
+- U5 `createProject.ts` (and its test) is replaced by `useCreateProject` and deleted.
+- U5 `model.ts`, `Checklist`, `SummaryCard`, `SlotGrid`, `TypeRow`, `draftStore` and `remap` changed in Task 12 and the fix wave (Create held while sorting, whole-folder note, truncated wording, severity rules in TypeRow, rule problems hold Create).
+
+**Gate (final, gate2 at 232b1da6, suites one at a time, run by the controller):** contract check ok;
+ruff check + format ok; pytest 5170 passed, 17 skipped, 17 deselected; frontend lint + tokens ok;
+vitest 585 files / 4114 tests passed; build ok; e2e 179 passed, 2 skipped (ports 5850/5851;
+`setup-real-backend` is one of them); `cargo test` skipped (no frozen sidecar). Evidence re-run after
+the screenshot fix: `setup-journey.spec.ts` 2 passed (14.7 s, 5850/5851); `e2e:setup` 1 passed (test
+3.4 s, run 15.2 s, 5852/5853); each also run with `E2E_CAPTURE_EVIDENCE=1`.
+
+**Follow-ups.**
+- A skipped photo bucket nested in (or sharing) a dispatched photo folder is still imported, because photo import is per folder; the page does not say so.
+- The per-source file list / extension filter on `POST /sources` (ADR `2026-10-01-photo-import-is-per-folder`).
+- S4: make the Confined template's video slot required (0003 is frozen, so a new catalogue revision); compare 0003's frozen copy with the pre-S4 literal in `test_catalogue_migration_0003.py::test_the_migration_carries_a_frozen_copy` and the Confined row in `test_setup_builtins.py`.
+- S4: turn video on with `app/setup/classify.py::VIDEO_IMPORT_ENABLED = True`.
+- S1 contract, next edit: reword `ProjectCreate.hotkeys` (null = no override); optionally declare 409 `type_exists` on ensure and 422 `invalid_severity_rule` on create/patch type (and ensure).
+- A legacy migrated type with a non-hex colour makes ensure answer 500 (`TypeConflict.colour` must be hex).
+- Quiet-ignore DJI sidecars (`.MRK .nav .obs .bin .SRT`) and `Thumbs.db` instead of listing them as Not recognised; drop `samples` for non-image buckets (worst case about 5–8 MB).
+- U5 deferred: template radiogroup arrow keys; catalogue picker silent at 64 types; overflow notice lost on leave mid-sort; duplicate bucket labels across DJI cards; severity select "No default" for an out-of-scale default; e2e prettier.
+- `playwright.real-backend.config.ts` (maps real-backend suite) still hard-codes the main checkout's venv path; the setup config now walks up to the first `backend/.venv`.
+- U6 minors: a start after dismiss while an old run is in flight could patch colliding unit ids; `main()` of the e2e data script raises IndexError without an argument; the real-backend Catalogue check has no hotkey or count-of-7 assertion.
+
+**Left for the operator:** the walkthrough, including "Checks only you can do". No installer was
+built (programme ruling R9).
+
 ## Reports lands — 2026-09-30 (`task/r-r10`, unit R10 evidence)
 
 Sub-project R (spec `docs/superpowers/specs/2026-09-26-reports-design.md`, index

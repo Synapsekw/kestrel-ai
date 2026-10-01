@@ -2,8 +2,10 @@ import { useId, useState } from "react";
 import type { TypeKind } from "@/api/catalogue";
 import { KIND_OPTIONS, TYPE_HOTKEYS } from "@/catalogue/catalogueModel";
 import { ColourSwatch } from "@/catalogue/ColourSwatch";
-import { Field, IconButton, Select, SeverityPill, Textarea, cx, useSeverityScale } from "@/ui";
-import type { CatalogueTypeSpec, SeverityRule, TypeConflict } from "./api";
+import { SeverityRulesEditor } from "@/catalogue/SeverityRulesEditor";
+import { rulesOf, toRules, validateRules, type RuleDraft } from "@/catalogue/severityRulesModel";
+import { Field, IconButton, Select, Textarea, cx, useSeverityScale } from "@/ui";
+import type { CatalogueTypeSpec, TypeConflict } from "./api";
 import { NO_COLOUR, conflictText, type DraftType } from "./model";
 
 export interface TypeRowProps {
@@ -19,6 +21,13 @@ export interface TypeRowProps {
 export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeRowProps) {
   const scale = useSeverityScale();
   const [open, setOpen] = useState(false);
+  // The editor works on keyed drafts; the draft store only ever receives plain rules. A template switch
+  // gives the row a new React key, so the drafts start afresh from the new type.
+  const [rules, setRules] = useState<RuleDraft[]>(() => rulesOf(type.severity_rules));
+  // The message waits until the operator has left a condition, so Add rule does not open on an error.
+  const [touched, setTouched] = useState(false);
+  const problem = validateRules(rules, scale);
+  const rulesProblem = problem !== null && (touched || !open) ? problem : null;
   const detailsId = useId();
   const note = conflict ? conflictText(type, conflict) : null;
   return (
@@ -86,12 +95,13 @@ export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeR
         />
         <IconButton icon="trash" size="sm" label={`Remove ${type.name}`} onClick={onRemove} />
       </div>
-      {(note || clashWith) && (
+      {(note || clashWith || (!open && rulesProblem)) && (
         <p className="flex flex-col gap-0.5 text-2xs">
           {note && <span className="text-warn">{note}</span>}
           {clashWith && (
             <span className="text-danger">{`Hotkey ${(type.hotkey ?? "").toUpperCase()} is also used by ${clashWith}.`}</span>
           )}
+          {!open && rulesProblem && <span className="text-danger">{rulesProblem}</span>}
         </p>
       )}
       {open && (
@@ -109,32 +119,24 @@ export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeR
               onChange={(e) => onChange({ definition: e.target.value || null })}
             />
           </Field>
-          <SeverityRulesList name={type.name} rules={type.severity_rules ?? []} />
+          <div
+            className="flex flex-col gap-1.5"
+            onBlur={(e) => e.target instanceof HTMLInputElement && setTouched(true)}
+          >
+            <p className="text-xs font-medium text-muted">Severity rules</p>
+            <SeverityRulesEditor
+              rules={rules}
+              defaultSeverity={type.default_severity ?? null}
+              onChange={(next) => {
+                setRules(next);
+                // A blank condition stays in the editor only; ensure refuses it, so the draft never holds one.
+                onChange({ severity_rules: toRules(next).filter((r) => r.when !== "") });
+              }}
+            />
+            {rulesProblem && <p className="text-xs text-danger">{rulesProblem}</p>}
+          </div>
         </div>
       )}
     </li>
-  );
-}
-
-/** Ruling 17: read-only until U4's editor is wired; the rules are edited on the type in the Catalogue. */
-function SeverityRulesList({ name, rules }: { name: string; rules: readonly SeverityRule[] }) {
-  if (rules.length === 0)
-    return (
-      <p className="text-xs text-muted">
-        No severity rules yet. They are edited on the type in the Catalogue.
-      </p>
-    );
-  return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-xs font-medium text-muted">Severity rules</p>
-      <ol aria-label={`Severity rules of ${name}`} className="flex flex-col gap-1">
-        {rules.map((r, i) => (
-          <li key={`${i}-${r.when}`} className="flex items-center gap-2 text-xs">
-            <span className="min-w-0 flex-1 text-ink">{r.when}</span>
-            <SeverityPill level={r.severity} size="sm" />
-          </li>
-        ))}
-      </ol>
-    </div>
   );
 }

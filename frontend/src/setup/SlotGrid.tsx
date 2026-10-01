@@ -5,9 +5,11 @@ import { useSetupDraft, type DraftBucket } from "./draftStore";
 import {
   ROUTE_ICON,
   VIDEO_NOTE,
+  wholeFolderText,
   bucketLabel,
   countLabel,
   sizeLabel,
+  wholeFolderNames,
   skippedBuckets,
   slotFills,
   unusedBuckets,
@@ -183,6 +185,11 @@ function SlotTile({
               <BucketRow key={b.id} bucket={b} moves={moves(b)} onDragStart={onDragStart} />
             ))}
           </ul>
+          {wholeFolderNames(buckets, slot.key).map((name) => (
+            <p key={name} className="text-xs text-warn">
+              {wholeFolderText(name)}
+            </p>
+          ))}
           <p className="flex items-center justify-between gap-2 text-xs text-muted">
             <span className="tabular-nums">{`${countLabel({ route: slot.route, count })} · ${sizeLabel(bytes)}`}</span>
             <Pill size="sm" tone="ok">
