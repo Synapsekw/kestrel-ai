@@ -6,6 +6,12 @@ followed by its figures when `options.snapshots` is true; a volume prints the `v
 
 from __future__ import annotations
 
+import hashlib
+
+from sqlalchemy import select
+
+from app.db.models import CloudMeasurement
+from app.pointclouds import views
 from app.reports import blocks
 from app.reports.context import ComposeContext
 from app.reports.schemas import ReportSectionDoc
@@ -54,5 +60,18 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
 
 def fingerprint(ctx: ComposeContext) -> str:
     """R2's etag hook: aggregates over the measurement tables plus what the volume blocks and the
-    figure targets read (surfaces, the runs volumes mask with, map footprints)."""
-    return m_etag.measurements(ctx)
+    figure targets read (surfaces, the runs volumes mask with, map footprints), plus, when snapshots
+    are on, each cloud measurement's stored 3D view (sha256 + stale flag): a capture/re-capture or a
+    view turning stale touches no measurement row, so only this moves the etag."""
+    base = m_etag.measurements(ctx)
+    if not ctx.options(KEY).snapshots:
+        return base
+    with ctx.session() as s:
+        ids = list(s.execute(select(CloudMeasurement.id).order_by(CloudMeasurement.id)).scalars())
+    h = hashlib.sha256(base.encode())
+    for mid in ids:
+        view = views.stored_view(ctx.handle, "cloud_measurement", mid)
+        sha = view.meta.sha256 if view is not None else "-"
+        stale = bool(view.meta.stale) if view is not None else False
+        h.update(f"{mid}:{sha}:{stale}".encode())
+    return h.hexdigest()

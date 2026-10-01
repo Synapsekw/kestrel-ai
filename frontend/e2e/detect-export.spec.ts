@@ -51,4 +51,7 @@ test("the counts export as a CSV of every source or of one; the PDF is a Survey 
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("radio", { name: /Survey count/ })).toBeChecked();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/reports$`));
+  // A template refetch can still be in this route's `route.fetch()` when the test ends; without this
+  // the late error is reported against the next test in the worker.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });

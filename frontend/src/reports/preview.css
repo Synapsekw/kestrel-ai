@@ -1,0 +1,11 @@
+/*
+ * One printed millimetre in px (printTheme.ts mm()/mmVar()). Registered so it computes to a length once,
+ * on the preview column: unregistered, every `calc(var(--mm) * n)` below it would carry `100cqw`, and each
+ * layout inside the preview's size container re-resolved every sheet (R10 task 6c: 110-160 ms frames
+ * while scrolling a 300-finding report).
+ */
+@property --mm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 1mm;
+}

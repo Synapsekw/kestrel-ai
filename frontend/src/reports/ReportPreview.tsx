@@ -25,6 +25,7 @@ import { PreviewEnvContext, type PreviewEnv } from "./preview/PreviewContext";
 import { useSectionBlocks, type SectionEntry } from "./preview/sectionBlocks";
 import { useInView } from "./preview/useInView";
 import { PRINT, mm, mmVar, paperOf, pt, type PaperSize } from "./printTheme";
+import "./preview.css";
 
 /** A section asks for its next page when it is this close to the preview's viewport. */
 export const SECTION_MARGIN = "1200px 0px";

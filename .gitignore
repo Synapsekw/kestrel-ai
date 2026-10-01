@@ -13,6 +13,7 @@ node_modules/
 frontend/dist/
 frontend/dist-e2e/
 frontend/dist-e2e-setup/
+frontend/dist-e2e-reports/
 frontend/test-results/
 frontend/playwright-report/
 # rust / tauri

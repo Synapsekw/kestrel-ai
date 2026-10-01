@@ -73,6 +73,8 @@ _DATA_COLUMNS = (
             GeoMap.gsd_cm,
             GeoMap.epsg,
             GeoMap.bounds_native,
+            GeoMap.bounds_wgs84,
+            GeoMap.crs_wkt,
         ),
     ),
     (
