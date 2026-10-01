@@ -88,7 +88,18 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Project landing (Overview v2) on `main`** (2026-10-01, `35534daf..335c37fb`, pushed).
+**Shipped last:** **New-project setup (S1) on `main`** (2026-10-01, `ea5d13cb..7bfb2b5b`, 6 units, pushed).
+- New project is now a full page at `/projects/new`.
+- Templates: Mapping, Vertical asset, Confined space, Blank, and your own saved ones.
+- Data: drop a folder and it is sorted into slots from headers only (bounded `setup_inspect` job).
+- Anomaly types land in the Catalogue, which gains a definition and severity rules.
+- Create imports each slot through the existing importers, and the Overview shows a notice if any fail.
+- Gate: 5170 backend; after the last merge, 4116 frontend and 180 browser tests. **No installer built.**
+- Walkthrough: `docs/evidence/setup/walkthrough.md`.
+- S2 (AI Describe it), S3 (AI Show it) and S4 (video import) are designed but not built.
+See [[2026-10-01-2131-s1-project-setup-wave]].
+
+Previously: **Project landing (Overview v2) on `main`** (2026-10-01, `35534daf..335c37fb`, pushed).
 - The Overview now fills the window. A data-driven grid (`composeOverview`) picks the hero (map, then point cloud, then photo mosaic, then drawing) and drops any pane that has nothing to show.
 - New panes: a header with coordinates and only non-zero figures, an offline site-location SVG, a budgeted live 3D preview with a static fallback, latest imagery, a Status pane, and a first-data screen for empty projects.
 - Backend: `ProjectOverview.hero` and `GET /overview/site`, which reads at most 500 photo points by rowid and never scans `image`.
@@ -102,6 +113,8 @@ Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
 **In flight:** Overview v2 needs the operator's check on real projects (§5). The Reports (R) wave is being merged on `main` by a parallel session (`r-r*` merges). Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
+
+**Next (S1):** The operator runs `docs/evidence/setup/walkthrough.md` on a real delivery. Then brainstorm S4 (video import, which unblocks the Confined template) or S2 (AI Describe it plus severity pre-fill).
 
 **Next:** The operator runs the Overview v2 walkthrough in [[2026-10-01-1842-overview-landing]] and rules on its three design calls. The Reports (R) wave continues. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
 
@@ -243,6 +256,16 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### New-project setup S1 (opened 2026-10-01)
+
+- **Operator check:** the 37-step walkthrough on real drone deliveries; no installer contains S1 yet.
+- **Not built:** S2, S3 and S4. S4 must flip the Confined video slot to required in a new catalogue revision and set `VIDEO_IMPORT_ENABLED`.
+- **Known gaps:**
+  - Photo import is per folder and recursive. A skipped nested photo bucket is still imported. Fix: a file list on `POST /sources`.
+  - Map-layer reordering likely broken in the installed app ([[2026-10-01-gotcha-tauri-drag-drop-blocks-html5-drag]]).
+  - Ensure returns 500 for a legacy type with a non-hex colour.
+- **Parked minors:** the follow-up list in `docs/evidence/setup/walkthrough.md`.
 
 ### Overview v2 (opened 2026-10-01)
 
