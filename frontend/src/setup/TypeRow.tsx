@@ -119,7 +119,10 @@ export function TypeRow({ type, conflict, clashWith, onChange, onRemove }: TypeR
               onChange={(e) => onChange({ definition: e.target.value || null })}
             />
           </Field>
-          <div className="flex flex-col gap-1.5" onBlur={() => setTouched(true)}>
+          <div
+            className="flex flex-col gap-1.5"
+            onBlur={(e) => e.target instanceof HTMLInputElement && setTouched(true)}
+          >
             <p className="text-xs font-medium text-muted">Severity rules</p>
             <SeverityRulesEditor
               rules={rules}
