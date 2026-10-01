@@ -226,21 +226,40 @@ export function templateLabel(templateId: string | null, templates: readonly Pro
   return templates.find((t) => t.id === templateId)?.name ?? "Blank";
 }
 
-/** Folder names (once each) of non-skipped, assigned photo buckets that import their whole folder; one slot's when `slotKey` is given. */
+/** The last two path segments, `parent\name`; the name alone for a root-level folder. */
+function parentAndName(path: string): string {
+  const parts = path
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .filter(Boolean);
+  return parts.slice(-2).join("\\") || path;
+}
+
+/**
+ * Folder names of non-skipped, assigned photo buckets that import their whole folder; one slot's when
+ * `slotKey` is given. One entry per folder path (case and slash insensitive); two different folders
+ * with the same name show as `parent\name`.
+ */
 export function wholeFolderNames(buckets: readonly DraftBucket[], slotKey?: string): string[] {
-  return [
-    ...new Set(
-      buckets
-        .filter(
-          (b) =>
-            b.wholeFolder &&
-            !b.skipped &&
-            b.slot_key !== null &&
-            (slotKey === undefined || b.slot_key === slotKey),
-        )
-        .map((b) => folderName(b.folder)),
-    ),
-  ];
+  const byPath = new Map<string, string>();
+  for (const b of buckets) {
+    if (!b.wholeFolder || b.skipped || b.slot_key === null) continue;
+    if (slotKey !== undefined && b.slot_key !== slotKey) continue;
+    const key = b.folder
+      .replace(/[\\/]+$/, "")
+      .replace(/\//g, "\\")
+      .toLowerCase();
+    if (!byPath.has(key)) byPath.set(key, b.folder);
+  }
+  const folders = [...byPath.values()];
+  const taken = new Map<string, number>();
+  for (const f of folders) {
+    const n = folderName(f).toLowerCase();
+    taken.set(n, (taken.get(n) ?? 0) + 1);
+  }
+  return folders.map((f) =>
+    (taken.get(folderName(f).toLowerCase()) ?? 0) > 1 ? parentAndName(f) : folderName(f),
+  );
 }
 
 export interface ChecklistModel {

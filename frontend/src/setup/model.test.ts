@@ -17,6 +17,7 @@ import {
   bucketLabel,
   canCreate,
   checklistOf,
+  wholeFolderNames,
   clashLines,
   conflictText,
   countLabel,
@@ -268,5 +269,17 @@ describe("slots and buckets", () => {
       "Blank",
     );
     expect(m.wholeFolders).toEqual(["100MEDIA"]);
+  });
+
+  it("lists a whole folder once per path, and tells two same-named folders apart", () => {
+    const at = (folder: string) =>
+      draftBucket(VISUAL, { wholeFolder: true, slot_key: "visual", folder, id: folder });
+    const names = (...folders: string[]) => wholeFolderNames(folders.map(at));
+    expect(names("E:\\A\\100MEDIA", "e:/a/100media/")).toEqual(["100MEDIA"]);
+    expect(names("E:\\A\\100MEDIA", "E:\\B\\100MEDIA", "E:\\C\\Other")).toEqual([
+      "A\\100MEDIA",
+      "B\\100MEDIA",
+      "Other",
+    ]);
   });
 });
