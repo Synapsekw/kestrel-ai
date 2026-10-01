@@ -520,11 +520,11 @@ test("one project from creation to a training run: every Foundation unit reads w
   // 1. Create a project; it is listed and opens on its Overview.
   await page.goto("/projects");
   await page.getByRole("button", { name: "New project" }).click();
-  const dialog = page.getByRole("dialog", { name: "New project" });
-  await dialog.getByLabel("Name").fill("Tower Q3");
-  await dialog.locator("#project-folder").fill(FOLDER);
+  await expect(page).toHaveURL(/\/projects\/new$/);
+  await page.locator("#project-name").fill("Tower Q3");
+  await page.locator("#project-folder").fill(FOLDER);
   const created = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/v1/projects"));
-  await dialog.getByRole("button", { name: "Create project" }).click();
+  await page.getByRole("button", { name: "Create project" }).click();
   expect((await created).postDataJSON()).toMatchObject({ name: "Tower Q3", folder: FOLDER, type_ids: [] });
   await expect(page).toHaveURL(new RegExp(`/p/${P}/overview$`));
   await page.goto("/projects");

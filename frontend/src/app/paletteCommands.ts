@@ -99,7 +99,7 @@ export function actionCommands(o: {
     id: "action:new-project",
     title: "New project",
     icon: "plus",
-    run: () => o.go("/projects?new=1"),
+    run: () => o.go("/projects/new"),
   });
   out.push({
     id: "action:toggle-effects",
