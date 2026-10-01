@@ -11,7 +11,6 @@ import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
 import { Alert, Button, Dialog, EmptyState, Input, Select, Skeleton, stagger, toast } from "@/ui";
-import { NewProjectDialog } from "./projects/NewProjectDialog";
 import { OpenFolderDialog } from "./projects/OpenFolderDialog";
 import { ProjectCard } from "./projects/ProjectCard";
 import { visibleProjects, type ProjectSort } from "./projects/projectCards";
@@ -28,7 +27,7 @@ export function ProjectsScreen() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<ProjectSort>("recent");
   const [removing, setRemoving] = useState<Project | null>(null);
-  const [dialog, setDialog] = useState<"new" | "open" | null>(null);
+  const [dialog, setDialog] = useState<"open" | null>(null);
   const [locating, setLocating] = useState<Project | null>(null);
   // Folders whose retry request is in flight: a double click sends one POST, not two.
   const retrying = useRef(new Set<string>());
@@ -125,7 +124,7 @@ export function ProjectsScreen() {
           <Button icon="folder" onClick={() => setDialog("open")}>
             Open folder
           </Button>
-          <Button variant="primary" icon="plus" onClick={() => setDialog("new")}>
+          <Button variant="primary" icon="plus" onClick={() => void navigate("/projects/new")}>
             New project
           </Button>
         </div>
@@ -193,7 +192,6 @@ export function ProjectsScreen() {
           ))}
         </ul>
       )}
-      {dialog === "new" && <NewProjectDialog onClose={() => setDialog(null)} onCreated={openProject} />}
       {dialog === "open" && <OpenFolderDialog onClose={() => setDialog(null)} onOpened={openProject} />}
       {locating && (
         <OpenFolderDialog

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { errorBody, exampleProject, fakeClient, runningJob, type FakeRoute } from "@/test/fixtures";
-import { severityRoute, TYPE_CRACK, TYPE_SPALLING } from "@/test/findingFixtures";
+import { severityRoute } from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
@@ -249,25 +249,6 @@ describe("ProjectsScreen: the list", () => {
   });
 });
 
-const catalogue: FakeRoute = {
-  method: "GET",
-  path: /\/catalogue\/types$/,
-  body: {
-    items: [
-      {
-        id: TYPE_SPALLING,
-        name: "Spalling",
-        colour: "#ff5a4f",
-        kind: "defect",
-        archived: false,
-        group: "Concrete defects",
-      },
-      { id: TYPE_CRACK, name: "Crack", colour: "#ff9c3a", kind: "defect", archived: false, group: null },
-      { id: "t-old", name: "Old type", colour: "#888888", kind: "object", archived: true, group: null },
-    ],
-  },
-};
-
 describe("ProjectsScreen: new project and open folder", () => {
   beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
@@ -296,89 +277,10 @@ describe("ProjectsScreen: new project and open folder", () => {
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 
-  it("asks for a folder instead of sending a request the backend will reject", async () => {
-    const requests = renderList([], [catalogue]);
+  it("New project opens the setup page", async () => {
+    renderList([]);
     fireEvent.click(await screen.findByRole("button", { name: "New project" }));
-    const dialog = await screen.findByRole("dialog", { name: "New project" });
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Site A" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create project" }));
-    expect(await within(dialog).findByText("Choose a folder for the project.")).toBeInTheDocument();
-    expect(requests.filter((r) => r.method === "POST")).toHaveLength(0);
-  });
-
-  it("creates a project with the chosen types and no kind, then opens it", async () => {
-    const requests = renderList(
-      [],
-      [catalogue, { method: "POST", path: /\/projects$/, status: 201, body: exampleProject }],
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "New project" }));
-    const dialog = await screen.findByRole("dialog", { name: "New project" });
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Tower Q3" } });
-    fireEvent.change(within(dialog).getByLabelText("Folder"), {
-      target: { value: "E:\\Projects\\Tower-Q3" },
-    });
-    fireEvent.click(await within(dialog).findByRole("checkbox", { name: /Spalling/ }));
-    expect(within(dialog).queryByText("Old type")).toBeNull();
-    // Bounded: one page at the API's maximum, never an unbounded walk of the catalogue.
-    expect(requests.find((r) => r.url.includes("/catalogue/types"))?.url).toContain("limit=1000");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create project" }));
-    await waitFor(() =>
-      expect(requests.find((r) => r.method === "POST")?.body).toEqual({
-        name: "Tower Q3",
-        folder: "E:\\Projects\\Tower-Q3",
-        type_ids: [TYPE_SPALLING],
-      }),
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent(`/p/${exampleProject.id}/overview`),
-    );
-  });
-
-  it("still creates a project when the catalogue is unavailable", async () => {
-    const requests = renderList(
-      [],
-      [
-        {
-          method: "GET",
-          path: /\/catalogue\/types$/,
-          status: 503,
-          body: errorBody("catalogue_unavailable", "catalogue.db could not be opened"),
-        },
-        { method: "POST", path: /\/projects$/, status: 201, body: exampleProject },
-      ],
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "New project" }));
-    const dialog = await screen.findByRole("dialog", { name: "New project" });
-    expect(await within(dialog).findByText(/The catalogue is unavailable/)).toBeInTheDocument();
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Yard" } });
-    fireEvent.change(within(dialog).getByLabelText("Folder"), { target: { value: "E:/Projects/Yard" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create project" }));
-    await waitFor(() =>
-      expect(requests.find((r) => r.method === "POST")?.body).toMatchObject({ type_ids: [] }),
-    );
-  });
-
-  it("shows which field the backend rejected", async () => {
-    renderList(
-      [],
-      [
-        catalogue,
-        {
-          method: "POST",
-          path: /\/projects$/,
-          status: 422,
-          body: errorBody("validation_error", "request validation failed", {
-            errors: [{ loc: ["body", "folder"], msg: "folder already holds a project", type: "value_error" }],
-          }),
-        },
-      ],
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "New project" }));
-    const dialog = await screen.findByRole("dialog", { name: "New project" });
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Site A" } });
-    fireEvent.change(within(dialog).getByLabelText("Folder"), { target: { value: "E:\\Projects\\A" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create project" }));
-    expect(await within(dialog).findByText("folder: folder already holds a project")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("location").textContent).toBe("/projects/new"));
   });
 
   it("opens an existing folder", async () => {

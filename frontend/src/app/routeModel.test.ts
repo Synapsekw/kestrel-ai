@@ -13,6 +13,7 @@ describe("routeInfo", () => {
   it.each([
     ["/", "projects", null, "Projects"],
     ["/projects", "projects", null, "Projects"],
+    ["/projects/new", "projects", null, "New project"],
     ["/p/abc", "projects", "overview", "Overview"],
     ["/p/abc/overview", "projects", "overview", "Overview"],
     ["/p/abc/images", "projects", "images", "Images"],
@@ -76,6 +77,7 @@ describe("routeInfo", () => {
     expect(key("/models/datasets")).toBe(key("/models/datasets/d1"));
     expect(key("/models/library")).not.toBe(key("/models/datasets"));
     expect(key("/")).toBe(key("/projects"));
+    expect(key("/projects")).not.toBe(key("/projects/new"));
   });
 
   it("has the seven tabs and the rail entries in the spec's order", () => {

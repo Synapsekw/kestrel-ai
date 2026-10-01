@@ -143,6 +143,7 @@ describe("routes", () => {
     `/p/${P}/measurements/volumes/v1`,
     "/models/datasets/d1",
     "/models/training/r1",
+    "/projects/new",
     "/catalogue",
     "/catalogue/severity",
     "/jobs",

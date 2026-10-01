@@ -4,16 +4,26 @@ import { useMemo, type ReactElement, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { render } from "@testing-library/react";
 import type { ApiClient } from "@contract/client";
+import type { BackendMode } from "@/api/backend";
 import { ApiContext, type ApiContextValue } from "@/api/client";
 
-export function TestApiProvider({ api, children }: { api: ApiClient; children: ReactNode }) {
+export function TestApiProvider({
+  api,
+  children,
+  mode = "mock",
+}: {
+  api: ApiClient;
+  children: ReactNode;
+  /** `"tauri"` renders the desktop branches (pickers, folder drop); the default is the browser's. */
+  mode?: BackendMode;
+}) {
   const value = useMemo<ApiContextValue>(
     () => ({
       client: api,
-      info: { baseUrl: "http://fake", token: "t", mode: "mock", logPath: null },
+      info: { baseUrl: "http://fake", token: "t", mode, logPath: null },
       health: { status: "ok", version: "test", pid: 1, started_at: "2026-09-17T00:00:00Z" },
     }),
-    [api],
+    [api, mode],
   );
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
 }
@@ -27,10 +37,10 @@ export function LocationProbe() {
 /** Renders `ui` inside the API context and a memory router; `path` mounts it as a route so `useParams` works. */
 export function renderWithProviders(
   ui: ReactElement,
-  opts: { api: ApiClient; route?: string; path?: string },
+  opts: { api: ApiClient; route?: string; path?: string; mode?: BackendMode },
 ) {
   return render(
-    <TestApiProvider api={opts.api}>
+    <TestApiProvider api={opts.api} mode={opts.mode}>
       <MemoryRouter initialEntries={[opts.route ?? "/"]}>
         {opts.path ? (
           <Routes>

@@ -84,7 +84,7 @@ describe("palette commands", () => {
     cmds.find((c) => c.title === "Add a point cloud")?.run();
     expect(addData).toHaveBeenCalledWith("point_cloud");
     cmds.find((c) => c.title === "New project")?.run();
-    expect(go).toHaveBeenCalledWith("/projects?new=1");
+    expect(go).toHaveBeenCalledWith("/projects/new");
     cmds.find((c) => c.title === "Toggle reduced effects")?.run();
     expect(toggleEffects).toHaveBeenCalled();
   });
