@@ -1,4 +1,5 @@
-import type { components } from "@contract/client";
+import { createApiClient, type components } from "@contract/client";
+import { fakeFetch, type FakeRoute } from "@/test/fixtures";
 import { emptyDraft, type DraftBucket, type DraftType, type SetupDraft } from "@/setup/draftStore";
 
 type S = components["schemas"];
@@ -72,5 +73,27 @@ export function draft(patch: Partial<SetupDraft> = {}): SetupDraft {
     folder: "E:\\Projects\\Tower 14",
     slots: VERTICAL_SLOTS,
     ...patch,
+  };
+}
+
+/**
+ * `fakeClient`, except that requests whose path matches `held` wait until `release()`: the way a
+ * test holds an import in flight while the page navigates or the store is dismissed.
+ */
+export function heldClient(routes: FakeRoute[], held: RegExp) {
+  const { fetch: inner, requests } = fakeFetch(routes);
+  let open: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (held.test(url.pathname)) await gate;
+    return inner(input, init);
+  }) as typeof fetch;
+  return {
+    api: createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl }),
+    requests,
+    release: () => open(),
   };
 }
