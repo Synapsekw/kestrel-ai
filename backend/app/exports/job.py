@@ -111,12 +111,18 @@ def _promote(base: Path, partial: Path, stamp: str, n: int) -> Path:
         n += 1
 
 
-def _has_active_results_export(handle) -> bool:
+REPORTS_FOLDER = "reports"
+REPORTS_NOT_A_REPORT = {"assets", ".cache"}
+
+
+def _has_active_job(handle, job_type: str) -> bool:
     with handle.session() as s:
-        row = s.execute(
-            select(Job.id).where(Job.type == "results_export", Job.state.in_(ACTIVE_JOB_STATES))
-        ).first()
+        row = s.execute(select(Job.id).where(Job.type == job_type, Job.state.in_(ACTIVE_JOB_STATES))).first()
     return row is not None
+
+
+def _has_active_results_export(handle) -> bool:
+    return _has_active_job(handle, "results_export")
 
 
 def _own_partial_folder(exports_dir: Path, entry: Path) -> bool:
@@ -141,20 +147,9 @@ def _own_partial_folder(exports_dir: Path, entry: Path) -> bool:
     return resolved.parent == root and resolved.name.casefold() == entry.name.casefold() and resolved.is_dir()
 
 
-def sweep_partial_exports(handle) -> None:
-    """Removes `exports/.partial-<stamp>` folders a crash left behind (spec G2, N2).
-
-    Never touches anything while a `results_export` job for this project is queued or running, nor
-    a folder younger than this process itself (m1: it could belong to an export this very process
-    is still writing, started the instant after this swept ran but before it returned).
-    """
-    exports_dir = handle.exports_dir
-    if not exports_dir.is_dir():
-        return
-    if _has_active_results_export(handle):
-        return
-    for entry in exports_dir.glob(f"{PARTIAL_PREFIX}*"):
-        if not _own_partial_folder(exports_dir, entry):
+def _sweep_partials_in(root: Path) -> None:
+    for entry in root.glob(f"{PARTIAL_PREFIX}*"):
+        if not _own_partial_folder(root, entry):
             continue
         try:
             if entry.stat().st_mtime >= _PROCESS_STARTED_AT:
@@ -162,6 +157,31 @@ def sweep_partial_exports(handle) -> None:
         except OSError:
             continue
         shutil.rmtree(entry, ignore_errors=True)
+
+
+def sweep_partial_exports(handle) -> None:
+    """Removes `.partial-<stamp>` folders a crash left behind (spec G2, N2) in `exports/` and in
+    each `reports/<rid>/` (reports spec §6.3).
+
+    Never touches `exports/` while a `results_export` job for this project is queued or running,
+    nor `reports/` while a `report_render` is, nor a folder younger than this process itself (m1:
+    it could belong to work this very process is still writing)."""
+    exports_dir = handle.exports_dir
+    if exports_dir.is_dir() and not _has_active_results_export(handle):
+        _sweep_partials_in(exports_dir)
+    reports_dir = handle.folder / REPORTS_FOLDER
+    if not reports_dir.is_dir() or _has_active_job(handle, "report_render"):
+        return
+    root = reports_dir.resolve()
+    for report_dir in reports_dir.iterdir():
+        if report_dir.name in REPORTS_NOT_A_REPORT or not report_dir.is_dir():
+            continue
+        try:
+            if report_dir.resolve().parent != root:  # a junction out of reports/ is never followed
+                continue
+        except OSError:
+            continue
+        _sweep_partials_in(report_dir)
 
 
 def _box_count(images: list[ExportImage]) -> int:

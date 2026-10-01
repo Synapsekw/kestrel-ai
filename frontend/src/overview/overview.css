@@ -35,3 +35,30 @@
     animation: none;
   }
 }
+
+/* Spec 2026-09-30-project-landing §5.2: one column below lg; a 12-column, full-height grid above,
+   with rows from composeOverview (--ov-rows) and each pane placed by --col / --row. */
+.ov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.875rem;
+}
+.ov-grid > [data-pane="hero"] {
+  min-height: 360px;
+}
+@media (min-width: 1024px) {
+  .ov-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: var(--ov-rows);
+  }
+  .ov-grid > [data-pane] {
+    grid-column: var(--col);
+    grid-row: var(--row);
+    min-height: 0;
+  }
+  .ov-grid > [data-pane="hero"] {
+    min-height: 340px;
+  }
+}

@@ -1,22 +1,43 @@
-"""Project templates (spec 2026-09-30-project-setup sections 5 and 9): 501 until unit U2 rewrites
-this module. No prefix: the paths are `/project-templates...`, outside any project.
+"""`/project-templates` (spec 2026-09-30-project-setup section 9; plan S1-U2 Task 3). No prefix:
+included by app/setup/router.py, which carries the tags. Every operation needs the catalogue (503
+without it)."""
 
-U2 keeps `router`, replaces the stubs with its handlers and deletes `STUBS` (plan
-2026-09-30-setup-u1; ADR 2026-09-26-foundation-contract-lands-before-its-backend).
-"""
+from fastapi import APIRouter, Depends, Response
 
-from fastapi import APIRouter
-
-from app.stubs import add_stubs
+from app.catalogue.handle import CatalogueHandle, get_catalogue
+from app.setup import templates
+from app.setup.schemas import (
+    ProjectTemplateCreate,
+    ProjectTemplateOut,
+    ProjectTemplatePage,
+    ProjectTemplatePatch,
+)
 
 router = APIRouter()
 
-# (method, path under the prefix, operationId)
-STUBS: list[tuple[str, str, str]] = [
-    ("GET", "/project-templates", "listProjectTemplates"),
-    ("POST", "/project-templates", "createProjectTemplate"),
-    ("PATCH", "/project-templates/{templateId}", "patchProjectTemplate"),
-    ("DELETE", "/project-templates/{templateId}", "deleteProjectTemplate"),
-]
 
-add_stubs(router, STUBS, project_scoped=False)
+@router.get("/project-templates", response_model=ProjectTemplatePage)
+def list_project_templates(cat: CatalogueHandle = Depends(get_catalogue)) -> ProjectTemplatePage:
+    return ProjectTemplatePage(items=templates.list_templates(cat))
+
+
+@router.post("/project-templates", response_model=ProjectTemplateOut, status_code=201)
+def create_project_template(
+    body: ProjectTemplateCreate, cat: CatalogueHandle = Depends(get_catalogue)
+) -> ProjectTemplateOut:
+    return templates.create_template(cat, body)
+
+
+@router.patch("/project-templates/{templateId}", response_model=ProjectTemplateOut)
+def patch_project_template(
+    templateId: str,  # noqa: N803
+    body: ProjectTemplatePatch,
+    cat: CatalogueHandle = Depends(get_catalogue),
+) -> ProjectTemplateOut:
+    return templates.patch_template(cat, templateId, body)
+
+
+@router.delete("/project-templates/{templateId}", status_code=204)
+def delete_project_template(templateId: str, cat: CatalogueHandle = Depends(get_catalogue)) -> Response:  # noqa: N803
+    templates.delete_template(cat, templateId)
+    return Response(status_code=204)

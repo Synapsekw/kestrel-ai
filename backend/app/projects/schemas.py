@@ -44,11 +44,15 @@ def _absolute(v: str) -> str:
 
 class ProjectCreate(BaseModel):
     """`type_ids` are the catalogue types the project starts with (spec 2026-09-26-foundation
-    section 9.2). It defaults to empty so a client from before the catalogue is not refused."""
+    section 9.2). It defaults to empty so a client from before the catalogue is not refused.
+    `hotkeys` sets the project's hotkey overrides, with the same meaning as
+    `PUT /projects/{id}/types` (spec 2026-09-30-project-setup S1-8); checked by
+    `ProjectRegistry.create` before the folder is touched, so a malformed key is `hotkey_invalid`."""
 
     name: str = Field(min_length=1)
     folder: str
     type_ids: list[str] = []
+    hotkeys: dict[str, str | None] | None = None
 
     _folder_abs = field_validator("folder")(_absolute)
 

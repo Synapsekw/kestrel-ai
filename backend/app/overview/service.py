@@ -58,6 +58,39 @@ def hero_map_id(s: Session) -> str | None:
     ).scalar_one_or_none()
 
 
+def newest_ready_cloud_id(s: Session) -> str | None:
+    """The newest ready point cloud by capture date (undated last), then by import."""
+    return s.execute(
+        select(PointCloud.id)
+        .where(PointCloud.status == "ready")
+        .order_by(
+            PointCloud.captured_on.is_(None), PointCloud.captured_on.desc(), PointCloud.created_at.desc()
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def hero(s: Session, data: dict, map_id: str | None) -> dict | None:
+    """Spec 2026-09-30-project-landing section 4.1. Every candidate is read every time, so the
+    Overview's statement count does not depend on what the project holds."""
+    cloud_id = newest_ready_cloud_id(s)
+    drawing_id = s.execute(
+        select(Drawing.id)
+        .where(Drawing.status == "ready")
+        .order_by(Drawing.created_at.desc(), Drawing.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if map_id:
+        return {"kind": "map", "id": map_id}
+    if cloud_id:
+        return {"kind": "point_cloud", "id": cloud_id}
+    if data["images"] > 0:
+        return {"kind": "images", "id": None}
+    if drawing_id:
+        return {"kind": "drawing", "id": drawing_id}
+    return None
+
+
 def latest_volume(s: Session) -> dict | None:
     """KPI 4: the newest ready volume measurement's net volume, and the previous ready measurement's
     over the same polygon (the client shows the delta)."""
@@ -132,11 +165,14 @@ def _model_adoption(handle) -> list[dict]:
 def build(handle) -> dict:
     levels = catalogue_service.scale_levels(handle.catalogue)
     with handle.session() as s:
+        data = data_counts(s)
+        map_id = hero_map_id(s)
         payload = {
             "findings": query.summary(s, levels=levels),
-            "data": data_counts(s),
+            "data": data,
             "latest_volume": latest_volume(s),
-            "hero_map_id": hero_map_id(s),
+            "hero_map_id": map_id,
+            "hero": hero(s, data, map_id),
         }
     banners: list[dict] = []
     for provider in BANNER_PROVIDERS:

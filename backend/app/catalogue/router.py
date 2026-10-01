@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
-from app.catalogue import project_types, service
+from app.catalogue import project_types, service, template_types
 from app.catalogue.handle import CatalogueHandle, get_catalogue
 from app.catalogue.schemas import (
     CatalogueTypeCreate,
@@ -10,6 +10,8 @@ from app.catalogue.schemas import (
     CatalogueTypePage,
     CatalogueTypePatch,
     CatalogueTypePatchOut,
+    EnsureTypesRequest,
+    EnsureTypesResult,
     SeverityLevelOut,
     SeverityScale,
     TypeKind,
@@ -20,7 +22,6 @@ from app.errors import AppError
 from app.findings.backfill import submit_backfill
 from app.jobs.schemas import JobOut
 from app.library.handle import LibraryHandle, get_library
-from app.stubs import add_stubs
 from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/catalogue", tags=["catalogue"])
@@ -74,11 +75,26 @@ def complete_catalogue_classification(
 def create_catalogue_type(
     body: CatalogueTypeCreate, request: Request, cat: CatalogueHandle = Depends(get_catalogue)
 ) -> CatalogueTypeOut:
-    # `definition` and `severity_rules` reach the service with U2 (plan 2026-09-30-setup-u2), which
-    # deletes this `exclude`; until then they are validated and not stored.
-    ref = service.create_type(cat, **body.model_dump(exclude={"definition", "severity_rules"}))
+    ref = service.create_type(cat, **body.model_dump())
     publish_catalogue_changed(request, {"type_ids": [ref.id]})
     return CatalogueTypeOut.from_ref(ref)
+
+
+@router.post("/types/ensure", response_model=EnsureTypesResult)
+def ensure_catalogue_types(
+    body: EnsureTypesRequest, request: Request, cat: CatalogueHandle = Depends(get_catalogue)
+) -> EnsureTypesResult:
+    """Resolve a template's types (spec 2026-09-30-project-setup section 6): reuse by name, bring an
+    archived match back, create a miss with `origin = "template"`; all or nothing. A dry run (the
+    setup page's preview) writes and publishes nothing."""
+    dry_run = bool(body.dry_run)
+    items = template_types.ensure_template_types(cat, body.types, dry_run=dry_run)
+    if not dry_run:
+        ids = list(dict.fromkeys(i.id for i in items if i.id))
+        # An unarchived type may have lost its hotkey: open projects' snapshots follow.
+        project_types.refresh_open_projects(request.app.state.projects, cat, ids)
+        publish_catalogue_changed(request, {"type_ids": ids})
+    return EnsureTypesResult(items=items)
 
 
 @router.get("/types/{typeId}", response_model=CatalogueTypeOut)
@@ -136,10 +152,3 @@ def backfill_catalogue_type(
         )
     job = submit_backfill(lib, request.app.state.jobs, typeId)
     return JobRef(job=JobOut.from_row(job, lib.id))
-
-
-# Project setup (spec 2026-09-30-project-setup section 6, plan 2026-09-30-setup-u1): 501 until U2
-# replaces it with the `ensure_template_types` route and deletes STUBS; `app.setup.router`'s
-# `stub_operation_ids()` collects it for tests/test_contract.py.
-STUBS: list[tuple[str, str, str]] = [("POST", "/types/ensure", "ensureCatalogueTypes")]
-add_stubs(router, STUBS, project_scoped=False)

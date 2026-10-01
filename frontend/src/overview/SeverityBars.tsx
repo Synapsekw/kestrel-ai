@@ -4,9 +4,9 @@ import { GlassPanel, cx, focusRing, stagger, transition } from "@/ui";
 import type { SeverityRow } from "./kpis";
 
 /** One bar per level; a click opens the Findings tab filtered to it (F §9.1). */
-export function SeverityBars({ rows }: { rows: SeverityRow[] }) {
-  return (
-    <GlassPanel variant="pane" className="stagger animate-rise px-4 py-3.5" style={stagger(5)}>
+export function SeverityBars({ rows, bare = false }: { rows: SeverityRow[]; bare?: boolean }) {
+  const content = (
+    <>
       <h2 className="text-xs text-muted">Open findings by severity</h2>
       <ul className="mt-3 flex flex-col gap-1">
         {rows.map((r, i) => (
@@ -38,6 +38,12 @@ export function SeverityBars({ rows }: { rows: SeverityRow[] }) {
           </li>
         ))}
       </ul>
+    </>
+  );
+  if (bare) return content;
+  return (
+    <GlassPanel variant="pane" className="stagger animate-rise px-4 py-3.5" style={stagger(5)}>
+      {content}
     </GlassPanel>
   );
 }
