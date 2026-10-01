@@ -182,6 +182,8 @@ describe("AnomaliesCard", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add from Catalogue" })).toBeDisabled();
+    // A new type is created through the Catalogue, so Create would fail with it; it waits for Project settings.
+    expect(screen.getByRole("button", { name: "New type" })).toBeDisabled();
     await wait(400);
     expect(ensures(requests)).toHaveLength(0);
   });

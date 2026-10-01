@@ -145,9 +145,10 @@ export const useSetupDraft = create<SetupDraft & SetupActions>((set, get) => ({
   applyInspect: (jobId, result) =>
     set((s) => {
       if (s.inspect?.jobId !== jobId) return s;
-      const target = s.slots.find((x) => x.key === s.inspect?.slotKey) ?? null;
+      const run = s.inspect;
+      const target = s.slots.find((x) => x.key === run.slotKey) ?? null;
       const incoming: DraftBucket[] = result.buckets.map((b) => {
-        const d = { ...b, id: bucketId(b), skipped: false };
+        const d = { ...b, id: bucketId(b, run.paths), skipped: false };
         return { ...d, slot_key: target && canMoveTo(d, target) ? target.key : slotFor(d, s.slots) };
       });
       return {

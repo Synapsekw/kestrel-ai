@@ -77,7 +77,14 @@ export function AnomaliesCard() {
           loading={catalogue === null}
           onPick={(t) => addType(specFromCatalogue(t))}
         />
-        <Button variant="ghost" icon="plus" aria-expanded={adding} onClick={() => setAdding((a) => !a)}>
+        {/* A new type is created through the Catalogue (`ensure`), so it needs the Catalogue too. */}
+        <Button
+          variant="ghost"
+          icon="plus"
+          aria-expanded={adding}
+          disabled={Boolean(catalogue?.error)}
+          onClick={() => setAdding((a) => !a)}
+        >
           New type
         </Button>
       </div>

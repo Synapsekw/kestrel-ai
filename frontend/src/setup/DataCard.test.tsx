@@ -321,6 +321,21 @@ describe("DataCard", () => {
     expect(inspects(requests)).toHaveLength(1);
   });
 
+  it("a drop of more than 16 items sorts the first 16 and says how many are left", async () => {
+    nextJob = inspectJob();
+    jobs[INSPECT_JOB_ID] = inspectJob();
+    const requests = renderData();
+    await dropFolder(Array.from({ length: 20 }, (_, i) => `E:\\F${i}`));
+    const status = await screen.findByRole("status", { name: "Sorting files" });
+    expect(
+      within(status).getByText("Sorting the first 16 of 20 items. Drop the other 4 when this sort finishes."),
+    ).toBeInTheDocument();
+    expect((inspects(requests)[0].body as { paths: string[] }).paths).toHaveLength(16);
+    fireEvent.click(within(status).getByRole("button", { name: "Cancel" }));
+    await screen.findByRole("group", { name: "Drop area" });
+    expect(screen.queryByText(/Sorting the first 16/)).toBeNull();
+  });
+
   it("keeps the typed path when the sort fails to start", async () => {
     renderData({
       routes: [

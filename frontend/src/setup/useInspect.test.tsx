@@ -151,11 +151,27 @@ describe("useInspect", () => {
     expect(reportedInline(inspectJob(), "/projects")).toBe(false);
   });
 
-  it("sends at most 16 paths and drops blanks", async () => {
+  it("sends at most 16 paths, drops blanks and says how many came in while that sort runs", async () => {
     const { result, requests } = mount();
     await act(() => result.current.start(["", ...Array.from({ length: 20 }, (_, i) => `E:\\F${i}`)]));
     const body = requests.find((r) => r.url === "/api/v1/setup/inspect")?.body as { paths: string[] };
     expect(body.paths).toHaveLength(16);
     expect(body.paths[0]).toBe("E:\\F0");
+    expect(result.current.overflow).toBe(20);
+    await act(() => result.current.cancel());
+    expect(result.current.overflow).toBeNull();
+    await act(() => result.current.start(["E:\\DCIM"]));
+    expect(result.current.overflow).toBeNull();
+  });
+
+  it("two quick starts send one request", async () => {
+    const { result, requests } = mount();
+    await act(async () => {
+      const first = result.current.start(["E:\\DCIM"]);
+      const second = result.current.start(["E:\\Delivery"]);
+      await Promise.all([first, second]);
+    });
+    expect(requests.filter((r) => r.url === "/api/v1/setup/inspect")).toHaveLength(1);
+    expect(useSetupDraft.getState().inspect?.paths).toEqual(["E:\\DCIM"]);
   });
 });

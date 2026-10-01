@@ -1,6 +1,9 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApi } from "@/api/client";
+import { messageOf } from "@/api/errors";
+import { cancelJob } from "@/api/jobs";
+import { LIBRARY_JOBS } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
 import { Button, toast } from "@/ui";
 import type { ProjectTemplate } from "./api";
@@ -46,6 +49,13 @@ export function SetupPage() {
   );
 
   const discard = () => {
+    // A sort still running would finish into an empty draft and toast; stop it, without waiting for the answer.
+    const run = useSetupDraft.getState().inspect;
+    if (run) {
+      cancelJob(api, LIBRARY_JOBS, run.jobId).catch((e: unknown) =>
+        pushLog(`cancel sort ${run.jobId} on discard failed: ${messageOf(e, String(e))}`),
+      );
+    }
     useSetupDraft.getState().discard();
     void navigate("/projects");
   };

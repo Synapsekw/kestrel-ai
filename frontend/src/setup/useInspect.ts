@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
@@ -23,6 +23,8 @@ export interface InspectControl {
   retryPoll: () => void;
   /** S-R3: why sorting is unavailable, or null while the library is open. */
   libraryUnavailable: string | null;
+  /** How many paths the running sort was given when more than 16 came in (only the first 16 are sorted); else null. */
+  overflow: number | null;
   /** Sorts `paths` (at most 16); `slotKey` is the slot whose Browse started it. */
   start: (paths: string[], slotKey?: string | null) => Promise<void>;
   cancel: () => Promise<void>;
@@ -40,6 +42,10 @@ export function useInspect(): InspectControl {
   const templateId = useSetupDraft((s) => s.templateId);
   const [library, setLibrary] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [overflow, setOverflow] = useState<{ jobId: string; total: number } | null>(null);
+  // Set before the start request goes out, so a second quick start does not send another (the draft's
+  // `inspect` is only set when the request returns).
+  const starting = useRef(false);
   const jobId = run?.jobId ?? null;
   const tracked = useTrackedJob(LIBRARY_JOBS, jobId);
   const job = tracked.job;
@@ -75,12 +81,12 @@ export function useInspect(): InspectControl {
 
   const start = useCallback(
     async (paths: string[], slotKey: string | null = null) => {
-      const clean = paths
-        .map((p) => p.trim())
-        .filter(Boolean)
-        .slice(0, MAX_DROP_PATHS);
-      if (clean.length === 0 || useSetupDraft.getState().inspect) return;
+      const given = paths.map((p) => p.trim()).filter(Boolean);
+      const clean = given.slice(0, MAX_DROP_PATHS);
+      if (clean.length === 0 || starting.current || useSetupDraft.getState().inspect) return;
+      starting.current = true;
       setStartError(null);
+      setOverflow(null);
       try {
         const started = await startInspect(api, {
           paths: clean,
@@ -88,9 +94,12 @@ export function useInspect(): InspectControl {
         });
         useJobsStore.getState().upsert(started);
         useSetupDraft.getState().beginInspect({ jobId: started.id, slotKey, paths: clean });
+        if (given.length > clean.length) setOverflow({ jobId: started.id, total: given.length });
       } catch (e) {
         if (isLibraryUnavailable(e)) setLibrary(messageOf(e, "the model library could not be opened"));
         else setStartError(messageOf(e, "could not start sorting the files"));
+      } finally {
+        starting.current = false;
       }
     },
     [api, templateId],
@@ -119,6 +128,7 @@ export function useInspect(): InspectControl {
     pollError: tracked.error,
     retryPoll: tracked.retry,
     libraryUnavailable: library,
+    overflow: overflow && overflow.jobId === jobId ? overflow.total : null,
     start,
     cancel,
     dismissError,

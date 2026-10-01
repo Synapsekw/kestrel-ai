@@ -112,6 +112,34 @@ describe("bucket identity and merging", () => {
     ]);
   });
 
+  it("two file picks from one folder keep both buckets; a later folder drop replaces them with one", () => {
+    const north = bucket({
+      route: "map",
+      match: { raster: "ortho" },
+      folder: "E:\\Survey",
+      files: ["E:\\Survey\\ortho_north.tif"],
+    });
+    const south = { ...north, files: ["E:\\Survey\\ORTHO_SOUTH.tif"] };
+    const pick = (b: typeof north) => draftBucket(b, { id: bucketId(b, b.files) });
+    // A file pick names its files; a run of the folder (or a parent) does not.
+    expect(bucketId(north, north.files)).toBe(`${bucketId(north)}|e:\\survey\\ortho_north.tif`);
+    expect(bucketId(north, ["e:\\survey\\"])).toBe(bucketId(north));
+    expect(bucketId(north, ["E:\\"])).toBe(bucketId(north));
+    expect(bucketId(VISUAL, ["E:\\Elsewhere\\x.jpg"])).toBe(bucketId(VISUAL));
+
+    const picked = mergeBuckets(mergeBuckets([draftBucket(LAS)], [pick(north)]), [pick(south)]);
+    expect(picked.map((b) => b.files)).toEqual([LAS.files, north.files, south.files]);
+    // The same file picked again replaces its own bucket.
+    expect(mergeBuckets(picked, [pick({ ...north, count: 3 })]).map((b) => b.count)).toEqual([1, 3, 1]);
+
+    const folder = draftBucket({ ...north, files: [...north.files, ...south.files], count: 2 });
+    const dropped = mergeBuckets(picked, [folder]);
+    expect(dropped.map((b) => [b.id, b.count])).toEqual([
+      [bucketId(LAS), 1],
+      [bucketId(north), 2],
+    ]);
+  });
+
   it("adds up what was not recognised and keeps at most 50 names", () => {
     const sample = (n: number) =>
       Array.from({ length: n }, (_, i) => ({ name: `f${i}.bin`, reason: "unknown type" }));

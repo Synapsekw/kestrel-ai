@@ -5,7 +5,14 @@ import { Alert, Button, Icon, Input, Progress, cx } from "@/ui";
 import type { ProjectTemplate, TemplateSlot } from "./api";
 import { useSetupDraft } from "./draftStore";
 import { pickFiles, pickFolders, subscribeFolderDrop } from "./folderDrop";
-import { SAME_FOLDER_NOTE, TRUNCATED_TEXT, emptyRequired, isAbsolutePath, sharesFolder } from "./model";
+import {
+  MAX_DROP_PATHS,
+  SAME_FOLDER_NOTE,
+  TRUNCATED_TEXT,
+  emptyRequired,
+  isAbsolutePath,
+  sharesFolder,
+} from "./model";
 import { SetupCard } from "./SetupCard";
 import { SlotGrid } from "./SlotGrid";
 import { useInspect } from "./useInspect";
@@ -97,6 +104,11 @@ export function DataCard({ templates, onUseTemplate }: DataCardProps) {
             </Button>
           </div>
           <Progress value={job?.progress} running label="Sorting progress" />
+          {inspect.overflow !== null && (
+            <p className="text-xs text-muted">
+              {`Sorting the first ${MAX_DROP_PATHS} of ${inspect.overflow} items. Drop the other ${inspect.overflow - MAX_DROP_PATHS} when this sort finishes.`}
+            </p>
+          )}
           {inspect.pollError && (
             <Alert
               tone="warn"

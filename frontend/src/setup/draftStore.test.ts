@@ -11,6 +11,7 @@ import {
   THERMAL,
   VERTICAL,
   VISUAL,
+  bucket,
   inspectResult,
   typeSpec,
 } from "@/test/setupFixtures";
@@ -28,7 +29,8 @@ function sort(
   slotKey: string | null = null,
   over: Partial<InspectResult> = {},
 ) {
-  store().beginInspect({ jobId, slotKey, paths: ["E:\\DCIM"] });
+  // A drop of both fixture folders: every bucket lies under a dropped path, so its id is folder-level.
+  store().beginInspect({ jobId, slotKey, paths: ["E:\\DCIM", "E:\\Delivery"] });
   store().applyInspect(jobId, inspectResult(buckets, over));
 }
 
@@ -136,6 +138,29 @@ describe("setup draft", () => {
     ]);
     expect(store().notRecognised.count).toBe(2);
     expect(store().inspect).toBeNull();
+  });
+
+  it("two file picks from one folder keep both buckets; a later folder drop replaces them with one", () => {
+    store().chooseTemplate(MAPPING, "replace");
+    const north = bucket({
+      route: "map",
+      match: { raster: "ortho" },
+      folder: "E:\\Survey",
+      files: ["E:\\Survey\\ortho_north.tif"],
+    });
+    const south = { ...north, files: ["E:\\Survey\\ortho_south.tif"] };
+    store().beginInspect({ jobId: INSPECT_JOB_ID, slotKey: "ortho", paths: north.files });
+    store().applyInspect(INSPECT_JOB_ID, inspectResult([north]));
+    store().beginInspect({ jobId: INSPECT_JOB_ID_2, slotKey: "ortho", paths: south.files });
+    store().applyInspect(INSPECT_JOB_ID_2, inspectResult([south]));
+    expect(store().buckets.map((b) => b.files)).toEqual([north.files, south.files]);
+
+    const both = { ...north, files: [...north.files, ...south.files], count: 2 };
+    const third = "j0000000-4444-4000-8000-000000000093";
+    store().beginInspect({ jobId: third, slotKey: null, paths: ["E:\\Survey\\"] });
+    store().applyInspect(third, inspectResult([both]));
+    expect(store().buckets).toHaveLength(1);
+    expect(store().buckets[0]).toMatchObject({ id: bucketId(north), count: 2, slot_key: "ortho" });
   });
 
   it("a sort started from a slot's Browse lands in that slot when the route fits", () => {

@@ -157,6 +157,25 @@ describe("SetupPage", () => {
     expect(useSetupDraft.getState().name).toBe("");
   });
 
+  it("Discard draft mid-sort cancels the sort, and a refused cancel does not hold the discard up", async () => {
+    const { requests } = renderPage([
+      {
+        method: "POST",
+        path: /\/library\/jobs\/[^/]+\/cancel$/,
+        status: 503,
+        body: errorBody("library_unavailable", "the library could not be opened"),
+      },
+    ]);
+    await sortTyped("E:\\DCIM");
+    await screen.findByRole("status", { name: "Sorting files" });
+    const jobId = useSetupDraft.getState().inspect?.jobId;
+    expect(jobId).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+    await waitFor(() => expect(screen.getByTestId("location").textContent).toBe("/projects"));
+    expect(useSetupDraft.getState().inspect).toBeNull();
+    expect(posts(requests, `/library/jobs/${jobId}/cancel`)).toHaveLength(1);
+  });
+
   it("leaving mid-sort and coming back sorts the files once", async () => {
     const first = renderPage();
     fireEvent.click(await screen.findByRole("radio", { name: /^Vertical asset inspection/ }));

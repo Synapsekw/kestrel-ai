@@ -7,12 +7,41 @@ export const MAX_NOT_RECOGNISED = 50;
 
 const GEOTIFF: ReadonlySet<SlotRoute> = new Set<SlotRoute>(["map", "elevation"]);
 
-/** One bucket per route, match and folder (Windows paths compare case-insensitively). */
-export function bucketId(b: Pick<InspectBucket, "route" | "match" | "folder">): string {
+/** Lower-cased, without trailing separators. */
+const trimPath = (p: string) => p.replace(/[\\/]+$/, "").toLowerCase();
+
+/** True when `folder` is one of `paths` or lies under one of them (the run sorted that folder). */
+function underAny(folder: string, paths: readonly string[]): boolean {
+  const slashes = (p: string) => trimPath(p).replace(/\//g, "\\");
+  const f = slashes(folder);
+  return paths.some((p) => {
+    const n = slashes(p);
+    return n !== "" && (f === n || f.startsWith(`${n}\\`));
+  });
+}
+
+/**
+ * One bucket per route, match and folder (Windows paths compare case-insensitively). When the run picked
+ * files rather than the bucket's folder (`runPaths` given, and the folder is neither one of them nor under
+ * one), the id also names the files, so two files picked from one folder stay two buckets.
+ */
+export function bucketId(
+  b: Pick<InspectBucket, "route" | "match" | "folder"> & { files?: readonly string[] },
+  runPaths?: readonly string[],
+): string {
   const raster = b.match.raster ?? "";
   const thermal = b.match.thermal ? "thermal" : "";
-  return [b.route, raster, thermal, b.folder.replace(/[\\/]+$/, "").toLowerCase()].join("|");
+  const id = [b.route, raster, thermal, trimPath(b.folder)].join("|");
+  const files = b.files ?? [];
+  if (!runPaths || files.length === 0 || underAny(b.folder, runPaths)) return id;
+  return `${id}|${files
+    .map((f) => f.toLowerCase())
+    .sort()
+    .join("|")}`;
 }
+
+/** The folder-level id a file-level id belongs to (itself for a folder-level id). */
+const folderIdOf = (id: string) => id.split("|").slice(0, 4).join("|");
 
 /**
  * The backend's `assign_slots` rule (coordinator ruling): the route is equal and every key the slot's
@@ -55,16 +84,24 @@ export function canMoveTo(b: Pick<InspectBucket, "route">, slot: Pick<TemplateSl
   return slot.route === b.route || (GEOTIFF.has(b.route) && GEOTIFF.has(slot.route));
 }
 
-/** A new drop adds to what is there: a known id is replaced in place, new buckets are appended. */
+/**
+ * A new drop adds to what is there: a known id is replaced in place, new buckets are appended. A folder-level
+ * bucket also replaces the file-level buckets picked from that folder (in place of the first of them).
+ */
 export function mergeBuckets(prev: readonly DraftBucket[], incoming: readonly DraftBucket[]): DraftBucket[] {
-  const byId = new Map(incoming.map((b) => [b.id, b]));
-  const out = prev.map((b) => {
-    const next = byId.get(b.id);
-    if (!next) return b;
-    byId.delete(b.id);
-    return next;
-  });
-  return [...out, ...byId.values()];
+  const pending = new Map(incoming.map((b) => [b.id, b]));
+  const placed = new Set<string>();
+  const out: DraftBucket[] = [];
+  for (const b of prev) {
+    const key = pending.has(b.id) ? b.id : pending.has(folderIdOf(b.id)) ? folderIdOf(b.id) : null;
+    if (key === null) out.push(b);
+    else if (!placed.has(key)) {
+      out.push(pending.get(key)!);
+      placed.add(key);
+    }
+  }
+  for (const [id, b] of pending) if (!placed.has(id)) out.push(b);
+  return out;
 }
 
 export function mergeNotRecognised(a: InspectNotRecognised, b: InspectNotRecognised): InspectNotRecognised {
