@@ -2,18 +2,30 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { evidencePath } from "./evidence";
-import { api, seedInspectionProject, waitJob, type Json, type Seeded } from "./fixtures/reportsSeed";
+import {
+  api,
+  createProjectWithTypes,
+  seedInspectionProject,
+  waitJob,
+  type Json,
+  type Seeded,
+} from "./fixtures/reportsSeed";
 import {
   ui,
+  DELTA_SINCE_V1,
   createReportFromTemplate,
   editAndWait,
   expectPreviewOrder,
   loadFindingPages,
   moveSectionAbove,
+  openBuilder,
+  closeHistory,
   openHistory,
   renderFromBuilder,
+  saveAsTemplate,
   sectionListOrder,
   setPhotosOff,
+  showInPreview,
 } from "./fixtures/reportsUi";
 
 // Spec 2026-09-26-reports §17 flows 1-4 against the real backend (plan 2026-09-30-reports-r10,
@@ -138,4 +150,80 @@ test("flow 1: Full inspection report, photos off, Measurements above the table, 
   expect(((await issuedRes.json()) as Json).id).toBe(v1Id);
   await expect(row).toContainText("Issued");
   await page.screenshot({ path: evidencePath("reports", "history-v1.png"), fullPage: true });
+});
+
+test("flow 2: close one finding, grade another higher → v2 reads 1 closed · 1 escalated since v1", async ({
+  page,
+  request,
+}) => {
+  const { pid } = seeded;
+  // Ruling R10-4: the finding edits go through the API; the report side is what this flow proves.
+  await api(request, "PATCH", `/projects/${pid}/findings/${seeded.findings.map}`, { status: "closed" });
+  await api(request, "PATCH", `/projects/${pid}/findings/${seeded.findings.cloud}`, { severity: 3 });
+
+  await openBuilder(page, pid, rid);
+  // The draft's baseline is issued v1; the strip is the summary section's delta sentence.
+  await expect(ui.previewSection(page, "summary")).toContainText(DELTA_SINCE_V1);
+
+  const job = await renderFromBuilder(page, rid, ["pdf"]);
+  await waitJob(request, pid, job.id, 240_000);
+  const v2 = await api(request, "GET", `/projects/${pid}/reports/${rid}/versions/2`);
+  expect(v2.state).toBe("ready");
+  expect(v2.baseline_version_id).toBe(v1Id);
+  const doc = JSON.parse(readFileSync(join(seeded.folder, v2.folder, "document.json"), "utf-8")) as Json;
+  const summary = (doc.sections as Json[]).find((s) => s.key === "summary")!;
+  expect(JSON.stringify(summary)).toMatch(DELTA_SINCE_V1);
+
+  await openHistory(page);
+  await expect(ui.historyRow(page, 2)).toBeVisible();
+  await expect(ui.historyRow(page, 1)).toContainText("Issued");
+  await closeHistory(page);
+  // The evidence frames the delta strip (it sits below the summary's KPIs, matrix and chart).
+  await showInPreview(page, "summary");
+  const strip = ui.previewSection(page, "summary").getByText(DELTA_SINCE_V1);
+  await strip.scrollIntoViewIfNeeded();
+  await expect(strip).toBeInViewport();
+  await page.screenshot({ path: evidencePath("reports", "deltas-v2.png"), fullPage: true });
+});
+
+test("flow 3: save as template → a second project's report has the same sections and no data-item filter", async ({
+  page,
+  request,
+}) => {
+  const { pid } = seeded;
+  await openBuilder(page, pid, rid);
+
+  // A project-only filter to strip: tick every data item (photos, two maps, the cloud).
+  const boxes = ui.dataItems(page).getByRole("checkbox");
+  await expect(boxes).toHaveCount(4);
+  for (let i = 0; i < 4; i++) {
+    await editAndWait(page, pid, rid, () => boxes.nth(i).check());
+  }
+  await expect
+    .poll(
+      async () =>
+        ((await api(request, "GET", `/projects/${pid}/reports/${rid}`)).config.filters.data_item_ids ?? [])
+          .length,
+    )
+    .toBe(4);
+  const source = (await api(request, "GET", `/projects/${pid}/reports/${rid}`)).config as Json;
+
+  const name = `North yard layout ${Date.now()}`;
+  const created = await saveAsTemplate(page, name);
+  expect(created.status(), await created.text()).toBe(201);
+  const template = (await created.json()) as Json;
+  expect(template.config.filters.data_item_ids ?? null).toBeNull();
+
+  const pid2 = await createProjectWithTypes(request, "Reports e2e second", seeded.typeIds);
+  await page.goto(`/p/${pid2}/reports`);
+  const rid2 = await createReportFromTemplate(page, pid2, name, "South yard inspection");
+  const copy = (await api(request, "GET", `/projects/${pid2}/reports/${rid2}`)).config as Json;
+
+  const layout = (cfg: Json) =>
+    (cfg.sections as Json[]).map((s) => ({ key: s.key, enabled: s.enabled, options: s.options }));
+  expect(layout(copy)).toEqual(layout(source));
+  expect(copy.filters.data_item_ids ?? null).toBeNull();
+  expect(await sectionListOrder(page)).toEqual(sectionKeys(source));
+  await expect(ui.dataItems(page).getByRole("checkbox", { checked: true })).toHaveCount(0);
+  await page.screenshot({ path: evidencePath("reports", "template-second-project.png"), fullPage: true });
 });

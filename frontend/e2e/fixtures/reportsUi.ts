@@ -25,7 +25,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   appendix: "Appendix",
 };
 
-/** The v2 delta strip (R2's summary composer, spec §17 flow 2). */
+/** The v2 delta strip: the summary's small para under the delta KPIs, from R2's `delta_sentence` (backend/app/reports/baseline.py:128; only non-zero parts, joined by " · "). */
 export const DELTA_SINCE_V1 = /1 closed\s*·\s*1 escalated since v1/;
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -185,6 +185,14 @@ export async function expectPreviewOrder(page: Page, first: string, second: stri
   }).toPass();
 }
 
+/** Scrolls the preview to a section with its row's "Show <label> in preview" button (R7). */
+export async function showInPreview(page: Page, key: SectionKey): Promise<void> {
+  await ui
+    .sectionRow(page, key)
+    .getByRole("button", { name: `Show ${SECTION_LABEL[key]} in preview` })
+    .click();
+}
+
 /**
  * Brings the Finding pages section into the preview's own scroller and loads it: R6 loads a section
  * only within 1200 px of the scroller's viewport and a figure within 600 px, so each finding page is
@@ -192,10 +200,7 @@ export async function expectPreviewOrder(page: Page, first: string, second: stri
  * every finding page has been on screen.
  */
 export async function loadFindingPages(page: Page): Promise<void> {
-  await ui
-    .sectionRow(page, "finding_pages")
-    .getByRole("button", { name: "Show Finding pages in preview" })
-    .click();
+  await showInPreview(page, "finding_pages");
   const section = ui.previewSection(page, "finding_pages");
   await expect(section).toHaveAttribute("aria-busy", "false");
   await expect(section.getByRole("status", { name: "Loading section" })).toHaveCount(0);
@@ -241,6 +246,12 @@ export async function openHistory(page: Page): Promise<Locator> {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
   await expect(ui.history(page)).toBeVisible();
   return ui.history(page);
+}
+
+/** Closes the History drawer with its own close button (the drawer covers the top bar's toggle). */
+export async function closeHistory(page: Page): Promise<void> {
+  await ui.history(page).getByRole("button", { name: "Close history" }).click();
+  await expect(ui.history(page)).toBeHidden();
 }
 
 /** Save as template → name → Save template; returns the POST /report-templates response. */
