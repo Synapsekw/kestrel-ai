@@ -46,6 +46,7 @@ const JOB_NAME: Record<Job["type"], string> = {
   elevation_import: "Elevation import",
   drawing_import: "Drawing import",
   report_render: "Report",
+  setup_inspect: "Sort dropped files",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

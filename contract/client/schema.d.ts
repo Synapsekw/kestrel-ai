@@ -2782,6 +2782,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogue/types/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a project template's types against the catalogue, in one transaction (spec
+         *     2026-09-30-project-setup section 6). Each spec is matched by normalised name, archived
+         *     types included. A match is reused and left unchanged, except that an archived match is
+         *     unarchived (its catalogue hotkey is cleared when a live type now holds it); a kind or colour
+         *     that differs from the spec is reported as `conflict`, and the catalogue wins. A miss creates
+         *     the type from the spec with `origin: template`. With `dry_run: true` nothing is written and
+         *     a miss has `id: null`. Items come back in request order. Setup calls it on Create, and as a
+         *     dry run while the anomaly list settles, so conflicts show before anything is created.
+         */
+        post: operations["ensureCatalogueTypes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalogue/types/{typeId}": {
         parameters: {
             query?: never;
@@ -4266,6 +4292,70 @@ export interface paths {
         patch: operations["patchReportTemplate"];
         trace?: never;
     };
+    "/api/v1/project-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project templates for the new-project page: the three built-ins first, then the operator's own by name. A template pre-fills the page; it is never stored on the project. */
+        get: operations["listProjectTemplates"];
+        put?: never;
+        /** Save slots and anomaly types as a reusable template (Save as my template). Names are unique after normalising, like catalogue type names; the project name, folder and files are never part of a template. */
+        post: operations["createProjectTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved template. Projects made from it are not affected: a template is never stored on a project. */
+        delete: operations["deleteProjectTemplate"];
+        options?: never;
+        head?: never;
+        /** Rename a saved template, or replace its description or config. Built-ins are read-only. */
+        patch: operations["patchProjectTemplate"];
+        trace?: never;
+    };
+    "/api/v1/setup/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sort dropped files and folders into buckets by route (spec 2026-09-30-project-setup section
+         *     7): a `setup_inspect` job on the model library's runner, because no project exists yet. Read
+         *     it with `GET /library/jobs/{jobId}`; its `result` is an `InspectResult`. Only extensions and
+         *     headers are read, never pixels, raster bodies or points: at most 20 photos per folder, one
+         *     header per GeoTIFF or LAS/LAZ file, the root element of an XML file. The walk stops early, at
+         *     50,000 files, 10,000 folders or 500 buckets, and sets `truncated`. A path that is relative, missing or unreadable is not refused: it
+         *     is listed under `not_recognised` with its reason. With `template_id`, each bucket's
+         *     `slot_key` is assigned for that template; an unknown id leaves every `slot_key` null.
+         */
+        post: operations["startSetupInspect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4357,6 +4447,13 @@ export interface components {
                  *     details `{job_id}`), issued_version (409: an issued version is never deleted),
                  *     invalid_snapshot_spec and snapshot_key_mismatch (400: the snapshot `spec` does not
                  *     decode, or does not match the key).
+                 *     Project setup: template_builtin (409: a built-in project template is never changed
+                 *     or deleted), template_name_taken (409: a project template with that normalised name
+                 *     exists; details `{template_id}`), invalid_template (also 422 for a project template
+                 *     whose config repeats a slot key, a type name or a hotkey; details
+                 *     `{errors: [{path, message}]}`), invalid_severity_rule (422: a severity rule names a
+                 *     level that is not on the scale; details `{name, severity}`), type_name_blank (422: a
+                 *     type name is empty once normalised; details `{name}`).
                  */
                 code: string;
                 message: string;
@@ -4607,6 +4704,10 @@ export interface components {
             folder: string;
             /** @description catalogue type ids to start with, in list order; empty when absent */
             type_ids?: string[];
+            /** @description type id to the project's hotkey for it (a digit 1-9 or a letter); null or a type left out means no project hotkey; the same meaning as in `PUT /projects/{projectId}/types`; empty when absent */
+            hotkeys?: {
+                [key: string]: string | null;
+            };
         };
         /**
          * @example {
@@ -8979,7 +9080,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render" | "setup_inspect";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -9014,7 +9115,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}) */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}) */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -9176,7 +9277,14 @@ export interface components {
          *       "hotkey": "c",
          *       "group": "Concrete defects",
          *       "archived": false,
-         *       "origin": "user"
+         *       "origin": "user",
+         *       "definition": "A fine dark line in concrete, straight or branching.",
+         *       "severity_rules": [
+         *         {
+         *           "when": "Wider than 3 mm or leaking",
+         *           "severity": 4
+         *         }
+         *       ]
          *     }
          */
         CatalogueType: {
@@ -9191,10 +9299,14 @@ export interface components {
             group: string | null;
             archived: boolean;
             /**
-             * @description `migrated` when the foundation migration created it from a project class
+             * @description `migrated` when the foundation migration created it from a project class; `template` when project setup created it from a template
              * @enum {string}
              */
-            origin: "user" | "migrated";
+            origin: "user" | "migrated" | "template";
+            /** @description what the anomaly looks like, in a sentence or two */
+            definition: string | null;
+            /** @description in order; the first rule that matches sets a finding's severity (applied by S2) */
+            severity_rules: components["schemas"]["SeverityRule"][];
         };
         /**
          * @example {
@@ -9208,7 +9320,9 @@ export interface components {
          *           "hotkey": "c",
          *           "group": "Concrete defects",
          *           "archived": false,
-         *           "origin": "user"
+         *           "origin": "user",
+         *           "definition": "A fine dark line in concrete, straight or branching.",
+         *           "severity_rules": []
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
@@ -9219,7 +9333,9 @@ export interface components {
          *           "hotkey": "1",
          *           "group": "Machinery",
          *           "archived": false,
-         *           "origin": "migrated"
+         *           "origin": "migrated",
+         *           "definition": null,
+         *           "severity_rules": []
          *         }
          *       ],
          *       "next_cursor": null,
@@ -9254,6 +9370,10 @@ export interface components {
             hotkey?: string | null;
             /** @description null when absent */
             group?: string | null;
+            /** @description null when absent */
+            definition?: string | null;
+            /** @description in order; empty when absent; a level not on the scale is refused with 422 `invalid_severity_rule`, details `{name, severity}` */
+            severity_rules?: components["schemas"]["SeverityRule"][];
         };
         /**
          * @description every field is optional; a field that is sent replaces the stored one
@@ -9270,6 +9390,9 @@ export interface components {
             hotkey?: string | null;
             group?: string | null;
             archived?: boolean;
+            definition?: string | null;
+            /** @description a level not on the scale is refused with 422 `invalid_severity_rule`, details `{name, severity}` */
+            severity_rules?: components["schemas"]["SeverityRule"][];
         };
         /**
          * @description the patched type, plus whether to offer the findings backfill
@@ -9283,6 +9406,8 @@ export interface components {
          *       "group": "Concrete defects",
          *       "archived": false,
          *       "origin": "migrated",
+         *       "definition": null,
+         *       "severity_rules": [],
          *       "backfill_candidates": true
          *     }
          */
@@ -12914,6 +13039,341 @@ export interface components {
             /** @description an absolute path to a JPEG, PNG or WebP picked with the file dialog */
             path: string;
         };
+        /**
+         * @description one of a type's ordered severity rules: a finding that matches `when` gets `severity` (S2 applies them; the first match wins)
+         * @example {
+         *       "when": "Section loss or holes through the member",
+         *       "severity": 4
+         *     }
+         */
+        SeverityRule: {
+            /** @description the condition in plain words */
+            when: string;
+            /** @description a level on the current severity scale */
+            severity: number;
+        };
+        /**
+         * @description a catalogue type as a project template names it, matched to the catalogue by normalised name. A request needs only `name` and `kind`; inside a `ProjectTemplate` the server sends every property.
+         * @example {
+         *       "name": "Corrosion",
+         *       "kind": "defect",
+         *       "colour": "#c2410c",
+         *       "default_severity": 2,
+         *       "hotkey": "1",
+         *       "definition": "Rust on steel members, fixings or plates.",
+         *       "severity_rules": []
+         *     }
+         */
+        CatalogueTypeSpec: {
+            name: string;
+            kind: components["schemas"]["CatalogueKind"];
+            /** @description null when absent; the catalogue picks one for a new type */
+            colour?: string | null;
+            /** @description null when absent */
+            default_severity?: number | null;
+            /** @description the project hotkey the template gives the type; null when absent */
+            hotkey?: string | null;
+            /** @description what the anomaly looks like; null when absent */
+            definition?: string | null;
+            /** @description in order; empty when absent */
+            severity_rules?: components["schemas"]["SeverityRule"][];
+        };
+        EnsureTypesRequest: {
+            types: components["schemas"]["CatalogueTypeSpec"][];
+            /** @description false when absent; true writes nothing and answers what Create would do */
+            dry_run?: boolean;
+        };
+        /** @description the catalogue's own kind and colour for a matched type whose kind or colour differs from the template's; the catalogue wins */
+        TypeConflict: {
+            kind: components["schemas"]["CatalogueKind"];
+            colour: string;
+        };
+        EnsuredType: {
+            /** @description the name as requested */
+            name: string;
+            /** @description the catalogue type id; null only for a miss in a dry run */
+            id: string | null;
+            /** @description true when the type was created by this call, or would be in a dry run */
+            created: boolean;
+            conflict: components["schemas"]["TypeConflict"] | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "name": "Corrosion",
+         *           "id": "c1a2b3c4-0000-4000-8000-000000000021",
+         *           "created": false,
+         *           "conflict": {
+         *             "kind": "object",
+         *             "colour": "#f97316"
+         *           }
+         *         },
+         *         {
+         *           "name": "Cracked weld",
+         *           "id": "c1a2b3c4-0000-4000-8000-000000000022",
+         *           "created": true,
+         *           "conflict": null
+         *         }
+         *       ]
+         *     }
+         */
+        EnsureTypesResult: {
+            /** @description one per requested type, in request order */
+            items: components["schemas"]["EnsuredType"][];
+        };
+        /**
+         * @description the existing importer a slot feeds: images `POST /sources` (one per folder), map `/maps`, elevation `/elevations`, pointcloud `/pointclouds`, drawing `/drawing-inspections` then `/drawings`; video waits for video import (S4)
+         * @enum {string}
+         */
+        SlotRoute: "images" | "map" | "elevation" | "pointcloud" | "drawing" | "video";
+        /** @description narrows a route: `raster` tells orthomosaics from elevation models, `thermal` tells thermal photos from visual ones; an absent key matches either */
+        SlotMatch: {
+            /** @enum {string} */
+            raster?: "ortho" | "elevation";
+            thermal?: boolean;
+        };
+        TemplateSlot: {
+            /** @description unique within the template */
+            key: string;
+            label: string;
+            route: components["schemas"]["SlotRoute"];
+            /** @description an empty required slot warns on the setup page; it never blocks Create */
+            required: boolean;
+            /** @description file extensions, lower case, without the dot */
+            accepts: string[];
+            match: components["schemas"]["SlotMatch"] | null;
+        };
+        /** @description versioned so later sub-projects can add to it. Repeated slot keys, type names (after normalising) or hotkeys are refused with `invalid_template`. */
+        TemplateConfig: {
+            /** @constant */
+            config_version: 1;
+            slots: components["schemas"]["TemplateSlot"][];
+            types: components["schemas"]["CatalogueTypeSpec"][];
+        };
+        ProjectTemplate: {
+            /** @description builtin-mapping, builtin-vertical, builtin-confined, or a UUID */
+            id: string;
+            name: string;
+            description: string;
+            /** @description a built-in is never changed or deleted */
+            builtin: boolean;
+            config: components["schemas"]["TemplateConfig"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "builtin-vertical",
+         *           "name": "Vertical asset inspection",
+         *           "description": "Visual and thermal photos, point clouds and drawings for towers, masts, poles and other tall structures.",
+         *           "builtin": true,
+         *           "config": {
+         *             "config_version": 1,
+         *             "slots": [
+         *               {
+         *                 "key": "visual",
+         *                 "label": "Visual photos",
+         *                 "route": "images",
+         *                 "required": true,
+         *                 "accepts": [
+         *                   "jpg",
+         *                   "jpeg"
+         *                 ],
+         *                 "match": {
+         *                   "thermal": false
+         *                 }
+         *               },
+         *               {
+         *                 "key": "thermal",
+         *                 "label": "Thermal photos",
+         *                 "route": "images",
+         *                 "required": false,
+         *                 "accepts": [
+         *                   "jpg",
+         *                   "jpeg"
+         *                 ],
+         *                 "match": {
+         *                   "thermal": true
+         *                 }
+         *               },
+         *               {
+         *                 "key": "point_cloud",
+         *                 "label": "3D point cloud",
+         *                 "route": "pointcloud",
+         *                 "required": false,
+         *                 "accepts": [
+         *                   "las",
+         *                   "laz"
+         *                 ],
+         *                 "match": null
+         *               },
+         *               {
+         *                 "key": "drawings",
+         *                 "label": "Asset drawings",
+         *                 "route": "drawing",
+         *                 "required": false,
+         *                 "accepts": [
+         *                   "pdf",
+         *                   "dxf",
+         *                   "xml"
+         *                 ],
+         *                 "match": null
+         *               }
+         *             ],
+         *             "types": [
+         *               {
+         *                 "name": "Corrosion",
+         *                 "kind": "defect",
+         *                 "colour": "#c2410c",
+         *                 "default_severity": 2,
+         *                 "hotkey": "1",
+         *                 "definition": "Rust on steel members, fixings or plates.",
+         *                 "severity_rules": []
+         *               },
+         *               {
+         *                 "name": "Bird nest",
+         *                 "kind": "object",
+         *                 "colour": "#84cc16",
+         *                 "default_severity": 2,
+         *                 "hotkey": "5",
+         *                 "definition": "A nest built on the structure, a platform or equipment.",
+         *                 "severity_rules": []
+         *               }
+         *             ]
+         *           },
+         *           "created_at": "2026-09-30T00:00:00Z",
+         *           "updated_at": "2026-09-30T00:00:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        ProjectTemplatePage: {
+            /** @description built-ins first, then by name */
+            items: components["schemas"]["ProjectTemplate"][];
+        };
+        ProjectTemplateCreate: {
+            name: string;
+            /** @description empty when absent */
+            description?: string;
+            config: components["schemas"]["TemplateConfig"];
+        };
+        /** @description every field is optional; a field that is sent replaces the stored one */
+        ProjectTemplatePatch: {
+            name?: string;
+            description?: string;
+            config?: components["schemas"]["TemplateConfig"];
+        };
+        SetupInspectRequest: {
+            /** @description absolute paths of dropped files or folders */
+            paths: string[];
+            /** @description assigns each bucket's `slot_key` for this template; absent leaves every `slot_key` null */
+            template_id?: string;
+        };
+        /** @description files of one route and match in one folder */
+        InspectBucket: {
+            route: components["schemas"]["SlotRoute"];
+            match: components["schemas"]["SlotMatch"];
+            /** @description the template slot the bucket fills; null without a template or when no slot takes it */
+            slot_key: string | null;
+            /** @description absolute path of the folder that holds the files */
+            folder: string;
+            /** @description absolute paths to import one by one (map, elevation, pointcloud, drawing, video); empty for `images`, which import the whole folder */
+            files: string[];
+            /** @description every file in the bucket, beyond the listed ones */
+            count: number;
+            bytes: number;
+            /** @description file names to show */
+            samples: string[];
+            /** @description the CRS of the first header read, such as EPSG:32633; null when there is none */
+            crs: string | null;
+        };
+        InspectSkipped: {
+            name: string;
+            /** @description unknown type, could not read header, not supported yet, not found */
+            reason: string;
+        };
+        InspectNotRecognised: {
+            count: number;
+            samples: components["schemas"]["InspectSkipped"][];
+        };
+        /**
+         * @description the `result` of a `setup_inspect` job (read through `GET /library/jobs/{jobId}`)
+         * @example {
+         *       "buckets": [
+         *         {
+         *           "route": "images",
+         *           "match": {
+         *             "thermal": false
+         *           },
+         *           "slot_key": "visual",
+         *           "folder": "E:\\Deliveries\\Tower 14\\DCIM",
+         *           "files": [],
+         *           "count": 212,
+         *           "bytes": 1484000000,
+         *           "samples": [
+         *             "DJI_0001_V.JPG",
+         *             "DJI_0003_V.JPG"
+         *           ],
+         *           "crs": null
+         *         },
+         *         {
+         *           "route": "images",
+         *           "match": {
+         *             "thermal": true
+         *           },
+         *           "slot_key": "thermal",
+         *           "folder": "E:\\Deliveries\\Tower 14\\DCIM",
+         *           "files": [],
+         *           "count": 212,
+         *           "bytes": 412000000,
+         *           "samples": [
+         *             "DJI_0002_T.JPG",
+         *             "DJI_0004_T.JPG"
+         *           ],
+         *           "crs": null
+         *         },
+         *         {
+         *           "route": "pointcloud",
+         *           "match": {},
+         *           "slot_key": "point_cloud",
+         *           "folder": "E:\\Deliveries\\Tower 14\\LiDAR",
+         *           "files": [
+         *             "E:\\Deliveries\\Tower 14\\LiDAR\\tower.laz"
+         *           ],
+         *           "count": 1,
+         *           "bytes": 98000000,
+         *           "samples": [
+         *             "tower.laz"
+         *           ],
+         *           "crs": "EPSG:32633"
+         *         }
+         *       ],
+         *       "not_recognised": {
+         *         "count": 1,
+         *         "samples": [
+         *           {
+         *             "name": "Thumbs.db",
+         *             "reason": "unknown type"
+         *           }
+         *         ]
+         *       },
+         *       "suggested_template_id": "builtin-vertical",
+         *       "truncated": false
+         *     }
+         */
+        InspectResult: {
+            buckets: components["schemas"]["InspectBucket"][];
+            not_recognised: components["schemas"]["InspectNotRecognised"];
+            /** @description the built-in whose required slots the most buckets fill; null when none fits */
+            suggested_template_id: string | null;
+            /** @description true when the walk stopped early: at 50,000 files, 10,000 folders or 500 buckets */
+            truncated: boolean;
+        };
     };
     responses: {
         /** @description error envelope */
@@ -13208,8 +13668,17 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
-            /** @description the folder already contains a project (`code` is `already_exists`) */
+            /** @description the folder already contains a project (`code` is `already_exists`), or two types were given one hotkey (`code` is `hotkey_conflict`, details `{type_id}`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`), or a `hotkeys` key is not one of `type_ids` (`code` is `hotkey_invalid`, details `{type_ids}`); nothing is created and the folder is not touched */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19009,7 +19478,7 @@ export interface operations {
                 /** @description matches the normalised name or the group */
                 q?: string;
                 kind?: components["schemas"]["CatalogueKind"];
-                origin?: "user" | "migrated";
+                origin?: "user" | "migrated" | "template";
                 /** @description false when absent */
                 include_archived?: boolean;
                 limit?: components["parameters"]["limit"];
@@ -19059,6 +19528,41 @@ export interface operations {
             };
             /** @description the name exists (`code` is `type_exists`, details `{type_id}`), or the hotkey is taken (`code` is `hotkey_conflict`, details `{type_id}`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    ensureCatalogueTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureTypesRequest"];
+            };
+        };
+        responses: {
+            /** @description one item per requested type, in request order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnsureTypesResult"];
+                };
+            };
+            /** @description a severity rule names a level that is not on the scale (`code` is `invalid_severity_rule`, details `{name, severity}`), a default severity is above the scale (`code` is `severity_unknown`), or a name is empty once normalised, such as `_-_` (`code` is `type_name_blank`, details `{name}`); nothing was written */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22207,6 +22711,210 @@ export interface operations {
                 };
             };
             503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listProjectTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description every template; there are few, so the list is not paged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplatePage"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createProjectTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"];
+                };
+            };
+            /** @description a template with that normalised name exists (`code` is `template_name_taken`, details `{template_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteProjectTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in template is never deleted (`code` is `template_builtin`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchProjectTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: components["parameters"]["templateId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTemplatePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated template */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in template is never changed (`code` is `template_builtin`), or the new name is taken (`code` is `template_name_taken`, details `{template_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the config repeats a slot key, a type name after normalising, or a hotkey (`code` is `invalid_template`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startSetupInspect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description inspect job queued in the library runner */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job": {
+                     *         "id": "j0000000-4444-4000-8000-000000000050",
+                     *         "project_id": "library",
+                     *         "type": "setup_inspect",
+                     *         "state": "queued",
+                     *         "progress": 0,
+                     *         "message": "",
+                     *         "log_path": "runs/j0000000-4444-4000-8000-000000000050/job.log",
+                     *         "params": {
+                     *           "paths": [
+                     *             "E:\\Deliveries\\Tower 14"
+                     *           ],
+                     *           "template_id": "builtin-vertical"
+                     *         },
+                     *         "result": null,
+                     *         "error": null,
+                     *         "created_at": "2026-09-30T10:00:00Z",
+                     *         "started_at": null,
+                     *         "finished_at": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the body is malformed (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };

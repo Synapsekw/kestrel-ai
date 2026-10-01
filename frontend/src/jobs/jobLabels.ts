@@ -36,6 +36,7 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   elevation_import: "Elevation import",
   drawing_import: "Drawing import",
   report_render: "Report",
+  setup_inspect: "Sort dropped files",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -163,6 +164,9 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       const report = str(job.params, "report_id");
       return { label: "Open report", to: report ? `${p}/reports/${report}` : `${p}/reports` };
     }
+    case "setup_inspect":
+      // A library job: its buckets live on the new-project page, whose draft survives navigation.
+      return { label: "Open new project", to: "/projects/new" };
   }
 }
 
