@@ -2,6 +2,7 @@
 
 import types as pytypes
 
+from reports_cloud_rows import cloud_measurement, measurement_row
 from reports_rows import GEN, add_cloud, add_finding, add_type, config, ctx_for, fake_key
 
 from app.reports import blocks
@@ -53,13 +54,20 @@ def test_r9m_sections_end_with_their_empty_state_on_an_empty_project(handle):
 
 
 def test_figure_hooks_are_empty_stubs(handle):
+    """A cloud-anchored finding gets no image or map figures, photos or comments; cloud's finding and
+    measurement figures are real (R9-C): with no stored view and no covering cloud DSM each prints its
+    placeholder figure."""
     t, c = add_type(handle, "crack"), add_cloud(handle)
     add_finding(handle, t, anchor="cloud", target=c)
+    mid = cloud_measurement(handle, c)
     ctx = ctx_for(handle, config())
     row = next(iter_findings(ctx))
     assert image.finding_figures(ctx, row) == [] and image.photos(ctx, row, 4) == []
     assert image.comments(ctx, row, "all") == [] and map_figures.finding_figures(ctx, row) == []
-    assert cloud.finding_figures(ctx, row) == [] and cloud.measurement_figure(ctx, object()) is None
+    mfig = cloud.measurement_figure(ctx, measurement_row(handle, c, mid))
+    assert mfig.snapshot.missing_reason is not None
+    (fig,) = cloud.finding_figures(ctx, row)
+    assert fig.snapshot.missing_reason is not None
 
 
 def test_compose_keeps_config_order_skips_disabled_and_is_deterministic(handle):
