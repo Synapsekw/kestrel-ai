@@ -76,3 +76,32 @@ def test_text_escapes_drops_controls_keeps_newlines_and_cuts():
     assert text("<b> & \x07ok\nnext") == "&lt;b&gt; &amp; ok<br/>next"
     assert text(None) == ""
     assert text("x" * 10, limit=5) == "xxxx…"
+
+
+def test_a_figure_embeds_its_jpeg_verbatim_and_holds_no_image_bytes_until_the_pdf_is_written(tmp_path):
+    # §15: a part's peak is its embedded JPEG plus reportlab overhead. reportlab's drawImage reads a
+    # JPEG into memory, ASCII85-inflated (x1.25), at draw time and keeps it for the whole build, and
+    # save() then formats and joins two more copies (the 300-finding render peaked at ~4x the part).
+    from reportlab.pdfbase import pdfdoc
+    from reportlab.pdfgen.canvas import Canvas
+
+    held: list[int] = []
+
+    class Probe(Canvas):
+        def save(self):
+            imgs = [o for o in self._doc.idToObject.values() if isinstance(o, pdfdoc.PDFImageXObject)]
+            held.append(len(imgs))
+            held.append(sum(len(getattr(o, "streamContent", None) or b"") for o in imgs))
+            super().save()
+
+    a = jpeg(tmp_path / "a.jpg", 1200, 900, (200, 40, 40))
+    b = jpeg(tmp_path / "b.jpg", 800, 600, (40, 40, 200))
+    path = tmp_path / "p.pdf"
+    flows = [primitives.figure_flowable(p, 80 * mm, 60 * mm, "", ST) for p in (a, b, a)]
+    SimpleDocTemplate(str(path), pagesize=A4, invariant=1).build(flows, canvasmaker=Probe)
+    data = path.read_bytes()
+    assert held == [2, 0]  # two images (the repeat reuses its XObject), none loaded before save
+    assert data.count(b"/Filter [ /DCTDecode ]") == 2  # binary, not ASCII85-inflated
+    assert a.read_bytes() in data and b.read_bytes() in data  # passthrough: the file, byte for byte
+    r, g, _ = pixel(path, 0, 0.5, 0.15)
+    assert r > 150 and g < 90

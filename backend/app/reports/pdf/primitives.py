@@ -1,9 +1,11 @@
 """Small flowables the report PDF is built from (spec 2026-09-26-reports §10.1-§10.2).
 
-A figure is drawn with canvas.drawImage on the cached JPEG: reportlab embeds a JPEG as /DCTDecode
-without decoding it, so a figure costs its file size, not its pixels. Only the JPEG header is read
-here (for the aspect ratio). Anything missing or unreadable prints as a grey placeholder with the
-reason, never an error (spec §16).
+A figure is drawn with canvas.drawImage on the cached JPEG, embedded as /DCTDecode without decoding
+it, so a figure costs its file size, not its pixels. The XObject is a LazyJpeg: reportlab's own reads
+the file at draw time, ASCII85-inflated (x1.25), and holds it for the whole build, so with save()'s two
+formatted copies a part peaked at ~4x its embedded JPEG (spec §15); a LazyJpeg reads the file only
+while save() writes it, binary. Only the JPEG header is read here (for the aspect ratio). Anything
+missing or unreadable prints as a grey placeholder with the reason, never an error (spec §16).
 
 `figure_flowable` returns a one-column Table (an atomic flowable), not a KeepTogether: Tasks 10 and
 11 place it inside other Table cells, and a KeepTogether inside a Table cell raises LayoutError on
@@ -17,7 +19,8 @@ from pathlib import Path
 
 from PIL import Image as PILImage
 from reportlab.lib.units import mm
-from reportlab.lib.utils import simpleSplit
+from reportlab.lib.utils import _digester, simpleSplit
+from reportlab.pdfbase import pdfdoc, pdfutils
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Flowable, Paragraph, Table, TableStyle
 
@@ -35,6 +38,39 @@ def fit_box(px_w: int, px_h: int, box_w: float, box_h: float) -> tuple[float, fl
     return round(px_w * scale, 4), round(px_h * scale, 4)
 
 
+class LazyJpeg(pdfdoc.PDFImageXObject):
+    """A JPEG image XObject that holds only its path and header until the PDF is written."""
+
+    def __init__(self, name: str, path: Path):
+        self.name, self.path, self.mask = name, Path(path), None
+        with self.path.open("rb") as f:
+            self.width, self.height, components = pdfutils.readJPEGInfo(f)[:3]
+        self.bitsPerComponent = 8
+        self.colorSpace = {1: "DeviceGray", 3: "DeviceRGB"}.get(components, "DeviceCMYK")
+        self._dotrans = int(components == 4)
+        self._filters = ("DCTDecode",)
+
+    def format(self, document):
+        self.streamContent = self.path.read_bytes()
+        try:
+            return super().format(document)
+        finally:
+            del self.streamContent
+
+
+def draw_jpeg(c, path: Path, x: float, y: float, width: float, height: float) -> None:
+    """canvas.drawImage of a JPEG through a LazyJpeg: registered under the name drawImage derives from
+    the path, so drawImage finds it and draws it, and a repeat of the path reuses it."""
+    name = _digester(f"{path}{None}".encode())
+    reg = c._doc.getXObjectName(name)
+    if c._doc.idToObject.get(reg) is None:
+        obj = LazyJpeg(name, path)
+        c._setXObjects(obj)
+        c._doc.Reference(obj, reg)
+        c._doc.addForm(name, obj)
+    c.drawImage(str(path), x, y, width, height)
+
+
 class FramedImage(Flowable):
     def __init__(self, path: Path, width: float, height: float):
         super().__init__()
@@ -50,7 +86,7 @@ class FramedImage(Flowable):
         clip = c.beginPath()
         clip.roundRect(0, 0, self.width, self.height, RADIUS)
         c.clipPath(clip, stroke=0, fill=0)
-        c.drawImage(str(self.path), 0, 0, self.width, self.height)
+        draw_jpeg(c, self.path, 0, 0, self.width, self.height)
         c.restoreState()
         c.saveState()
         c.setStrokeColor(colour("rule"))
