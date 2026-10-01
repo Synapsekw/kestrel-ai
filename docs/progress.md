@@ -9,6 +9,62 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Reports lands — 2026-09-30 (`task/r-r10`, unit R10 evidence)
+
+Sub-project R (spec `docs/superpowers/specs/2026-09-26-reports-design.md`, index
+`docs/superpowers/plans/2026-09-30-reports-index.md`) is merged: R0–R9 on `main` at `b435e184`. R10 adds
+the §17 e2e flows, the §18 checks, two ADRs and the operator walkthrough
+`docs/evidence/reports/walkthrough.md` (21 steps).
+
+**e2e (spec §17).** Flows 1–4 against the real backend (`pnpm -C frontend e2e:reports`, opt-in; built
+bundle + FastAPI on a scratch data folder; ruling R10-1): `5 passed` (seed smoke + flows 1–4; the
+300-finding test skipped without `E2E_FRAME_BUDGET=1`) in `29.5s` (ports 5772/5773, run with
+`E2E_CAPTURE_EVIDENCE=1`). Flow 4's counts CSV and the Survey-count link in the gate suite
+(`e2e/reports-data-exports.spec.ts`; ruling R10-2): `1 passed` in 13.3s (Prism, ports 5770/5771).
+Screenshots in `docs/evidence/reports/`: `builder.png`, `history-v1.png`, `deltas-v2.png`,
+`template-second-project.png`, `data-exports-real.png`, `data-exports.png`.
+
+**§18 success criteria.**
+| # | Evidence |
+| --- | --- |
+| 1 | flow 1: new report to issued v1 inside the project's Reports tab |
+| 2 | flow 1: the live `finding_pages` blocks equal v1's `document.json` (finding numbers and snapshot keys) |
+| 3 | R4 determinism tests (no golden sha256 is committed; the PDF bytes depend on the snapshot cache path): `backend/tests/test_reports_pdf_document.py::test_sha256_is_stable_twice_and_across_processes`, `backend/tests/test_reports_pdf_parts.py::test_parts_are_deterministic`; R3 key-changes-on-mtime: `backend/tests/test_report_snapshot_render.py::test_the_key_changes_when_the_source_mtime_changes`, `backend/tests/test_report_snapshot_image_crop.py::test_the_adapter_keys_on_the_file_and_annotation_and_misses_cleanly` (ruling R10-6) |
+| 4 | `pytest -m perf tests/test_reports_render_scale.py` (RSS sampled every 10 ms): `300-finding render: 34.1 s, 1 PDF part(s), 314 pages, RSS peak +245 MB over 237 MB, stats {'finding_count': 300, 'page_count': 314, 'part_count': 1, 'warnings': [], 'label': None, 'error': None}` (Task 7's run: 36.0 s, +285 MB). `E2E_FRAME_BUDGET=1 … -g "300 findings"` (ports 5774/5775): Task 7 passed with `scale: frames while rendering {"samples":140,"p50":16.7,"p95":16.8,"max":149.9}, job running at the end of the sample`; of four fresh runs on 2026-10-01 one passed (`{"samples":147,"p50":16.7,"p95":33.3,"max":166.7}`) and three failed the 33.4 ms p95 budget (p95 83.3, 49.9 and 150 ms; the first two while another unit's lint/e2e/build ran, the last on a quiet machine). **Open:** the frame budget is not met reliably. |
+| 5 | walkthrough step 13 (operator print check); R4 severity-as-word tests `backend/tests/test_reports_pdf_primitives.py::test_severity_tag_prints_its_word_and_survives_a_bad_colour`, `backend/tests/test_reports_pdf_finding.py::test_graded_finding_shows_its_severity_and_status` |
+| 6 | flow 4 (both halves); walkthrough steps 18–20 |
+
+**ADRs.** `vault/decisions/2026-09-30-fonts-in-the-frozen-sidecar.md` (supersedes the "Helvetica
+only" consequence of `2026-09-24-pdf-and-xlsx-in-the-frozen-sidecar.md`),
+`vault/decisions/2026-09-30-reports-use-reportlab-not-webview2-print.md`.
+
+**Changes to other units' code.**
+- `backend/app/reports/pdf/primitives.py` (R4): snapshot JPEGs embed as binary DCT XObjects
+  (`LazyJpeg`) whose bytes are read only at `save()`, with an eager fallback when the lazy XObject
+  rejects a JPEG and a grey placeholder if the file vanished before the save. Root cause: reportlab
+  ASCII85-encoded every figure at draw time and held them all until save (about 3.75x the part); the
+  300-finding RSS peak went from +436 MB to +285 MB. Pinned by
+  `test_a_figure_embeds_its_jpeg_verbatim_and_holds_no_image_bytes_until_the_pdf_is_written`,
+  `test_a_jpeg_the_lazy_xobject_rejects_is_still_drawn_eagerly` and
+  `test_a_snapshot_gone_before_the_pdf_is_written_prints_grey_not_a_failed_render`
+  (`tests/test_reports_pdf_primitives.py`) and the perf test (`69d24472`, `7af7d87c`).
+- `backend/app/reports/figures/map.py` (`fingerprint(ctx)` over each map's id, status,
+  `bounds_wgs84` and `crs_wkt`), `outline._DATA_COLUMNS` (GeoMap `bounds_wgs84`, `crs_wkt`),
+  `sections/measurements.py` + `sections/m_etag.py` (fingerprint over the cloud measurement views'
+  sha256 and stale flag) (R2/R9-M/R9-C hand-off, coordinator task): the preview goes stale when a
+  map's georeference or a cloud measurement view changes; PDFs are unaffected. No separate warnings
+  hook: the outline composes the section, so missing/stale cloud measurement view warnings already
+  reach the chip. Pinned by `tests/test_reports_preview_staleness.py` (four tests, including
+  `test_the_outline_warns_once_for_missing_and_for_stale_measurement_views`) (`52735827`).
+
+**Gate (at `GATE_PENDING`, suites one at a time):** contract check GATE_PENDING; ruff check + format GATE_PENDING; pytest GATE_PENDING
+passed, GATE_PENDING skipped, GATE_PENDING deselected; frontend lint + tokens GATE_PENDING; vitest GATE_PENDING / GATE_PENDING
+passed; build GATE_PENDING; e2e GATE_PENDING passed, GATE_PENDING skipped (ports 5770/5771); `cargo test`: GATE_PENDING.
+
+**Left for R-X:** freeze the sidecar, `smoke_frozen.ps1` (`reports ok`, `report ok v1 …`), installer,
+combined walkthrough. **Left for the operator:** the walkthrough's "Checks only you can do". **Open:**
+the 300-finding frame budget (criterion 4, UI half) failed three of four fresh runs.
+
 ## I/M/C wave closes — 2026-09-28 (`task/imc-x`, programme unit IMC-X)
 
 All three sub-projects of the inspection-platform wave (Images, Maps, Point clouds; `main` at
