@@ -208,7 +208,44 @@ describe("slots and buckets", () => {
       clashes: [],
       sorting: false,
       wholeFolders: [],
+      rulesProblems: [],
     });
+  });
+
+  it("holds Create for a rule problem, one line per type, and counts it", () => {
+    const base = { name: "Site", folder: "E:\\Projects\\Site", slots: [], buckets: [], inspect: null };
+    const scale = [
+      { level: 1, name: "Minor", colour: "#3fb68e" },
+      { level: 2, name: "Major", colour: "#ff5a4f" },
+    ];
+    const ok = { ...draftTypes([typeSpec("Rust", "defect", 1, "1")])[0] };
+    const tooLong = {
+      ...ok,
+      key: "k2",
+      name: "Crack",
+      hotkey: null,
+      severity_rules: [{ when: "x".repeat(201), severity: 1 }],
+    };
+    const offScale = {
+      ...ok,
+      key: "k3",
+      name: "Leak",
+      hotkey: null,
+      severity_rules: [{ when: "wet", severity: 4 }],
+    };
+    const clean = checklistOf({ ...base, types: [ok] }, "Blank", scale);
+    const bad = checklistOf({ ...base, types: [ok, tooLong, offScale] }, "Blank", scale);
+    expect(clean.rulesProblems).toEqual([]);
+    expect(canCreate(clean)).toBe(true);
+    expect(bad.rulesProblems).toEqual([
+      "Crack: Keep rule 1 to 200 characters or fewer.",
+      "Leak: Rule 1 uses level 4, which is no longer on the severity scale. Choose another level.",
+    ]);
+    expect(canCreate(bad)).toBe(false);
+    expect(issueCount(bad)).toBe(issueCount(clean) + 2);
+    // No scale given: the level check is skipped, the length check is not.
+    expect(checklistOf({ ...base, types: [offScale] }, "Blank").rulesProblems).toEqual([]);
+    expect(checklistOf({ ...base, types: [tooLong] }, "Blank").rulesProblems).toHaveLength(1);
   });
 
   it("holds Create while a sort runs, and counts it as something to check", () => {

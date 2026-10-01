@@ -33,6 +33,11 @@ export function Checklist({ model }: { model: ChecklistModel }) {
           {c}
         </Item>
       ))}
+      {model.rulesProblems.map((p) => (
+        <Item key={p} tone="danger">
+          {p}
+        </Item>
+      ))}
     </ul>
   );
 }

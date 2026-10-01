@@ -55,6 +55,20 @@ describe("SummaryCard", () => {
     expect(create()).toBeEnabled();
   });
 
+  it("holds Create and names the type when a severity rule is over 200 characters", () => {
+    renderSummary();
+    act(() => {
+      store().setName("Site A");
+      store().setFolder("E:\\Projects\\A");
+      store().addType({
+        ...typeSpec("Rust", "defect", 1, "1"),
+        severity_rules: [{ when: "x".repeat(201), severity: 1 }],
+      });
+    });
+    expect(checklist()).toHaveTextContent("Rust: Keep rule 1 to 200 characters or fewer.");
+    expect(create()).toBeDisabled();
+  });
+
   it("warns for each empty required slot but still allows Create", () => {
     store().chooseTemplate(VERTICAL, "replace");
     store().setName("Mast");

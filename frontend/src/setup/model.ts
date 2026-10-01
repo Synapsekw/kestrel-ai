@@ -1,8 +1,9 @@
 import type { CatalogueType } from "@/api/catalogue";
 import { TYPE_HOTKEYS, TYPE_PALETTE } from "@/catalogue/catalogueModel";
 import { normaliseName } from "@/catalogue/normaliseName";
+import { rulesOf, validateRules } from "@/catalogue/severityRulesModel";
 import { formatBytes } from "@/clouds/format";
-import type { IconName } from "@/ui";
+import type { IconName, SeverityLevel } from "@/ui";
 import type {
   CatalogueTypeSpec,
   InspectBucket,
@@ -255,6 +256,23 @@ export interface ChecklistModel {
   sorting: boolean;
   /** Folder names of assigned photo buckets that came from a file, not their folder (U3 F1). */
   wholeFolders: string[];
+  /** One line per type whose severity rules the Catalogue would refuse ("<type>: <message>"). */
+  rulesProblems: string[];
+}
+
+/**
+ * A rule over 200 characters, or on a level off the scale, stays in the draft and would fail `ensure`
+ * late. Without a scale the level check is skipped (each rule's own level counts as on the scale).
+ */
+function rulesProblemsOf(types: readonly DraftType[], scale?: readonly SeverityLevel[]): string[] {
+  const out: string[] = [];
+  for (const t of types) {
+    const rules = rulesOf(t.severity_rules);
+    const against = scale ?? rules.map((r) => ({ level: r.severity, name: "", colour: "" }));
+    const problem = validateRules(rules, against);
+    if (problem) out.push(`${t.name}: ${problem}`);
+  }
+  return out;
 }
 
 export function checklistOf(
@@ -267,6 +285,7 @@ export function checklistOf(
     inspect: object | null;
   },
   templateName: string,
+  scale?: readonly SeverityLevel[],
 ): ChecklistModel {
   return {
     templateName,
@@ -278,15 +297,20 @@ export function checklistOf(
     clashes: clashLines(d.types),
     sorting: d.inspect !== null,
     wholeFolders: wholeFolderNames(d.buckets),
+    rulesProblems: rulesProblemsOf(d.types, scale),
   };
 }
 
 /**
- * Spec §8: Create needs a valid name and folder, no hotkey clash and no sort still running (S-R17: unapplied
+ * Spec §8: Create needs a valid name and folder, no hotkey clash, no rule problem and no sort still running (S-R17: unapplied
  * results would never be imported); an empty required slot only warns (S1-6).
  */
 export const canCreate = (c: ChecklistModel): boolean =>
-  c.basics === null && c.clashes.length === 0 && !c.sorting;
+  c.basics === null && c.clashes.length === 0 && c.rulesProblems.length === 0 && !c.sorting;
 
 export const issueCount = (c: ChecklistModel): number =>
-  (c.basics ? 1 : 0) + c.emptyRequired.length + c.clashes.length + (c.sorting ? 1 : 0);
+  (c.basics ? 1 : 0) +
+  c.emptyRequired.length +
+  c.clashes.length +
+  c.rulesProblems.length +
+  (c.sorting ? 1 : 0);
