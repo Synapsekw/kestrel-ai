@@ -43,7 +43,7 @@ def _hash(payload) -> str:
     return hashlib.sha256(json.dumps(payload, default=str, sort_keys=True).encode()).hexdigest()
 
 
-def _maps(s) -> str:
+def maps(s) -> str:
     """Map columns R9-M reads that `_data_fp` does not: the WGS84 footprint and the CRS (survey
     list, covering map, pair frames)."""
     return _digest(
@@ -81,7 +81,7 @@ def measurements(ctx: ComposeContext) -> str:
             if run_ids
             else ""
         )
-        maps = _maps(s)
+        maps_digest = maps(s)
     return _hash(
         {
             "map": list(map_m),
@@ -89,7 +89,7 @@ def measurements(ctx: ComposeContext) -> str:
             "volume": [list(r) for r in volumes],
             "surfaces": surfaces,
             "mask_runs": [run_ids, runs],
-            "maps": maps,
+            "maps": maps_digest,
         }
     )
 
@@ -138,7 +138,7 @@ def _counts_payload(ctx: ComposeContext, s) -> dict:
         "map_runs": map_runs,
         "query_runs": query_runs,
         "areas": areas,
-        "maps": _maps(s),
+        "maps": maps(s),
         "classes": classes,
     }
 

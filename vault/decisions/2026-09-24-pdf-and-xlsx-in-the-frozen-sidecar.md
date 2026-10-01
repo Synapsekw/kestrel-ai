@@ -31,3 +31,5 @@ replace this sentence with the line added (or "none").
 
 - A packaging regression in any of the three fails the smoke test by name.
 - reportlab stays on the built-in Type 1 Helvetica: no font files to ship.
+- Superseded in part on 2026-09-30 by [[2026-09-30-fonts-in-the-frozen-sidecar]]: report PDFs ship
+  Space Grotesk and JetBrains Mono; volume and detection PDFs keep Helvetica.
