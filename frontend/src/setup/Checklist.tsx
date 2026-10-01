@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Icon, Pill, type PillTone } from "@/ui";
-import type { ChecklistModel } from "./model";
+import { SORTING_TEXT, wholeFolderText, type ChecklistModel } from "./model";
 
 /** Spec §8 Summary: template, name and folder, "n of m slots" with a line per empty required slot, types, clashes. */
 export function Checklist({ model }: { model: ChecklistModel }) {
@@ -22,6 +22,12 @@ export function Checklist({ model }: { model: ChecklistModel }) {
       <Item tone="accent" mark={String(model.typeCount)}>
         {`${model.typeCount} anomaly ${model.typeCount === 1 ? "type" : "types"}`}
       </Item>
+      {model.wholeFolders.map((name) => (
+        <Item key={`whole-${name}`} tone="warn">
+          {wholeFolderText(name)}
+        </Item>
+      ))}
+      {model.sorting && <Item tone="warn">{SORTING_TEXT}</Item>}
       {model.clashes.map((c) => (
         <Item key={c} tone="danger">
           {c}

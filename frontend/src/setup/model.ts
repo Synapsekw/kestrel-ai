@@ -19,7 +19,10 @@ export type DraftType = CatalogueTypeSpec & { key: string };
 export const MAX_TYPES = 64;
 export const ENSURE_DEBOUNCE_MS = 300;
 export const MAX_DROP_PATHS = 16;
-export const TRUNCATED_TEXT = "Stopped at 50,000 files. Drop a narrower folder.";
+export const TRUNCATED_TEXT =
+  "Not everything was sorted: the folder holds more than Kestrel sorts at once. Drop a narrower folder, or add the rest later from the project's tabs.";
+export const SORTING_TEXT = "Sorting files… Create when it finishes";
+export const wholeFolderText = (name: string) => `The whole folder ${name} will be imported`;
 export const VIDEO_NOTE = "Video import is coming";
 export const SAME_FOLDER_NOTE = "Visual and thermal photos in the same folder are imported together.";
 /** The swatch for a type whose colour the server will pick. */
@@ -231,6 +234,10 @@ export interface ChecklistModel {
   emptyRequired: TemplateSlot[];
   typeCount: number;
   clashes: string[];
+  /** S-R17: a sort is still running, so its results are not yet in the draft. */
+  sorting: boolean;
+  /** Folder names of assigned photo buckets that came from a file, not their folder (U3 F1). */
+  wholeFolders: string[];
 }
 
 export function checklistOf(
@@ -240,6 +247,7 @@ export function checklistOf(
     slots: readonly TemplateSlot[];
     buckets: readonly DraftBucket[];
     types: readonly DraftType[];
+    inspect: object | null;
   },
   templateName: string,
 ): ChecklistModel {
@@ -251,11 +259,23 @@ export function checklistOf(
     emptyRequired: emptyRequired(d.slots, d.buckets),
     typeCount: d.types.length,
     clashes: clashLines(d.types),
+    sorting: d.inspect !== null,
+    wholeFolders: [
+      ...new Set(
+        d.buckets
+          .filter((b) => b.wholeFolder && !b.skipped && b.slot_key !== null)
+          .map((b) => folderName(b.folder)),
+      ),
+    ],
   };
 }
 
-/** Spec §8: Create needs a valid name and folder and no hotkey clash; an empty required slot only warns (S1-6). */
-export const canCreate = (c: ChecklistModel): boolean => c.basics === null && c.clashes.length === 0;
+/**
+ * Spec §8: Create needs a valid name and folder, no hotkey clash and no sort still running (S-R17: unapplied
+ * results would never be imported); an empty required slot only warns (S1-6).
+ */
+export const canCreate = (c: ChecklistModel): boolean =>
+  c.basics === null && c.clashes.length === 0 && !c.sorting;
 
 export const issueCount = (c: ChecklistModel): number =>
-  (c.basics ? 1 : 0) + c.emptyRequired.length + c.clashes.length;
+  (c.basics ? 1 : 0) + c.emptyRequired.length + c.clashes.length + (c.sorting ? 1 : 0);

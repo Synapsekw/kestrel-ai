@@ -1,7 +1,12 @@
 import type { InspectBucket, InspectNotRecognised, SlotRoute, TemplateSlot } from "./api";
 
 /** A sorted bucket in the draft: `id` stays the same when its folder is dropped again; `skipped` leaves it out of Create. */
-export type DraftBucket = InspectBucket & { id: string; skipped: boolean };
+export type DraftBucket = InspectBucket & {
+  id: string;
+  skipped: boolean;
+  /** A photo bucket that came from a picked file, not its folder: Create imports the whole folder. */
+  wholeFolder?: boolean;
+};
 
 export const MAX_NOT_RECOGNISED = 50;
 
@@ -11,7 +16,7 @@ const GEOTIFF: ReadonlySet<SlotRoute> = new Set<SlotRoute>(["map", "elevation"])
 const trimPath = (p: string) => p.replace(/[\\/]+$/, "").toLowerCase();
 
 /** True when `folder` is one of `paths` or lies under one of them (the run sorted that folder). */
-function underAny(folder: string, paths: readonly string[]): boolean {
+export function underAny(folder: string, paths: readonly string[]): boolean {
   const slashes = (p: string) => trimPath(p).replace(/\//g, "\\");
   const f = slashes(folder);
   return paths.some((p) => {
@@ -96,7 +101,10 @@ export function mergeBuckets(prev: readonly DraftBucket[], incoming: readonly Dr
     const key = pending.has(b.id) ? b.id : pending.has(folderIdOf(b.id)) ? folderIdOf(b.id) : null;
     if (key === null) out.push(b);
     else if (!placed.has(key)) {
-      out.push(pending.get(key)!);
+      const next = pending.get(key)!;
+      // The flag holds only while no run ever sorted the folder itself: a folder-level arrival (or an
+      // earlier folder-level bucket) clears it.
+      out.push(key === b.id && next.wholeFolder && !b.wholeFolder ? { ...next, wholeFolder: false } : next);
       placed.add(key);
     }
   }

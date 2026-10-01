@@ -15,6 +15,7 @@ import {
   MAX_TYPES,
   basicsError,
   bucketLabel,
+  canCreate,
   checklistOf,
   clashLines,
   conflictText,
@@ -25,6 +26,7 @@ import {
   freeHotkey,
   hotkeyClashes,
   isAbsolutePath,
+  issueCount,
   mergeTypes,
   sharesFolder,
   sizeLabel,
@@ -186,7 +188,14 @@ describe("slots and buckets", () => {
   it("builds the checklist", () => {
     const buckets = remap([draftBucket(THERMAL)], vertical);
     const model = checklistOf(
-      { name: "", folder: "", slots: vertical, buckets, types: draftTypes(VERTICAL.config.types) },
+      {
+        name: "",
+        folder: "",
+        slots: vertical,
+        buckets,
+        types: draftTypes(VERTICAL.config.types),
+        inspect: null,
+      },
       "Vertical asset inspection",
     );
     expect(model).toEqual({
@@ -197,6 +206,30 @@ describe("slots and buckets", () => {
       emptyRequired: [vertical[0]],
       typeCount: 7,
       clashes: [],
+      sorting: false,
+      wholeFolders: [],
     });
+  });
+
+  it("holds Create while a sort runs, and counts it as something to check", () => {
+    const base = { name: "Site", folder: "E:\\Projects\\Site", slots: [], buckets: [], types: [] };
+    const idle = checklistOf({ ...base, inspect: null }, "Blank");
+    const busy = checklistOf({ ...base, inspect: { jobId: "j", slotKey: null, paths: [] } }, "Blank");
+    expect(canCreate(idle)).toBe(true);
+    expect(canCreate(busy)).toBe(false);
+    expect(busy.sorting).toBe(true);
+    expect(issueCount(busy)).toBe(issueCount(idle) + 1);
+  });
+
+  it("names each whole folder a photo bucket will import, once, skipping skipped and unassigned buckets", () => {
+    const a = draftBucket(VISUAL, { wholeFolder: true, slot_key: "visual" });
+    const b = draftBucket(THERMAL, { wholeFolder: true, slot_key: "thermal" });
+    const skipped = draftBucket(ORTHO, { wholeFolder: true, skipped: true, slot_key: "x" });
+    const unused = draftBucket(ORTHO, { wholeFolder: true, slot_key: null });
+    const m = checklistOf(
+      { name: "", folder: "", slots: vertical, buckets: [a, b, skipped, unused], types: [], inspect: null },
+      "Blank",
+    );
+    expect(m.wholeFolders).toEqual(["100MEDIA"]);
   });
 });
