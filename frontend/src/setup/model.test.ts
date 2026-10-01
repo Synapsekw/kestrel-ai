@@ -40,6 +40,16 @@ let n = 0;
 const key = () => `k${++n}`;
 const draftTypes = (specs: readonly CatalogueTypeSpec[]) => specs.map((s) => toDraftType(s, key()));
 
+describe("specOf rules", () => {
+  it("keeps only when and severity on each rule", () => {
+    const t = {
+      ...toDraftType(typeSpec("Rust", "defect", 2, "A"), "k"),
+      severity_rules: [{ when: "wide", severity: 3, key: "x" } as never],
+    };
+    expect(specOf(t).severity_rules).toEqual([{ when: "wide", severity: 3 }]);
+  });
+});
+
 describe("name and folder (moved from the New project dialog)", () => {
   it("asks for a name, then a folder, then a full folder path", () => {
     expect(basicsError("", "E:\\Projects\\A")).toBe("Give the project a name.");

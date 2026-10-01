@@ -84,14 +84,16 @@ export function planImports(draft: Pick<SetupDraft, "slots" | "buckets">): Impor
     // A bucket goes through its slot's route, not its own (ruling S-R15).
     if (b.skipped || !slot || slot.route === "video") continue;
     const route = slot.route;
-    used.add(slot.key);
     if (route !== "images" && b.count > b.files.length)
       omitted.push({ slotKey: slot.key, folder: b.folder, count: b.count - b.files.length, tab: TAB[route] });
     for (const path of route === "images" ? [b.folder] : b.files) {
       // A path is dispatched once across every bucket and route; the first in bucket order wins.
       const prior = seen.get(pathKey(path));
       if (prior) {
-        if (prior.route === route && !prior.slotKeys.includes(slot.key)) prior.slotKeys.push(slot.key);
+        if (prior.route === route) {
+          used.add(slot.key);
+          if (!prior.slotKeys.includes(slot.key)) prior.slotKeys.push(slot.key);
+        }
         continue;
       }
       const unit: ImportUnit = {
@@ -101,6 +103,7 @@ export function planImports(draft: Pick<SetupDraft, "slots" | "buckets">): Impor
         slotKeys: [slot.key],
         state: "pending",
       };
+      used.add(slot.key);
       units.set(unit.id, unit);
       seen.set(pathKey(path), unit);
     }
@@ -118,6 +121,7 @@ export function planImports(draft: Pick<SetupDraft, "slots" | "buckets">): Impor
     units.delete(inner.id);
   }
 
+  // Keyed on the bucket's own route (the files are on disk), unlike dispatch, which uses the slot's (R2).
   // Any map or elevation file on disk under a photo folder, whatever the operator did with its bucket.
   const rasters = draft.buckets
     .filter((b) => b.route === "map" || b.route === "elevation")

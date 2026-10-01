@@ -69,7 +69,7 @@ export function draft(patch: Partial<SetupDraft> = {}): SetupDraft {
     ...emptyDraft(),
     templateId: "builtin-vertical",
     name: "Tower 14",
-    folder: "E:\Projects\Tower 14",
+    folder: "E:\\Projects\\Tower 14",
     slots: VERTICAL_SLOTS,
     ...patch,
   };

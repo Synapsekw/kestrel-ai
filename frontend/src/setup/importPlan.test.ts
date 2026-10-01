@@ -143,16 +143,18 @@ describe("planImports", () => {
     const plan = planImports(
       draft({
         slots: [slot("dsm", "Elevation DSM/DTM", "elevation", { raster: "elevation" })],
-        buckets: [bucket({ route: "map", slot_key: "dsm", folder: "E:\D\o", files: ["E:\D\o\dsm.tif"] })],
+        buckets: [
+          bucket({ route: "map", slot_key: "dsm", folder: "E:\\D\\o", files: ["E:\\D\\o\\dsm.tif"] }),
+        ],
       }),
     );
     expect(plan.units.map((u) => [u.route, u.path, u.slotKeys])).toEqual([
-      ["elevation", "E:\D\o\dsm.tif", ["dsm"]],
+      ["elevation", "E:\\D\\o\\dsm.tif", ["dsm"]],
     ]);
   });
 
   it("dispatches a file once across routes: the first bucket wins, a same-route repeat adds its slot", () => {
-    const f = "E:\D\o\a.tif";
+    const f = "E:\\D\\o\\a.tif";
     const plan = planImports(
       draft({
         slots: [
@@ -161,13 +163,14 @@ describe("planImports", () => {
           slot("site", "Site map", "map"),
         ],
         buckets: [
-          bucket({ route: "map", slot_key: "ortho", folder: "E:\D\o", files: [f] }),
-          bucket({ route: "map", slot_key: "dsm", folder: "E:\D\o", files: [f.toUpperCase()] }),
-          bucket({ route: "map", slot_key: "site", folder: "E:\D\o", files: [f] }),
+          bucket({ route: "map", slot_key: "ortho", folder: "E:\\D\\o", files: [f] }),
+          bucket({ route: "map", slot_key: "dsm", folder: "E:\\D\\o", files: [f.toUpperCase()] }),
+          bucket({ route: "map", slot_key: "site", folder: "E:\\D\\o", files: [f] }),
         ],
       }),
     );
     expect(plan.units.map((u) => [u.route, u.slotKeys])).toEqual([["map", ["ortho", "site"]]]);
+    expect(plan.labels).toEqual({ ortho: "Orthomosaic", site: "Site map" });
   });
 
   it("starts one import per file for maps, elevations, point clouds and drawings", () => {
