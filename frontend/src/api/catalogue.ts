@@ -8,6 +8,7 @@ export type CatalogueTypePatch = S["CatalogueTypePatch"];
 export type CatalogueTypeUpdated = S["CatalogueTypeUpdated"];
 export type SeverityLevel = S["SeverityLevel"];
 export type TypeKind = CatalogueType["kind"];
+export type SeverityRule = S["SeverityRule"];
 
 export const CATALOGUE_PAGE = 500;
 const MAX_PAGES = 50;
@@ -101,6 +102,11 @@ export function existingTypeId(err: unknown): string | null {
 
 export function isHotkeyConflict(err: unknown): boolean {
   return codeOf(err) === "hotkey_conflict";
+}
+
+/** 422 `invalid_severity_rule`: a rule names a level that is not on the scale, or there are more than 8 (S1 §5). */
+export function isInvalidSeverityRule(err: unknown): boolean {
+  return codeOf(err) === "invalid_severity_rule";
 }
 
 /** 409 `job_running`: a backfill of this type is already queued or running (controller ruling P13). */
