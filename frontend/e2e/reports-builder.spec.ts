@@ -270,6 +270,28 @@ test("R-7.2 Show in preview scrolls the preview pane to that section", async ({ 
   await expect(page.locator('[data-section-key="appendix"]')).toBeInViewport();
 });
 
+test("Alt+ArrowDown twice moves a section and keeps focus on its control", async ({ page }) => {
+  const seen = await answerReports(page);
+  await page.goto(`/p/${P}/reports/${R}`);
+  await waitForBuilder(page);
+
+  const reorder = page.getByRole("button", { name: "Reorder Executive summary" });
+  await reorder.focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(reorder).toBeFocused();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Executive summary moved to position 4 of 8" }),
+  ).toBeAttached();
+  const keys = await page
+    .getByRole("list", { name: "Sections" })
+    .getByRole("listitem")
+    .evaluateAll((els) => els.map((el) => el.getAttribute("data-key")));
+  expect(keys.slice(0, 4)).toEqual(["cover", "findings_table", "finding_pages", "summary"]);
+  await expect(reorder).toBeFocused();
+  await expect.poll(() => seen.patches.length).toBeGreaterThan(0);
+});
+
 test("History View v1 shows the read-only banner; Back to draft returns to the draft", async ({ page }) => {
   await answerReports(page);
   const base = `/api/v1/projects/${P}/reports`;

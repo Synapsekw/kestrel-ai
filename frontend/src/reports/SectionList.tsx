@@ -48,6 +48,9 @@ export function SectionList({ sections, onChange, onShow }: SectionListProps) {
   const [announcement, setAnnouncement] = useState("");
   const rows = useRef(new Map<string, HTMLLIElement>());
   const tops = useRef(new Map<string, number>());
+  const list = useRef<HTMLOListElement>(null);
+  /** The control that had focus when a move began: re-inserting its row drops focus in a browser. */
+  const refocus = useRef<HTMLElement | null>(null);
   const reduced = useReducedMotion();
   const order = sections.map((s) => s.key).join(",");
 
@@ -64,17 +67,22 @@ export function SectionList({ sections, onChange, onShow }: SectionListProps) {
       });
     });
     tops.current = next;
+    const el = refocus.current;
+    refocus.current = null;
+    if (el?.isConnected && document.activeElement !== el) el.focus({ preventScroll: true });
   }, [order, reduced]);
 
   const move = (next: Sections | null, key: SectionKey) => {
     if (!next) return;
+    const active = document.activeElement;
+    refocus.current = active instanceof HTMLElement && list.current?.contains(active) ? active : null;
     onChange(next);
     setAnnouncement(positionAnnouncement(next, key));
   };
 
   return (
     <div className="flex flex-col gap-2">
-      <ol aria-label="Sections" className="flex flex-col gap-1.5">
+      <ol ref={list} aria-label="Sections" className="flex flex-col gap-1.5">
         {sections.map((s) => (
           <SectionRow
             key={s.key}

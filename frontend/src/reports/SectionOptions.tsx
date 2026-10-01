@@ -11,7 +11,7 @@ const list = (o: Opts, k: string, d: readonly string[]): string[] =>
 const toggle = (xs: string[], v: string): string[] =>
   xs.includes(v) ? xs.filter((x) => x !== v) : [...xs, v];
 
-export const TABLE_COLUMNS = [
+const TABLE_COLUMNS = [
   ["number", "Number"],
   ["type", "Type"],
   ["severity", "Severity"],
@@ -31,7 +31,7 @@ const SNAPSHOT_KINDS = [
   ["map", "Map"],
   ["cloud", "3D view"],
 ] as const;
-export const MEASUREMENT_KINDS = [
+const MEASUREMENT_KINDS = [
   ["length", "Length"],
   ["area", "Area"],
   ["height", "Height"],
@@ -47,11 +47,14 @@ function CheckGroup({
   items,
   value,
   onChange,
+  keepOne = false,
 }: {
   legend: string;
   items: readonly (readonly [string, string])[];
   value: string[];
   onChange: (v: string[]) => void;
+  /** The contract needs at least one ticked (`minItems: 1`): the last ticked box cannot be cleared. */
+  keepOne?: boolean;
 }) {
   return (
     <fieldset className="flex flex-col gap-1.5">
@@ -62,6 +65,7 @@ function CheckGroup({
             key={v}
             label={label}
             checked={value.includes(v)}
+            disabled={keepOne && value.length === 1 && value.includes(v)}
             onChange={() => onChange(toggle(value, v))}
           />
         ))}
@@ -130,6 +134,7 @@ export function SectionOptions({
           <CheckGroup
             legend="Columns"
             items={TABLE_COLUMNS}
+            keepOne
             value={list(
               o,
               "columns",
@@ -187,6 +192,7 @@ export function SectionOptions({
           <CheckGroup
             legend="Kinds"
             items={MEASUREMENT_KINDS}
+            keepOne
             value={list(
               o,
               "kinds",

@@ -86,6 +86,18 @@ describe("SectionList", () => {
     expect(order().slice(1, 3)).toEqual(["findings_table", "summary"]);
   });
 
+  it("keeps focus on the moved row's control when the browser drops it during the move", () => {
+    // A browser blurs a focused node that React re-inserts; jsdom does not, so the parent blurs it.
+    render(<Harness onChange={() => (document.activeElement as HTMLElement | null)?.blur()} />);
+    const control = screen.getByRole("button", { name: "Reorder Executive summary" });
+    control.focus();
+    fireEvent.keyDown(control, { key: "ArrowDown", altKey: true });
+    expect(control).toHaveFocus();
+    fireEvent.keyDown(control, { key: "ArrowDown", altKey: true });
+    expect(order().slice(1, 4)).toEqual(["findings_table", "finding_pages", "summary"]);
+    expect(screen.getByRole("button", { name: "Reorder Executive summary" })).toHaveFocus();
+  });
+
   it("never moves anything above the cover, nor the cover", () => {
     const onChange = setup();
     fireEvent.keyDown(screen.getByRole("switch", { name: "Executive summary" }), {
@@ -143,6 +155,25 @@ describe("SectionList", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Volume" }));
     const m = onChange.mock.calls.at(-1)![0].find((s: { key: string }) => s.key === "measurements");
     expect(m.options.kinds).not.toContain("volume");
+  });
+
+  it("keeps at least one table column and one measurement kind ticked", () => {
+    setup();
+    fireEvent.click(within(row("Findings table")).getByRole("button", { name: "Options" }));
+    for (const name of ["Number", "Type", "Severity", "Status", "Data item", "Observed"])
+      fireEvent.click(screen.getByRole("checkbox", { name }));
+    expect(screen.getByRole("checkbox", { name: "Note" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Note" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Number" })).toBeEnabled();
+    fireEvent.click(within(row("Measurements")).getByRole("button", { name: "Options" }));
+    for (const name of ["Length", "Area", "Height", "Lean", "Profile"])
+      fireEvent.click(screen.getByRole("checkbox", { name }));
+    expect(screen.getByRole("checkbox", { name: "Volume" })).toBeDisabled();
+    // Snapshots may be emptied (no minItems in the contract).
+    fireEvent.click(within(row("Finding pages")).getByRole("button", { name: "Options" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Image" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Map" }));
+    expect(screen.getByRole("checkbox", { name: "3D view" })).toBeEnabled();
   });
 
   // R-7.2 (reports index recon 10, overrides plan Ruling 19): an optional onShow prop puts a quiet
