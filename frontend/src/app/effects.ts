@@ -133,6 +133,22 @@ export function measureFrames(
 }
 
 let probed = false;
+/** The probe's measurement while it runs; null when no probe is in flight. */
+let inFlight: Promise<unknown> | null = null;
+
+/**
+ * Resolves once no frame probe is running: at once when none is, else when the running one decides.
+ * Heavy work the Overview starts (the 3D preview) waits for it, so its chunk parse and engine build are
+ * not measured as slow frames and cannot switch the session to reduced for good.
+ */
+export function autoProbeSettled(): Promise<void> {
+  return inFlight
+    ? inFlight.then(
+        () => undefined,
+        () => undefined,
+      )
+    : Promise.resolve();
+}
 
 /**
  * Auto's frame-time probe. The Overview calls it on its first render (S1). It runs at most once per
@@ -147,7 +163,14 @@ export async function runAutoProbe(
   if (document.documentElement.dataset.effects === "reduced") return null;
   if (document.visibilityState !== "visible") return null;
   probed = true;
-  const samples = await measure();
+  let samples: number[] | null;
+  const run = measure();
+  inFlight = run;
+  try {
+    samples = await run;
+  } finally {
+    inFlight = null;
+  }
   if (samples === null || document.visibilityState !== "visible") {
     // Hidden mid-probe (or nothing usable measured): no decision, and a later call may probe again.
     probed = false;
@@ -168,4 +191,5 @@ export async function runAutoProbe(
 /** Tests only: forget that this session already probed. */
 export function resetAutoProbe(): void {
   probed = false;
+  inFlight = null;
 }

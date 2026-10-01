@@ -30,11 +30,26 @@ class Banner(BaseModel):
     action: str | None = None
 
 
+class Hero(BaseModel):
+    kind: Literal["map", "point_cloud", "images", "drawing"]
+    id: str | None
+
+
+class OverviewSite(BaseModel):
+    center: list[float] | None
+    bounds_wgs84: list[float] | None
+    source: Literal["map", "point_cloud", "images"] | None
+    area_m2: float | None
+    photo_points: list[list[float]]
+    photo_points_total: int
+
+
 class ProjectOverview(BaseModel):
     findings: FindingSummary
     data: DataCounts
     latest_volume: LatestVolume | None
     hero_map_id: str | None
+    hero: Hero | None
     banners: list[Banner]
 
 

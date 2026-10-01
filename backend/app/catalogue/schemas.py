@@ -38,9 +38,8 @@ class CatalogueTypeOut(BaseModel):
     group: str | None
     archived: bool
     origin: TypeOrigin
-    # Defaulted until U2 adds both fields to CatalogueTypeRef (plan 2026-09-30-setup-u2); `from_ref`
-    # then passes them through. A default is always serialised, so every answer carries the two keys
-    # the contract requires.
+    # The ref carries both fields and `from_ref` passes them through; a default is always serialised,
+    # so every answer carries the two keys the contract requires.
     definition: str | None = Field(None, max_length=DEFINITION_MAX)
     severity_rules: list[SeverityRule] = Field(default_factory=list, max_length=MAX_SEVERITY_RULES)
 

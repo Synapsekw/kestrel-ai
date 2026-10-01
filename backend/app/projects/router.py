@@ -104,7 +104,7 @@ def list_projects(request: Request) -> ProjectPage:
 @router.post("", response_model=ProjectOut, status_code=201)
 def create_project(body: ProjectCreate, request: Request) -> ProjectOut:
     reg = _registry(request)
-    handle = reg.create(body.name, Path(body.folder), body.type_ids)
+    handle = reg.create(body.name, Path(body.folder), body.type_ids, hotkeys=body.hotkeys)
     return _out(handle, reg.last_opened_at(handle.id), request.app.state.jobs)
 
 

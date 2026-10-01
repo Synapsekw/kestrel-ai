@@ -61,6 +61,10 @@ describe("routeInfo", () => {
     expect(routeInfo("/p/a/clouds").layout).toBe("page");
     expect(routeInfo("/p/a/clouds/c1").layout).toBe("fullbleed");
     expect(layoutOf("findings", true)).toBe("page");
+    // R7: the report builder fills the page under the tabs; the list and Data exports are pages.
+    expect(routeInfo("/p/a/reports").layout).toBe("page");
+    expect(routeInfo("/p/a/reports/r1").layout).toBe("workspace");
+    expect(routeInfo("/p/a/reports/exports").layout).toBe("page");
   });
 
   it("keys transitions on the tab, never on an item inside it", () => {

@@ -144,3 +144,14 @@ export function severityRows(
   const max = Math.max(0, ...rows.map((r) => r.count));
   return rows.map((r) => ({ ...r, fraction: max ? r.count / max : 0 }));
 }
+
+/** Spec 2026-09-30-project-landing D6: the header shows a figure only when it says something. */
+export function headerFigures(kpis: Kpi[]): Kpi[] {
+  return kpis.filter((k) => k.value !== null && k.value !== 0);
+}
+
+export function formatCoords(lon: number, lat: number): string {
+  const ns = lat >= 0 ? "N" : "S";
+  const ew = lon >= 0 ? "E" : "W";
+  return `${Math.abs(lat).toFixed(4)}° ${ns} ${Math.abs(lon).toFixed(4)}° ${ew}`;
+}

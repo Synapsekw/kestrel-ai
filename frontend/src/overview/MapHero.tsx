@@ -113,10 +113,12 @@ export function MapHero({
   projectId,
   heroMapId,
   hasData,
+  className,
 }: {
   projectId: string;
   heroMapId: string | null;
   hasData: boolean;
+  className?: string;
 }) {
   const api = useApi();
   const { baseUrl, token } = useBackend();
@@ -197,7 +199,7 @@ export function MapHero({
 
   const backdrop = useMemo(() => (items && !map ? backdropLayout(items) : null), [items, map]);
 
-  const frame = "relative col-span-12 min-h-[360px] overflow-hidden lg:col-span-8";
+  const frame = cx("relative h-full min-h-0 overflow-hidden", className);
   if (!items || mapPending)
     return (
       <GlassPanel variant="pane" className={frame}>

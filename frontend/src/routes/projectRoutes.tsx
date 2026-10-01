@@ -5,7 +5,7 @@ import { ImagesWorkspace } from "@/images/workspace/ImagesWorkspace";
 import { MapWorkspace } from "@/mapws/MapWorkspace";
 import { MeasurementsScreen } from "@/measurements/MeasurementsScreen";
 import { OverviewScreen } from "@/overview/OverviewScreen";
-import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
+import { ReportsTab } from "@/reports/ReportsTab";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
 import { MapEvaluateRoute } from "@/screens/MapEvaluateScreen";
 import { RunsScreen } from "@/screens/RunsScreen";
@@ -79,9 +79,10 @@ export const projectRoutes: RouteObject[] = [
       </Later>
     ),
   },
-  // Reports (R7 swaps both for ReportsTab); Data exports is the old Export screen (reports spec §13).
-  { path: "reports", element: <ReportsPlaceholder /> },
-  { path: "reports/exports", element: <ReportsPlaceholder /> },
+  // Reports (R7): the list, Data exports (R8's panel) and one report's builder, all under ReportsTab.
+  { path: "reports", element: <ReportsTab /> },
+  { path: "reports/exports", element: <ReportsTab /> },
+  { path: "reports/:reportId", element: <ReportsTab /> },
   { path: "settings", element: <SettingsScreen /> },
   // Secondary routes without a tab: the tab strip's More menu and the palette reach them.
   { path: "runs", element: <RunsScreen /> },

@@ -2,7 +2,7 @@
 
 import logging
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.appdata import AppData
+from app.catalogue.names import normalise_hotkey
 from app.db.models import Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
@@ -102,6 +103,53 @@ def _undo_create(folder: Path, engine, made: list[Path]) -> None:
             pass  # not empty (something else wrote there) or already gone
 
 
+def _check_create_hotkeys(refs: Mapping, wanted: list[str], hotkeys: Mapping[str, str | None] | None) -> None:
+    """A new project's hotkey overrides, checked before its folder is touched (plan S1-U2 Ruling 10).
+    Every key must name a type of `type_ids` and every value must be a hotkey (422 `hotkey_invalid`).
+    No two types of the list may end on one key (409 `hotkey_conflict`). The effective key follows
+    what `create` then does in its session: `add_types` clears a catalogue hotkey an earlier type
+    holds, and `set_types` applies the overrides, where null means "the catalogue's key"."""
+    if not hotkeys:
+        return
+    listed = set(wanted)
+    stray = [t for t in hotkeys if t not in listed]
+    if stray:
+        raise AppError(
+            "hotkey_invalid",
+            f"Hotkeys name types that are not in type_ids: {', '.join(stray)}.",
+            422,
+            {"type_ids": stray},
+        )
+    overrides = {t: normalise_hotkey(k) for t, k in hotkeys.items()}
+    taken: set[str] = set()
+    cleared: set[str] = set()
+    for t in wanted:  # add_types' rule
+        key = refs[t].hotkey
+        if key and key in taken:
+            cleared.add(t)
+        elif key:
+            taken.add(key)
+    seen: dict[str, str] = {}
+    for t in wanted:  # set_types' rule, then effective_hotkey
+        if overrides.get(t):
+            key = overrides[t]
+        elif t in overrides or t not in cleared:
+            key = refs[t].hotkey
+        else:
+            key = None
+        if not key:
+            continue
+        if key in seen:
+            first = seen[key]
+            raise AppError(
+                "hotkey_conflict",
+                f"{refs[first].name} and {refs[t].name} both use the hotkey {key} in this project.",
+                409,
+                {"hotkey": key, "type_id": first, "type_ids": [first, t]},
+            )
+        seen[key] = t
+
+
 class ProjectRegistry:
     def __init__(self, data_dir: Path, on_open: Callable[[ProjectHandle], None] | None = None):
         """`on_open` runs once per project, the moment it becomes live in this process."""
@@ -111,18 +159,27 @@ class ProjectRegistry:
         self._lock = threading.Lock()
         self.catalogue = None  # set in the lifespan (app.main.open_catalogue)
 
-    def create(self, name: str, folder: Path, type_ids: list[str]) -> ProjectHandle:
-        """Create a project folder whose type list is `type_ids` (catalogue ids, in order). The
-        ids are checked before any folder is touched: 503 without a catalogue, 422 for an unknown
-        id. A new project has nothing to migrate: once the migration steps are armed it is born at
-        schema_version 2; while they are disarmed it starts at 1 like every other project, and the
-        steps (which keep existing `project_type` rows) bring it to 2 when they arm."""
+    def create(
+        self,
+        name: str,
+        folder: Path,
+        type_ids: list[str],
+        hotkeys: Mapping[str, str | None] | None = None,
+    ) -> ProjectHandle:
+        """Create a project folder whose type list is `type_ids` (catalogue ids, in order) with the
+        hotkey overrides `hotkeys` (spec 2026-09-30-project-setup S1-8). The ids and the hotkeys are
+        checked before any folder is touched: 503 without a catalogue, 422 for an unknown id or a bad
+        hotkey, 409 for a hotkey clash. A new project has nothing to migrate: once the migration
+        steps are armed it is born at schema_version 2; while they are disarmed it starts at 1 like
+        every other project, and the steps (which keep existing `project_type` rows) bring it to 2
+        when they arm."""
         from app.catalogue import project_types
         from app.migration.job import armed
 
         folder = folder.resolve()
         wanted = list(dict.fromkeys(type_ids))
-        project_types.lookup_types(self.catalogue, wanted)
+        refs = project_types.lookup_types(self.catalogue, wanted)
+        _check_create_hotkeys(refs, wanted, hotkeys)
         with self._lock:
             if (folder / "project.db").exists():
                 raise AppError("already_exists", f"{folder} already contains a project", 409)
@@ -143,6 +200,9 @@ class ProjectRegistry:
                     # (an archived type's key taken by a live one) clears the later key, as it does
                     # for any appended type, instead of failing the create.
                     project_types.add_types(s, self.catalogue, wanted)
+                    if hotkeys:
+                        # The same session: the list and its overrides land together or not at all.
+                        project_types.set_types(s, self.catalogue, wanted, hotkeys)
                     s.commit()
                     pid = row.id
             except BaseException:

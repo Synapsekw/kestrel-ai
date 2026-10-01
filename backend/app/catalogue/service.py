@@ -23,8 +23,9 @@ from app.errors import AppError, not_found
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 
 KINDS = ("defect", "object")
-ORIGINS = ("user", "migrated")
+ORIGINS = ("user", "migrated", "template")
 MAX_LEVELS = 9  # the review keys 1-9 set severity (spec section 5.6)
+MAX_RULES = 8  # severity rules per type (spec 2026-09-30-project-setup section 5)
 NEEDS_CLASSIFICATION = "needs_classification"
 log = logging.getLogger(__name__)
 PALETTE = (
@@ -42,6 +43,12 @@ PALETTE = (
 
 
 @dataclass(frozen=True)
+class SeverityRuleRef:
+    when: str
+    severity: int
+
+
+@dataclass(frozen=True)
 class CatalogueTypeRef:
     id: str
     name: str
@@ -52,6 +59,11 @@ class CatalogueTypeRef:
     group: str | None
     archived: bool
     origin: str
+    # S1 (spec 2026-09-30-project-setup section 5). Appended last and defaulted so every existing
+    # construction keeps working. Rules are frozen dataclasses, so the ref stays hashable; `asdict`
+    # turns them into dicts for `CatalogueTypeOut`.
+    definition: str | None = None
+    severity_rules: tuple[SeverityRuleRef, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -72,6 +84,11 @@ def to_ref(row: CatalogueType) -> CatalogueTypeRef:
         group=row.group,
         archived=bool(row.archived),
         origin=row.origin,
+        definition=row.definition,
+        severity_rules=tuple(
+            SeverityRuleRef(when=str(r["when"]), severity=int(r["severity"]))
+            for r in row.severity_rules or ()
+        ),
     )
 
 
@@ -99,6 +116,54 @@ def _check_default_severity(s, level: int | None) -> None:
         return
     if s.get(SeverityLevel, level) is None:
         raise AppError("severity_unknown", f"There is no severity level {level}.", 422, {"level": level})
+
+
+def _clean_definition(value: str | None) -> str | None:
+    """Trimmed; a blank definition is no definition."""
+    if value is None:
+        return None
+    return value.strip() or None
+
+
+def _rule_fields(rule: Any) -> tuple[Any, Any]:
+    """A rule arrives as a dict (a route's `model_dump`) or a `SeverityRule` model (`ensure`)."""
+    if isinstance(rule, Mapping):
+        return rule.get("when"), rule.get("severity")
+    return getattr(rule, "when", None), getattr(rule, "severity", None)
+
+
+def _check_rules(s, rules: Sequence[Any] | None, levels: set[int] | None = None) -> list[dict]:
+    """`severity_rules` as stored: at most MAX_RULES, each `when` trimmed and not blank, each
+    `severity` a level of the current scale. 422 `invalid_severity_rule` otherwise, with details
+    `{count, max}`, `{index}` or `{index, severity}`. `levels` lets `ensure` read the scale once for
+    up to 64 types."""
+    items = list(rules or ())
+    if len(items) > MAX_RULES:
+        raise AppError(
+            "invalid_severity_rule",
+            f"A type has at most {MAX_RULES} severity rules.",
+            422,
+            {"count": len(items), "max": MAX_RULES},
+        )
+    if levels is None:
+        levels = set(s.execute(select(SeverityLevel.level)).scalars())
+    out: list[dict] = []
+    for i, rule in enumerate(items):
+        when, level = _rule_fields(rule)
+        text = str(when or "").strip()
+        if not text:
+            raise AppError(
+                "invalid_severity_rule", f"Severity rule {i + 1} needs a condition.", 422, {"index": i}
+            )
+        if level not in levels:
+            raise AppError(
+                "invalid_severity_rule",
+                f"Severity rule {i + 1} names level {level}, which is not on the severity scale.",
+                422,
+                {"index": i, "severity": level},
+            )
+        out.append({"when": text, "severity": int(level)})
+    return out
 
 
 def _refuse_live_name(s, key: str, exclude: str | None = None) -> None:
@@ -146,12 +211,15 @@ def create_type(
     hotkey: str | None = None,
     group: str | None = None,
     origin: str = "user",
+    definition: str | None = None,
+    severity_rules: Sequence[Any] | None = None,
 ) -> CatalogueTypeRef:
     clean, key = _clean_name(name)
     hotkey = normalise_hotkey(hotkey)
     _check_kind(kind)
     with cat.session() as s:
         _check_default_severity(s, default_severity)
+        rules = _check_rules(s, severity_rules)
         _refuse_live_name(s, key)
         _refuse_live_hotkey(s, hotkey)
         row = CatalogueType(
@@ -163,6 +231,8 @@ def create_type(
             hotkey=hotkey,
             group=_group(group),
             origin=origin,
+            definition=_clean_definition(definition),
+            severity_rules=rules,
         )
         s.add(row)
         try:
@@ -207,6 +277,7 @@ def patch_type(
             _check_kind(fields["kind"])
         if "default_severity" in fields:
             _check_default_severity(s, fields["default_severity"])
+        rules = _check_rules(s, fields["severity_rules"]) if "severity_rules" in fields else None
         if not archived:
             _refuse_live_name(s, key, exclude=row.id)
             _refuse_live_hotkey(s, hotkey, exclude=row.id)
@@ -219,6 +290,10 @@ def patch_type(
             row.default_severity = fields["default_severity"]
         if "group" in fields:
             row.group = _group(fields["group"])
+        if "definition" in fields:
+            row.definition = _clean_definition(fields["definition"])
+        if rules is not None:
+            row.severity_rules = rules  # a new list: the JSON column sees the change
         s.flush()
         return to_ref(row), was == "object" and row.kind == "defect"
 
@@ -354,7 +429,8 @@ def put_scale(
 ) -> list[SeverityLevelRef]:
     """Replace the scale: rename and recolour always, append at the top, and remove top levels only
     when `level_in_use(level)` names no project (spec section 7.2). Defaults above the new top are
-    cleared.
+    cleared, and severity rules above it are dropped with the others kept in order (plan S1-U2
+    Ruling 1).
 
     The scale-shape refusal is `invalid_scale` 422 (controller ruling on the merged contract's
     code), not the brief's `severity_scale_invalid` 409."""
@@ -390,6 +466,16 @@ def put_scale(
             .where(CatalogueType.default_severity > len(numbers))
             .values(default_severity=None)
         )
+        new_top = len(numbers)
+        ruled = (
+            s.execute(select(CatalogueType).where(func.json_array_length(CatalogueType.severity_rules) > 0))
+            .scalars()
+            .all()
+        )
+        for row in ruled:  # only the types that have rules; the catalogue is small
+            kept = [r for r in row.severity_rules if int(r["severity"]) <= new_top]
+            if len(kept) != len(row.severity_rules):
+                row.severity_rules = kept
     return get_scale(cat)
 
 

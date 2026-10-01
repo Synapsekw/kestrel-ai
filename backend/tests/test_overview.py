@@ -67,7 +67,7 @@ def test_an_empty_project(client, project):
         "point_clouds": 0,
         "drawings": 0,
     }
-    assert (out["latest_volume"], out["hero_map_id"], out["banners"]) == (None, None, [])
+    assert (out["latest_volume"], out["hero_map_id"], out["hero"], out["banners"]) == (None, None, None, [])
     assert out["findings"]["by_status"] == {"open": 0, "reviewed": 0, "closed": 0}
     assert out["findings"]["open_by_severity"] == {"1": 0, "2": 0, "3": 0, "4": 0}
 
@@ -194,3 +194,19 @@ def test_every_project_response_carries_the_summary(client, project, path):
         r = client.patch(f"{API}/projects/{project['id']}", json={"name": "Renamed"})
     assert r.status_code == 200, r.text
     assert r.json()["summary"]["open_findings"] == 0
+
+
+def test_the_hero_is_map_then_cloud_then_images_then_drawing(client, project, handle):
+    from app.db.models import Drawing, Source
+
+    with handle.session() as s:
+        s.add(Drawing(name="Plan", format="pdf", status="ready", source_path="C:/d.pdf", source_size=1))
+    hero = _overview(client, project)["hero"]
+    assert hero["kind"] == "drawing" and hero["id"]
+    with handle.session() as s:
+        s.add(Source(folder="C:/f", site="A", kind="images", image_count=3))
+    assert _overview(client, project)["hero"] == {"kind": "images", "id": None}
+    cloud = insert_cloud(handle)
+    assert _overview(client, project)["hero"] == {"kind": "point_cloud", "id": cloud}
+    april = _map(handle, "April", "ready", date(2026, 4, 1))
+    assert _overview(client, project)["hero"] == {"kind": "map", "id": april}
