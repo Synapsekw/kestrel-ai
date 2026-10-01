@@ -12,6 +12,7 @@
     "format": "prettier --write src",
     "e2e": "playwright test",
     "e2e:perf": "playwright test --config playwright.perf.config.ts",
+    "e2e:setup": "playwright test --config playwright.setup.config.ts",
     "icons:check": "node scripts/verify-icons.mjs",
     "icons:generate": "node scripts/generate-icons.mjs",
     "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
