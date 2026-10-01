@@ -153,9 +153,25 @@ describe("AnomaliesCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Details of Corrosion" }));
     fireEvent.change(screen.getByLabelText("Definition"), { target: { value: "Flaking on steel." } });
     expect(useSetupDraft.getState().types[0].definition).toBe("Flaking on steel.");
-    const rules = screen.getByRole("list", { name: "Severity rules of Corrosion" });
-    expect(rules).toHaveTextContent("section loss visible");
-    expect(rules).toHaveTextContent("Major");
+    expect(screen.getByLabelText("Rule 1 condition")).toHaveValue("section loss visible");
+    expect(screen.getByLabelText("Rule 1 severity")).toHaveDisplayValue("3 Major");
+    expect(screen.queryByText(/edited on the type in the Catalogue/)).toBeNull();
+  });
+
+  it("edits severity rules in place; the draft keeps plain rules with no key", () => {
+    useSetupDraft.getState().addType(typeSpec("Corrosion", "defect", 2, "1"));
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Details of Corrosion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    expect(
+      screen.getByText("Rule 1 needs a condition. Say when it applies, or remove it."),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Rule 1 condition"), { target: { value: " wider than 5 mm " } });
+    fireEvent.change(screen.getByLabelText("Rule 1 severity"), { target: { value: "4" } });
+    expect(useSetupDraft.getState().types[0].severity_rules).toEqual([
+      { when: "wider than 5 mm", severity: 4 },
+    ]);
+    expect(screen.queryByText(/needs a condition/)).toBeNull();
   });
 
   it("removing a type marks the list edited", () => {
