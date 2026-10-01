@@ -26,7 +26,7 @@ ok; vitest 580 files / 4065 tests passed; build ok; e2e 178 passed, 7 skipped (p
 1.0 m); `e2e:reports` 5 passed, 1 skipped (the scale spec, runs only with `E2E_FRAME_BUDGET=1`)
 (5782/5783, 31.3 s).
 
-**Frozen sidecar** (`backend\scriptsuild.ps1`, 3,632.1 MB in 14,548 files, 238 s):
+**Frozen sidecar** (`backend\scripts\build.ps1`, 3,632.1 MB in 14,548 files, 238 s):
 `smoke_frozen.ps1 -SamWeights E:\Dev\Yolo\models\sam2.1_t.pt` → `smoke ok` in 44.04 s: geo ok 32633
 15.000325 45.000216; design ok 10 185 surface 64x64; drawings ok 200x100 2; volumes ok pdf 2038 xlsx
 523.6 delaunay 2; reports ok fonts 3 gradient 1 jpeg 1 chart 1 xlsx Major pdf 21424; pointcloud ok
