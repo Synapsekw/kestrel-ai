@@ -97,10 +97,9 @@ def _xmp_float(raw: bytes) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def parse_xmp(packet: bytes | str | None) -> dict[str, float]:
-    """DJI `drone-dji:` values, attribute form (`Key="+38.40"`) or element form; no XML parser.
-
-    The attribute form wins when a packet carries both. Junk values are skipped, never raised."""
+def xmp_fields(packet: bytes | str | None) -> dict[str, bytes]:
+    """Every `drone-dji:` key of an XMP packet with its raw value, attribute form or element form;
+    no XML parser. The attribute form wins when a packet carries both."""
     if not packet:
         return {}
     data = packet.encode("utf-8", "ignore") if isinstance(packet, str) else bytes(packet)
@@ -109,6 +108,14 @@ def parse_xmp(packet: bytes | str | None) -> dict[str, float]:
         raw.setdefault(key.decode("ascii", "ignore"), value)
     for key, value in _XMP_ATTR.findall(data):
         raw[key.decode("ascii", "ignore")] = value
+    return raw
+
+
+def parse_xmp(packet: bytes | str | None) -> dict[str, float]:
+    """DJI `drone-dji:` values, attribute form (`Key="+38.40"`) or element form; no XML parser.
+
+    The attribute form wins when a packet carries both. Junk values are skipped, never raised."""
+    raw = xmp_fields(packet)
     out: dict[str, float] = {}
     for key, column in XMP_FIELDS.items():
         value = _xmp_float(raw[key]) if key in raw else None
