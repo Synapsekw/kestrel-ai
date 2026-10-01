@@ -45,4 +45,7 @@ test("Data exports: /export redirects, the counts CSV still posts, and the PDF b
   await expect(ui.newDialog(page)).toBeVisible();
   await expect(ui.templateRadio(page, "Survey count report")).toBeChecked();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/reports$`));
+  // A template refetch can still be in this route's `route.fetch()` when the test ends; without this
+  // the late error is reported against the next test in the worker.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
