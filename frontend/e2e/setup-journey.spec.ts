@@ -309,6 +309,8 @@ test("setup journey: vertical template, visual and thermal in one folder, Create
     },
   ]);
   expect(JSON.stringify(w.posted)).not.toContain("walkround");
+  // The Overview must have rendered, or a missing notice would prove nothing.
+  await expect(page.getByTestId("overview-grid")).toBeVisible();
   await expect(setupUi.notice(page)).toHaveCount(0);
   await entrancesDone(page);
   await page.screenshot({ path: evidencePath("setup", "overview-after-create.png"), fullPage: true });

@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
 // Project setup (S1) spec §12 against the real FastAPI backend (plan 2026-09-30-setup-u6, ruling
@@ -10,7 +12,20 @@ import { defineConfig } from "@playwright/test";
 const webPort = Number(process.env.E2E_WEB_PORT ?? 5852);
 const apiPort = Number(process.env.E2E_API_PORT ?? webPort + 1);
 const token = process.env.E2E_API_TOKEN ?? "e2e-setup-token";
-const python = process.env.KESTREL_PYTHON ?? "E:\\Dev\\Yolo\\app\\backend\\.venv\\Scripts\\python.exe";
+// The shared venv's interpreter: a worktree has no venv of its own (CONTRIBUTING.md), so look for
+// backend/.venv from this config's folder upwards. frontend/ -> the checkout's own backend (the main
+// checkout), then .claude/worktrees/<name>/ -> .. -> the main checkout's. KESTREL_PYTHON overrides.
+function findPython(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (;;) {
+    const candidate = join(dir, "backend", ".venv", "Scripts", "python.exe");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error("backend/.venv not found above the config; set KESTREL_PYTHON");
+    dir = parent;
+  }
+}
+const python = process.env.KESTREL_PYTHON ?? findPython();
 const dataDir = process.env.E2E_DATA_DIR ?? join(tmpdir(), `kestrel-e2e-setup-${apiPort}`);
 
 process.env.E2E_SETUP_BACKEND = "1";
