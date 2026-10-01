@@ -56,7 +56,7 @@ export function specOf(t: DraftType): CatalogueTypeSpec {
     default_severity: t.default_severity ?? null,
     hotkey: t.hotkey ?? null,
     definition: t.definition ?? null,
-    severity_rules: t.severity_rules ?? [],
+    severity_rules: (t.severity_rules ?? []).map((r) => ({ when: r.when, severity: r.severity })),
   };
 }
 
