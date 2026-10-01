@@ -76,6 +76,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Point clouds (S1) — import LAS/LAZ, 3D viewer, measurements, map ↔ 3D, LAZ export | merged/pushed to `main` (`0af7084`), acceptance + fixes `ab3fa34`; CI green; installed 2026-09-26 (build of `3ad69e4`) | chimney import 9.5 s; 195 M points in 58.9 s (converter peak 8.98 GB); viewer settled < 0.7 s; picks within 0.002 mm; LAZ export 1.8 s. §17.10 rim u 0.171 m vs ≤ 0.05 m (data-limited, operator decision). 1974 backend, 995 frontend, 93 browser, 8 Rust tests. See [[2026-09-26-0404-point-clouds-s1]] |
 | Foundation of the inspection platform (F): Aero glass UI, projects without kind, catalogue, findings, Models section, migration | merged/pushed to `main` (`09fb538..f3ff568`); installed 2026-09-27 | 11 units via parallel worktrees. 2576 backend, 1622 frontend, 103 browser, 8 Rust tests; smoke ok (CUDA); the smoke run caught and fixed an unbundled catalogue migration. Migration dry run on copies of AHTest, Ahmadia and acceptance: all reach `0010`/v2, 120,278 boxes rewritten, 0 unmapped, originals unchanged. **Not yet opened by the operator.** See [[2026-09-27-1030-foundation-inspection-platform]] |
 | I/M/C wave: Images, Maps and Point clouds workspaces (39 units + IMC-X) | merged/pushed to `main` (`4ebcac1..ad4e548`); installer built (`c4080c7`), **not installed** | all 39 units plus the IMC-X close-out merged via per-unit worktrees. IMC-X gate: 3946 backend, 3535 frontend, 162 browser, 8 Rust; frozen smoke ok (SAM on CUDA, drawings, pypdfium2). **CI frontend e2e red on `main` since `81b0310` (perf budgets on the slow runner); fix in flight.** See [[2026-09-27-2140-imc-wave-part-1]], [[2026-09-28-1905-imc-wave-part-2]] |
+| Reports (R): builder, live preview, render job with versions, templates, Data exports | merged/pushed to `main` (`07beeac..cd7c59d`); installer built (`8aead7b`), **not installed** | 13 units in parallel worktrees + R-X close-out; gate 5181 backend, 4065 frontend, 178 browser, cargo 8/8; frozen smoke renders a real report. See [[2026-10-01-2205-reports-wave]] |
 | Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); **not installed** | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
@@ -88,7 +89,16 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **New-project setup (S1) on `main`** (2026-10-01, `ea5d13cb..7bfb2b5b`, 6 units, pushed).
+**Shipped last:** **Reports (R) complete on `main`** (2026-10-01, `07beeac..cd7c59d`, 13 units + close-out, pushed).
+- Project → **Reports**: a report list, a three-pane builder with a live A4 preview, filters, templates, and **Render** as a background job producing numbered versions (PDF, optional CSV/XLSX), with issue/unissue and history.
+- Snapshots are rendered server-side (image crops, maps, swipe pairs, volume plans) and C's stored 3D views are passed through with fallbacks; the PDF is reportlab with bundled fonts and is byte-stable.
+- Data exports moved under Reports (`/export` redirects).
+- R10's evidence runs fixed a PDF memory peak (+609 → +314 MB for 300 findings) and preview scroll jank (p95 166 → 16.8 ms).
+- Gate at `8aead7b`: 5181 backend, 4065 frontend, 178 browser, cargo 8/8; frozen smoke renders a real report (`report ok v1 8 pages pdf xlsx`).
+- Installer `E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-8aead7b.exe` (**not installed**; predates S1-U6). Walkthrough: `docs/evidence/reports/combined-walkthrough.md`.
+See [[2026-10-01-2205-reports-wave]].
+
+Previously: **New-project setup (S1) on `main`** (2026-10-01, `ea5d13cb..7bfb2b5b`, 6 units, pushed).
 - New project is now a full page at `/projects/new`.
 - Templates: Mapping, Vertical asset, Confined space, Blank, and your own saved ones.
 - Data: drop a folder and it is sorted into slots from headers only (bounded `setup_inspect` job).
@@ -112,11 +122,11 @@ Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight:** Overview v2 needs the operator's check on real projects (§5). The Reports (R) wave is being merged on `main` by a parallel session (`r-r*` merges). Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
+**In flight:** Overview v2 needs the operator's check on real projects (§5). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
 **Next (S1):** The operator runs `docs/evidence/setup/walkthrough.md` on a real delivery. Then brainstorm S4 (video import, which unblocks the Confined template) or S2 (AI Describe it plus severity pre-fill).
 
-**Next:** The operator runs the Overview v2 walkthrough in [[2026-10-01-1842-overview-landing]] and rules on its three design calls. The Reports (R) wave continues. The operator installs `c4080c7` and runs `docs/evidence/imc/walkthrough.md`; the Foundation walkthrough is still owed (§5).
+**Next:** The operator runs the Overview v2 walkthrough in [[2026-10-01-1842-overview-landing]] and rules on its three design calls. The operator installs `8aead7b` and runs `docs/evidence/reports/combined-walkthrough.md` (Reports plus the open I/M/C checks; it supersedes installing `c4080c7`). For one build with S1 too, rebuild the installer from current `main`; the Foundation walkthrough is still owed (§5).
 
 Before that: **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
 - **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
@@ -256,6 +266,12 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Reports R (opened 2026-10-01)
+
+- **Operator check:** install `8aead7b` and run `docs/evidence/reports/combined-walkthrough.md` (26 Reports steps incl. "Checks only you can do", plus 4 carried I/M/C checks). Nothing in Reports has been run by the operator yet.
+- **Parked follow-ups:** History drawer covers "Back to draft" at 1280 px; templates keep `measurement_ids`/comparison pairs (portability over-claimed); ReportFilters' chip duplicates `ToggleChip`; R3 `compact_geometry` drops polygon holes; Space Grotesk lacks Cyrillic/CJK/emoji (no fallback font); `app.pointclouds.views` imports PIL eagerly and reads views one at a time; smoke does not yet assert the XLSX file or report image.
+- **Deferred by spec (§20):** Word output, server-side 3D rendering, in-app PDF viewer, merged PDF above the part budget, landscape, deleting `detect/export_pdf.py` one release after R8.
 
 ### New-project setup S1 (opened 2026-10-01)
 
