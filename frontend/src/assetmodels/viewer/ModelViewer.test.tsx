@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { createRef } from "react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
@@ -8,10 +9,10 @@ vi.mock("./engine", async (orig) => ({
 }));
 
 import { NoWebGlError } from "@/clouds/viewer/engine";
-import { ModelViewer } from "./ModelViewer";
+import { ModelViewer, type ModelViewerHandle } from "./ModelViewer";
 
 const stub = (load: () => Promise<unknown>, dispose = vi.fn()) => ({
-  load,
+  load: vi.fn(load),
   dispose,
   setGroupVisible: vi.fn(),
   select: vi.fn(),
@@ -62,5 +63,64 @@ describe("ModelViewer", () => {
     create.mockClear();
     render(<ModelViewer glbUrl={null} onParts={() => {}} onSelect={() => {}} />);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a new GLB of the same model loads into the same engine, keeps the camera and the selection", async () => {
+    create.mockReset();
+    const load = vi.fn(() => Promise.resolve([{ id: "N7", name: "N7", group: "Nozzle" }]));
+    const eng = stub(load);
+    create.mockImplementation(() => eng);
+    const onSelect = vi.fn();
+    const onParts = vi.fn();
+    const ref = createRef<ModelViewerHandle>();
+    const { rerender } = render(
+      <ModelViewer ref={ref} glbUrl="v2.glb" onParts={onParts} onSelect={onSelect} />,
+    );
+    await waitFor(() => expect(onParts).toHaveBeenCalledTimes(1));
+    expect(load).toHaveBeenLastCalledWith("v2.glb", { keepCamera: false });
+    act(() => ref.current!.select("N7"));
+    rerender(<ModelViewer ref={ref} glbUrl="v3.glb" onParts={onParts} onSelect={onSelect} />);
+    await waitFor(() => expect(onParts).toHaveBeenCalledTimes(2));
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(eng.dispose).not.toHaveBeenCalled();
+    expect(load).toHaveBeenLastCalledWith("v3.glb", { keepCamera: true });
+    expect(eng.setView).not.toHaveBeenCalled();
+    expect(eng.select).toHaveBeenLastCalledWith("N7");
+  });
+
+  it("a programmatic select never echoes back through onSelect", async () => {
+    create.mockReset();
+    let emit: (id: string | null) => void = () => {};
+    const eng = stub(() => Promise.resolve([]));
+    // The engine echoes onSelect, with null for an id it does not hold.
+    eng.select.mockImplementation(() => emit(null));
+    create.mockImplementation((o: { onSelect(id: string | null): void }) => {
+      emit = o.onSelect;
+      return eng;
+    });
+    const onSelect = vi.fn();
+    const onState = vi.fn();
+    const ref = createRef<ModelViewerHandle>();
+    render(
+      <ModelViewer ref={ref} glbUrl="v2.glb" onParts={() => {}} onSelect={onSelect} onState={onState} />,
+    );
+    await waitFor(() => expect(onState).toHaveBeenLastCalledWith("running"));
+    act(() => ref.current!.select("gone"));
+    expect(eng.select).toHaveBeenCalledWith("gone");
+    expect(onSelect).not.toHaveBeenCalled();
+    // a click in the view still reports
+    act(() => emit("N7"));
+    expect(onSelect).toHaveBeenCalledWith("N7");
+  });
+
+  it("reload view builds a fresh engine and frames it", async () => {
+    create.mockReset();
+    const bad = stub(() => Promise.reject(new Error("bad")));
+    const good = stub(() => Promise.resolve([]));
+    create.mockImplementationOnce(() => bad).mockImplementationOnce(() => good);
+    render(<ModelViewer glbUrl="v2.glb" onParts={() => {}} onSelect={() => {}} />);
+    (await screen.findByRole("button", { name: /reload view/i })).click();
+    await waitFor(() => expect(good.load).toHaveBeenCalledWith("v2.glb", { keepCamera: false }));
+    expect(bad.dispose).toHaveBeenCalled();
   });
 });

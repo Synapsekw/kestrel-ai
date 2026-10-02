@@ -53,36 +53,63 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
     cbs.current.onState?.(state);
   }, [state]);
 
+  // One engine per canvas (a "Reload view" makes a new canvas and engine). A new GLB of the same model
+  // loads into it and keeps the camera (spec §8); only the engine's first load frames the iso view.
+  const framed = useRef(false);
+  /** Set while the shell drives `select` itself, so the engine's echo never reaches the workspace. */
+  const quiet = useRef(false);
+  const selectQuietly = (eng: ModelEngine, id: string | null) => {
+    quiet.current = true;
+    try {
+      eng.select(id);
+    } finally {
+      quiet.current = false;
+    }
+  };
+  useEffect(
+    () => () => {
+      engine.current?.dispose();
+      engine.current = null;
+    },
+    [generation],
+  );
   useEffect(() => {
     const canvas = canvasRef.current;
     const host = box.current;
     if (!glbUrl || !canvas || !host) return;
-    let cancelled = false;
-    let eng: ModelEngine;
-    try {
-      eng = createModelEngine({
-        canvas,
-        host,
-        onSelect: (id) => {
-          wanted.current.selected = id;
-          cbs.current.onSelect(id);
-        },
-      });
-    } catch (err) {
-      if (err instanceof NoWebGlError) setStatus({ key: sceneKey, state: "no-webgl" });
-      else setStatus({ key: sceneKey, state: "load-error" });
-      return;
+    let eng = engine.current;
+    if (!eng) {
+      try {
+        eng = createModelEngine({
+          canvas,
+          host,
+          onSelect: (id) => {
+            if (quiet.current) return;
+            wanted.current.selected = id;
+            cbs.current.onSelect(id);
+          },
+        });
+      } catch (err) {
+        if (err instanceof NoWebGlError) setStatus({ key: sceneKey, state: "no-webgl" });
+        else setStatus({ key: sceneKey, state: "load-error" });
+        return;
+      }
+      engine.current = eng;
+      framed.current = false;
     }
-    engine.current = eng;
-    eng.load(glbUrl).then(
+    const live = eng;
+    let cancelled = false;
+    live.load(glbUrl, { keepCamera: framed.current }).then(
       (parts) => {
         if (cancelled) return;
+        framed.current = true;
         const w = wanted.current;
-        for (const g of w.hidden) eng.setGroupVisible(g, false);
-        eng.setCut(w.cut);
-        eng.setLevels(w.levels);
-        eng.setHeadOff(w.headOff);
-        eng.setOverlay(w.overlay);
+        for (const g of w.hidden) live.setGroupVisible(g, false);
+        live.setCut(w.cut);
+        live.setLevels(w.levels);
+        live.setHeadOff(w.headOff);
+        live.setOverlay(w.overlay);
+        if (w.selected) selectQuietly(live, w.selected);
         setStatus({ key: sceneKey, state: "running" });
         cbs.current.onParts(parts);
       },
@@ -92,8 +119,6 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
     );
     return () => {
       cancelled = true;
-      if (engine.current === eng) engine.current = null;
-      eng.dispose();
     };
   }, [glbUrl, generation, sceneKey]);
 
@@ -107,7 +132,7 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
       },
       select(id) {
         wanted.current.selected = id;
-        engine.current?.select(id);
+        if (engine.current) selectQuietly(engine.current, id);
       },
       setCut(bearing) {
         wanted.current.cut = bearing;
@@ -164,7 +189,8 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         className="absolute inset-0 h-full w-full bg-bg"
         style={{ cursor: "grab" }}
       />
-      {state === "loading" && (
+      {/* A new version swapping in keeps the old model in view until it is ready: no skeleton over it. */}
+      {state === "loading" && status.state !== "running" && (
         <div
           role="status"
           aria-label="Loading 3D model"

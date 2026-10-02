@@ -13,8 +13,11 @@ export interface ModelPart {
   group: string;
 }
 export interface ModelEngine {
-  /** Rejects on a bad GLB; parts come from node extras. A later `load` replaces (and disposes) the model. */
-  load(url: string): Promise<ModelPart[]>;
+  /**
+   * Rejects on a bad GLB; parts come from node extras. A later `load` replaces (and disposes) the model.
+   * The first load frames the iso view; `keepCamera` leaves the camera where it is (a new version swapping in).
+   */
+  load(url: string, opts?: { keepCamera?: boolean }): Promise<ModelPart[]>;
   setGroupVisible(group: string, visible: boolean): void;
   /** Highlights the part and emits `onSelect`. */
   select(partId: string | null): void;
@@ -229,7 +232,10 @@ export function createModelEngine(o: {
       ),
       camera,
     );
-    const hit = raycaster.intersectObject(modelRoot, true).find((h) => h.object.visible);
+    // With the cut on, the half beyond the plane is clipped away: a click picks what is still drawn.
+    const hit = raycaster
+      .intersectObject(modelRoot, true)
+      .find((h) => h.object.visible && (cutBearing === null || cutPlane.distanceToPoint(h.point) >= 0));
     let n: THREE.Object3D | null = hit?.object ?? null;
     while (n && !idByNode.has(n)) n = n.parent;
     engine.select((n && idByNode.get(n)) ?? null);
@@ -238,7 +244,7 @@ export function createModelEngine(o: {
   o.canvas.addEventListener("pointerup", onUp);
 
   const engine: ModelEngine = {
-    async load(url) {
+    async load(url, opts) {
       const seq = ++loadSeq;
       const gltf = await new GLTFLoader().loadAsync(url);
       if (disposed || seq !== loadSeq) {
@@ -290,7 +296,8 @@ export function createModelEngine(o: {
       applyCut();
       applyVisibility();
       drawLevels();
-      setView("iso");
+      if (opts?.keepCamera) requestRender();
+      else setView("iso");
       return parts;
     },
     setGroupVisible(group, visible) {
