@@ -2,7 +2,7 @@
 `python -m app geo-selftest` checks GDAL/PROJ, `pointcloud-selftest`, `design-selftest`,
 `volumes-selftest`, `drawings-selftest` and `reports-selftest` check the point-cloud, design-surface,
 volume-export, drawings and report-PDF stacks (placeholders until S1 K2, S3 U3, S2 V6 and M-B3 build
-them).
+them). `asset-models-selftest` checks the trimesh GLB builder.
 """
 
 import multiprocessing
@@ -51,6 +51,10 @@ def run(argv: list[str], freeze_support: Callable[[], None] = multiprocessing.fr
         from app.reports.selftest import main as reports_selftest
 
         return reports_selftest(argv[2:])
+    if len(argv) > 1 and argv[1] == "asset-models-selftest":
+        from app.asset_models.selftest import main as asset_models_selftest
+
+        return asset_models_selftest()
     from app.main import main
 
     main()

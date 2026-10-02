@@ -76,6 +76,12 @@ if ($LASTEXITCODE -ne 0 -or $drawings -notmatch "drawings ok 200x100 2") { throw
 Write-Host ($drawings.Trim().Split("`n")[-1])
 Complete-Step "drawings"
 
+# trimesh + mapbox-earcut + the GLB exporter inside the bundle (plan 2026-10-02-asset-model-u1 Task 6).
+$am = & $exe asset-models-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $am -notmatch "asset-models ok \d+ \d+") { throw "asset-models selftest failed: $am" }
+Write-Host ($am.Trim().Split("`n")[-1])
+Complete-Step "asset-models"
+
 # Volume exports (plan 2026-09-24-volumes Task 13): reportlab, openpyxl and scipy's qhull.
 $vol = & $exe volumes-selftest 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selftest failed: $vol" }
