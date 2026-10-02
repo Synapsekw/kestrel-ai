@@ -12,7 +12,7 @@ from app.asset_models.shapes import build_shape
 from app.asset_models.spec import AssetSpec
 
 OVERLAP_SHARE = 0.5
-OFF_SURFACE_MM = 20.0
+RESERVED_ID = "world"  # trimesh names the GLB root node "world"
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,14 @@ def validate(spec: AssetSpec) -> Report:
     by_id = {p.id: p for p in spec.parts}
     boxes: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     for part in spec.parts:
+        if part.id == RESERVED_ID:
+            report.errors.append(
+                Issue("reserved_id", part.id, f"{RESERVED_ID!r} is reserved; pick another id")
+            )
+            continue
+        if part.placement.host == part.id:
+            report.errors.append(Issue("host_self", part.id, "a part cannot be its own host"))
+            continue
         msg = _geometry_error(part)
         if msg:
             report.errors.append(Issue("bad_geometry", part.id, msg))
@@ -64,10 +72,20 @@ def validate(spec: AssetSpec) -> Report:
             code = "host_missing" if "is not a part" in str(e) else "host_wrong_kind"
             report.errors.append(Issue(code, part.id, str(e)))
             continue
-        if counts[part.id] == 1:
+        except Exception:
+            report.errors.append(Issue("bad_geometry", part.id, "could not build this part's geometry"))
+            continue
+        try:
             mesh = build_shape(part.shape, part.typed_params())
             mesh.apply_transform(T)
-            boxes[part.id] = (mesh.bounds[0], mesh.bounds[1])
+            lo, hi = np.asarray(mesh.bounds[0]), np.asarray(mesh.bounds[1])
+            if len(mesh.faces) == 0 or not (np.isfinite(lo).all() and np.isfinite(hi).all()):
+                raise ValueError("empty or non-finite mesh")
+        except Exception:
+            report.errors.append(Issue("bad_geometry", part.id, "could not build this part's geometry"))
+            continue
+        if counts[part.id] == 1:
+            boxes[part.id] = (lo, hi)
         if part.source.kind == "assumed" and part.confidence == "high":
             report.warnings.append(
                 Issue("assumed_high_confidence", part.id, "an assumed part is marked high confidence")

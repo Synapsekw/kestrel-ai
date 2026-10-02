@@ -1,5 +1,7 @@
 """Spec validation (spec §6.3): errors block the GLB, warnings don't."""
 
+import pytest
+
 from app.asset_models.spec import AssetSpec
 from app.asset_models.validate import validate
 
@@ -101,3 +103,44 @@ def test_parts_inside_or_on_a_host_are_not_duplicates():
     r = validate(spec)
     assert r.ok
     assert "overlap" not in codes(r.warnings)
+
+
+def _bad(shape, params):
+    return AssetSpec.model_validate({"parts": [part("b", shape=shape, params=params)]})
+
+
+def test_degenerate_geometry_is_reported_never_raised():
+    from app.asset_models.build import SpecInvalid, build_meshes
+
+    cases = [
+        _bad("extrusion", {"outline_mm": [[0, 0], [1, 0], [2, 0]], "height": 100}),
+        _bad("extrusion", {"outline_mm": [[1, 1], [1, 1], [1, 1]], "height": 100}),
+        _bad("lathe", {"profile_mm": [[0, 0], [0, 10], [0, 20]]}),
+    ]
+    for spec in cases:
+        r = validate(spec)
+        assert [i.code for i in r.errors] == ["bad_geometry"], spec
+        assert r.errors[0].part_id == "b"
+        with pytest.raises(SpecInvalid):
+            build_meshes(spec)
+
+
+def test_a_part_cannot_host_itself():
+    spec = AssetSpec.model_validate(
+        {
+            "parts": [
+                part(
+                    "n",
+                    shape="nozzle",
+                    params={"dn": 50, "od": 60, "projection": 200, "flange_od": 165, "flange_t": 20},
+                    placement={"host": "n", "bearing_deg": 0, "elevation_mm": 10},
+                )
+            ]
+        }
+    )
+    assert "host_self" in codes(validate(spec).errors)
+
+
+def test_world_is_a_reserved_id():
+    r = validate(AssetSpec.model_validate({"parts": [part("world")]}))
+    assert "reserved_id" in codes(r.errors)
