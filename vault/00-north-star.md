@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-10-01
+last-updated: 2026-10-02
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -89,7 +89,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Reports (R) complete on `main`** (2026-10-01, `07beeac..cd7c59d`, 13 units + close-out, pushed).
+**Shipped last:** **Native icons on the brand gradient** (2026-10-02, `3c6b04bc`, on `main`). The desktop/taskbar icon moved from amber to the violet → teal `grad-brand`, matching the rail tile. The installer was rebuilt from `3c6b04bc` with a freshly frozen backend and **installed**; the operator confirmed the app opens. That build therefore contains S1 and Reports; neither walkthrough has been run on it yet. See [[2026-10-02-1441-native-icons-brand-gradient]].
+
+Previously: **Reports (R) complete on `main`** (2026-10-01, `07beeac..cd7c59d`, 13 units + close-out, pushed).
 - Project → **Reports**: a report list, a three-pane builder with a live A4 preview, filters, templates, and **Render** as a background job producing numbered versions (PDF, optional CSV/XLSX), with issue/unissue and history.
 - Snapshots are rendered server-side (image crops, maps, swipe pairs, volume plans) and C's stored 3D views are passed through with fallbacks; the PDF is reportlab with bundled fonts and is byte-stable.
 - Data exports moved under Reports (`/export` redirects).
@@ -269,13 +271,13 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 
 ### Reports R (opened 2026-10-01)
 
-- **Operator check:** install `8aead7b` and run `docs/evidence/reports/combined-walkthrough.md` (26 Reports steps incl. "Checks only you can do", plus 4 carried I/M/C checks). Nothing in Reports has been run by the operator yet.
+- **Operator check:** (the installed `3c6b04bc` build, 2026-10-02, includes Reports, so it can stand in for `8aead7b`) run `docs/evidence/reports/combined-walkthrough.md` (26 Reports steps incl. "Checks only you can do", plus 4 carried I/M/C checks). Nothing in Reports has been run by the operator yet.
 - **Parked follow-ups:** History drawer covers "Back to draft" at 1280 px; templates keep `measurement_ids`/comparison pairs (portability over-claimed); ReportFilters' chip duplicates `ToggleChip`; R3 `compact_geometry` drops polygon holes; Space Grotesk lacks Cyrillic/CJK/emoji (no fallback font); `app.pointclouds.views` imports PIL eagerly and reads views one at a time; smoke does not yet assert the XLSX file or report image.
 - **Deferred by spec (§20):** Word output, server-side 3D rendering, in-app PDF viewer, merged PDF above the part budget, landscape, deleting `detect/export_pdf.py` one release after R8.
 
 ### New-project setup S1 (opened 2026-10-01)
 
-- **Operator check:** the 37-step walkthrough on real drone deliveries; no installer contains S1 yet.
+- **Operator check:** the 37-step walkthrough on real drone deliveries. The installed build from `3c6b04bc` (2026-10-02) contains S1; the walkthrough has not been run on it.
 - **Not built:** S2, S3 and S4. S4 must flip the Confined video slot to required in a new catalogue revision and set `VIDEO_IMPORT_ENABLED`.
 - **Known gaps:**
   - Photo import is per folder and recursive. A skipped nested photo bucket is still imported. Fix: a file list on `POST /sources`.
