@@ -31,5 +31,7 @@ def main() -> int:
         }
     )
     glb, meta = build_glb(spec)
+    import google.genai  # noqa: F401  proves the frozen bundle carries google-genai
+
     print(f"asset-models ok {meta['triangles']} {len(glb)}")
     return 0

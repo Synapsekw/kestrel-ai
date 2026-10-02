@@ -49,3 +49,6 @@ Thumbs.db
 dist/
 # Brainstorm companion mockups are per-session scratch
 .superpowers/brainstorm/
+
+# Operator client drawings for the live asset-model acceptance test
+backend/tests/data/asset_models/*.pdf
