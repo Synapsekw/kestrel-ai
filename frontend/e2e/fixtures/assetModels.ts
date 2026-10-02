@@ -22,10 +22,10 @@ const part = (id: string, name: string, group: string, shape: string, params: ob
   ...extra,
 });
 
-/** The spec the GLB fixture was built from; `projection` is the N7 nozzle's. */
+/** The spec the GLB fixture was built from, except the shell is named "Shell (spec)" so a list read from the spec is told apart from one read from the GLB extras ("Shell"); `projection` is the N7 nozzle's. */
 export const specWith = (projection: number) => ({
   parts: [
-    part("shell", "Shell", "Shell", "cylinder", { id: 4000, thickness: 8, height: 8000 }),
+    part("shell", "Shell (spec)", "Shell", "cylinder", { id: 4000, thickness: 8, height: 8000 }),
     part(
       "N7",
       "Nozzle N7",
