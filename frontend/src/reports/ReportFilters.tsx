@@ -41,7 +41,7 @@ const DATA_ICON: Record<DataItemType, IconName> = {
   elevation: "elevation",
   drawing: "drawing",
   point_cloud: "cloud",
-  asset_model: "layers",
+  asset_model: "cube",
 };
 
 const DATE_RULES: { value: DateRule; label: string }[] = [

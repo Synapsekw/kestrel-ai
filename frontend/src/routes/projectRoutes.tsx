@@ -1,5 +1,5 @@
 import type { RouteObject } from "react-router-dom";
-import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
+import { AssetModelsScreen, CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { FindingsScreen } from "@/findings/FindingsScreen";
 import { ImagesWorkspace } from "@/images/workspace/ImagesWorkspace";
 import { MapWorkspace } from "@/mapws/MapWorkspace";
@@ -54,6 +54,22 @@ export const projectRoutes: RouteObject[] = [
     element: (
       <Later>
         <CloudsScreen />
+      </Later>
+    ),
+  },
+  {
+    path: "models",
+    element: (
+      <Later>
+        <AssetModelsScreen />
+      </Later>
+    ),
+  },
+  {
+    path: "models/:modelId",
+    element: (
+      <Later>
+        <AssetModelsScreen />
       </Later>
     ),
   },

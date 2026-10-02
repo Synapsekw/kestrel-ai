@@ -50,6 +50,7 @@ export type IconName =
   | "pin"
   | "sparkle"
   | "layers"
+  | "cube"
   | "drawing"
   | "elevation"
   // The point cloud palette (C-W1), from the mockup's TOOLS paths.
@@ -140,6 +141,7 @@ const PATHS: Record<IconName, string> = {
   // AI provenance.
   sparkle:
     "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z",
+  cube: "M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z M12 12l8-4.5 M12 12v9 M12 12L4 7.5",
   layers: "M12 4 3 8.5l9 4.5 9-4.5L12 4zM3 13l9 4.5 9-4.5",
   // A drawing: a floor plan.
   drawing: "M4 4h16v16H4zM4 10h6v10M10 4v6h10",

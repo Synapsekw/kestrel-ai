@@ -6,6 +6,9 @@ import { Skeleton } from "@/ui";
 export const CloudsScreen = lazy(() =>
   import("@/screens/CloudsScreen").then((m) => ({ default: m.CloudsScreen })),
 );
+export const AssetModelsScreen = lazy(() =>
+  import("@/screens/AssetModelsScreen").then((m) => ({ default: m.AssetModelsScreen })),
+);
 export const VolumesScreen = lazy(() =>
   import("@/screens/VolumesScreen").then((m) => ({ default: m.VolumesScreen })),
 );

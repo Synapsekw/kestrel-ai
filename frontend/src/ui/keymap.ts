@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
  * means "commit") and DataTable handles it.
  */
 
-export type WorkspaceScope = "images" | "maps" | "clouds" | "clouds.fly" | "findings";
+export type WorkspaceScope = "images" | "maps" | "clouds" | "clouds.fly" | "models" | "findings";
 export type KeyScope = "global" | "review" | WorkspaceScope;
 
 export interface KeyEntry {
@@ -220,6 +220,8 @@ export const WORKSPACE_KEYS: Record<WorkspaceScope, KeyEntry[]> = {
     fly("Q", "move-down", "Fly down"),
     fly("E", "move-up", "Fly up"),
   ],
+  // The Asset models tab: no workspace keys yet (the global ones apply).
+  models: [],
   // The Findings tab (F §8.6): 1-9 and T are the review keys, Enter and Esc the global ones.
   findings: [
     fd("J", "next-row", "Next finding"),
