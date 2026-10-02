@@ -106,4 +106,12 @@ export { computeWindow, useVirtualRows, type RowWindow, type VirtualViewport } f
 export { cx, focusRing, lift, pressable, transition } from "./tokens";
 export { createRailStore, RAIL_STORAGE_PREFIX, type RailState, type RailWorkspace } from "./railStore";
 export { NARROW_WIDTH, WorkspaceRail, type RailTopic, type WorkspaceRailProps } from "./WorkspaceRail";
-export { TOPIC_ROW_HEIGHT, TopicList, TopicPanel, type TopicItem, type TopicListProps, type TopicPanelProps, type TopicTool } from "./TopicPanel";
+export {
+  TOPIC_ROW_HEIGHT,
+  TopicList,
+  TopicPanel,
+  type TopicItem,
+  type TopicListProps,
+  type TopicPanelProps,
+  type TopicTool,
+} from "./TopicPanel";

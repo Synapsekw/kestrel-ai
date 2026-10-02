@@ -10,9 +10,20 @@ const topics: RailTopic[] = [
 ];
 
 function setup(inspectorOpen = false) {
-  const store = createRailStore("maps", topics.map((t) => t.id), "findings");
+  const store = createRailStore(
+    "maps",
+    topics.map((t) => t.id),
+    "findings",
+  );
   const utils = render(
-    <WorkspaceRail label="Map" store={store} nav={null} topics={topics} inspectorOpen={inspectorOpen} bottomInset={140} />,
+    <WorkspaceRail
+      label="Map"
+      store={store}
+      nav={null}
+      topics={topics}
+      inspectorOpen={inspectorOpen}
+      bottomInset={140}
+    />,
   );
   return { store, ...utils };
 }

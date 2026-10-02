@@ -69,7 +69,10 @@ export function WorkspaceRail({ label, store, nav, topics, inspectorOpen, bottom
           </span>
         ) : null}
         {t.hidden && (
-          <span aria-hidden className="pointer-events-none absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-dim" />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-dim"
+          />
         )}
       </span>
     );
