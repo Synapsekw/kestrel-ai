@@ -43,10 +43,13 @@ def drawing_view(handle, drawing_id: str, region=None, *, max_side: int = 1600) 
     from app.drawings.raster_io import read_rgba
 
     _drawing(handle, drawing_id)
+    plan = dstore.plan_path(handle, drawing_id)
+    if not plan.exists():
+        raise LookError("That is a vector drawing with no rendered image - read its text with drawing_text.")
     region, note = clamp_region(region)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", NotGeoreferencedWarning)
-        src = rasterio.open(dstore.plan_path(handle, drawing_id))
+        src = rasterio.open(plan)
     with src:
         W, H = src.width, src.height
         x0, y0, x1, y1 = region or [0.0, 0.0, 1.0, 1.0]

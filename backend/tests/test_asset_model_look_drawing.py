@@ -67,6 +67,17 @@ def test_text_from_dxf(client, project_id, wait_job, handle, tmp_path):
     assert 0 < fx < 0.5 and 0.5 < fy < 1  # near the bottom-left, measured from the top-left
 
 
+def test_view_of_dxf_raises_look_error(client, project_id, wait_job, handle, tmp_path):
+    doc = new_doc(insunits=6)
+    msp = doc.modelspace()
+    msp.add_line((0, 0), (40, 0), dxfattribs={"layer": "WALLS"})
+    msp.add_line((0, 0), (0, 30), dxfattribs={"layer": "WALLS"})
+    msp.add_text("GATE", height=2, dxfattribs={"layer": "TEXT"}).set_placement((5, 5))
+    did = _import(client, project_id, wait_job, save(doc, tmp_path / "site.dxf"))
+    with pytest.raises(LookError, match="drawing_text"):
+        drawing_view(handle, did)
+
+
 def test_unknown_drawing_raises(handle):
     with pytest.raises(LookError):
         drawing_view(handle, "00000000-0000-0000-0000-000000000000")
