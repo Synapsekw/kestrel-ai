@@ -81,7 +81,7 @@ function useRuns(projectId: string, modelId: string) {
 
 function CentreCard({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center p-6">
+    <div className="pointer-events-none absolute inset-y-0 left-0 right-[344px] z-10 grid place-items-center p-6">
       <GlassPanel
         variant="float"
         radius="panel"
@@ -191,6 +191,8 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
   };
 
   const [tab, setTab] = useState<ModelInspectorTab>("parts");
+  // Without a version the inspector opens on the Run tab (the parts and versions are still empty).
+  const [firstTab, setFirstTab] = useState<ModelInspectorTab>("run");
   const [selected, setSelected] = useState<string | null>(null);
   const selectPart = (id: string) => {
     setSelected(id);
@@ -251,7 +253,8 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     reportedId === followedId;
   const liveRunId = handOver ? model.live_run_id : (followedId ?? model.live_run_id);
   const live = useLiveRun(projectId, model.id, liveRunId);
-  const liveRun = live.run ?? (started && started.id === liveRunId ? started : null);
+  // The start answer stands in until the first poll, never over a poll that gave up (the error shows).
+  const liveRun = live.run ?? (!live.error && started && started.id === liveRunId ? started : null);
   const runningRun = liveRun?.state === "running" ? liveRun : null;
   if (runningRun && runningRun.id !== followedId) setFollowedId(runningRun.id);
   /** Runs seen running here: only their end gets this screen's toast (not a run already over on load). */
@@ -488,6 +491,33 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
         >
           {buildBar(false)}
         </div>
+        {/* The Run tab follows a first build; the parts and versions fill once it saves a version. */}
+        <ModelInspector
+          tab={firstTab}
+          onTab={setFirstTab}
+          partsCount={0}
+          versionsCount={0}
+          partsTab={<PartsTab parts={[]} error={null} selected={null} onSelect={() => {}} />}
+          partTab={
+            <EmptyState icon="cube" title="No parts yet">
+              The first version&apos;s parts can be picked here.
+            </EmptyState>
+          }
+          versionsTab={
+            <VersionsTab
+              projectId={projectId}
+              modelId={model.id}
+              versions={[]}
+              current={null}
+              shown={null}
+              onShow={setPicked}
+              onRestore={restore}
+              error={null}
+              onRetry={reloadVersions}
+            />
+          }
+          runTab={<RunTab projectId={projectId} model={model} runs={tabRuns} onStarted={onRunStarted} />}
+        />
         {retry && (
           <BuildDialog
             key={retry.key}

@@ -213,4 +213,100 @@ describe("BuildDialog", () => {
     );
     expect(await screen.findByRole("button", { name: /start build/i })).toBeDisabled();
   });
+  const open = (
+    api: Parameters<typeof renderWithProviders>[1]["api"],
+    props: Partial<Parameters<typeof BuildDialog>[0]> = {},
+  ) =>
+    renderWithProviders(
+      <BuildDialog
+        open
+        onClose={() => {}}
+        projectId={PROJECT_ID}
+        model={MODEL}
+        mode="build"
+        onStarted={() => {}}
+        {...props}
+      />,
+      { api },
+    );
+  const POSTED = {
+    method: "POST",
+    path: /\/runs$/,
+    status: 202,
+    body: {
+      run: { id: "r1", state: "running" },
+      job: { id: "j1", type: "asset_model_run", state: "queued" },
+    },
+  };
+
+  it("drops a seeded source that is no longer in the project", async () => {
+    const { api, requests } = setup([POSTED]);
+    open(api, {
+      initial: {
+        sources: [
+          { type: "drawing", id: "gone" },
+          { type: "drawing", id: "d1" },
+        ],
+      },
+    });
+    expect(await screen.findByRole("checkbox", { name: /ga drawing/i })).toBeChecked();
+    expect(await screen.findByText(/1 source is no longer in the project/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: /start build/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start build/i }));
+    await waitFor(() => expect(requests.some((r) => r.method === "POST")).toBe(true));
+    expect((requests.find((r) => r.method === "POST")!.body as { sources: unknown }).sources).toEqual([
+      { type: "drawing", id: "d1" },
+    ]);
+  });
+
+  it("a chosen source that is not ready any more can still be unticked", async () => {
+    const { api } = setup();
+    open(api, { initial: { sources: [{ type: "drawing", id: "d2" }] } });
+    const box = await screen.findByRole("checkbox", { name: /importing/i });
+    expect(box).toBeChecked();
+    expect(box).toBeEnabled();
+    fireEvent.click(box);
+    expect(box).not.toBeChecked();
+    expect(box).toBeDisabled();
+  });
+
+  it("a no_sources answer takes the named source out and says which", async () => {
+    const { api } = setup([
+      {
+        method: "POST",
+        path: /\/runs$/,
+        status: 422,
+        body: {
+          error: {
+            code: "no_sources",
+            message: "A chosen source is missing or not ready.",
+            details: { source: { type: "point_cloud", id: "c1" } },
+          },
+        },
+      },
+    ]);
+    open(api);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /ga drawing/i }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /may survey cloud/i }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: /anthropic/i })).toBeChecked());
+    fireEvent.click(screen.getByRole("button", { name: /start build/i }));
+    expect(await screen.findByText(/may survey cloud is missing or not ready/i)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /may survey cloud/i })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /ga drawing/i })).toBeChecked();
+  });
+
+  it("Try again keeps the run's model name only while its provider is the one chosen", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/providers$/,
+        body: { items: [providers.items[0], { ...providers.items[1], has_key: false }, providers.items[2]] },
+      },
+      { method: "GET", path: /\/data$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
+    ] as never);
+    open(api, { initial: { provider: "anthropic", model_name: "claude-opus-5-5", notes: "x" } });
+    await waitFor(() => expect(screen.getByRole("radio", { name: /gemini/i })).toBeChecked());
+    expect(screen.getByLabelText(/^model$/i)).toHaveValue("gemini-2.5-pro");
+  });
 });

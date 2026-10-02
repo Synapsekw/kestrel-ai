@@ -294,7 +294,8 @@ export async function routeRuns(
       if (req.method() === "POST" && rest === `/${RUN}/stop`) {
         sim.stopped += 1;
         sim.state = "stopped";
-        return json(route, runJson(sim));
+        // The contract answers a stop with 202 and the ended (or ending) run.
+        return json(route, runJson(sim), 202);
       }
       if (req.method() === "GET" && rest === `/${RUN}`) {
         if (sim.state === "running") {

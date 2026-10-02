@@ -12,13 +12,13 @@ The HCl acceptance tolerances (spec section 11: dimensions, nozzle bearings and 
 ## Steps
 
 1. Open the project and its **Asset models** tab. Press **New asset model…**, type the name "HCl tank" and press **Create**.
-   Expected: the empty model workspace opens with the viewer, the model panel and the inspector.
+   Expected: the model workspace opens with the model panel, a "No version yet" card in the middle, the Build bar at the bottom (**Build with AI…**) and the inspector on the right, open on its **Run** tab ("No runs yet"). **Parts** and **Versions** are empty until the first version is saved.
 
 2. In the Build bar press **Build with AI…**. In the **Build with AI** dialog tick the GA drawing under **Drawings**, choose **Anthropic** under **Provider**, and press **Start build**.
-   Expected: the dialog closes and the Build bar switches to the live run. If the key is missing, the Provider row says so and links to **Add a key in App settings**.
+   Expected: the dialog closes, the Build bar switches to the live run with **Stop**, and the centre card becomes "Building HCl tank" with the latest render. If a provider has no key, the Provider row says "… has no API key" and links to **Add a key in App settings**.
 
-3. Watch the Build bar: the phase (Sampling the scan, Reading sources, Building, Checking), the step count, the progress line, the latest step summary and a 64 px step thumbnail. Open the **Run** tab in the inspector.
-   Expected: steps arrive one by one, with the agent, start time, phase and usage (k tokens) above them.
+3. Watch the Build bar: the phase (Sampling the scan, Reading sources, Building, Checking), "step n of 80", the progress line, the latest step summary and a 64 px step thumbnail. Look at the **Run** tab in the inspector (already open during a first build).
+   Expected: a **Running** pill, then **Agent** (provider · model), **Started**, **Phase** and **Usage** (k tokens), and the steps arriving one by one under **Steps** (hover a step with a render to see its thumbnail). When the run ends, the tab shows its summary and any **Open questions**, each with **Refine with this note…**.
 
 4. When the run finishes, a toast says "Built version 1" and the model shows in the viewer. Orbit it by dragging. In the view tools (top left) press **Cut** and set the **Cut bearing** slider to 90°, then try **Levels** and **Head off**. In the **Groups** list of the model panel, switch **Nozzle** off and on again. Use **Fit** and **Views** (Top, Front, Side, Iso view) as well.
    Expected: each tool changes the view and can be switched off again. The Nozzle switch hides and shows all nozzles.
@@ -34,9 +34,9 @@ The HCl acceptance tolerances (spec section 11: dimensions, nozzle bearings and 
    Expected: the model shows in 3D Viewer; "HCl tank-v3.json" is readable JSON. The GLB item stays disabled while a version's 3D file is still building.
 
 8. Start another build (**Build with AI…**, a source, **Start build**) and press **Stop** in the Build bar while it runs.
-   Expected: the run ends with a toast "Saved a draft as version N". The bar reads "Stopped by you · Saved a draft as version N" and offers **Try again** (opens the dialog with the same choices) next to **Build with AI…** and **Refine…**. The **Run** tab lists the run as **Stopped**.
+   Expected: the run ends with a toast "Saved a draft as version N" when it had saved a draft, or "Stopped by you" when it had not. The bar reads "Stopped by you" (followed by " · Saved a draft as version N" when there is a draft) and offers **Try again** (opens the dialog with the same choices) next to **Build with AI…** and **Refine…**. The **Run** tab lists the run as **Stopped**.
 
 9. Start one more build and close the app while it runs. Reopen the app and the project's **Asset models** tab.
-   Expected: the bar reads "Interrupted when the app closed" and, when the run had saved one, "Saved a draft as version N". The draft is listed in **Versions**. **Try again** is offered.
+   Expected: the bar reads "Interrupted when the app closed" and, when the run had saved one, "Saved a draft as version N"; the draft is listed in **Versions**. **Try again** is offered (on the "No version yet" card instead of the bar when the model has no version).
 
 Optional: with a version present, **Refine…** opens **Refine with AI** (button **Start refine**); the Notes field takes a hint such as "N7 is at 270°, not 90°".

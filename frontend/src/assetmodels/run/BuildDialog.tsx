@@ -10,7 +10,7 @@ import type {
 import { listVersions, startRun } from "@/api/assetModels";
 import { useApi } from "@/api/client";
 import type { DataItem } from "@/api/dataItems";
-import { codeOf, messageOf } from "@/api/errors";
+import { ApiFailure, codeOf, messageOf } from "@/api/errors";
 import { providerLabel, useProviders } from "@/api/providers";
 import { useJobsStore } from "@/store/jobs";
 import { Alert, Button, Checkbox, Dialog, Field, Input, Pill, Segmented, Skeleton, Textarea } from "@/ui";
@@ -46,6 +46,12 @@ const START_ERRORS: Record<string, string> = {
   no_sources: "A chosen source is missing or not ready.",
   nothing_to_refine: "This model has no version to refine yet.",
 };
+
+/** The source a 422 `no_sources` names in its details (`{source: {type, id}}`), if any. */
+function badSource(e: unknown): AssetSourceRef | null {
+  const src = e instanceof ApiFailure ? (e.details.source as Partial<AssetSourceRef> | undefined) : undefined;
+  return src && typeof src.id === "string" && typeof src.type === "string" ? (src as AssetSourceRef) : null;
+}
 
 function startError(e: unknown): string {
   const code = codeOf(e);
@@ -94,7 +100,8 @@ function SourceRow({
     <li className="flex min-h-7 items-center rounded-sm px-1.5 hover:bg-hover">
       <Checkbox
         checked={checked}
-        disabled={!ready}
+        // A chosen source that is no longer ready stays untickable.
+        disabled={!ready && !checked}
         onChange={(e) => onChange(e.target.checked)}
         className="min-w-0 flex-1"
         label={
@@ -248,11 +255,28 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
 
   /** null until the operator changes the selection: the defaults show through until then. */
   const [picked, setPicked] = useState<Map<string, AssetSourceRef> | null>(null);
-  const chosen = useMemo(() => {
+  const seeded = useMemo(() => {
     if (picked) return picked;
     const start = initial?.sources ?? versionSources ?? [];
     return new Map(start.map((r) => [sourceKey(r), r]));
   }, [picked, initial?.sources, versionSources]);
+  // A seeded drawing or cloud that is not in its (loaded) list any more was deleted: it is left out.
+  // Photos are paged, so a chosen photo off the loaded pages is kept.
+  const { chosen, dropped } = useMemo(() => {
+    const listed = (type: AssetSourceRef["type"]) => {
+      const list = type === "drawing" ? drawings : type === "point_cloud" ? clouds : null;
+      return !list || !list.items || list.error ? null : new Set(list.items.map((i) => i.id));
+    };
+    const ids = { drawing: listed("drawing"), point_cloud: listed("point_cloud"), image: null };
+    const kept = new Map<string, AssetSourceRef>();
+    let gone = 0;
+    for (const [k, r] of seeded) {
+      const known = ids[r.type];
+      if (known && !known.has(r.id)) gone += 1;
+      else kept.set(k, r);
+    }
+    return { chosen: kept, dropped: gone };
+  }, [seeded, drawings, clouds]);
   const isChosen = (r: AssetSourceRef) => chosen.has(sourceKey(r));
   const onToggle = (r: AssetSourceRef, on: boolean) => {
     const next = new Map(chosen);
@@ -266,10 +290,27 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const pickedProvider = providers.find((p) => p.name === providerPick && p.has_key);
   const provider = pickedProvider?.name ?? defaultProvider(providers);
   const providerRow = providers.find((p) => p.name === provider) ?? null;
-  const [modelName, setModelName] = useState<string | null>(initial?.model_name ?? null);
-  const shownModelName = modelName ?? providerRow?.model_name ?? "";
+  const [modelName, setModelName] = useState<string | null>(null);
+  // A copied model name belongs to its provider: once another one is chosen (the original lost its
+  // key, say), that provider's default applies.
+  const initialModel =
+    initial?.model_name && (provider === null || provider === initial.provider) ? initial.model_name : null;
+  const shownModelName = modelName ?? initialModel ?? providerRow?.model_name ?? "";
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const keyless = providers.filter((p) => !p.has_key);
+
+  const sourceName = (r: AssetSourceRef) => {
+    const list = r.type === "drawing" ? drawings.items : r.type === "point_cloud" ? clouds.items : null;
+    const label = list?.find((i) => i.id === r.id)?.label;
+    return (
+      label ??
+      (r.type === "image"
+        ? "A chosen photo"
+        : r.type === "drawing"
+          ? "A chosen drawing"
+          : "A chosen point cloud")
+    );
+  };
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -291,7 +332,15 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
       useJobsStore.getState().upsert(job);
       onStarted(run);
     } catch (e) {
-      setError(startError(e));
+      const bad = codeOf(e) === "no_sources" ? badSource(e) : null;
+      if (bad && chosen.has(sourceKey(bad))) {
+        const next = new Map(chosen);
+        next.delete(sourceKey(bad));
+        setPicked(next);
+        setError(
+          `${sourceName(bad)} is missing or not ready, so it was taken out. Start again to run without it.`,
+        );
+      } else setError(startError(e));
       setBusy(false);
     }
   };
@@ -353,6 +402,13 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
           {tooMany && (
             <p role="alert" className="text-xs text-danger">
               {`A run reads at most ${MAX_SOURCES} sources; untick ${chosen.size - MAX_SOURCES}.`}
+            </p>
+          )}
+          {dropped > 0 && (
+            <p className="text-xs text-muted">
+              {dropped === 1
+                ? "1 source is no longer in the project and was left out."
+                : `${dropped} sources are no longer in the project and were left out.`}
             </p>
           )}
         </section>

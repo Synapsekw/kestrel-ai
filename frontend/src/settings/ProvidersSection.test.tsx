@@ -90,4 +90,13 @@ describe("ProvidersSection", () => {
     expect(await screen.findByRole("note")).toHaveTextContent("Cloud providers are not available yet");
     expect(screen.getByRole("heading", { name: "Provider keys" })).toBeInTheDocument();
   });
+
+  it("lists Google Gemini with its own key row (asset model runs use it)", async () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/providers$/, body: { items: exampleProviders } }]);
+    renderWithProviders(<ProvidersSection />, { api });
+    const gemini = await screen.findByTestId("provider-gemini");
+    expect(gemini).toHaveTextContent("Google Gemini");
+    expect(within(gemini).getByLabelText("Google Gemini API key")).toHaveAttribute("type", "password");
+    expect(within(gemini).getByRole("button", { name: "Save Google Gemini key" })).toBeInTheDocument();
+  });
 });

@@ -21,7 +21,8 @@ export function RunProgressCard({
   const thumb = lastThumbStep(run);
   const last = run.steps.at(-1);
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center p-6">
+    // Centred in the space left of the inspector.
+    <div className="pointer-events-none absolute inset-y-0 left-0 right-[344px] z-10 grid place-items-center p-6">
       <GlassPanel
         variant="float"
         radius="panel"

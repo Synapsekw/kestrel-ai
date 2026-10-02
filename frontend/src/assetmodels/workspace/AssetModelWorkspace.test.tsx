@@ -11,6 +11,7 @@ vi.mock("@/assetmodels/viewer/ModelViewer", async () => ({
   ModelViewer: (await import("@/test/fakeModelViewer")).FakeModelViewer,
 }));
 import { callsTo, emitParts, emitState, fake, resetFake } from "@/test/fakeModelViewer";
+import { RUN_POLL_MAX_FAILURES, RUN_POLL_MS } from "@/assetmodels/run/useLiveRun";
 import { AssetModelWorkspace } from "./AssetModelWorkspace";
 
 /** Extra routes go first: the first matching route wins, so a test can override a default. */
@@ -490,6 +491,95 @@ describe("AssetModelWorkspace", () => {
       await waitFor(() =>
         expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("Built version 3"),
       );
+    });
+
+    it("without a version, the inspector opens on the Run tab with the live run's steps", async () => {
+      open(
+        liveRoutes([
+          {
+            method: "GET",
+            path: /\/asset-models$/,
+            body: { items: [{ ...liveModel, current_version: null }] },
+          },
+          { method: "GET", path: /\/asset-models\/m1\/versions$/, body: { items: [] } },
+        ]),
+      );
+      expect(await screen.findByTestId("model-run-progress")).toBeInTheDocument();
+      const inspector = screen.getByTestId("model-inspector");
+      expect(within(inspector).getByRole("tab", { name: /^run$/i })).toHaveAttribute("aria-selected", "true");
+      const panel = within(inspector).getByRole("tabpanel", { name: /run/i });
+      expect(await within(panel).findAllByRole("listitem", { name: /step/i })).toHaveLength(2);
+      fireEvent.click(within(inspector).getByRole("tab", { name: /versions/i }));
+      expect(within(inspector).getByRole("tabpanel", { name: /versions/i })).toHaveTextContent(
+        /no versions yet/i,
+      );
+    });
+
+    it("a started run whose progress can't be read shows the error, not a live run", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const providers = {
+          items: [
+            {
+              name: "anthropic",
+              model_name: "claude-opus-5-5",
+              has_key: true,
+              requests_per_minute: 30,
+              cost_per_request: 0,
+            },
+          ],
+        };
+        open([
+          { method: "GET", path: /\/providers$/, body: providers },
+          {
+            method: "GET",
+            path: /\/data$/,
+            body: {
+              items: [
+                {
+                  id: "d1",
+                  type: "drawing",
+                  label: "GA drawing",
+                  status: "ready",
+                  captured_on: null,
+                  created_at: "2026-10-01T09:00:00Z",
+                  summary: {},
+                },
+              ],
+              next_cursor: null,
+            },
+          },
+          { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
+          {
+            method: "POST",
+            path: /\/asset-models\/m1\/runs$/,
+            status: 202,
+            body: { run: LIVE, job: { id: "jr1", type: "asset_model_run", state: "queued" } },
+          },
+          {
+            method: "GET",
+            path: /\/runs\/r1$/,
+            status: 500,
+            body: { error: { code: "internal", message: "Boom.", details: {} } },
+          },
+        ]);
+        const bar = await screen.findByTestId("model-build-bar");
+        fireEvent.click(within(bar).getByRole("button", { name: /build with ai/i }));
+        const dialog = await screen.findByRole("dialog", { name: /build with ai/i });
+        fireEvent.click(await within(dialog).findByRole("checkbox", { name: /ga drawing/i }));
+        await waitFor(() =>
+          expect(within(dialog).getByRole("button", { name: /start build/i })).toBeEnabled(),
+        );
+        fireEvent.click(within(dialog).getByRole("button", { name: /start build/i }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(RUN_POLL_MS * 2 * RUN_POLL_MAX_FAILURES);
+        });
+        expect(await within(bar).findByText(/the run could not be read/i)).toBeInTheDocument();
+        expect(within(bar).queryByRole("button", { name: /^stop$/i })).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("without a version, a live run replaces the empty card with its progress", async () => {
