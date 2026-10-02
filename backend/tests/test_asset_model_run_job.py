@@ -406,7 +406,8 @@ def test_cancel_before_start_leaves_another_runs_lock(handle, app, seeded):
 def test_end_does_not_release_another_runs_lock(handle, app, seeded):
     with handle.session() as s:
         s.get(AssetModel, seeded[0]).live_run_id = "other-run"
-    _fake, _res, run, model = go(handle, app, seeded, [reply(("finish", {"summary": "x", "open_questions": []}))])
+    script = [reply(("finish", {"summary": "x", "open_questions": []}))]
+    _fake, _res, run, model = go(handle, app, seeded, script)
     assert run.state == "finished" and model.live_run_id == "other-run" and model.status == "building"
 
 

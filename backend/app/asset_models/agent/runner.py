@@ -261,7 +261,8 @@ def run_asset_model(ctx) -> dict:
                     continue
                 calls += 1
                 t0 = time.monotonic()
-                tool_name = call.name if call.name in TOOLS else "unknown"  # model output; never log it verbatim
+                # model output: never log an unknown name verbatim
+                tool_name = call.name if call.name in TOOLS else "unknown"
                 out = run_tool(rc, call.name, call.input)
                 log.info("asset model tool %s ok=%s %.2fs", tool_name, out.ok, time.monotonic() - t0)
                 if out.image:
