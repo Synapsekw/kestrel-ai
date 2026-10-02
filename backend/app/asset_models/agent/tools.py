@@ -363,7 +363,8 @@ class Render:
         "Render the current model: iso, front (looking north), side (looking east), top (north up), "
         "or section@<bearing> (cut through the axis, looking along that bearing). Up to 4 views. "
         "The iso view looks along (1, -0.8, 1), from the south-west and above, so parts on the "
-        "north/east side (e.g. a nozzle at bearing 90) are hidden behind the shell: use front/side/top/section@<bearing> to see them."
+        "north/east side (e.g. a nozzle at bearing 90) are hidden behind the shell: "
+        "use front/side/top/section@<bearing> to see them."
     )
 
     def run(self, ctx, a):
