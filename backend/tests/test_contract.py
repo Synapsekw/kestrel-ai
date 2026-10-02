@@ -150,6 +150,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
     "startTrainingRun": {422},  # task_mismatch: a base model of another task
     "createSurface": {422},
+    # asset models U3: a schema-valid spec with duplicate ids is `invalid_spec`; a GLB not built yet is
+    # `not_ready`; a model with a live run or GLB build refuses deletion (`job_running`).
+    "createAssetModelVersion": {422},
+    "getAssetModelGlb": {409},
+    "deleteAssetModel": {409},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
     # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
     # `grid_too_large`, `insufficient_disk`).

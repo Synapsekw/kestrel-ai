@@ -9,9 +9,8 @@ def _items(client, project_id):
     return r.json()["items"]
 
 
-def test_asset_model_is_listed_as_a_data_item(client, handle, project_id):
-    with handle.session() as s:
-        s.add(AssetModel(name="Tank", status="empty"))
+def test_asset_model_is_listed_as_a_data_item(client, project_id):
+    client.post(f"/api/v1/projects/{project_id}/asset-models", json={"name": "Tank"})
     (item,) = _items(client, project_id)
     assert item["type"] == "asset_model" and item["label"] == "Tank"
     assert item["status"] == "ready" and item["summary"]["versions"] == 0
