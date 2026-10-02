@@ -16,7 +16,7 @@ from PIL import Image
 
 from app.asset_models import service, store
 from app.asset_models.agent.prompt import SYSTEM, first_message
-from app.asset_models.agent.tools import RunContext, run_tool, tool_specs
+from app.asset_models.agent.tools import TOOLS, RunContext, run_tool, tool_specs
 from app.asset_models.look import LookError
 from app.asset_models.look.cloud import CloudSample, sample_cloud, source_of
 from app.asset_models.spec import AssetSpec
@@ -114,7 +114,23 @@ def _thumb(ctx, run_id, model_id, n, jpeg):
     img.save(path, "PNG")
 
 
-@register_job_type(RUN_JOB)
+def _cancelled_before_start(ctx) -> None:
+    """Stop pressed while the job was still queued: nothing ran, so end the run with no version."""
+    model_id, run_id = ctx.params["model_id"], ctx.params["run_id"]
+    with ctx.project.session() as s:
+        run = s.get(AssetModelRun, run_id)
+        if run is not None and run.state == "running":
+            run.state, run.stop_reason, run.summary = "stopped", "user", "Stopped by the operator."
+            run.phase, run.ended_at = "done", _now()
+        model = s.get(AssetModel, model_id)
+        if model is not None:
+            if model.live_run_id == run_id:
+                model.live_run_id = None
+            service.refresh_status(model)
+    ctx.publish("asset_models.changed", {"asset_model_ids": [model_id], "run_id": run_id})
+
+
+@register_job_type(RUN_JOB, on_cancelled_before_start=_cancelled_before_start)
 def run_asset_model(ctx) -> dict:
     model_id, run_id = ctx.params["model_id"], ctx.params["run_id"]
     rc = RunContext(
@@ -245,8 +261,9 @@ def run_asset_model(ctx) -> dict:
                     continue
                 calls += 1
                 t0 = time.monotonic()
+                tool_name = call.name if call.name in TOOLS else "unknown"  # model output; never log it verbatim
                 out = run_tool(rc, call.name, call.input)
-                log.info("asset model tool %s ok=%s %.2fs", call.name, out.ok, time.monotonic() - t0)
+                log.info("asset model tool %s ok=%s %.2fs", tool_name, out.ok, time.monotonic() - t0)
                 if out.image:
                     _thumb(ctx, run_id, model_id, calls, out.image)
                 _append_step(
@@ -254,7 +271,7 @@ def run_asset_model(ctx) -> dict:
                     run_id,
                     {
                         "n": calls,
-                        "tool": call.name,
+                        "tool": tool_name,
                         "ok": out.ok,
                         "summary": out.summary,
                         "has_thumb": bool(out.image),
@@ -330,7 +347,8 @@ def _end(ctx, rc: RunContext, state, reason, summary, questions, base, *, kind) 
         run.state, run.stop_reason, run.summary, run.open_questions = state, reason, summary, list(questions)
         run.version, run.phase, run.ended_at = version, "done", _now()
         model = s.get(AssetModel, rc.model_id)
-        model.live_run_id = None
+        if model.live_run_id == rc.run_id:
+            model.live_run_id = None
         service.refresh_status(model)
     ctx.publish("asset_models.changed", {"asset_model_ids": [rc.model_id], "run_id": rc.run_id})
     return {"run_id": rc.run_id, "version": version}

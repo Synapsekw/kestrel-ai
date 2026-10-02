@@ -376,3 +376,52 @@ def test_calls_after_finish_in_the_same_reply_are_not_run(handle, app, seeded):
         [reply(("upsert_parts", {"parts": [SHELL]})), reply(("finish", {"summary": "s"}), ("validate", {}))],
     )
     assert run.state == "finished" and [s["tool"] for s in run.steps] == ["upsert_parts", "finish"]
+
+
+def test_cancel_before_start_stops_the_run_and_unsticks_the_model(handle, app, seeded):
+    from app.jobs.registry import cancelled_before_start_hook
+
+    ctx = Ctx(handle, app.state.jobs, {"model_id": seeded[0], "run_id": seeded[1]})
+    cancelled_before_start_hook(R.RUN_JOB)(ctx)
+    with handle.session() as s:
+        run, model = s.get(AssetModelRun, seeded[1]), s.get(AssetModel, seeded[0])
+        assert (run.state, run.stop_reason, run.summary) == ("stopped", "user", "Stopped by the operator.")
+        assert run.ended_at is not None and run.version is None and run.phase == "done"
+        assert model.live_run_id is None and model.status == "empty"
+    assert ("asset_models.changed", {"asset_model_ids": [seeded[0]], "run_id": seeded[1]}) in ctx.published
+
+
+def test_cancel_before_start_leaves_another_runs_lock(handle, app, seeded):
+    from app.jobs.registry import cancelled_before_start_hook
+
+    with handle.session() as s:
+        s.get(AssetModel, seeded[0]).live_run_id = "other-run"
+    ctx = Ctx(handle, app.state.jobs, {"model_id": seeded[0], "run_id": seeded[1]})
+    cancelled_before_start_hook(R.RUN_JOB)(ctx)
+    with handle.session() as s:
+        assert s.get(AssetModel, seeded[0]).live_run_id == "other-run"
+        assert s.get(AssetModelRun, seeded[1]).state == "stopped"
+
+
+def test_end_does_not_release_another_runs_lock(handle, app, seeded):
+    with handle.session() as s:
+        s.get(AssetModel, seeded[0]).live_run_id = "other-run"
+    _fake, _res, run, model = go(handle, app, seeded, [reply(("finish", {"summary": "x", "open_questions": []}))])
+    assert run.state == "finished" and model.live_run_id == "other-run" and model.status == "building"
+
+
+def test_unknown_tool_name_is_not_logged_or_recorded_verbatim(handle, app, seeded, caplog):
+    import logging
+
+    caplog.set_level(logging.DEBUG)
+    _fake, _res, run, _model = go(
+        handle,
+        app,
+        seeded,
+        [
+            reply(("ignore_previous_SECRETNAME", {})),
+            reply(("finish", {"summary": "x", "open_questions": []})),
+        ],
+    )
+    assert [s["tool"] for s in run.steps] == ["unknown", "finish"]
+    assert "SECRETNAME" not in caplog.text and "asset model tool unknown ok=False" in caplog.text
