@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-DataItemType = Literal["image_set", "map", "elevation", "point_cloud", "drawing"]
+DataItemType = Literal["image_set", "map", "elevation", "point_cloud", "drawing", "asset_model"]
 DataItemStatus = Literal["importing", "ready", "failed"]
 
 

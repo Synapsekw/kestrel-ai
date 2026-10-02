@@ -152,12 +152,19 @@ def test_count_per_provider(handle):
     add_map(handle)
     with handle.session() as s:
         counts = {t: p.count(s) for t, p in PROVIDERS.items()}
-    assert counts == {"image_set": 1, "map": 1, "elevation": 0, "point_cloud": 0, "drawing": 0}
+    assert counts == {
+        "image_set": 1,
+        "map": 1,
+        "elevation": 0,
+        "point_cloud": 0,
+        "drawing": 0,
+        "asset_model": 0,
+    }
 
 
 @pytest.mark.parametrize("rows", [1, 25])
 def test_a_page_costs_one_statement_per_provider(client, handle, project_id, rows):
-    """Spec 14: <= 5 x (limit + 1) indexed rows, one query per provider, whatever the project holds."""
+    """Spec 14: <= 6 x (limit + 1) indexed rows, one query per provider, whatever the project holds."""
     for n in range(rows):
         add_map(handle, name=f"m{n}", created_at=at(n))
         add_image_set(handle, site=f"s{n}", created_at=at(n))
@@ -177,4 +184,4 @@ def test_a_page_costs_one_statement_per_provider(client, handle, project_id, row
         one = len(statements)
     finally:
         event.remove(handle.engine, "before_cursor_execute", record)
-    assert (full, one) == (5, 1)
+    assert (full, one) == (6, 1)

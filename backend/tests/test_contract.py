@@ -18,6 +18,7 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.asset_models.stubs import stub_operation_ids as asset_models_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -104,6 +105,10 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # Project setup (plan 2026-09-30-setup-u1): the STUBS lists of app/setup/routes_*.py (U2 templates, U3
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
+
+# Asset model builder (spec 2026-10-02): app/asset_models/stubs.py. Until U3 task 3b the models and
+# versions operations are stubbed too; U5 removes the run operations.
+EXPECTED_STUBS |= asset_models_stub_operation_ids()  # asset models U3; U5 removes
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
 # app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
