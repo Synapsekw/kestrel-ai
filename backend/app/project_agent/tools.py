@@ -1558,7 +1558,7 @@ REGISTRY: dict[str, Tool] = {
 }
 
 
-def _clean_schema(schema: dict) -> dict:
+def clean_schema(schema: dict) -> dict:
     """A self-contained JSON schema: `$defs` refs inlined, titles and discriminator hints dropped,
     `oneOf` emitted as `anyOf`."""
     defs = schema.get("$defs", {})
@@ -1589,9 +1589,12 @@ def _clean_schema(schema: dict) -> dict:
     return walk(schema)
 
 
+_clean_schema = clean_schema  # the old private name, kept for existing callers
+
+
 def tool_specs() -> list[ToolSpec]:
     return [
-        ToolSpec(t.name, t.description, _clean_schema(t.Args.model_json_schema())) for t in REGISTRY.values()
+        ToolSpec(t.name, t.description, clean_schema(t.Args.model_json_schema())) for t in REGISTRY.values()
     ]
 
 
