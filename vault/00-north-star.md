@@ -79,6 +79,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Reports (R): builder, live preview, render job with versions, templates, Data exports | merged/pushed to `main` (`07beeac..cd7c59d`); installer built (`8aead7b`), **not installed** | 13 units in parallel worktrees + R-X close-out; gate 5181 backend, 4065 frontend, 178 browser, cargo 8/8; frozen smoke renders a real report. See [[2026-10-01-2205-reports-wave]] |
 | Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); installed (`8aead7b`), operator walkthrough passed 2026-10-02 | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
+| M1 asset model builder (confined-space programme M1–M6) | merged 2026-10-02 (`914c4d5b`) | all 7 units green; frozen smoke `asset-models ok`; installer not built (app was running); HCl acceptance owed |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 [[2026-09-17-s1-dataset-backend]], [[2026-09-17-s2-annotation-ui]],
@@ -89,7 +90,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Point-cloud RAM admission at the measured plateau** (2026-10-02, `4a4e4d8d`, on `main`). The 842 M-point LNG cloud was refused at "39.0 GB needed"; PotreeConverter measured 10.3 GB peak on it, so the need is now min(45 MB/Mpt, 9 GB + 2.5 MB/Mpt) + 1 GiB (12.2 GB at 842 M). The installer was rebuilt from `4a4e4d8d` and **installed** (it supersedes `3c6b04bc` and still contains S1 and Reports; not the am-u1/am-u4 merges); the operator imported the cloud on it: "works great". See [[2026-10-02-1650-cloud-ram-admission]] and [[2026-10-02-gotcha-potreeconverter-ram-plateaus]].
+**Shipped last:** **M1 asset model builder** (2026-10-02, `1b392b1a..914c4d5b`, 7 unit merges on `main`, pushed). Asset models tab: Build with AI (Claude, OpenAI or Gemini) reads drawings, clouds and photos into a versioned part spec and a GLB; edit parts as new versions, compare and restore, download GLB/JSON; runs stop, draft and survive restarts. Frozen sidecar at `914c4d5b` passes smoke (`asset-models ok`); the installer was **not** built (`check-packaged-webview` refused while Kestrel AI was running). Walkthrough: `docs/evidence/2026-10-02-asset-model-m1/walkthrough.md`. See [[2026-10-02-2300-asset-model-builder-m1]] and [[2026-10-02-gotcha-shared-venv-install-while-python-runs]].
+
+Before that: **Point-cloud RAM admission at the measured plateau** (2026-10-02, `4a4e4d8d`, on `main`). The 842 M-point LNG cloud was refused at "39.0 GB needed"; PotreeConverter measured 10.3 GB peak on it, so the need is now min(45 MB/Mpt, 9 GB + 2.5 MB/Mpt) + 1 GiB (12.2 GB at 842 M). The installer was rebuilt from `4a4e4d8d` and **installed** (it supersedes `3c6b04bc` and still contains S1 and Reports; not the am-u1/am-u4 merges); the operator imported the cloud on it: "works great". See [[2026-10-02-1650-cloud-ram-admission]] and [[2026-10-02-gotcha-potreeconverter-ram-plateaus]].
 
 Before that: **Native icons on the brand gradient** (2026-10-02, `3c6b04bc`, on `main`). The desktop/taskbar icon moved from amber to the violet → teal `grad-brand`, matching the rail tile. The installer was rebuilt from `3c6b04bc` with a freshly frozen backend and **installed**; the operator confirmed the app opens. That build therefore contains S1 and Reports; neither walkthrough has been run on it yet. See [[2026-10-02-1441-native-icons-brand-gradient]].
 
@@ -125,6 +128,8 @@ Previously: **I/M/C wave complete on `main`** (2026-09-28, `4f68d13..ad4e548`, 1
 Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`4ebcac1..7c1200b`). See [[2026-09-27-2140-imc-wave-part-1]].
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
+
+**In flight (M1):** close Kestrel AI, build the installer from `main`, install, then the HCl acceptance (§5 Owed). The other session's artifact-port plan treats M1 as P0.
 
 **In flight:** nothing for Overview v2: the operator checked it on the installed `8aead7b` (2026-10-02, "all good, all working"). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
@@ -270,6 +275,13 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### M1 asset model builder (opened 2026-10-02)
+
+- **Installer:** not built from `914c4d5b` (the app was running). `pnpm -C frontend build:installer`, then install.
+- **Acceptance (spec §11):** needs the HCl GA drawing (P-00212-DW-MD-143TD1 rev 3) as `backend/tests/data/asset_models/hcl-tank-ga.pdf`; the live test's bearing/elevation table must be transcribed from `source_2/model_meta.json` first.
+- **Gemini:** default model id `gemini-2.5-pro` unconfirmed; one live Test in App settings.
+- **Known gaps:** DXF/LandXML drawings have no image view for the agent; compare is unsigned distance; 2 000-part validate is ~8 s synchronous; unsaved Part edits drop silently. Full deferred lists in `.superpowers/sdd/am-common/ledgers/` (git-ignored).
 
 ### Reports R (opened 2026-10-01)
 
