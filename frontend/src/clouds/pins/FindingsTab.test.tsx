@@ -11,7 +11,7 @@ import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtur
 import { baseRoutes, exampleFindingDetail, projectTypes, TYPE_SPALLING } from "@/test/findingFixtures";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { TestApiProvider } from "@/test/render";
-import { FindingsTab } from "./FindingsTab";
+import { FindingDetail, FindingsList, type FindingsTabProps } from "./FindingsTab";
 import { FLY_TO_DISTANCE_M } from "./flyTo";
 import type { CloudPinsState } from "./useCloudPins";
 import type { CloudPin } from "./types";
@@ -83,6 +83,8 @@ function mount(
     routes?: FakeRoute[];
     seams?: Partial<WorkspaceSeams>;
     maps?: GeoMap[];
+    /** Which half to render; both by default. */
+    only?: "list" | "detail";
   } = {},
 ) {
   const { api, requests } = fakeClient(
@@ -109,31 +111,51 @@ function mount(
   const onSelect = vi.fn();
   const onMovePin = vi.fn();
   const onNavigate = vi.fn();
-  render(
+  const props: FindingsTabProps = {
+    projectId: PROJECT_ID,
+    cloud: exampleCloud,
+    pins,
+    types,
+    selectedId: opts.selectedId ?? null,
+    onSelect,
+    viewer,
+    moving: null,
+    onMovePin,
+    onNavigate,
+    maps: opts.maps ?? [],
+  };
+  const { container } = render(
     <TestApiProvider api={api}>
       <MemoryRouter>
         <WorkspaceSeamsContext.Provider value={seams}>
-          <FindingsTab
-            projectId={PROJECT_ID}
-            cloud={exampleCloud}
-            pins={pins}
-            types={types}
-            selectedId={opts.selectedId ?? null}
-            onSelect={onSelect}
-            viewer={viewer}
-            moving={null}
-            onMovePin={onMovePin}
-            onNavigate={onNavigate}
-            maps={opts.maps ?? []}
-          />
+          {opts.only !== "detail" && <FindingsList {...props} />}
+          {opts.only !== "list" && <FindingDetail {...props} />}
         </WorkspaceSeamsContext.Provider>
       </MemoryRouter>
     </TestApiProvider>,
   );
-  return { requests, viewer, onSelect, onMovePin, onNavigate };
+  return { requests, viewer, onSelect, onMovePin, onNavigate, container };
 }
 
-describe("FindingsTab", () => {
+describe("FindingsList and FindingDetail", () => {
+  it("the list never renders F's inspector, even with a selection", async () => {
+    mount(state([pinA, pinB]), { selectedId: "f-a", only: "list" });
+    expect(screen.getByRole("list", { name: "Findings on this cloud" })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByTestId("cloud-anchor-slot")).toBeNull();
+  });
+
+  it("the detail renders F's inspector for the selected finding and no list", async () => {
+    mount(state([pinA, pinB]), { selectedId: "f-a", only: "detail" });
+    expect(await screen.findByTestId("cloud-anchor-slot")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Findings on this cloud" })).toBeNull();
+  });
+
+  it("the detail renders nothing without a selection", () => {
+    const { container } = mount(state([pinA, pinB]), { selectedId: null, only: "detail" });
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("lists the cloud's findings with number, location and status", () => {
     mount(state([pinA, pinB]));
     const list = screen.getByRole("list", { name: "Findings on this cloud" });

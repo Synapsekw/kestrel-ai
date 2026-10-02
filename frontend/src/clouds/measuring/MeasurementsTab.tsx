@@ -72,17 +72,18 @@ function Row({
   );
 }
 
-/** The Measurements tab (spec §8.5): this cloud's saved list, its details and "Copy all as CSV". */
-export function MeasurementsTab({
-  projectId,
-  cloud,
-  list,
-  onSelect,
-  onRetry,
-}: {
+interface MeasurementsTopicProps {
   projectId: string;
   cloud: PointCloud;
   list: CloudMeasurements;
+}
+
+/** The Measurements list (spec §8.5): this cloud's saved rows and "Copy all as CSV". */
+export function MeasurementsList({
+  list,
+  onSelect,
+  onRetry,
+}: MeasurementsTopicProps & {
   onSelect: (m: CloudMeasurement) => void;
   onRetry: (m: CloudMeasurement) => Promise<unknown>;
 }) {
@@ -126,15 +127,20 @@ export function MeasurementsTab({
           />
         ))}
       </ul>
-      {list.selected && (
-        <MeasurementDetails
-          key={list.selected.id}
-          projectId={projectId}
-          cloud={cloud}
-          m={list.selected}
-          list={list}
-        />
-      )}
     </div>
+  );
+}
+
+/** The selected measurement's details (spec §8.5), or nothing without a selection. */
+export function MeasurementDetail({ projectId, cloud, list }: MeasurementsTopicProps) {
+  if (!list.selected) return null;
+  return (
+    <MeasurementDetails
+      key={list.selected.id}
+      projectId={projectId}
+      cloud={cloud}
+      m={list.selected}
+      list={list}
+    />
   );
 }

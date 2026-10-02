@@ -116,7 +116,7 @@ function mount(active: CloudToolId, routes: FakeRoute[], wrap: (api: ApiClient) 
   const { api, requests } = fakeClient(routes);
   const viewer = fakeViewer();
   const seams: WorkspaceSeams = { requestViewCapture: vi.fn(), ReportViewCard: null, LikelyViews: null };
-  const showTab = vi.fn();
+  const showTopic = vi.fn();
   const restoreClipBox = vi.fn();
   let feature: WorkspaceFeature | null = null;
   let setViewState: (v: WorkspaceViewState) => void = () => undefined;
@@ -135,7 +135,7 @@ function mount(active: CloudToolId, routes: FakeRoute[], wrap: (api: ApiClient) 
       render: { colour: "rgb", elevationRange: [0, 1], pointSize: 1, budget: 3_000_000, edl: true },
       clipBox: null,
       arm: vi.fn(),
-      showTab,
+      showTopic,
       restoreClipBox,
     };
     const f = useMeasureFeature(ctx);
@@ -148,7 +148,8 @@ function mount(active: CloudToolId, routes: FakeRoute[], wrap: (api: ApiClient) 
         <HintBar entry={ENTRY[active]} tool={t} progress={null} onCancel={() => t?.onCancel?.()} />
         {f.layer}
         {f.floating}
-        {f.measurementsTab?.body}
+        {f.measure?.list}
+        {f.measure?.detail}
       </WorkspaceSeamsContext.Provider>
     );
   }
@@ -159,7 +160,7 @@ function mount(active: CloudToolId, routes: FakeRoute[], wrap: (api: ApiClient) 
     requests,
     viewer,
     seams,
-    showTab,
+    showTopic,
     restoreClipBox,
     tool,
     tap,
@@ -214,7 +215,7 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
       "section",
     ]);
     act(() => m.tool().onArm!());
-    expect(m.showTab).toHaveBeenCalledWith("measurements");
+    expect(m.showTopic).toHaveBeenCalledWith("measure");
   });
 
   it("area: four picks and Enter save the outline with its mode and view direction, then ask for a capture", async () => {

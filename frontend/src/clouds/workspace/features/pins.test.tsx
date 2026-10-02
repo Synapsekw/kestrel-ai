@@ -101,14 +101,15 @@ function Harness({ ctx }: { ctx: FeatureContext }) {
       <span data-testid="cancelled">{cancelled}</span>
       <span data-testid="tool">{`${tool.id} picks=${tool.picks} canCommit=${tool.canCommit}`}</span>
       <span data-testid="hint-actions">{String(tool.hintActions !== false)}</span>
-      <span data-testid="count">{f.findingsTab!.count}</span>
+      <span data-testid="count">{f.findings!.count}</span>
       <span data-testid="dots">{f.minimap!.length}</span>
       <span data-testid="marks">
         {JSON.stringify(f.minimap!.map((m) => (m.kind === "dot" ? [m.label, m.x, m.y] : null)))}
       </span>
       <div>{f.layer}</div>
       <div>{f.floating}</div>
-      <div>{f.findingsTab!.body}</div>
+      <div>{f.findings!.list}</div>
+      <div>{f.findings!.detail}</div>
     </div>
   );
 }
@@ -180,7 +181,7 @@ function mount(
     render: { colour: "rgb", elevationRange: [0, 1], pointSize: 1, budget: 3_000_000, edl: true },
     clipBox: null,
     arm: vi.fn(),
-    showTab: vi.fn(),
+    showTopic: vi.fn(),
     restoreClipBox: vi.fn(),
     ...over,
   };
@@ -258,7 +259,7 @@ describe("usePinsFeature", () => {
   it("selecting a finding opens the Findings tab; Delete asks, then deletes", async () => {
     const { requests, ctx } = mount({ activeTool: "orbit" });
     await userEvent.click(await findRow());
-    expect(ctx.showTab).toHaveBeenCalledWith("findings");
+    expect(ctx.showTopic).toHaveBeenCalledWith("findings");
     blur();
     await userEvent.keyboard("{Delete}");
     await userEvent.click(await screen.findByRole("button", { name: "Delete F-0217" }));

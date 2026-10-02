@@ -43,7 +43,7 @@ describe("useCamerasFeature", () => {
     expect(f.name).toBe("cameras");
     expect(f.tools?.map((t) => [t.id, t.picks])).toEqual([["photo", false]]);
     expect(isValidElement(f.layer) && f.layer.type).toBe(CloudCameras);
-    expect(isValidElement(f.cloudPanel) && f.cloudPanel.type).toBe(CamerasPanelRow);
+    expect(isValidElement(f.layersRow) && f.layersRow.type).toBe(CamerasPanelRow);
   });
 
   it("passes the armed tool and the route's search to the layer", () => {

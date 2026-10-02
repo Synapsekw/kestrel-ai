@@ -9,7 +9,7 @@ import type { CloudPick } from "@/clouds/CloudViewer";
 import { parseFinding } from "@/clouds/jump";
 import { reviewKeysLive } from "@/clouds/keys";
 import { locationLabel } from "@/clouds/pins/callout";
-import { FindingsTab } from "@/clouds/pins/FindingsTab";
+import { FindingDetail, FindingsList, type FindingsTabProps } from "@/clouds/pins/FindingsTab";
 import { PinCalloutCreate, PinCalloutView } from "@/clouds/pins/PinCallout";
 import { PinsLayer } from "@/clouds/pins/PinsLayer";
 import { NEUTRAL_PIN_COLOUR } from "@/clouds/pins/pinView";
@@ -149,7 +149,7 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   const select = useCallback(
     (id: string | null) => {
       setSel(id ? { cloudId: cloud.id, id } : null);
-      if (id) latest.current.showTab("findings");
+      if (id) latest.current.showTopic("findings");
     },
     [cloud.id],
   );
@@ -378,27 +378,27 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
     [pins.pins, scale],
   );
   const number = confirming ? formatFindingNumber(confirming.number) : "";
+  const findingsProps: FindingsTabProps = {
+    projectId,
+    cloud,
+    pins,
+    types,
+    selectedId,
+    onSelect: select,
+    viewer,
+    moving: tool.moving,
+    onMovePin,
+    onNavigate,
+    maps: ctx.maps,
+  };
 
   return {
     name: "pins",
     tools: [pinTool],
-    findingsTab: {
+    findings: {
       count: pins.total,
-      body: (
-        <FindingsTab
-          projectId={projectId}
-          cloud={cloud}
-          pins={pins}
-          types={types}
-          selectedId={selectedId}
-          onSelect={select}
-          viewer={viewer}
-          moving={tool.moving}
-          onMovePin={onMovePin}
-          onNavigate={onNavigate}
-          maps={ctx.maps}
-        />
-      ),
+      list: <FindingsList {...findingsProps} />,
+      detail: selectedPin ? <FindingDetail {...findingsProps} /> : null,
     },
     layer: (
       <PinsLayer

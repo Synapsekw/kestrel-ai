@@ -28,12 +28,8 @@ export interface FindingsTabProps {
   maps: GeoMap[];
 }
 
-/** Spec §9.4 "Findings tab": compact rows, then F's inspector for the selected one. */
-export function FindingsTab(p: FindingsTabProps) {
-  const selected = p.pins.pins.find((x) => x.id === p.selectedId) ?? null;
-  // Same predicate as `CloudWorkspace.tsx`'s `linkedMap` (T8-2): ready, georeferenced, and this cloud's map.
-  const linkedMap: GeoMap | null =
-    p.maps.find((m) => m.id === p.cloud.map_id && m.status === "ready" && m.proj4 && m.geotransform) ?? null;
+/** Spec §9.4 "Findings tab", the list half: compact rows (the rail's Findings panel). */
+export function FindingsList(p: FindingsTabProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="cloud-findings-tab">
       {p.pins.capNote && <p className="px-3 py-1 text-xs text-muted">{p.pins.capNote}</p>}
@@ -44,7 +40,7 @@ export function FindingsTab(p: FindingsTabProps) {
         </EmptyState>
       )}
       {p.pins.pins.length > 0 && (
-        <ul aria-label="Findings on this cloud" className="max-h-[40%] min-h-0 shrink-0 overflow-y-auto">
+        <ul aria-label="Findings on this cloud" className="min-h-0 flex-1 overflow-y-auto">
           {p.pins.pins.map((pin) => {
             const type = p.types.get(pin.typeId);
             const on = pin.id === p.selectedId;
@@ -75,36 +71,45 @@ export function FindingsTab(p: FindingsTabProps) {
           })}
         </ul>
       )}
-      {selected && (
-        <div className="min-h-0 flex-1 overflow-y-auto border-t border-line">
-          <FindingInspector
-            key={selected.id}
+    </div>
+  );
+}
+
+/** Spec §9.4, the detail half: F's inspector for the selected finding, or nothing without one. */
+export function FindingDetail(p: FindingsTabProps) {
+  const selected = p.pins.pins.find((x) => x.id === p.selectedId) ?? null;
+  if (!selected) return null;
+  // Same predicate as `CloudWorkspace.tsx`'s `linkedMap` (T8-2): ready, georeferenced, and this cloud's map.
+  const linkedMap: GeoMap | null =
+    p.maps.find((m) => m.id === p.cloud.map_id && m.status === "ready" && m.proj4 && m.geotransform) ?? null;
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <FindingInspector
+        key={selected.id}
+        projectId={p.projectId}
+        findingId={selected.id}
+        onNavigate={p.onNavigate}
+        anchorSlot={
+          <AnchorSlot
             projectId={p.projectId}
-            findingId={selected.id}
-            onNavigate={p.onNavigate}
-            anchorSlot={
-              <AnchorSlot
-                projectId={p.projectId}
-                cloud={p.cloud}
-                pin={selected}
-                view={p.pins.views.get(selected.id)}
-                viewer={p.viewer}
-                moving={p.moving === selected.id}
-                onMovePin={() => p.onMovePin(selected.id)}
-                map={linkedMap}
-              />
-            }
-            measureSlot={
-              <MeasureSlot
-                projectId={p.projectId}
-                cloudId={p.cloud.id}
-                findingId={selected.id}
-                viewer={p.viewer}
-              />
-            }
+            cloud={p.cloud}
+            pin={selected}
+            view={p.pins.views.get(selected.id)}
+            viewer={p.viewer}
+            moving={p.moving === selected.id}
+            onMovePin={() => p.onMovePin(selected.id)}
+            map={linkedMap}
           />
-        </div>
-      )}
+        }
+        measureSlot={
+          <MeasureSlot
+            projectId={p.projectId}
+            cloudId={p.cloud.id}
+            findingId={selected.id}
+            viewer={p.viewer}
+          />
+        }
+      />
     </div>
   );
 }

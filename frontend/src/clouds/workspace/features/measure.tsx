@@ -12,7 +12,7 @@ import type { CloudPick } from "@/clouds/CloudViewer";
 import { isGeographic } from "@/clouds/measure";
 import { MeasureHint } from "@/clouds/measuring/MeasureHint";
 import { MeasureLabel } from "@/clouds/measuring/MeasureLabel";
-import { MeasurementsTab } from "@/clouds/measuring/MeasurementsTab";
+import { MeasurementDetail, MeasurementsList } from "@/clouds/measuring/MeasurementsTab";
 import {
   centroidOf,
   createBody,
@@ -69,7 +69,7 @@ function savedLine(m: CloudMeasurement | null): SectionLine | null {
  * ReadyWorkspace above the seams provider.
  */
 export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
-  const { projectId, cloud, viewer, viewState, activeTool, seams, showTab, restoreClipBox } = ctx;
+  const { projectId, cloud, viewer, viewState, activeTool, seams, showTopic, restoreClipBox } = ctx;
   const api = useApi();
   const tool = useCloudTool();
   const { state, dispatch } = tool;
@@ -325,7 +325,7 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
   const tools: WorkspaceTool[] = MEASURE_TOOLS.map((id) => ({
     id,
     picks: true,
-    onArm: () => showTab("measurements"),
+    onArm: () => showTopic("measure"),
     onPick,
     onHover,
     hint: id === activeTool ? hint : undefined,
@@ -348,11 +348,12 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
   return {
     name: "measure",
     tools,
-    measurementsTab: {
-      body: (
-        <MeasurementsTab projectId={projectId} cloud={cloud} list={list} onSelect={choose} onRetry={retry} />
-      ),
+    measure: {
       count: list.loaded ? list.items.length : null,
+      list: (
+        <MeasurementsList projectId={projectId} cloud={cloud} list={list} onSelect={choose} onRetry={retry} />
+      ),
+      detail: list.selected ? <MeasurementDetail projectId={projectId} cloud={cloud} list={list} /> : null,
     },
     layer:
       labelText && anchor ? <MeasureLabel viewer={viewer} anchor={anchor} text={labelText} /> : undefined,

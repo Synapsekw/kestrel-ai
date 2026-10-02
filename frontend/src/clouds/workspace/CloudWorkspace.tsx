@@ -25,7 +25,7 @@ import { usePinsFeature } from "./features/pins";
 import { useReportViewsFeature } from "./features/reportViews";
 import { Gizmo } from "./ViewGizmo";
 import { HintBar } from "./HintBar";
-import { Inspector } from "./Inspector";
+import { Inspector, type InspectorTab, type TabContent } from "./Inspector";
 import { NOTICE_INSET } from "./layout";
 import { Minimap } from "./SiteMinimap";
 import { Palette } from "./Palette";
@@ -33,7 +33,7 @@ import { Readout } from "./Readout";
 import { LikelyViews as LikelyViewsSeam } from "@/clouds/cameras/LikelyViews";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "./seams";
 import { ENTRY, type CloudToolId } from "./tools";
-import type { FeatureContext, InspectorTab, RenderSettings } from "./types";
+import type { FeatureContext, RenderSettings, TopicContent } from "./types";
 import { useClipTool } from "./useClipTool";
 import { useCloudExports } from "./useCloudExports";
 import { useCloudList } from "./useCloudList";
@@ -132,7 +132,10 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
       render,
       clipBox: clip.box,
       arm: (id) => armRef.current(id),
-      showTab: setTab,
+      // Task 8 replaces this with the rail.
+      showTopic: (id) => {
+        if (id === "findings" || id === "measure") setTab(id === "measure" ? "measurements" : "findings");
+      },
       restoreClipBox: clip.restore,
     }),
     [projectId, cloud, maps, viewState, activeTool, location.search, seams, render, clip.box, clip.restore],
@@ -287,18 +290,33 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
             pointsShown={pointsShown}
           />
         )}
-        {features.cloudPanel.map((s) => (
+        {features.layersRows.map((s) => (
           <Fragment key={s.key}>{s.node}</Fragment>
         ))}
       </CloudPanel>
       <Inspector
         tab={tab}
         onTab={setTab}
-        findings={features.findingsTab}
-        measurements={features.measurementsTab}
-        findingsMenu={features.findingsMenu}
+        findings={asTab(features.findings)}
+        measurements={asTab(features.measure)}
+        findingsMenu={features.findings?.menu ?? []}
       />
     </WorkspaceSeamsContext.Provider>
+  );
+}
+
+/** Task 8 replaces this with the rail: a topic's list above its detail, as one inspector tab. */
+function asTab(t: TopicContent | null): TabContent | null {
+  return (
+    t && {
+      count: t.count,
+      body: (
+        <>
+          {t.list}
+          {t.detail}
+        </>
+      ),
+    }
   );
 }
 

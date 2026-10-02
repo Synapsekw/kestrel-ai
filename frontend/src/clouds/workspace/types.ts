@@ -6,10 +6,10 @@ import type { ColourMode } from "@/clouds/viewer/materialOptions";
 import type { MenuItem } from "@/ui";
 import type { WorkspaceSeams } from "./seams";
 import type { CloudToolId } from "./tools";
+import type { CloudTopicId } from "./topics";
 
 /** The viewer's report, or "starting" before its first one. */
 export type WorkspaceViewState = ViewState | "starting";
-export type InspectorTab = "findings" | "measurements";
 
 /** What the cloud panel sets and C-R1 records as `CloudViewRender`. */
 export interface RenderSettings {
@@ -61,14 +61,20 @@ export interface FeatureContext {
   /** The operator's clip box (null when none): R1's `render.clip_box`, P1's pin hiding. */
   clipBox: CloudClipBox | null;
   arm(id: CloudToolId): void;
-  showTab(tab: InspectorTab): void;
+  /** Opens a rail topic (the pins feature on a selection, a measure tool on arming). */
+  showTopic(id: CloudTopicId): void;
   /** Re-applies the operator's clip box, e.g. after M1's cross-section slab used the engine's box. */
   restoreClipBox(): void;
 }
 
-export interface TabContent {
-  body: ReactNode;
+/** What a feature shows for one rail topic (spec §2): a list in the panel, details in the inspector. */
+export interface TopicContent {
+  /** The rail panel's list (spec §2). */
+  list: ReactNode;
+  /** The selected item's details, shown in the inspector; null when nothing is selected. */
+  detail: ReactNode | null;
   count?: number | null;
+  menu?: readonly MenuItem[];
 }
 
 export type MinimapMark =
@@ -79,13 +85,14 @@ export type MinimapMark =
 export interface WorkspaceFeature {
   name: string;
   tools?: readonly WorkspaceTool[];
-  findingsTab?: TabContent;
-  measurementsTab?: TabContent;
+  findings?: TopicContent;
+  measure?: TopicContent;
+  /** Extra menu entries for the Findings topic (C-R1's "Capture missing views"). */
   findingsMenu?: readonly MenuItem[];
   /** Shown in the hint bar whatever the tool (R1's "Saving views n / N"). */
   hintProgress?: ReactNode;
-  /** A section at the bottom of the cloud panel (L1's camera switch). */
-  cloudPanel?: ReactNode;
+  /** A row at the bottom of the Layers topic (L1's camera switch). */
+  layersRow?: ReactNode;
   /** In the z 5 layer over the canvas; the host is pointer-events: none, children opt in. */
   layer?: ReactNode;
   /** In the z 12 layer (callout, profile panel, popovers); pointer-events: none on the host. */

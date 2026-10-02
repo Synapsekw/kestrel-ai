@@ -9,7 +9,7 @@ import { exampleFinding, FINDING_ID } from "@/test/findingFixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "../workspace/seams";
-import { MeasurementsTab } from "./MeasurementsTab";
+import { MeasurementDetail, MeasurementsList } from "./MeasurementsTab";
 import { useCloudMeasurements, type CloudMeasurements } from "./useCloudMeasurements";
 
 const base = {
@@ -72,8 +72,11 @@ function Harness({
   onReady,
   onSelect = vi.fn(),
   onRetry = vi.fn().mockResolvedValue(undefined),
+  only,
 }: {
   onReady(l: CloudMeasurements): void;
+  /** Which half to render; both by default. */
+  only?: "list" | "detail";
   onSelect?: (m: CloudMeasurement) => void;
   onRetry?: (m: CloudMeasurement) => Promise<unknown>;
 }) {
@@ -83,13 +86,16 @@ function Harness({
   });
   return (
     <WorkspaceSeamsContext.Provider value={seams}>
-      <MeasurementsTab
-        projectId={PROJECT_ID}
-        cloud={exampleCloud}
-        list={list}
-        onSelect={onSelect}
-        onRetry={onRetry}
-      />
+      {only !== "detail" && (
+        <MeasurementsList
+          projectId={PROJECT_ID}
+          cloud={exampleCloud}
+          list={list}
+          onSelect={onSelect}
+          onRetry={onRetry}
+        />
+      )}
+      {only !== "list" && <MeasurementDetail projectId={PROJECT_ID} cloud={exampleCloud} list={list} />}
     </WorkspaceSeamsContext.Provider>
   );
 }
@@ -123,6 +129,25 @@ function mount(
 
 describe("Measurements tab", () => {
   beforeEach(() => useChangesStore.setState({ pointcloudsRevision: 0 }));
+
+  it("the list shows rows and Copy all as CSV, never the selected row's details", async () => {
+    const { list } = mount([area], [], { only: "list" });
+    await screen.findByRole("button", { name: /Area 1/ });
+    expect(screen.getByRole("button", { name: "Copy all as CSV" })).toBeInTheDocument();
+    act(() => list().select("a1"));
+    await waitFor(() => expect(list().selectedId).toBe("a1"));
+    expect(screen.queryByRole("region", { name: "Details of Area 1" })).toBeNull();
+  });
+
+  it("the detail shows only the selected row's details, and nothing without a selection", async () => {
+    const { list } = mount([area], [], { only: "detail" });
+    await waitFor(() => expect(list().loaded).toBe(true));
+    expect(screen.queryByRole("region", { name: /^Details of/ })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Saved measurements" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy all as CSV" })).toBeNull();
+    act(() => list().select("a1"));
+    expect(await screen.findByRole("region", { name: "Details of Area 1" })).toBeInTheDocument();
+  });
 
   it("lists each measurement with its value, and a profile's state", async () => {
     const onRetry = vi.fn().mockResolvedValue(undefined);

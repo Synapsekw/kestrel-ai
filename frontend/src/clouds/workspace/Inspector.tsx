@@ -1,5 +1,12 @@
+import type { ReactNode } from "react";
 import { EmptyState, GlassPanel, MenuButton, Tabs, stagger, type MenuItem } from "@/ui";
-import type { InspectorTab, TabContent } from "./types";
+
+// Task 8 replaces this with the rail.
+export type InspectorTab = "findings" | "measurements";
+export interface TabContent {
+  body: ReactNode;
+  count?: number | null;
+}
 
 /**
  * The inspector (spec §6: right 14, top 14, bottom 204, width 330): Findings n | Measurements n,

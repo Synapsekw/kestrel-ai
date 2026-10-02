@@ -11,7 +11,7 @@ const PHOTO_TOOL: WorkspaceTool = { id: "photo", picks: false };
 
 /**
  * C-L1 (spec §10.2–10.4): the photo-link tool, the camera glyphs with their popover and the
- * `?from_image=` arrival (`layer`), and section (7) of the cloud panel (`cloudPanel`).
+ * `?from_image=` arrival (`layer`), and its row in the Layers topic (`layersRow`).
  *
  * `useCloudCameras` runs here rather than in the `layer` (controller Ruling 3): this feature is
  * always mounted with the ready workspace, but `layer` renders only while the view is running, so a
@@ -32,6 +32,6 @@ export function useCamerasFeature(ctx: FeatureContext): WorkspaceFeature {
         search={ctx.search}
       />
     ),
-    cloudPanel: <CamerasPanelRow projectId={ctx.projectId} cloud={ctx.cloud} />,
+    layersRow: <CamerasPanelRow projectId={ctx.projectId} cloud={ctx.cloud} />,
   };
 }
