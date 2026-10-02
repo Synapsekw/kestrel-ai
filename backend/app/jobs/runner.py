@@ -87,6 +87,9 @@ class JobRunner:
         # The app-wide catalogue (a CatalogueHandle), wired in the lifespan like `library`; None when
         # it could not be opened. The findings backfill reads it from here.
         self.catalogue = None
+        # The model-call seam for background agent jobs (asset_model_run), wired in the lifespan next
+        # to `app.state.agent_llm`; None when not wired (the job then fails with a fixed message).
+        self.agent_llm = None
 
     def start(self) -> None:
         self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="job")

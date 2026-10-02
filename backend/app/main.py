@@ -202,6 +202,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         app.state.agent = AgentRunner(app)
         app.state.agent_llm = agent_llm.complete
+        app.state.jobs.agent_llm = agent_llm.complete
         yield
         await app.state.agent.stop()
         try:
