@@ -17,6 +17,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.asset_models import store
+from app.asset_models.agent.guide import GUIDE
 from app.asset_models.build import build_meshes
 from app.asset_models.compare import CloudTransform, cloud_to_asset, compare
 from app.asset_models.look import LookError, LookImage
@@ -289,7 +290,7 @@ class UpsertParts:
         "host_missing, host_wrong_kind, host_self, reserved_id (part id 'world' is reserved), bad_geometry; "
         "warnings: overlap, assumed_high_confidence. elevation_mm is ABSOLUTE asset-frame height (Y), not "
         "relative to the host. Hosts are vertical: a mounted part ignores a host's own axis. A partial "
-        "sweep_deg starts at bearing 0 and runs anticlockwise in bearing terms (toward -Z)."
+        "sweep_deg starts at bearing 0 and runs anticlockwise in bearing terms (toward -Z). " + GUIDE
     )
 
     def run(self, ctx, a):

@@ -198,3 +198,19 @@ def test_get_spec_oversize_part_is_an_error_that_advances(ctx):
     object.__setattr__(ctx.spec.parts[0], "name", "n" * 9000)  # past the field limit, as a bypass
     out = run_tool(ctx, "get_spec", {"start": 0})
     assert not out.ok and "shell" in out.text and "start=1" in out.text
+
+
+def test_upsert_parts_description_carries_the_generated_field_guide():
+    from app.asset_models.agent.guide import GUIDE
+    from app.asset_models.agent.tools import TOOLS
+    from app.asset_models.spec import SHAPE_PARAMS, Part, Placement, Source
+
+    desc = TOOLS["upsert_parts"].description
+    assert GUIDE in desc and len(GUIDE) <= 2500
+    for shape, model in SHAPE_PARAMS.items():
+        assert f"{shape}: " in GUIDE
+        for field in model.model_fields:
+            assert field in GUIDE, (shape, field)
+    for model in (Part, Placement, Source):
+        for field in model.model_fields:
+            assert field in GUIDE, (model.__name__, field)
