@@ -126,9 +126,12 @@ change fades and rises 6px over `--dur-base`, with no exit animation.
 ## Workspaces
 
 Maps and Point clouds are full-bleed; Images has a browser, a canvas and an inspector. The canvas sits
-on `bg`. Every control over imagery floats as glass: the tool palette (`FloatingToolbar`, top left,
-tooltips "Box · B"), the zoom group (top right), the info bar, the hint bar (bottom centre), layer and
-type popovers (`Popover`, `Combobox`). The inspector (`InspectorPane`) is 340px on the right and stacks
+on `bg`. Maps and Point clouds share the workspace rail (`ui/WorkspaceRail`): navigation tools, then
+Layers · Findings · Measure, then the workspace's own topics; one 340px topic panel at a time (`\`
+toggles it); the inspector on the right shows only the selection. Every other control over imagery
+floats as glass: the Images tool palette (`FloatingToolbar`, top left, tooltips "Box · B"), the zoom
+group (top right), the info bar, the hint bar (bottom centre), layer and type popovers (`Popover`,
+`Combobox`). The inspector (`InspectorPane`) is 340px on the right and stacks
 below the content under 1100px. One keymap covers the app (`ui/keymap.ts`, spec §5.6): global keys,
 review keys (A accept, X reject, 1–9 severity, T type, Tab next), and per-workspace tool keys that never
 equal a global or review key; M always drops a finding marker, L always measures a length, D always runs

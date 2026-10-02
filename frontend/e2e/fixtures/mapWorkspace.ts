@@ -276,6 +276,19 @@ async function pressUntilPressed(page: Page, key: string, button: Locator): Prom
 }
 
 /**
+ * Opens the map rail's topic `name` (workspace rail spec §2) unless its panel already shows: a
+ * click on the open topic's button would close it. Layer rows live in the Layers topic, which is
+ * not the default when the project has data (Findings is).
+ */
+export async function openMapTopic(page: Page, name: string): Promise<void> {
+  const rail = page.getByRole("toolbar", { name: "Map" });
+  await expect(rail).toBeVisible();
+  const shown = page.locator(`[data-testid="rail-panel"][data-topic="${name.toLowerCase()}"]`);
+  if ((await shown.count()) === 0) await rail.getByRole("button", { name, exact: true }).click();
+  await expect(shown).toBeVisible();
+}
+
+/**
  * Arms the map tool `name` with its `key`, pressing until its button reads pressed. A key
  * pressed in the first moments after the workspace appears is not always bound yet, so a single
  * press can be lost.

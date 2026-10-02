@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { measureFrames } from "./frameTime";
-import { enableDiagnostics, P, serveMapWorkspace, SITE, sitePixel } from "./fixtures/mapWorkspace";
+import {
+  enableDiagnostics,
+  openMapTopic,
+  P,
+  serveMapWorkspace,
+  SITE,
+  sitePixel,
+} from "./fixtures/mapWorkspace";
 
 // The M-X e2e fixtures prove themselves once: the fake world opens the workspace with its layers,
 // the diagnostics hook maps a site coordinate to a pixel inside the map, and the frame sampler
@@ -17,7 +24,8 @@ test("the fake map world opens the workspace, places site coordinates and sample
   await expect(ws).toBeVisible();
   await expect(ws).toHaveAttribute("data-frame", "crs");
   await expect(page.getByTestId("coord-readout")).toContainText("EPSG:32633");
-  // Both orthos, both DSMs and the design surface are listed.
+  // Both orthos, both DSMs and the design surface are listed (in the rail's Layers topic).
+  await openMapTopic(page, "Layers");
   await expect(page.locator('[data-testid="layer-row"][data-kind="map"]').first()).toBeVisible();
   await expect(page.locator('[data-testid="layer-row"][data-kind="surface"]').first()).toBeVisible();
 

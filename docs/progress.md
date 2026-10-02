@@ -9,6 +9,27 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Workspace rail lands on the branch — 2026-10-02 (`task/workspace-rail`, plan Task 9)
+
+Plan `docs/superpowers/plans/2026-10-02-workspace-rail.md` (spec
+`docs/superpowers/specs/2026-10-02-workspace-rail-design.md`), Tasks 1–9 on `task/workspace-rail`,
+not yet merged. Maps and Point clouds share `ui/WorkspaceRail`: navigation tools, then
+Layers · Findings · Measure, then the workspace's own topics (map: AI, Drawings; cloud: Clip,
+Photos); one 340px topic panel (`\` toggles it); the inspector shows only the selection.
+
+**Task 9.** The last map e2e specs reach layer rows through the Layers topic (`openMapTopic` in
+`e2e/fixtures/mapWorkspace.ts`), drawing rows through Drawings; the new `e2e/workspace-rail.spec.ts`
+covers map finding create/list/select, the `\` toggle and tool-key topic follow, Align's single home,
+"Run on the whole map" from the AI topic (starts a run), and the cloud's Layers/Measure/Findings
+topics. A cloud finding row hidden behind a later measurement now comes forward on click instead of
+deselecting (`clouds/workspace/inspectorShows.ts`). `DESIGN.md` Workspaces and the map (§5) and cloud
+(§6) specs point at the rail spec.
+
+**Gate (worktree, Task 9 tree):** contract check ok; ruff check + format ok (954 files); pytest 5306
+passed, 17 skipped, 18 deselected (39:13); frontend lint (0 errors, 22 warnings) + tokens ok; vitest
+595 files / 4187 tests passed; build ok; e2e 185 passed, 8 skipped (ports 1520/4110, 1.3 m);
+real-backend maps spec 1 passed (1620/1621). `cargo test` skipped (no frozen sidecar in the worktree).
+
 ## Reports closes — 2026-10-01 (`task/r-x`, unit R-X)
 
 Sub-project R is merged (`main` at `ff443e5`, R10 included). R-X ran the full gate on the combined

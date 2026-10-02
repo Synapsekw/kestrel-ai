@@ -9,6 +9,7 @@ import {
   SEP,
   SITE,
   enableDiagnostics,
+  openMapTopic,
   serveMapWorkspace,
   sharedTiles,
   sitePixel,
@@ -124,17 +125,12 @@ test.beforeEach(async ({ page }) => {
 const layers = (page: Page) => page.getByTestId("layer-row");
 const railPanel = (page: Page) => page.getByTestId("rail-panel");
 
-/** Opens a topic from the map rail (workspace rail spec §2); layer rows live in the Layers topic. */
-async function openTopic(page: Page, name: string) {
-  await page.getByRole("toolbar", { name: "Map" }).getByRole("button", { name }).click();
-  await expect(railPanel(page)).toHaveAttribute("data-topic", name.toLowerCase());
-}
-
 /**
  * Show the Sep DSM (surface rows are hidden by default, R-DSM), wait for its Z readout, then hover
  * the site centre so the readout samples the fixture's elevation there.
  */
 async function showDsmAndHover(page: Page) {
+  await openMapTopic(page, "Layers");
   await page.getByRole("button", { name: "Show DSM 14 Sep" }).click();
   await expect(page.getByTestId("readout-z")).toBeVisible();
   const c = await sitePixel(page, SITE.cE, SITE.cN);
@@ -152,7 +148,7 @@ test("flow 1: two orthos aligned, swipe the divider, side-by-side mirrors the cr
   await page.goto(`/p/${P}/maps?l=${AUG}&r=${SEP}`);
   await expect(page.getByTestId("map-workspace")).toHaveAttribute("data-frame", "crs");
   await expect(page.getByTestId("coord-readout")).toContainText("EPSG:32633");
-  await openTopic(page, "Layers");
+  await openMapTopic(page, "Layers");
   await expect(layers(page).filter({ hasText: "14 Aug 2026" })).toBeVisible();
   await expect(layers(page).filter({ hasText: "14 Sep 2026" })).toBeVisible();
 
@@ -298,6 +294,7 @@ test("the retired viewer's address opens the workspace on that map", async ({ pa
 test("a map without coordinates is listed greyed and opens its evaluation view (§14)", async ({ page }) => {
   await serveMapWorkspace(page, { flatMap: true });
   await page.goto(`/p/${P}/maps`);
+  await openMapTopic(page, "Layers");
   const noCrs = page.getByTestId("layer-row").filter({ hasText: "no coordinates" });
   await expect(noCrs).toBeVisible();
   await noCrs.getByRole("link", { name: "open in evaluation view" }).click();

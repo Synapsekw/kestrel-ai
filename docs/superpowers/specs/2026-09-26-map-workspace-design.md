@@ -156,6 +156,8 @@ changes, M's plan adapts; M's own decisions do not change.
 
 ## 5. The workspace layout (the approved mockup, precisely)
 
+Layout superseded by [[2026-10-02-workspace-rail-design]].
+
 The route is `/p/:projectId/maps`, with the view state in the query string:
 
 - `?l=<date>&r=<date>&mode=single|swipe|side|blend&sel=<kind>:<id>`

@@ -157,6 +157,8 @@ S1 is complete in `frontend/src/clouds/`, `frontend/src/screens/CloudsScreen.tsx
 
 ## 6. Workspace layout (the approved mockup)
 
+Layout superseded by [[2026-10-02-workspace-rail-design]].
+
 `ws-clouds.html`, D9 Aero glass. The viewport (`.vp`) is `position: relative; flex: 1` below F's
 top bar (the project tabs hide on this full-bleed surface, F §5.2). The canvas fills it (`absolute; inset: 0`), and the renderer clear colour is the
 backdrop token. The layers, bottom to top:

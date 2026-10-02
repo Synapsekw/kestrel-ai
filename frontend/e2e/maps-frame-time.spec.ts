@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 import { entrancesDone, evidencePath } from "./evidence";
 import { measureFrames, pageEnvironment, type FrameStats } from "./frameTime";
-import { AUG, P, SEP, enableDiagnostics, serveMapWorkspace } from "./fixtures/mapWorkspace";
+import { AUG, P, SEP, enableDiagnostics, openMapTopic, serveMapWorkspace } from "./fixtures/mapWorkspace";
 
 // Spec M §13 "Frame budget" and §15 flow 7: pan and zoom in Swipe with 4 layers visible (two orthos,
 // the right DSM's hillshade, a drawing), and divider drags. Budget p95 ≤ 20 ms at effects Full,
@@ -97,11 +97,15 @@ test("flow 7: frame time in Swipe with 4 layers, while panning, zooming and drag
   await expect(divider(page)).toBeVisible();
   // Four visible layers: two orthos, the DSM hillshade, the drawing. Surface rows start hidden
   // (R-DSM), so the Sep DSM is switched on first.
-  for (const kind of ["map", "surface", "drawing"]) {
+  // Orthos and surfaces are rows of the rail's Layers topic, drawings of its Drawings topic.
+  await openMapTopic(page, "Layers");
+  for (const kind of ["map", "surface"]) {
     await expect(page.locator(`[data-testid="layer-row"][data-kind="${kind}"]`).first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Show DSM 14 Sep" }).click();
   await expect(page.getByRole("button", { name: "Hide DSM 14 Sep" })).toHaveAttribute("aria-pressed", "true");
+  await openMapTopic(page, "Drawings");
+  await expect(page.locator(`[data-testid="layer-row"][data-kind="drawing"]`).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide Site plan" })).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => world.tiles.some((t) => t.startsWith("surface/"))).toBe(true);
   await entrancesDone(page);

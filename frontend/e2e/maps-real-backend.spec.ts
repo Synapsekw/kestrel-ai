@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { drawSite, enableDiagnostics } from "./fixtures/mapWorkspace";
+import { drawSite, enableDiagnostics, openMapTopic } from "./fixtures/mapWorkspace";
 
 // Spec 2026-09-26-map-workspace §15 "then one real-backend flow": the real site frame, real warped
 // site tiles for two orthos in different extents, Swipe, and a distance the server computes on the
@@ -64,6 +64,7 @@ test("real backend: two orthos in one frame, Swipe, and a server-computed distan
   await page.goto(`/p/${pid}/maps?l=2026-08-14&r=2026-09-14`);
   await expect(page.getByTestId("coord-readout")).toContainText("EPSG:32633");
   expect((await tile).headers()["content-type"]).toContain("image/png");
+  await openMapTopic(page, "Layers");
   await expect(page.getByTestId("layer-row").filter({ hasText: "14 Aug 2026" })).toBeVisible();
   await expect(page.getByTestId("layer-row").filter({ hasText: "14 Sep 2026" })).toBeVisible();
 
