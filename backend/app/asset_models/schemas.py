@@ -104,3 +104,55 @@ class AssetModelVersionCreate(BaseModel):
 class AssetModelVersionWithJob(BaseModel):
     version: AssetModelVersionOut
     job: JobOut
+
+
+class AssetModelRunStepOut(BaseModel):
+    n: int
+    tool: str
+    ok: bool
+    summary: str
+    has_thumb: bool
+
+
+class AssetModelRunOut(BaseModel):
+    id: str
+    model_id: str
+    job_id: str
+    provider: Literal["openai", "anthropic", "gemini"]
+    model_name: str
+    mode: Literal["build", "refine"]
+    notes: str | None
+    state: Literal["running", "finished", "stopped", "failed"]
+    stop_reason: Literal["budget", "timeout", "user", "provider_error", "interrupted"] | None
+    phase: Literal["sampling", "reading", "building", "checking", "done"]
+    steps: list[AssetModelRunStepOut]
+    summary: str | None
+    open_questions: list[str]
+    usage: dict
+    sources: list[AssetSourceRef]
+    version: int | None
+    comparison: dict | None
+    started_at: datetime
+    ended_at: datetime | None
+
+    @classmethod
+    def of(cls, row) -> AssetModelRunOut:
+        return cls.model_validate(row, from_attributes=True)
+
+
+class AssetModelRunList(BaseModel):
+    items: list[AssetModelRunOut]
+
+
+class AssetModelRunStart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["build", "refine"]
+    sources: list[AssetSourceRef] = Field(min_length=1, max_length=50)
+    provider: Literal["openai", "anthropic", "gemini"]
+    model_name: str | None = Field(None, max_length=120)
+    notes: str | None = Field(None, max_length=4000)
+
+
+class AssetModelRunWithJob(BaseModel):
+    run: AssetModelRunOut
+    job: JobOut

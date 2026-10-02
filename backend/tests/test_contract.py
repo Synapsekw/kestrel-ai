@@ -18,7 +18,6 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
-from app.asset_models.stubs import stub_operation_ids as asset_models_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -106,8 +105,6 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
-# Asset model builder (spec 2026-10-02): the run operations of app/asset_models/stubs.py; U5 removes them.
-EXPECTED_STUBS |= asset_models_stub_operation_ids()  # asset models U3; U5 removes
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
 # app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
@@ -141,6 +138,7 @@ RETIRING: dict[str, str] = {}
 # S1, S2 and S3 add entries here and never loosen the test another way; each status must be
 # declared for its operation in openapi.yaml (guarded below).
 REFUSES_VALID_DATA: dict[str, set[int]] = {
+    "startAssetModelRun": {409, 422},  # provider_key_missing / job_running; no_sources / nothing_to_refine
     # S2 (plan deviation 14): a schema-valid build whose ids resolve can still be refused - a full
     # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
     # CRS-less cloud (`unsupported_crs`), a missing source (`source_missing`), a Z clip upside down

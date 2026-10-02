@@ -1,4 +1,4 @@
-"""Asset models and versions (spec §9). Runs are routed by `stubs.py` until U5."""
+"""Asset models and versions (spec §9). Runs live in `runs.py`."""
 
 from __future__ import annotations
 

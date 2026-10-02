@@ -143,12 +143,6 @@ def test_bad_spec_on_a_missing_model_is_404(client, base):
     assert r.status_code == 404
 
 
-def test_run_operations_are_501_until_u5(client, base):
-    m = create(client, base)
-    r = client.get(f"{base}/{m['id']}/runs")
-    assert r.status_code == 501
-
-
 def _seed_pending(handle, model_id, glb_job_id=None):
     from app.db.models import AssetModelVersion
 
