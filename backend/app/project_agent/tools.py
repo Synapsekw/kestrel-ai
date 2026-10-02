@@ -326,7 +326,10 @@ class GetProject(Tool):
                 ],
             },
             # Only whether a key exists: the key itself never leaves the credential store.
-            "cloud_providers": [{"name": p["name"], "has_key": bool(p["has_key"])} for p in providers],
+            # Gemini serves asset model runs only, so it is not a cloud-labeling provider.
+            "cloud_providers": [
+                {"name": p["name"], "has_key": bool(p["has_key"])} for p in providers if p["name"] != "gemini"
+            ],
         }
         return _ok(body, f"Read project {project['name']}")
 
