@@ -10,7 +10,7 @@ const GROUPS = ["drawings"] as const;
 export function DrawingsTopic({ rows, notInCompare, projectId, context }: MapTopicProps) {
   const ready = useAddDataReady(projectId);
   const tools = useTopicTools("drawings", context);
-  const count = rows.filter((r) => r.group === "drawings").length;
+  const count = rows.filter((r) => r.group === "drawings" && !r.unavailable).length;
   return (
     <TopicPanel
       title="Drawings"

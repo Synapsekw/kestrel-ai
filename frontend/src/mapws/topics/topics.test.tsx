@@ -172,6 +172,19 @@ describe("map topics", () => {
     expect(screen.queryByRole("menuitem", { name: /Align|Knock out white|Layers…/ })).toBeNull();
   });
 
+  it("Drawings counts only the drawings that are available, like Layers", () => {
+    renderTopic(DrawingsTopic, {
+      drawing: true,
+      rows: (rows) =>
+        rows.map((r) =>
+          r.group === "drawings"
+            ? { ...r, unavailable: { reason: "gone", href: "/", linkLabel: "Open" } }
+            : r,
+        ),
+    });
+    expect(screen.getAllByRole("heading", { name: "Drawings" })[0].nextElementSibling).toHaveTextContent("0");
+  });
+
   it("Layers: base and elevation only, one import menu without drawings", () => {
     renderTopic(LayersTopic, { drawing: true });
     expect(screen.queryByRole("region", { name: "Annotations" })).toBeNull();

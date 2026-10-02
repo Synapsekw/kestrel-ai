@@ -11,7 +11,8 @@ const alignDrawing: MapTool = {
   action: "align-drawing",
   hint: "Click a point on the drawing, then the same point on the map · Enter saves · Esc cancels a pending click · Backspace removes the last pair",
   draw: { shape: "point" },
-  // PF11: a raster drawing is selected from its row menu ("Align"); PF2: the row's contract `status`.
+  // Ruling R11: Align is armed from the Drawings tool row or the drawing inspector, on a selected
+  // drawing; the drawing row's menu has no Align. PF2: the row's contract `status`.
   disabledReason: ({ selection, layers }) => {
     if (selection?.kind !== "drawing") return "Choose a drawing first";
     const row = layers.find((l) => l.kind === "drawing" && l.id === selection.id);

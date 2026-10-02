@@ -1,10 +1,9 @@
 import { useEffect } from "react";
 import { useApi } from "@/api/client";
-import { useTools, useWorkspace, useWorkspaceStores } from "@/mapws/context";
+import { useWorkspace, useWorkspaceStores } from "@/mapws/context";
 import { ConfirmDeleteDialog } from "../layers/ConfirmDeleteDialog";
 import type { PanelProps } from "../panels/panelRegistry";
-import { ALIGN_TOOL_ID } from "./AlignOverlay";
-import { DELETE_CONFIRM, reimportDrawing, removeDrawing, toggleKnockout } from "./drawingActions";
+import { DELETE_CONFIRM, reimportDrawing, removeDrawing } from "./drawingActions";
 import { useDrawingUi } from "./drawingUi";
 import { useDrawingsStore } from "./drawingsStore";
 
@@ -17,7 +16,6 @@ export function DrawingDialogs({ projectId }: PanelProps) {
   const api = useApi();
   const { workspace } = useWorkspaceStores();
   const select = useWorkspace((s) => s.select);
-  const activate = useTools((s) => s.activate);
   const intent = useDrawingUi((s) => s.intent);
   const drawing = useDrawingsStore((s) => (intent ? (s.byId[intent.id] ?? null) : null));
 
@@ -25,14 +23,11 @@ export function DrawingDialogs({ projectId }: PanelProps) {
     if (!intent || intent.kind === "delete") return;
     useDrawingUi.getState().clear();
     const d = useDrawingsStore.getState().byId[intent.id];
-    if (intent.kind === "properties" || intent.kind === "align" || intent.kind === "layers")
-      select({ kind: "drawing", id: intent.id });
-    // Final review #4: K on a drawing that is not ready would sit active and dead (W1's activate
-    // does not consult disabledReason), so a not-ready drawing is only selected.
-    if (intent.kind === "align" && d?.status === "ready") activate(ALIGN_TOOL_ID);
-    if (intent.kind === "knockout" && d) void toggleKnockout(api, projectId, d);
+    // Spec §3.1: the row menu is Properties, Re-import and Delete; Align, Knock out white and the
+    // DXF layers live on the Drawings tool row and in the drawing inspector.
+    if (intent.kind === "properties") select({ kind: "drawing", id: intent.id });
     if (intent.kind === "reimport" && d) reimportDrawing(d);
-  }, [intent, select, activate, api, projectId]);
+  }, [intent, select]);
 
   if (intent?.kind !== "delete") return null;
   const close = () => useDrawingUi.getState().clear();

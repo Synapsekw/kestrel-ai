@@ -44,7 +44,8 @@ export function useMapRail(p: MapTopicProps & { hasBaseData: boolean }): {
 
   // Ruling R6: Side-by-side needs the left pane, so entering it closes the panel; leaving does not reopen it.
   const mode = useWorkspace((s) => s.mode);
-  const lastMode = useRef(mode);
+  // null on mount, so mounting straight into Side-by-side closes the panel too.
+  const lastMode = useRef<typeof mode | null>(null);
   useEffect(() => {
     if (mode === "side" && lastMode.current !== "side") store.getState().close();
     lastMode.current = mode;

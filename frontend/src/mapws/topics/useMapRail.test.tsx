@@ -10,8 +10,9 @@ import { useMapRail } from "./useMapRail";
 
 afterEach(() => localStorage.clear());
 
-function renderMapRail({ hasBaseData = true }: { hasBaseData?: boolean } = {}) {
+function renderMapRail({ hasBaseData = true, side = false }: { hasBaseData?: boolean; side?: boolean } = {}) {
   const stores = makeStores();
+  if (side) stores.workspace.getState().setMode("side");
   const layers = [layer("map", "m1", { date: "2026-09-14" })];
   const ctx: LayerRowsContext = {
     projectId: "p",
@@ -81,6 +82,12 @@ describe("useMapRail", () => {
     act(() => rail.getState().openTopic("layers"));
     act(() => workspace.getState().setMode("swipe"));
     expect(rail.getState().open).toBe(true);
+  });
+
+  it("mounting straight into Side-by-side closes the panel too (R6)", () => {
+    const { workspace, rail } = renderMapRail({ side: true });
+    expect(workspace.getState().mode).toBe("side");
+    expect(rail.getState().open).toBe(false);
   });
 
   it("defaults to Layers when the project has no base data", () => {

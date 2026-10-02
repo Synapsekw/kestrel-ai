@@ -116,7 +116,9 @@ test.describe("map", () => {
     await expect(panel).toHaveAttribute("data-topic", "measure");
   });
 
-  test("Align lives only in the drawing inspector, not the drawing row's menu", async ({ page }) => {
+  test("the drawing row's menu has no Align (it is on the Drawings tool row and the inspector)", async ({
+    page,
+  }) => {
     const world = await serveMapWorkspace(page);
     world.drawings.push({
       id: "d0000000-9999-4000-8000-0000000000fe",

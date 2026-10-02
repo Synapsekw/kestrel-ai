@@ -3,7 +3,7 @@ import "@/mapws/plugins";
 import type { MapFindingPin } from "@/api/mapFindings";
 import { useWorkspace } from "../context";
 import { useMapFindingsStore } from "../findings/store";
-import { layerRegistry, type LayerRowsContext } from "../layers/layerRegistry";
+import { layerRegistry, type LayerRow, type LayerRowsContext } from "../layers/layerRegistry";
 import { makeStores, renderInWorkspace } from "../test/harness";
 import { UTM33, layer } from "../test/fixtures";
 import type { ToolContext } from "../tools/toolStore";
@@ -12,6 +12,8 @@ import type { MapTopicProps } from "./types";
 export interface TopicOpts {
   findings?: { id: string; number: number; severity?: number | null }[];
   drawing?: boolean;
+  /** Adjusts the registered rows before the topic sees them. */
+  rows?: (rows: LayerRow[]) => LayerRow[];
 }
 
 const pin = (f: { id: string; number: number; severity?: number | null }): MapFindingPin => ({
@@ -39,7 +41,8 @@ export function renderTopic(Topic: ComponentType<MapTopicProps>, opts: TopicOpts
     layers,
     surveys: stores.workspace.getState().surveys,
   };
-  const rows = layerRegistry.all().flatMap((k) => k.rows(ctx));
+  const all = layerRegistry.all().flatMap((k) => k.rows(ctx));
+  const rows = opts.rows ? opts.rows(all) : all;
   function Host() {
     const selection = useWorkspace((s) => s.selection);
     const surveys = useWorkspace((s) => s.surveys);
