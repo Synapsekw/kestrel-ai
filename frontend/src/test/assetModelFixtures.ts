@@ -104,3 +104,25 @@ export const RUN: AssetModelRun = {
   started_at: "2026-10-02T08:40:00Z",
   ended_at: "2026-10-02T08:58:00Z",
 };
+
+/** A finished build that wrote v1: two steps, a summary and one open question. */
+export const RUN_FINISHED: AssetModelRun = {
+  ...RUN,
+  id: "run1",
+  job_id: "jr1",
+  mode: "build",
+  notes: "N7 is at 270°, not 90°",
+  phase: "done",
+  steps: [
+    { n: 1, tool: "read_drawing", ok: true, summary: "Read the GA drawing.", has_thumb: false },
+    { n: 2, tool: "write_spec", ok: true, summary: "Wrote the shell and nozzles.", has_thumb: true },
+  ],
+  summary: "Built the shell and nozzles.",
+  open_questions: ["Roof type?"],
+  usage: { input_tokens: 9000, output_tokens: 500 },
+  sources: [{ type: "drawing", id: "d1" }],
+  version: 1,
+  comparison: null,
+  started_at: "2026-10-01T09:40:00Z",
+  ended_at: "2026-10-01T09:58:00Z",
+};

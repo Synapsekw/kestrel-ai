@@ -11,6 +11,12 @@ import { createVersion, listRuns, restoreVersion } from "@/api/assetModels";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { groupParts } from "@/assetmodels/groups";
+import { BuildBar } from "@/assetmodels/run/BuildBar";
+import { RunProgressCard } from "@/assetmodels/run/RunProgressCard";
+import { RunTab } from "@/assetmodels/run/RunTab";
+import { stopReasonText } from "@/assetmodels/run/runText";
+import { endedEarly, runEndToast } from "@/assetmodels/run/runView";
+import { useLiveRun } from "@/assetmodels/run/useLiveRun";
 import { useAssetModelList, useVersionDetail, useVersions } from "@/assetmodels/useAssetModels";
 import type { ModelPart, ModelView } from "@/assetmodels/viewer/engine";
 import { ModelViewer, type ModelViewerHandle, type ModelViewState } from "@/assetmodels/viewer/ModelViewer";
@@ -26,6 +32,7 @@ import {
   MenuButton,
   Progress,
   Skeleton,
+  claimJobOutcome,
   stagger,
   toast,
   useToolShortcuts,
@@ -50,7 +57,7 @@ const comparisonOf = (run: AssetModelRun) => run.comparison as unknown as Compar
 /** The notice band: between the model panel and the inspector, below the Download button. */
 const NOTICE_STYLE = { left: NOTICE_INSET.left, right: NOTICE_INSET.right, top: NOTICE_INSET.top } as const;
 
-/** The model's runs. Until the runs unit lands the backend answers 501: that, like any failure, is "no runs". */
+/** The model's runs, newest first. A failing read (a 501 from an older backend, say) is "no runs". */
 function useRuns(projectId: string, modelId: string) {
   const api = useApi();
   const [loaded, setLoaded] = useState<{ key: string; runs: AssetModelRun[] } | null>(null);
@@ -63,7 +70,12 @@ function useRuns(projectId: string, modelId: string) {
   }, [api, projectId, modelId, key]);
   useEffect(reload, [reload]);
   useOnJobsFinished("asset_model_run", reload);
-  return loaded?.key === key ? loaded.runs : [];
+  const runs = useMemo(
+    () =>
+      loaded?.key === key ? [...loaded.runs].sort((a, b) => b.started_at.localeCompare(a.started_at)) : [],
+    [loaded, key],
+  );
+  return { runs, reload };
 }
 
 function CentreCard({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
@@ -222,7 +234,77 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
 
   // Runs: the scan overlay and the Part tab's deviation come from the latest run of this version
   // that compared it with a cloud.
-  const runs = useRuns(projectId, model.id);
+  const { runs, reload: reloadRuns } = useRuns(projectId, model.id);
+
+  // The live run: the model's own (on load or after a reload), else the one this screen just started.
+  const [started, setStarted] = useState<AssetModelRun | null>(null);
+  const liveRunId = model.live_run_id ?? started?.id ?? null;
+  const live = useLiveRun(projectId, model.id, liveRunId);
+  const liveRun = live.run ?? (started && started.id === liveRunId ? started : null);
+  const runningRun = liveRun?.state === "running" ? liveRun : null;
+  /** Runs seen running here: only their end gets this screen's toast (not a run already over on load). */
+  const seenRunning = useRef(new Set<string>());
+  /**
+   * Job outcome claims (job id → release) for runs this screen follows: the screen's own toast names
+   * the version, so the global job toast stays quiet. A run whose end was reported keeps its claim; one
+   * still running when the screen goes releases it, so the global toast reports it instead.
+   */
+  const claims = useRef(new Map<string, () => void>());
+  const follow = useCallback((r: AssetModelRun) => {
+    seenRunning.current.add(r.id);
+    if (!claims.current.has(r.job_id)) claims.current.set(r.job_id, claimJobOutcome(r.job_id));
+  }, []);
+  useEffect(() => {
+    const held = claims.current;
+    return () => {
+      for (const release of held.values()) release();
+      held.clear();
+    };
+  }, []);
+  useEffect(() => {
+    if (!liveRun) return;
+    if (liveRun.state === "running") {
+      follow(liveRun);
+      return;
+    }
+    if (!seenRunning.current.delete(liveRun.id)) return;
+    claims.current.delete(liveRun.job_id);
+    const { tone, text } = runEndToast(liveRun);
+    toast(tone, text);
+    reloadVersions();
+    reloadRuns();
+    onModelChanged();
+  }, [liveRun, follow, reloadVersions, reloadRuns, onModelChanged]);
+  const onRunStarted = (r: AssetModelRun) => {
+    setStarted(r);
+    follow(r);
+    reloadRuns();
+  };
+  const stopLiveRun = () => {
+    live.stop().catch((e: unknown) => toast("danger", messageOf(e, "The run could not be stopped.")));
+  };
+  // The latest ended run: the bar says why it stopped and offers Try again.
+  const lastEnded = (liveRun && liveRun.state !== "running" ? liveRun : null) ?? runs[0] ?? null;
+  const buildBar = (
+    <BuildBar
+      projectId={projectId}
+      model={model}
+      onStarted={onRunStarted}
+      run={runningRun}
+      onStop={stopLiveRun}
+      stopping={live.stopping}
+      lastRun={lastEnded}
+      loading={liveRunId !== null && !liveRun && !live.error}
+      error={live.error}
+    />
+  );
+  // The Run tab shows the live run as polled, ahead of the list's copy.
+  const tabRuns = useMemo(() => {
+    if (!liveRun) return runs;
+    const rest = runs.filter((r) => r.id !== liveRun.id);
+    return [liveRun, ...rest].sort((a, b) => b.started_at.localeCompare(a.started_at));
+  }, [runs, liveRun]);
+
   const overlayRun = useMemo(
     () =>
       runs
@@ -348,16 +430,23 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     return (
       <>
         {panel}
-        <CentreCard testId="model-no-version" title="No version yet">
-          <p className="text-sm text-muted">
-            {model.name} has no 3D model yet. Each build or edit saves a version, and the first one opens
-            here.
-          </p>
-        </CentreCard>
+        {runningRun ? (
+          <RunProgressCard projectId={projectId} model={model} run={runningRun} />
+        ) : (
+          <CentreCard testId="model-no-version" title="No version yet">
+            <p className="text-sm text-muted">
+              {lastEnded && endedEarly(lastEnded)
+                ? `${stopReasonText(lastEnded)}. Try again from the bar below, or pick other sources.`
+                : `${model.name} has no 3D model yet. Each build or edit saves a version, and the first one opens here.`}
+            </p>
+          </CentreCard>
+        )}
         <div
           data-testid="model-build-slot"
           className="pointer-events-none absolute bottom-3.5 left-[72px] right-[358px] z-10"
-        />
+        >
+          {buildBar}
+        </div>
       </>
     );
 
@@ -481,12 +570,15 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
             onRetry={reloadVersions}
           />
         }
+        runTab={<RunTab projectId={projectId} model={model} runs={tabRuns} onStarted={onRunStarted} />}
       />
-      {/* U7 mounts the Build bar here; empty, it lets the pointer through to the view. */}
+      {/* The strip lets the pointer through to the view; the bar takes it back on itself. */}
       <div
         data-testid="model-build-slot"
         className="pointer-events-none absolute bottom-3.5 left-[72px] right-[358px] z-10"
-      />
+      >
+        {buildBar}
+      </div>
     </>
   );
 }

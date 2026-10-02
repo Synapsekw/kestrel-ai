@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
-import { MODEL, RUN, SPEC_V1, SPEC_V2, VERSION_1, VERSION_2 } from "@/test/assetModelFixtures";
+import { MODEL, RUN, RUN_FINISHED, SPEC_V1, SPEC_V2, VERSION_1, VERSION_2 } from "@/test/assetModelFixtures";
 import { useToastStore } from "@/ui";
 
 vi.mock("@/assetmodels/viewer/ModelViewer", async () => ({
@@ -408,5 +408,188 @@ describe("AssetModelWorkspace", () => {
     expect(callsTo("setLevels")).toEqual([[false]]);
     expect(callsTo("setHeadOff")).toEqual([[false]]);
     expect(callsTo("select")).toEqual([["N7"]]);
+  });
+  describe("runs", () => {
+    const LIVE = {
+      ...RUN_FINISHED,
+      id: "r1",
+      job_id: "jr1",
+      state: "running",
+      phase: "building",
+      ended_at: null,
+      version: null,
+      summary: null,
+      open_questions: [],
+    };
+    const liveModel = { ...MODEL, live_run_id: "r1" };
+    const liveRoutes = (extra: unknown[] = []) => [
+      ...extra,
+      { method: "GET", path: /\/asset-models$/, body: { items: [liveModel] } },
+      { method: "GET", path: /\/runs\/r1$/, body: LIVE },
+    ];
+
+    it("the Build bar follows a live run and Stop stops it", async () => {
+      const { requests } = open(
+        liveRoutes([
+          {
+            method: "POST",
+            path: /\/runs\/r1\/stop$/,
+            body: { ...LIVE, state: "stopped", stop_reason: "user", ended_at: "2026-10-02T10:00:00Z" },
+          },
+        ]),
+      );
+      const bar = await screen.findByTestId("model-build-bar");
+      expect(await within(bar).findByText("Building")).toBeInTheDocument();
+      expect(within(bar).getByText(/step 2 of 80/i)).toBeInTheDocument();
+      expect(within(bar).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
+      expect(within(bar).getByRole("img", { name: /step 2/i })).toHaveAttribute(
+        "src",
+        expect.stringMatching(/\/runs\/r1\/steps\/2\/thumb\?token=t$/),
+      );
+      fireEvent.click(within(bar).getByRole("button", { name: /^stop$/i }));
+      await waitFor(() =>
+        expect(requests.some((r) => r.method === "POST" && /\/runs\/r1\/stop$/.test(r.url))).toBe(true),
+      );
+      await waitFor(() =>
+        expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("Stopped by you"),
+      );
+      expect(await within(bar).findByRole("button", { name: /build with ai/i })).toBeInTheDocument();
+    });
+
+    it("a failed stop says why and keeps the run", async () => {
+      open(
+        liveRoutes([
+          {
+            method: "POST",
+            path: /\/runs\/r1\/stop$/,
+            status: 500,
+            body: { error: { code: "internal", message: "Boom.", details: {} } },
+          },
+        ]),
+      );
+      const bar = await screen.findByTestId("model-build-bar");
+      fireEvent.click(await within(bar).findByRole("button", { name: /^stop$/i }));
+      await waitFor(() => expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("Boom."));
+      expect(within(bar).getByRole("button", { name: /^stop$/i })).toBeInTheDocument();
+    });
+
+    it("a run that finishes says which version it built", async () => {
+      open(
+        liveRoutes([
+          {
+            method: "POST",
+            path: /\/runs\/r1\/stop$/,
+            body: { ...LIVE, state: "finished", phase: "done", version: 3, ended_at: "2026-10-02T10:00:00Z" },
+          },
+        ]),
+      );
+      const bar = await screen.findByTestId("model-build-bar");
+      fireEvent.click(await within(bar).findByRole("button", { name: /^stop$/i }));
+      await waitFor(() =>
+        expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("Built version 3"),
+      );
+    });
+
+    it("without a version, a live run replaces the empty card with its progress", async () => {
+      open(
+        liveRoutes([
+          {
+            method: "GET",
+            path: /\/asset-models$/,
+            body: { items: [{ ...liveModel, current_version: null }] },
+          },
+          { method: "GET", path: /\/asset-models\/m1\/versions$/, body: { items: [] } },
+        ]),
+      );
+      expect(await screen.findByTestId("model-run-progress")).toHaveTextContent(/step 2 of 80/i);
+      expect(screen.queryByTestId("model-no-version")).not.toBeInTheDocument();
+    });
+
+    it("Build with AI… starts a run and the bar follows it", async () => {
+      const providers = {
+        items: [
+          {
+            name: "anthropic",
+            model_name: "claude-opus-5-5",
+            has_key: true,
+            requests_per_minute: 30,
+            cost_per_request: 0,
+          },
+        ],
+      };
+      const { requests } = open([
+        { method: "GET", path: /\/providers$/, body: providers },
+        {
+          method: "GET",
+          path: /\/data$/,
+          body: {
+            items: [
+              {
+                id: "d1",
+                type: "drawing",
+                label: "GA drawing",
+                status: "ready",
+                captured_on: null,
+                created_at: "2026-10-01T09:00:00Z",
+                summary: {},
+              },
+            ],
+            next_cursor: null,
+          },
+        },
+        { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
+        {
+          method: "POST",
+          path: /\/asset-models\/m1\/runs$/,
+          status: 202,
+          body: { run: LIVE, job: { id: "jr1", type: "asset_model_run", state: "queued" } },
+        },
+        { method: "GET", path: /\/runs\/r1$/, body: LIVE },
+      ]);
+      const bar = await screen.findByTestId("model-build-bar");
+      fireEvent.click(within(bar).getByRole("button", { name: /build with ai/i }));
+      const dialog = await screen.findByRole("dialog", { name: /build with ai/i });
+      fireEvent.click(await within(dialog).findByRole("checkbox", { name: /ga drawing/i }));
+      await waitFor(() => expect(within(dialog).getByRole("button", { name: /start build/i })).toBeEnabled());
+      fireEvent.click(within(dialog).getByRole("button", { name: /start build/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(requests.some((r) => r.method === "POST" && /\/runs$/.test(r.url))).toBe(true);
+      expect(await within(bar).findByRole("button", { name: /^stop$/i })).toBeInTheDocument();
+    });
+
+    it("after a stopped run the bar gives its reason and Try again reopens it prefilled", async () => {
+      const stopped = {
+        ...RUN_FINISHED,
+        id: "r0",
+        mode: "refine",
+        state: "stopped",
+        stop_reason: "budget",
+        provider: "anthropic",
+        model_name: "claude-opus-5-5",
+        notes: "N7 is at 270°, not 90°",
+        version: 3,
+        started_at: "2026-10-02T11:00:00Z",
+      };
+      open([
+        { method: "GET", path: /\/asset-models\/m1\/runs$/, body: { items: [stopped, RUN] } },
+        { method: "GET", path: /\/providers$/, body: { items: [] } },
+      ]);
+      const bar = await screen.findByTestId("model-build-bar");
+      expect(await within(bar).findByText(/stopped: the run used its budget/i)).toBeInTheDocument();
+      expect(within(bar).getByText(/saved a draft as version 3/i)).toBeInTheDocument();
+      fireEvent.click(within(bar).getByRole("button", { name: /try again/i }));
+      const dialog = await screen.findByRole("dialog", { name: /refine with ai/i });
+      expect(within(dialog).getByLabelText(/notes/i)).toHaveValue("N7 is at 270°, not 90°");
+      expect(within(dialog).getByLabelText(/^model$/i)).toHaveValue("claude-opus-5-5");
+      expect(within(dialog).getByRole("button", { name: /start refine/i })).toBeInTheDocument();
+    });
+
+    it("the Run tab shows the latest run", async () => {
+      open([{ method: "GET", path: /\/asset-models\/m1\/runs$/, body: { items: [RUN] } }]);
+      await screen.findByTestId("model-workspace");
+      fireEvent.click(await screen.findByRole("tab", { name: /^run$/i }));
+      const panel = await screen.findByRole("tabpanel", { name: /run/i });
+      expect(await within(panel).findByText(RUN.summary!)).toBeInTheDocument();
+    });
   });
 });
