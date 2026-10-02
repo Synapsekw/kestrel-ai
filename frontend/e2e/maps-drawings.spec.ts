@@ -11,7 +11,8 @@ import {
 
 // Spec M §15 flow 2: a DXF placed by its CRS and a PDF placed with three control points; the RMSE
 // shows, "Save placement" sends the pairs, and the overlay re-renders at the new georef version.
-// Selectors: task-1-inventory.md and ruling R-P5 (the drawing import, the row menu's "Align").
+// Selectors: task-1-inventory.md and ruling R-P5 (the drawing import). Align has one home (workspace
+// rail spec §3.1): the row menu's "Properties" selects the drawing, then the Align tool starts it.
 
 test.beforeEach(async ({ page }) => {
   await enableDiagnostics(page);
@@ -53,15 +54,14 @@ async function importPdf(page: Page, world: MapWorld): Promise<{ row: Locator; i
   return { row, id: String(world.drawings.find((d) => d.format === "pdf")!.id) };
 }
 
-/** The row menu's "Align" selects the drawing and arms the tool (a row click selects nothing). */
+/** The row menu's "Properties" selects the drawing; the Align tool then arms (a row click selects nothing). */
 async function alignFromRowMenu(page: Page, row: Locator, id: string) {
   await row.getByRole("button", { name: /actions$/ }).click();
-  await page.getByRole("menuitem", { name: /^Align/ }).click();
+  await page.getByRole("menuitem", { name: "Properties" }).click();
   await expect(page.getByTestId("map-inspector")).toHaveAttribute("data-sel", `drawing:${id}`);
-  await expect(page.getByRole("button", { name: "Align drawing", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  const align = page.getByRole("button", { name: "Align drawing", exact: true });
+  await align.click();
+  await expect(align).toHaveAttribute("aria-pressed", "true");
 }
 
 const PENDING = "Now click the same point on the map.";
@@ -83,7 +83,7 @@ test("flow 2: a DXF by CRS, a PDF by three control points, RMSE, save, overlay",
   const pdf = await importPdf(page, world);
   await expect(page.getByRole("button", { name: "Align drawing — Choose a drawing first" })).toBeDisabled();
   await alignFromRowMenu(page, pdf.row, pdf.id);
-  // F1 (task-8-report.md): the menu's "Align" starts the session straight away, with no second K.
+  // F1 (task-8-report.md): starting the Align tool starts the session straight away, with no second K.
   // Save placement shows only in a session, and stays disabled until the pairs fit.
   const inspector = page.getByTestId("map-inspector");
   await expect(inspector.getByRole("button", { name: "Save placement" })).toBeDisabled();

@@ -8,6 +8,7 @@ import { useWorkspace } from "../context";
 import { bumpWorkspaceData } from "../data/useRasterLayers";
 import type { PanelProps } from "../panels/panelRegistry";
 import { canCompare } from "../state/surveys";
+import { SurveyScope } from "./SurveyScope";
 import { buildTicks, clickTick, formatSurveyDate, rangeText, summaryText, type Tick } from "./timelineModel";
 
 const pct = (x: number) => `${(x * 100).toFixed(3)}%`;
@@ -62,6 +63,7 @@ export function TimelineScrubber({ projectId }: PanelProps) {
             <span className="ml-auto font-mono text-2xs tabular-nums text-muted">
               {rangeText(pair, comparing)}
             </span>
+            <SurveyScope />
           </div>
           <div className="relative mx-2 h-7" data-testid="timeline-track">
             <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-chip bg-surface-2" />

@@ -61,10 +61,9 @@ function setup() {
 describe("row-menu dialogs (M §5.2)", () => {
   beforeEach(() => useRasterActions.getState().clear());
 
-  it("menus: maps get date, run, evaluate and delete; only dem surfaces get date and role", () => {
+  it("menus: maps get date, evaluate and delete (Run AI is in the AI topic); only dem surfaces get date and role", () => {
     expect(rasterMenu(ortho).map((i) => i.label)).toEqual([
       "Set survey date",
-      "Run AI on the whole map",
       "Open in evaluation view",
       "Delete map",
     ]);
@@ -99,9 +98,9 @@ describe("row-menu dialogs (M §5.2)", () => {
     });
   });
 
-  it("opens RunDialog for the map and navigates to the evaluation view", async () => {
+  it("opens RunDialog for the map (the AI topic asks) and navigates to the evaluation view", async () => {
     setup();
-    choose(ortho, "run");
+    act(() => useRasterActions.getState().request({ type: "run", row: ortho }));
     expect(screen.getByText("run dialog for sep")).toBeInTheDocument();
     choose(ortho, "evaluate");
     await waitFor(() =>

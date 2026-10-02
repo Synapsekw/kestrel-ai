@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { Checkbox, Field, Select, Switch, useSeverityScale } from "@/ui";
+import { Checkbox, Field, Select, useSeverityScale } from "@/ui";
 import type { LayerRowExtraProps } from "@/mapws/annotations/bindings";
 import { useMapFindingsStore } from "./store";
 import { findingFilters, findingsMeta, visibleFindings } from "./tooltip";
@@ -10,7 +10,7 @@ const STATUSES = [
   { value: "closed", label: "Closed" },
 ] as const;
 
-/** The Findings row's live count and filters (W3-9, W3-13, W3-19). */
+/** The Findings row's live count and filters (W3-9, W3-13, W3-19); the survey scope is on the timeline. */
 export function FindingsRowExtra({ style, setStyle }: LayerRowExtraProps) {
   const f = findingFilters(style);
   const byId = useMapFindingsStore((s) => s.byId);
@@ -22,11 +22,6 @@ export function FindingsRowExtra({ style, setStyle }: LayerRowExtraProps) {
       <p className="text-2xs text-muted">
         {findingsMeta(visibleFindings(Object.values(byId), f), truncated, scale)}
       </p>
-      <Switch
-        checked={f.allSurveys}
-        onChange={(allSurveys) => setStyle({ allSurveys })}
-        label="All surveys"
-      />
       <fieldset className="flex flex-wrap gap-x-3 gap-y-1">
         <legend className="sr-only">Status</legend>
         {STATUSES.map((s) => (

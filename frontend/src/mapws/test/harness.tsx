@@ -1,7 +1,9 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
+import { renderHook } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import type { ApiClient } from "@contract/client";
 import { PROJECT_ID, fakeClient } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { TestApiProvider, renderWithProviders } from "@/test/render";
 import { WorkspaceProvider, type WorkspaceStores } from "../context";
 import { createWorkspaceStore } from "../state/workspaceStore";
 import { createToolStore, type MapTool } from "../tools/toolStore";
@@ -36,4 +38,22 @@ export function renderInWorkspace(
     route: opts.route ?? `/p/${PROJECT_ID}/maps`,
   });
   return { ...view, stores, api };
+}
+
+/** `renderHook` inside the same providers `renderInWorkspace` uses. */
+export function renderHookInWorkspace<T>(
+  hook: () => T,
+  opts: { stores?: WorkspaceStores; api?: ApiClient; route?: string } = {},
+) {
+  const stores = opts.stores ?? makeStores();
+  const api = opts.api ?? fakeClient([]).api;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <TestApiProvider api={api}>
+      <MemoryRouter initialEntries={[opts.route ?? `/p/${PROJECT_ID}/maps`]}>
+        <WorkspaceProvider value={stores}>{children}</WorkspaceProvider>
+      </MemoryRouter>
+    </TestApiProvider>
+  );
+  const { result } = renderHook(hook, { wrapper });
+  return { result, workspace: stores.workspace, tools: stores.tools, stores };
 }

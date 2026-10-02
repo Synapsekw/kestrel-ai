@@ -29,6 +29,11 @@ describe("TimelineScrubber (M §5 Timeline, §14 dates)", () => {
     expect(screen.getByTestId("timeline-track").querySelectorAll("[data-planned]")).toHaveLength(1);
   });
 
+  it("carries the one survey-scope switch at the end of its control row (spec §3.1)", () => {
+    setup();
+    expect(screen.getAllByRole("switch", { name: "All surveys" })).toHaveLength(1);
+  });
+
   it("names a planned tick to assistive technology without a hover", () => {
     setup();
     const planned = screen.getByTestId("timeline-track").querySelector("[data-planned]")!;

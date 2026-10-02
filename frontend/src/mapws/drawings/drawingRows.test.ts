@@ -41,46 +41,21 @@ describe("the drawing layer kind", () => {
     });
   });
 
-  it("row menu: Properties, Align (K), Knock out white, Re-import, Delete for a raster; Layers for a DXF", () => {
+  it("row menu: Properties, Re-import, Delete only; Align, knockout and DXF layers live in the inspector (spec §3.1)", () => {
     useDrawingsStore.getState().set("p:0", "p", [pdfDrawing, dxfDrawing]);
     const raster = drawingRowMenu(drawingRowOf(pdfDrawing));
-    expect(raster.map((i) => i.label)).toEqual([
-      "Properties",
-      "Align",
-      "Knock out white",
-      "Re-import…",
-      "Delete…",
-    ]);
-    expect(raster[1].shortcut).toBe("K");
-    expect(raster[4].danger).toBe(true);
+    expect(raster.map((i) => i.label)).toEqual(["Properties", "Re-import…", "Delete…"]);
     expect(drawingRowMenu(drawingRowOf(dxfDrawing)).map((i) => i.label)).toEqual([
       "Properties",
-      "Align",
-      "Layers…",
       "Re-import…",
       "Delete…",
     ]);
+    for (const gone of ["Align", "Knock out white", "Show white", "Layers…"])
+      expect(raster.some((i) => i.label === gone)).toBe(false);
+    expect(raster[2].danger).toBe(true);
     raster[0].onSelect();
     expect(useDrawingUi.getState().intent).toEqual({ kind: "properties", id: pdfDrawing.id });
     raster[2].onSelect();
-    expect(useDrawingUi.getState().intent).toEqual({ kind: "knockout", id: pdfDrawing.id });
-    raster[4].onSelect();
     expect(useDrawingUi.getState().intent).toEqual({ kind: "delete", id: pdfDrawing.id });
-  });
-
-  it("the knockout item reads 'Show white' while white is knocked out", () => {
-    const on = { ...pdfDrawing, layer_state: { hidden_layers: [], knockout_white: true } };
-    useDrawingsStore.getState().set("p:0", "p", [on]);
-    expect(drawingRowMenu(drawingRowOf(on))[2].label).toBe("Show white");
-  });
-  it("row menu: Align is disabled, with a hint, while the drawing is not ready", () => {
-    useDrawingsStore.getState().set("p:0", "p", [pdfDrawing]);
-    const ready = drawingRowMenu(drawingRowOf(pdfDrawing)).find((i) => i.id === "align")!;
-    expect(ready.disabled).toBeFalsy();
-    for (const status of ["importing", "failed"] as const) {
-      const align = drawingRowMenu(drawingRowOf({ ...pdfDrawing, status })).find((i) => i.id === "align")!;
-      expect(align.disabled).toBe(true);
-      expect(align.hint).toBeTruthy();
-    }
   });
 });

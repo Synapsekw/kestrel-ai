@@ -1,9 +1,9 @@
 import { useProjectTypes } from "@/findings/useProjectTypes";
 import { useWorkspaceStores } from "@/mapws/w4host";
-import { Checkbox, Switch } from "@/ui";
+import { Checkbox } from "@/ui";
 import { useDetectStore } from "./detectStore";
 
-/** Under the AI detections row (spec §5.2): pending / accepted / findings / rejected, types, all surveys (R-W4-5). */
+/** Under the AI detections row (spec §5.2): pending / accepted / findings / rejected, types; the survey scope is on the timeline (spec §3.1). */
 export function DetectionFilters() {
   const { projectId } = useWorkspaceStores();
   const { all } = useProjectTypes(projectId);
@@ -41,7 +41,6 @@ export function DetectionFilters() {
           ))}
         </div>
       )}
-      <Switch label="All surveys" checked={f.allSurveys} onChange={(on) => set({ allSurveys: on })} />
     </div>
   );
 }

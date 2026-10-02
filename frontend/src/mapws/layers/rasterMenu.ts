@@ -22,17 +22,14 @@ export const useRasterActions = create<{
 const ask = (type: RasterAction["type"], row: LayerRow) => () =>
   useRasterActions.getState().request({ type, row });
 
-/** M §5.2 row menus (deviation 4: no Rename; W2-11: date and role on dem only). */
+/**
+ * M §5.2 row menus (deviation 4: no Rename; W2-11: date and role on dem only). "Run AI on the whole
+ * map" lives in the AI topic (spec §3.1), which posts the same "run" action.
+ */
 export function rasterMenu(row: LayerRow): MenuItem[] {
   if (row.kind === "map") {
     return [
       { id: "date", label: "Set survey date", onSelect: ask("date", row) },
-      {
-        id: "run",
-        label: "Run AI on the whole map",
-        icon: "detect",
-        onSelect: ask("run", row),
-      },
       {
         id: "evaluate",
         label: "Open in evaluation view",
