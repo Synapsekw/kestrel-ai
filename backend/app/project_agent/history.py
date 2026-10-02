@@ -54,6 +54,7 @@ class ModelReply:
     text: str
     tool_calls: list[ToolCall]
     provider_payload: Any = None
+    usage: dict | None = None  # {"input_tokens", "output_tokens"} when the provider reports it
 
 
 class LlmError(Exception):

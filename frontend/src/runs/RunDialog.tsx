@@ -5,7 +5,7 @@ import { messageOf } from "@/api/errors";
 import { fetchModelGsdEstimate, updateLibraryModel, type ModelGsdEstimate } from "@/api/library";
 import { listMaps } from "@/api/maps";
 import { useProject } from "@/api/project";
-import { providerLabel, useProviders } from "@/api/providers";
+import { detectionProviders, providerLabel, useProviders } from "@/api/providers";
 import { createRuns, saveModelClassMap, unmappedClasses, type RunCreate, type RunCreated } from "@/api/runs";
 import { fetchAllSources } from "@/api/sources";
 import { useLibraryModels } from "@/library/useLibraryModels";
@@ -343,7 +343,7 @@ export function RunDialog({
                   value={provider}
                   onChange={(e) => setProvider(e.target.value as ProviderName)}
                 >
-                  {providers.providers.map((p) => (
+                  {detectionProviders(providers.providers).map((p) => (
                     <option key={p.name} value={p.name}>
                       {providerLabel(p.name)}
                     </option>

@@ -6804,13 +6804,13 @@ export interface components {
          * @example {
          *       "name": "anthropic",
          *       "has_key": true,
-         *       "model_name": "claude-opus-5",
+         *       "model_name": "claude-opus-5-5",
          *       "requests_per_minute": 30,
          *       "cost_per_request": 0.02
          *     }
          */
         Provider: {
-            name: components["schemas"]["ProviderName"];
+            name: components["schemas"]["KeyedProviderName"];
             /** @description whether a key is stored in Credential Manager */
             has_key: boolean;
             model_name: string;
@@ -13939,7 +13939,7 @@ export interface components {
         turnId: string;
         runId: string;
         jobId: string;
-        provider: components["schemas"]["ProviderName"];
+        provider: components["schemas"]["KeyedProviderName"];
         limit: number;
         /** @description opaque cursor from the previous page's `next_cursor` */
         cursor: string;

@@ -151,7 +151,7 @@ for _module in (
     "app.surfaces.design.router",
     "app.volumes.router",
     "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
-    "app.asset_models.stubs",  # asset models (spec 2026-10-02); trimesh is native
+    "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
 ):
     try:
         api_router.include_router(importlib.import_module(_module).router)

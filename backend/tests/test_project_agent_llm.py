@@ -29,7 +29,8 @@ TOOLS = [
 
 
 def _anthropic_message(content, stop_reason="end_turn"):
-    return SimpleNamespace(content=content, stop_reason=stop_reason)
+    usage = SimpleNamespace(input_tokens=11, output_tokens=7)
+    return SimpleNamespace(content=content, stop_reason=stop_reason, usage=usage)
 
 
 def _openai_response(output, status="completed"):
@@ -40,7 +41,8 @@ def _openai_response(output, status="completed"):
         for part in item.content
         if part.type == "output_text"
     ]
-    return SimpleNamespace(output=output, status=status, output_text="".join(texts))
+    usage = SimpleNamespace(input_tokens=13, output_tokens=5)
+    return SimpleNamespace(output=output, status=status, output_text="".join(texts), usage=usage)
 
 
 def _openai_message(text):
@@ -146,7 +148,7 @@ def test_openai_request_shape(sdk):
 
 def test_unknown_provider(sdk):
     with pytest.raises(LlmError) as info:
-        run("gemini", [HistoryEntry(role="user", text="Hi")])
+        run("nope", [HistoryEntry(role="user", text="Hi")])
     assert info.value.message == "Unknown provider."
     assert sdk["requests"] == []
 
@@ -545,3 +547,60 @@ def test_a_payload_from_another_model_is_not_replayed(sdk, provider):
     request = json.dumps(sdk["requests"][0])
     assert "sig" not in request and "rs_1" not in request
     assert "call_1" in request  # the neutral replay still names the resulted call
+
+
+# --- usage, effort and caching -------------------------------------------------------------------
+
+
+def test_usage_is_reported(sdk):
+    reply = run("anthropic", [HistoryEntry(role="user", text="Hi")])
+    assert reply.usage == {
+        "input_tokens": sdk["anthropic"].usage.input_tokens,
+        "output_tokens": sdk["anthropic"].usage.output_tokens,
+    }
+    reply = run("openai", [HistoryEntry(role="user", text="Hi")])
+    assert reply.usage == {
+        "input_tokens": sdk["openai"].usage.input_tokens,
+        "output_tokens": sdk["openai"].usage.output_tokens,
+    }
+
+
+def test_effort_and_cache_reach_anthropic_only_when_asked(sdk):
+    history = [HistoryEntry(role="user", text="Hi")]
+    run("anthropic", history)
+    plain = sdk["requests"][-1]
+    assert "output_config" not in plain and "cache_control" not in plain
+    asyncio.run(
+        llm.complete(
+            "anthropic",
+            api_key=KEY,
+            model="the-model",
+            system="s",
+            history=history,
+            tools=TOOLS,
+            effort="high",
+            cache=True,
+        )
+    )
+    asked = sdk["requests"][-1]
+    assert asked["output_config"] == {"effort": "high"}
+    assert asked["cache_control"] == {"type": "ephemeral"}
+
+
+def test_effort_reaches_openai_only_when_asked(sdk):
+    history = [HistoryEntry(role="user", text="Hi")]
+    run("openai", history)
+    assert "reasoning" not in sdk["requests"][-1]
+    asyncio.run(
+        llm.complete(
+            "openai",
+            api_key=KEY,
+            model="the-model",
+            system="s",
+            history=history,
+            tools=TOOLS,
+            effort="low",
+            cache=True,
+        )
+    )
+    assert sdk["requests"][-1]["reasoning"] == {"effort": "low"}

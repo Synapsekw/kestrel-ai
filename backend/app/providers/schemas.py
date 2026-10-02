@@ -7,10 +7,11 @@ from pydantic import BaseModel, Field
 from app.providers.config import ProviderConfig
 
 ProviderName = Literal["openai", "anthropic"]
+KeyedProviderName = Literal["openai", "anthropic", "gemini"]
 
 
 class ProviderOut(BaseModel):
-    name: ProviderName
+    name: KeyedProviderName
     has_key: bool
     model_name: str
     requests_per_minute: int

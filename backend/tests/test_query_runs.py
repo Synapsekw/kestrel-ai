@@ -220,7 +220,7 @@ def test_creating_a_run_returns_the_run_and_its_queued_job(
     body = r.json()
     assert body["query_run"]["kind"] == "cloud_provider"
     assert body["query_run"]["provider"] == "anthropic"
-    assert body["query_run"]["model_name"] == "claude-opus-5"
+    assert body["query_run"]["model_name"] == "claude-opus-5-5"
     assert body["query_run"]["image_ids"] == frames
     assert body["query_run"]["box_count"] == 0
     assert body["query_run"]["promoted_at"] is None
@@ -257,7 +257,7 @@ def test_the_job_writes_unreviewed_proposals_with_cloud_provenance(
     assert len(rows) == 4
     assert {r.provenance_kind for r in rows} == {"cloud_provider"}
     assert {r.provider for r in rows} == {"anthropic"}
-    assert {r.model_name for r in rows} == {"claude-opus-5"}
+    assert {r.model_name for r in rows} == {"claude-opus-5-5"}
     assert {r.query_run_id for r in rows} == {out["run"]["id"]}
     assert {r.review_state for r in rows} == {"unreviewed"}
     assert {r.class_id for r in rows} == {class_ids["excavator"]}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ApiClient, Provider, ProviderName, components } from "@contract/client";
+import type { ApiClient, Provider, KeyedProviderName, ProviderName, components } from "@contract/client";
 import { useApi } from "./client";
 import { isNotImplemented, messageOf, unwrap } from "./errors";
 import { pushLog } from "@/app/diagnostics";
@@ -15,14 +15,18 @@ export async function fetchProviders(api: ApiClient): Promise<Provider[]> {
 
 export function updateProvider(
   api: ApiClient,
-  provider: ProviderName,
+  provider: KeyedProviderName,
   patch: ProviderUpdate,
 ): Promise<Provider> {
   return unwrap(api.PATCH("/api/v1/providers/{provider}", { params: { path: { provider } }, body: patch }));
 }
 
 /** The key travels once, in this request body; callers must drop it from state afterwards. Never log it. */
-export async function setProviderKey(api: ApiClient, provider: ProviderName, apiKey: string): Promise<void> {
+export async function setProviderKey(
+  api: ApiClient,
+  provider: KeyedProviderName,
+  apiKey: string,
+): Promise<void> {
   await unwrap<unknown>(
     api.PUT("/api/v1/providers/{provider}/key", {
       params: { path: { provider } },
@@ -31,15 +35,24 @@ export async function setProviderKey(api: ApiClient, provider: ProviderName, api
   );
 }
 
-export async function deleteProviderKey(api: ApiClient, provider: ProviderName): Promise<void> {
+export async function deleteProviderKey(api: ApiClient, provider: KeyedProviderName): Promise<void> {
   await unwrap<unknown>(api.DELETE("/api/v1/providers/{provider}/key", { params: { path: { provider } } }));
 }
 
-export function testProvider(api: ApiClient, provider: ProviderName): Promise<ProviderTestResult> {
+export function testProvider(api: ApiClient, provider: KeyedProviderName): Promise<ProviderTestResult> {
   return unwrap(api.POST("/api/v1/providers/{provider}/test", { params: { path: { provider } } }));
 }
 
-const LABELS: Record<ProviderName, string> = { openai: "OpenAI", anthropic: "Anthropic" };
+/** Gemini serves asset model runs only: detection and the agents keep OpenAI and Anthropic. */
+export function detectionProviders(providers: Provider[]): Array<Provider & { name: ProviderName }> {
+  return providers.filter((p): p is Provider & { name: ProviderName } => p.name !== "gemini");
+}
+
+const LABELS: Record<KeyedProviderName, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  gemini: "Google Gemini",
+};
 
 export function providerLabel(name: string | null | undefined): string {
   if (!name) return "–";

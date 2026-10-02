@@ -19,7 +19,7 @@ describe("providers api", () => {
         body: { ok: true, message: "responded in 1.2 s", model_name: "claude-opus-5" },
       },
     ]);
-    expect((await fetchProviders(api)).map((p) => p.name)).toEqual(["openai", "anthropic"]);
+    expect((await fetchProviders(api)).map((p) => p.name)).toEqual(["openai", "anthropic", "gemini"]);
     expect((await updateProvider(api, "anthropic", { requests_per_minute: 10 })).requests_per_minute).toBe(
       10,
     );

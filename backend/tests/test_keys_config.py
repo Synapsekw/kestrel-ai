@@ -27,7 +27,7 @@ def test_config_store_defaults_and_updates(tmp_path):
     assert store.get("anthropic").model_name == DEFAULTS["anthropic"].model_name
     assert store.get("openai").requests_per_minute == 30
     store.update("openai", model_name="gpt-5-mini", requests_per_minute=120)
-    assert [c.name for c in store.all()] == ["openai", "anthropic"]
+    assert [c.name for c in store.all()] == ["openai", "anthropic", "gemini"]
     reopened = ProviderConfigStore(AppData(tmp_path))
     assert reopened.get("openai").model_name == "gpt-5-mini"
     assert reopened.get("openai").requests_per_minute == 120
@@ -35,9 +35,13 @@ def test_config_store_defaults_and_updates(tmp_path):
 
 def test_list_providers_shows_defaults_without_keys(client):
     items = client.get("/api/v1/providers").json()["items"]
-    assert [i["name"] for i in items] == ["openai", "anthropic"]
+    assert [i["name"] for i in items] == ["openai", "anthropic", "gemini"]
     assert all(i["has_key"] is False for i in items)
-    assert {i["name"]: i["model_name"] for i in items} == {"openai": "gpt-5", "anthropic": "claude-opus-5"}
+    assert {i["name"]: i["model_name"] for i in items} == {
+        "openai": "gpt-5",
+        "anthropic": "claude-opus-5-5",
+        "gemini": "gemini-2.5-pro",
+    }
     assert all(i["requests_per_minute"] == 30 and i["cost_per_request"] == 0.02 for i in items)
 
 
@@ -46,7 +50,7 @@ def test_setting_a_key_never_leaks_it(client, settings):
     assert r.status_code == 204, r.text
     assert SECRET not in r.text
     items = client.get("/api/v1/providers").json()["items"]
-    assert {i["name"]: i["has_key"] for i in items} == {"openai": False, "anthropic": True}
+    assert {i["name"]: i["has_key"] for i in items} == {"openai": False, "anthropic": True, "gemini": False}
     assert SECRET not in client.get("/api/v1/providers").text
     client.patch("/api/v1/providers/anthropic", json={"requests_per_minute": 42})  # force a settings write
     assert SECRET not in (settings.data_dir / "settings.json").read_text("utf-8")
@@ -90,10 +94,10 @@ def test_patch_persists_across_a_new_app_on_the_same_data_dir(client, settings):
 
 
 def test_patch_rejects_an_unknown_provider(client):
-    assert client.patch("/api/v1/providers/gemini", json={"model_name": "x"}).status_code == 422
+    assert client.patch("/api/v1/providers/mistral", json={"model_name": "x"}).status_code == 422
 
 
-@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "gemini"])
 def test_test_endpoint_without_a_key_is_not_ok(client, provider):
     r = client.post(f"/api/v1/providers/{provider}/test")
     assert r.status_code == 200, r.text

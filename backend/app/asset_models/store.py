@@ -12,6 +12,8 @@ from app.db.models import AssetModel, AssetModelVersion
 from app.errors import not_found
 from app.surfaces.design.store import ID_RE
 
+INT32_MAX = 2_147_483_647  # bound for path ints that reach SQLite INTEGER columns
+
 
 def model_dir(handle, model_id: str) -> Path:
     if not ID_RE.fullmatch(model_id or ""):

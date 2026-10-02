@@ -143,12 +143,6 @@ def test_bad_spec_on_a_missing_model_is_404(client, base):
     assert r.status_code == 404
 
 
-def test_run_operations_are_501_until_u5(client, base):
-    m = create(client, base)
-    r = client.get(f"{base}/{m['id']}/runs")
-    assert r.status_code == 501
-
-
 def _seed_pending(handle, model_id, glb_job_id=None):
     from app.db.models import AssetModelVersion
 
@@ -197,3 +191,12 @@ def test_failed_submit_marks_the_version_failed_and_raises(client, base, handle,
         client.post(f"{base}/{m['id']}/versions", json={"spec": SPEC})
     with handle.session() as s:
         assert store.get_version(s, m["id"], 1).glb_status == "failed"
+
+
+@pytest.mark.parametrize("suffix", ["", "/glb"])
+def test_huge_version_is_never_a_500(client, base, suffix):
+    mid = create(client, base)["id"]
+    r = client.get(f"{base}/{mid}/versions/{2**63}{suffix}")
+    assert r.status_code in (404, 422)
+    r = client.post(f"{base}/{mid}/versions/{2**63}/restore")
+    assert r.status_code in (404, 422)

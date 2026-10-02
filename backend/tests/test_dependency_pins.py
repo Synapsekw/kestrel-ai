@@ -45,3 +45,10 @@ def test_the_interpreter_has_the_pinned_version(name, pin):
     except PackageNotFoundError:
         pytest.fail(f"{name} is not installed; install backend/requirements-lock.txt ({name}=={pin})")
     assert installed == pin
+
+
+def test_the_lock_stays_resolvable_with_google_genai():
+    """google-genai 1.75.0 needs websockets<17 and (via google-auth[requests]) requests>=2.30."""
+    lines = _lines("requirements-lock.txt")
+    assert "google-genai==1.75.0" in lines and "websockets==16.1.1" in lines
+    assert "requests==2.34.2" in lines and "certifi==2026.7.22" in lines
