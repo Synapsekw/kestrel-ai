@@ -201,7 +201,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
   useEffect(() => {
     railStoreRef.current = rail.store;
   }, [rail.store]);
-  const detail = features.findings?.detail ?? features.measure?.detail ?? null;
+  const detail = rail.detail;
 
   const onViewState = useCallback((s: ViewState) => {
     setViewState(s);

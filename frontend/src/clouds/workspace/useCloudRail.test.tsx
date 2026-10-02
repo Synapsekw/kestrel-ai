@@ -1,22 +1,29 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceRail } from "@/ui";
 import { composeFeatures } from "./compose";
 import type { CloudToolId } from "./tools";
 import { useCloudRail } from "./useCloudRail";
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  window.innerWidth = 1024; // jsdom's default
+});
 
 let armTool: (id: CloudToolId) => void = () => {};
 
 function Harness({
   available = () => true,
   onArm = vi.fn(),
+  findingDetail = null,
+  measureDetail = null,
 }: {
   available?: (id: CloudToolId) => boolean;
   onArm?: (id: CloudToolId) => void;
+  findingDetail?: ReactNode;
+  measureDetail?: ReactNode;
 }) {
   const [active, setActive] = useState<CloudToolId>("orbit");
   useEffect(() => {
@@ -30,11 +37,11 @@ function Harness({
       name: "f",
       findings: {
         list: <p>pin list</p>,
-        detail: null,
+        detail: findingDetail,
         count: 2,
         menu: [{ id: "m", label: "Do", onSelect() {} }],
       },
-      measure: { list: <p>measure list</p>, detail: null, count: 0 },
+      measure: { list: <p>measure list</p>, detail: measureDetail, count: 0 },
     },
   ]);
   const rail = useCloudRail({
@@ -47,14 +54,17 @@ function Harness({
     photosBody: <p>photos help</p>,
   });
   return (
-    <WorkspaceRail
-      label="Point cloud"
-      store={rail.store}
-      nav={rail.nav}
-      topics={rail.topics}
-      inspectorOpen={false}
-      bottomInset={120}
-    />
+    <>
+      <WorkspaceRail
+        label="Point cloud"
+        store={rail.store}
+        nav={rail.nav}
+        topics={rail.topics}
+        inspectorOpen={rail.detail !== null}
+        bottomInset={120}
+      />
+      <output data-testid="detail">{rail.detail}</output>
+    </>
   );
 }
 
@@ -98,5 +108,22 @@ describe("useCloudRail", () => {
     expect(clip).toBeDisabled();
     expect(screen.getByRole("button", { name: "Fly" })).toBeDisabled();
     expect(screen.getByRole("region", { name: "Clip" })).toHaveTextContent("clip help");
+  });
+
+  it("the inspector shows the selection of the topic last opened, else whichever there is", async () => {
+    window.innerWidth = 1600; // a wide window: the inspector does not close the panel
+    const { rerender } = render(<Harness findingDetail={<p>finding F-0001</p>} />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
+    // A finding and a measurement both selected: Findings is open, so the finding shows ...
+    rerender(<Harness findingDetail={<p>finding F-0001</p>} measureDetail={<p>Area 1</p>} />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
+    // ... and opening Measure shows the measurement.
+    const rail = screen.getByRole("toolbar", { name: "Point cloud" });
+    await userEvent.click(within(rail).getByRole("button", { name: "Measure" }));
+    expect(screen.getByTestId("detail")).toHaveTextContent("Area 1");
+    rerender(<Harness findingDetail={<p>finding F-0001</p>} />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
+    rerender(<Harness />);
+    expect(screen.getByTestId("detail")).toBeEmptyDOMElement();
   });
 });

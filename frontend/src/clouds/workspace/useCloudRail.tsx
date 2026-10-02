@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import {
   createRailStore,
@@ -27,8 +28,9 @@ export function useCloudRail(p: {
   layersBody: ReactNode;
   clipBody: ReactNode;
   photosBody: ReactNode;
-}): { store: StoreApi<RailState>; topics: RailTopic[]; nav: ReactNode } {
+}): { store: StoreApi<RailState>; topics: RailTopic[]; nav: ReactNode; detail: ReactNode | null } {
   const [store] = useState(() => createRailStore("clouds", CLOUD_TOPICS, "findings"));
+  const topic = useStore(store, (s) => s.topic);
 
   // Spec §4 "Tool keys": if the panel is open it switches to the armed tool's topic.
   useEffect(() => {
@@ -36,8 +38,8 @@ export function useCloudRail(p: {
     if (t !== "nav") store.getState().revealTopicFor(t);
   }, [p.active, store]);
 
-  const tools = (topic: CloudTopicId): TopicTool[] =>
-    toolsOf(topic).map((e) => ({
+  const tools = (id: CloudTopicId): TopicTool[] =>
+    toolsOf(id).map((e) => ({
       id: e.id,
       icon: e.icon,
       label: e.label,
@@ -62,6 +64,11 @@ export function useCloudRail(p: {
   ));
 
   const { findings, measure } = p.features;
+  // Spec §3.2: the inspector shows one selection. With a finding and a measurement both selected,
+  // the one of the topic last opened wins (the rail's topic, open or not).
+  const findingDetail = findings?.detail ?? null;
+  const measureDetail = measure?.detail ?? null;
+  const detail = topic === "measure" ? (measureDetail ?? findingDetail) : (findingDetail ?? measureDetail);
   const topics: RailTopic[] = [
     {
       id: "layers",
@@ -124,5 +131,5 @@ export function useCloudRail(p: {
       ),
     },
   ];
-  return { store, topics, nav };
+  return { store, topics, nav, detail };
 }
