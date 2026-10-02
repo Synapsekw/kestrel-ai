@@ -104,3 +104,5 @@ export { claimJobOutcome, useJobToasts, jobToastText, reportedInline } from "./u
 export { INDICATOR_BASE, useSlidingIndicator } from "./useSlidingIndicator";
 export { computeWindow, useVirtualRows, type RowWindow, type VirtualViewport } from "./useVirtualRows";
 export { cx, focusRing, lift, pressable, transition } from "./tokens";
+export { createRailStore, RAIL_STORAGE_PREFIX, type RailState, type RailWorkspace } from "./railStore";
+export { NARROW_WIDTH, WorkspaceRail, type RailTopic, type WorkspaceRailProps } from "./WorkspaceRail";
