@@ -1,6 +1,7 @@
 # backend/tests/test_asset_model_agent_tools.py
 """Agent tools over a RunContext (spec §7.3; Review Focus 3)."""
 
+import io
 import json
 import uuid
 
@@ -159,3 +160,41 @@ def test_render_view_schema_is_flat():
     spec = next(s for s in tool_specs() if s.name == "render")
     text = json.dumps(spec.input_schema)
     assert "anyOf" not in text and "section@" in text
+
+
+def test_multi_view_render_is_at_most_1024_px(ctx):
+    from PIL import Image
+
+    run_tool(ctx, "upsert_parts", {"parts": [SHELL]})
+    out = run_tool(ctx, "render", {"views": ["iso", "front", "side", "top"]})
+    assert out.ok and out.image
+    assert max(Image.open(io.BytesIO(out.image)).size) <= 1024
+
+
+def _many_parts(n):
+    return [{**SHELL, "id": f"s{i}", "name": f"S{i}" + "x" * 100} for i in range(n)]
+
+
+def test_get_spec_pages_within_budget(ctx):
+    from app.asset_models.agent.tools import MAX_TEXT
+
+    run_tool(ctx, "upsert_parts", {"parts": _many_parts(60)})
+    seen, start = [], 0
+    for _ in range(20):
+        out = run_tool(ctx, "get_spec", {"start": start})
+        assert out.ok and len(out.text) <= MAX_TEXT
+        doc = json.loads(out.text)
+        assert doc["parts"]
+        seen += [p["id"] for p in doc["parts"]]
+        if "next_start" not in doc:
+            break
+        assert doc["next_start"] == start + len(doc["parts"])
+        start = doc["next_start"]
+    assert seen == [f"s{i}" for i in range(60)]
+
+
+def test_get_spec_oversize_part_is_an_error_that_advances(ctx):
+    run_tool(ctx, "upsert_parts", {"parts": [SHELL]})
+    object.__setattr__(ctx.spec.parts[0], "name", "n" * 9000)  # past the field limit, as a bypass
+    out = run_tool(ctx, "get_spec", {"start": 0})
+    assert not out.ok and "shell" in out.text and "start=1" in out.text

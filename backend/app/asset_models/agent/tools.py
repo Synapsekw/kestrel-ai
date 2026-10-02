@@ -31,6 +31,7 @@ from app.project_agent.tools import clean_schema
 
 MAX_IMAGES = 40
 MAX_TEXT = 8000
+MAX_RENDER_PX = 1024
 OVERLAY_POINTS = 300_000
 Region = Annotated[list[float], Field(min_length=4, max_length=4)]
 
@@ -233,15 +234,26 @@ class GetSpec:
 
     def run(self, ctx, a):
         doc = ctx.spec.model_dump(mode="json", exclude_none=True)
-        parts, out, end = doc["parts"][a.start :], [], a.start
-        for p in parts:
-            if len(json.dumps(out + [p])) > MAX_TEXT - 500:
-                break
-            out.append(p)
-            end += 1
-        more = f', "next_start": {end}' if end < len(doc["parts"]) else ""
-        text = json.dumps({"asset": doc["asset"], "parts": out}, separators=(",", ":"))
-        return ToolOut(text[:-1] + more + "}" if more else text, f"Read the spec ({len(out)} parts)")
+        asset = json.dumps(doc["asset"], separators=(",", ":"))
+        budget = MAX_TEXT - len(asset) - 100  # room for the wrapper keys and next_start
+        out, used, i = [], 0, a.start
+        while i < len(doc["parts"]):
+            piece = json.dumps(doc["parts"][i], separators=(",", ":"))
+            if used + len(piece) + 1 > budget:
+                if out:
+                    break
+                pid = doc["parts"][i].get("id", i)
+                return ToolOut(
+                    f"Part {pid!r} is too large to show. Continue with get_spec start={i + 1}.",
+                    "A part was too large to show",
+                    ok=False,
+                )
+            out.append(piece)
+            used += len(piece) + 1
+            i += 1
+        more = f',"next_start":{i}' if i < len(doc["parts"]) else ""
+        text = f'{{"asset":{asset},"parts":[{",".join(out)}]{more}}}'
+        return ToolOut(text, f"Read the spec ({len(out)} parts)")
 
 
 # ------------------------------------------------------------------ build
@@ -407,6 +419,7 @@ class Render:
                 ok=False,
                 phase="checking",
             )
+        sheet.thumbnail((MAX_RENDER_PX, MAX_RENDER_PX))  # the model never gets more than 1024 px a side
         buf = io.BytesIO()
         sheet.save(buf, "JPEG", quality=85)
         return _image(
