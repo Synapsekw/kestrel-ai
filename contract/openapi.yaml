@@ -5659,7 +5659,7 @@ paths:
       - name: step
         in: path
         required: true
-        schema: { type: integer, minimum: 1 }
+        schema: { type: integer, minimum: 1, maximum: 2147483647 }
     get:
       tags: [assetmodels]
       operationId: getAssetModelRunThumb
@@ -6469,7 +6469,7 @@ components:
       name: version
       in: path
       required: true
-      schema: { type: integer, minimum: 1 }
+      schema: { type: integer, minimum: 1, maximum: 2147483647 }
     assetModelRunId:
       name: runId
       in: path

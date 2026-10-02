@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Path, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
@@ -23,6 +23,7 @@ from app.asset_models.schemas import (
     SpecIssueOut,
 )
 from app.asset_models.spec import AssetSpec
+from app.asset_models.store import INT32_MAX
 from app.asset_models.validate import validate
 from app.db.models import AssetModel, AssetModelVersion
 from app.errors import AppError
@@ -138,7 +139,11 @@ def create_asset_model_version(
 
 
 @router.get(P + "/{assetModelId}/versions/{version}", response_model=AssetModelVersionDetailOut)
-def get_asset_model_version(assetModelId: str, version: int, handle: ProjectHandle = Depends(get_project)):  # noqa: N803
+def get_asset_model_version(
+    assetModelId: str,  # noqa: N803
+    version: int = Path(ge=1, le=INT32_MAX),
+    handle: ProjectHandle = Depends(get_project),
+):
     with handle.session() as s:
         row = store.get_version(s, assetModelId, version)
         spec = AssetSpec.model_validate(row.spec)
@@ -152,8 +157,8 @@ def get_asset_model_version(assetModelId: str, version: int, handle: ProjectHand
 )
 def restore_asset_model_version(
     assetModelId: str,
-    version: int,
     request: Request,  # noqa: N803
+    version: int = Path(ge=1, le=INT32_MAX),
     handle: ProjectHandle = Depends(get_project),
 ):
     with handle.session() as s:
@@ -174,7 +179,11 @@ def restore_asset_model_version(
 
 
 @router.get(P + "/{assetModelId}/versions/{version}/glb", response_class=FileResponse)
-def get_asset_model_glb(assetModelId: str, version: int, handle: ProjectHandle = Depends(get_project)):  # noqa: N803
+def get_asset_model_glb(
+    assetModelId: str,  # noqa: N803
+    version: int = Path(ge=1, le=INT32_MAX),
+    handle: ProjectHandle = Depends(get_project),
+):
     with handle.session() as s:
         row = store.get_version(s, assetModelId, version)
         ready = row.glb_status == "ready"

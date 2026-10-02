@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Path, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
@@ -15,6 +15,7 @@ from app.asset_models.schemas import (
     AssetModelRunWithJob,
 )
 from app.asset_models.service import refresh_status
+from app.asset_models.store import INT32_MAX
 from app.db.base import utcnow
 from app.db.models import AssetModel, AssetModelRun, Drawing, Image, PointCloud
 from app.errors import AppError, not_found
@@ -146,7 +147,7 @@ def stop_asset_model_run(
 def get_asset_model_run_thumb(
     assetModelId: str,  # noqa: N803
     runId: str,  # noqa: N803
-    step: int,
+    step: int = Path(ge=1, le=INT32_MAX),
     handle: ProjectHandle = Depends(get_project),
 ):
     with handle.session() as s:

@@ -148,3 +148,8 @@ def test_thumb_and_overlay_204_when_absent(client, app, model_url, project_id, d
     assert (
         client.get(f"{model_url}/runs/{rid}/overlay/00000000-0000-0000-0000-000000000000").status_code == 204
     )
+
+
+def test_huge_thumb_step_is_never_a_500(client, model_url):
+    r = client.get(f"{model_url}/runs/r1/steps/{2**63}/thumb")
+    assert r.status_code in (404, 422)

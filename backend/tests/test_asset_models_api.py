@@ -191,3 +191,12 @@ def test_failed_submit_marks_the_version_failed_and_raises(client, base, handle,
         client.post(f"{base}/{m['id']}/versions", json={"spec": SPEC})
     with handle.session() as s:
         assert store.get_version(s, m["id"], 1).glb_status == "failed"
+
+
+@pytest.mark.parametrize("suffix", ["", "/glb"])
+def test_huge_version_is_never_a_500(client, base, suffix):
+    mid = create(client, base)["id"]
+    r = client.get(f"{base}/{mid}/versions/{2**63}{suffix}")
+    assert r.status_code in (404, 422)
+    r = client.post(f"{base}/{mid}/versions/{2**63}/restore")
+    assert r.status_code in (404, 422)
