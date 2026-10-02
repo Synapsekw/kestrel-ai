@@ -206,7 +206,7 @@ Runs on every spec write; errors block the GLB, warnings don't.
 Pure function: `spec → (glb bytes, meta)`. One glTF node per part, named by part id, with
 `extras` carrying `name`, `group` and `params` so the viewer and later stages can read them. PBR
 materials as in the artifact (sRGB authored, converted to linear). Triangle budget per part scales
-with size (segment counts from a chord-error tolerance of 2 mm, capped). `meta` holds the bounds,
+with size (segment counts from a chord-error tolerance of 0.5 mm, capped (2 mm left a 16-gon on 100 mm radii, 2.5 % under volume)). `meta` holds the bounds,
 the top elevation, the part index, and triangle counts. Uses `trimesh` and `numpy` (`trimesh`
 becomes a backend dependency; checked for PyInstaller bundling in planning).
 
