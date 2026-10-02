@@ -181,7 +181,7 @@ Units are millimetres in the spec (drawings are in mm); the builder emits metres
 | `flat_plate` | `d` or `w`×`l`, `thickness`, optional `slope` (1:n, cone-up/down) | bottoms, floors, blinds |
 | `box` | `w`, `l`, `h` | supports, platforms, rectangular ducts and culverts |
 | `nozzle` | `dn`, `od`, `projection`, `flange_od`, `flange_t`, optional `blind` | nozzles and manways (radial on a shell or vertical on a head) |
-| `pipe_run` | `od`, `points_mm[]`, `bend_r` | internal pipes, dip pipes |
+| `pipe_run` | `od`, `points_mm[]` (joints get a sphere) | internal pipes, dip pipes |
 | `lathe` | `profile_mm[[r, y], …]`, `sweep_deg` | anything rotationally symmetric |
 | `extrusion` | `outline_mm[[x, z], …]`, `height` | stiffeners, plates, irregular sections |
 | `sweep` | `section` (circle/rect), `path_mm[]` | handrails, ladder stringers, cable trays |
@@ -197,7 +197,7 @@ Runs on every spec write; errors block the GLB, warnings don't.
 
 - **Errors:** unknown shape or bad params (non-positive dimensions, thickness ≥ radius); duplicate
   part ids; a shell-mounted part whose host doesn't exist; a spec over 2 000 parts.
-- **Warnings:** a nozzle whose base is more than 20 mm off its host surface; parts whose bounding
+- **Warnings:** parts whose bounding
   boxes overlap more than 50 % (likely a duplicate); a part with `source.kind = assumed` and
   `confidence = high`.
 
@@ -237,8 +237,9 @@ in the build dialog; the default comes from the existing provider config.
 5. On budget, timeout, user stop or provider failure: if the working spec has at least one part,
    write it as a `draft` version; record the stop reason.
 
-**Budget per run:** at most 80 tool calls, a token budget (default 400 k output+input combined,
-configurable in App settings), 20 minutes wall clock. One run per asset model at a time; at most
+**Budget per run:** at most 80 tool calls, a token budget (default 3 M input+output tokens summed over
+calls, with Anthropic prompt caching on), at most 40 images sent, 20 minutes wall clock. The model
+history is append-only (preserved thinking rejects edited history). One run per asset model at a time; at most
 two runs per app at once.
 
 **Prompt.** A system prompt explaining the asset frame, the spec, the shape vocabulary, the
@@ -254,9 +255,9 @@ All tools are app code; all reads are bounded.
 | Tool | Args | Returns | Bound |
 | --- | --- | --- | --- |
 | `list_sources` | — | the run's drawings (pages, format), clouds (bounds, point count, CRS or local), photos (count, size) | — |
-| `drawing_view` | `id`, `page`, `region?` | PNG of the page or a crop | longest side ≤ 1 600 px |
-| `drawing_text` | `id`, `page`, `region?` | text spans with positions from a vector PDF or DXF; empty for rasters | ≤ 4 000 spans |
-| `cloud_slice` | `id`, `axis` (x/y/z), `at_m`, `thickness_m` | a section image (≤ 1 024 px) and ≤ 5 000 sampled points | reads ≤ 200 k points via the octree |
+| `drawing_view` | `id`, `region?` (a Drawing row is one page) | PNG of the page or a crop | longest side ≤ 1 600 px |
+| `drawing_text` | `id`, `region?` | text spans with positions from a vector PDF or DXF; empty for rasters | ≤ 4 000 spans |
+| `cloud_slice` | `id`, `axis` (x/y/z), `at_m`, `thickness_m` | a section image (≤ 1 024 px) and ≤ 5 000 sampled points | reads the run's cloud sample (≤ 2 M points) |
 | `cloud_fit` | `id`, `kind` (circle/cylinder/plane), `region` (box) | fitted params, RMS residual, inlier share | ≤ 200 k points |
 | `photo_view` | `id`, `region?` | a downscaled JPEG | ≤ 1 600 px |
 | `set_asset` | asset fields | updated asset block | — |
@@ -307,19 +308,21 @@ change.
 - `GET/POST /projects/{pid}/asset-models`, `GET/PATCH/DELETE /projects/{pid}/asset-models/{id}`
 - `GET /projects/{pid}/asset-models/{id}/versions`, `GET …/versions/{n}`,
   `POST …/versions` (manual edit: a full spec + note), `POST …/versions/{n}/restore`
-- `GET …/versions/{n}/glb` (file), `GET …/versions/{n}/spec` (download)
+- `GET …/versions/{n}/glb` (file); the spec download is the version detail's `spec`, saved by the UI
 - `POST /projects/{pid}/asset-models/{id}/runs` (start: mode, sources, provider, model, notes) →
   job; `GET …/runs`, `GET …/runs/{rid}`, `POST …/runs/{rid}/stop`
-- `GET …/runs/{rid}/steps/{n}/thumb` (the step's render thumbnail)
+- `GET …/runs/{rid}/steps/{n}/thumb` (the step's render thumbnail), `GET …/runs/{rid}/overlay/{cloudId}`
+  (≤ 300 k float32 points in the asset frame, written by `compare_to_cloud`)
 - Schemas: `AssetModel`, `AssetModelVersion`, `AssetSpec`, `AssetPart` (with a discriminated
   `params` per shape), `AssetModelRun`, `AssetModelRunStart`.
-- Provider settings gain `gemini` wherever `anthropic`/`openai` are enumerated.
+- A new `KeyedProviderName` (`openai`, `anthropic`, `gemini`) types `/providers` and runs; detection keeps
+  `ProviderName` (`openai`, `anthropic`), so Gemini is offered for asset model runs only.
 
 ## 10. Budget and execution DAG
 
 **Background jobs:** the agent run (≤ 20 min, cancellable, progress events) and the GLB build.
 **Bounded reads:** every tool in §7.3 states its cap; no tool loads a full cloud, a full image set
-or an unscaled page into memory. Clouds are read through the existing octree.
+or an unscaled page into memory. Each run samples a cloud once (≤ 2 M points, one streamed pass).
 
 **Units**
 
@@ -379,3 +382,21 @@ With the tank's Elios cloud added to the run, the shell's deviation median is un
 | An asset needs a shape the vocabulary lacks | `lathe`, `extrusion` and `sweep` cover most; a new shape is a contained addition (§6.2) |
 | Gemini tool-use behaviour differs | The fake-model tests pin the loop; the live test runs per provider when its key is present |
 | Run cost | Token budget per run, shown usage per run, default limits in App settings |
+
+## 13. Amendments made while planning (2026-10-02)
+
+The implementation plan (`docs/superpowers/plans/2026-10-02-asset-model-builder.md`) found these;
+the sections above are updated to match.
+
+- No server-side octree reader exists, so cloud tools read a per-run sample (≤ 2 M points, one
+  streamed laspy pass, cached as `runs/<runId>/cloud_<cloudId>.npz`).
+- A `Drawing` row is one page; `drawing_view` reads its rendered `plan.tif`, `drawing_text` reads the
+  source PDF's text layer (pypdfium2) or DXF text (ezdxf).
+- trimesh does not export per-node extras; the builder patches the GLB's JSON chunk.
+- `pipe_run` has no `bend_r`; the "nozzle off its host surface" warning is dropped (hosted parts are
+  placed on the surface by construction).
+- Run budget 3 M tokens (not 400 k), 40 images, append-only history.
+- The run checkpoints `working.json` after each build tool; the restart sweep turns it into a draft.
+- `AssetModelRun.comparison` holds the last `compare_to_cloud` result; a `get_spec` read tool is added.
+- `asset_model.status` maps to the data item status `importing` (building) or `ready` (ready, empty).
+- `KeyedProviderName` for `/providers` and runs; the default Anthropic model becomes `claude-opus-5-5`.
