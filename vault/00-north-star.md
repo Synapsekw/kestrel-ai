@@ -89,7 +89,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Native icons on the brand gradient** (2026-10-02, `3c6b04bc`, on `main`). The desktop/taskbar icon moved from amber to the violet → teal `grad-brand`, matching the rail tile. The installer was rebuilt from `3c6b04bc` with a freshly frozen backend and **installed**; the operator confirmed the app opens. That build therefore contains S1 and Reports; neither walkthrough has been run on it yet. See [[2026-10-02-1441-native-icons-brand-gradient]].
+**Shipped last:** **Point-cloud RAM admission at the measured plateau** (2026-10-02, `4a4e4d8d`, on `main`). The 842 M-point LNG cloud was refused at "39.0 GB needed"; PotreeConverter measured 10.3 GB peak on it, so the need is now min(45 MB/Mpt, 9 GB + 2.5 MB/Mpt) + 1 GiB (12.2 GB at 842 M). The installer was rebuilt from `4a4e4d8d` and **installed** (it supersedes `3c6b04bc` and still contains S1 and Reports; not the am-u1/am-u4 merges); the operator imported the cloud on it: "works great". See [[2026-10-02-1650-cloud-ram-admission]] and [[2026-10-02-gotcha-potreeconverter-ram-plateaus]].
+
+Before that: **Native icons on the brand gradient** (2026-10-02, `3c6b04bc`, on `main`). The desktop/taskbar icon moved from amber to the violet → teal `grad-brand`, matching the rail tile. The installer was rebuilt from `3c6b04bc` with a freshly frozen backend and **installed**; the operator confirmed the app opens. That build therefore contains S1 and Reports; neither walkthrough has been run on it yet. See [[2026-10-02-1441-native-icons-brand-gradient]].
 
 Previously: **Reports (R) complete on `main`** (2026-10-01, `07beeac..cd7c59d`, 13 units + close-out, pushed).
 - Project → **Reports**: a report list, a three-pane builder with a live A4 preview, filters, templates, and **Render** as a background job producing numbered versions (PDF, optional CSV/XLSX), with issue/unissue and history.
@@ -342,6 +344,12 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 - **COPC export was deliberately dropped** (potree-core can't read COPC; LAZ opens in QGIS and
   CloudCompare, QGIS builds its own index). Revisit only if a client asks for COPC.
 - **The installer bundles no WebView2 bootstrapper** — fine on this machine, not on a clean one.
+- **RAM admission past 842 M points is extrapolated** (2026-10-02, `4a4e4d8d`): the converter
+  plateau was measured once (842 M → 10.3 GB, 24 threads); re-measure on a bigger cloud or new
+  hardware ([[2026-10-02-gotcha-potreeconverter-ram-plateaus]]). Heavy imports (cloud, ortho,
+  training) still share the 2-worker pool, and a refusal still comes only after copy + scan.
+- **`scripts/start-task.ps1` throws on PS 5.1** at `git fetch origin main` (stderr becomes a
+  NativeCommandError under `$ErrorActionPreference = 'Stop'`); cut the worktree by hand meanwhile.
 
 ### Point clouds (S1): operator checks (opened 2026-09-26)
 
