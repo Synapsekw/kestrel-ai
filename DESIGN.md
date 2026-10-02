@@ -147,8 +147,8 @@ pins use the severity colours; critical pins get a thicker ring, never a pulse. 
 ## App identity
 
 The Kestrel mark (`frontend/src/assets/kestrel-mark.svg`, the single geometry master) sits on a 36px
-`grad-brand` tile with a 12px radius at the top of the rail. The native icons (`icons:generate`) keep
-their current artwork until a follow-up regenerates them on the brand gradient.
+`grad-brand` tile with a 12px radius at the top of the rail. The native icons (`icons:generate`) put
+the same mark on the same violet → teal brand gradient, so the desktop icon matches the rail tile.
 
 ## Copy
 
