@@ -89,5 +89,6 @@ def _overlap_share(a, b) -> float:
     if np.any(hi <= lo):
         return 0.0
     inter = float(np.prod(hi - lo))
-    smaller = min(float(np.prod(a[1] - a[0])), float(np.prod(b[1] - b[0])))
-    return inter / smaller if smaller > 0 else 0.0
+    # against the LARGER box: near-identical boxes score ~1, a small part inside a big host scores low
+    larger = max(float(np.prod(a[1] - a[0])), float(np.prod(b[1] - b[0])))
+    return inter / larger if larger > 0 else 0.0

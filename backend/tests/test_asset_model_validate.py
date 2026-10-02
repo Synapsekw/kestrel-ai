@@ -75,3 +75,29 @@ def test_overlap_and_assumed_high_confidence_are_warnings():
     r = validate(spec)
     assert r.ok
     assert codes(r.warnings) == ["assumed_high_confidence", "overlap"]
+
+
+def test_parts_inside_or_on_a_host_are_not_duplicates():
+    spec = AssetSpec.model_validate(
+        {
+            "parts": [
+                part("s1"),
+                part(
+                    "N1",
+                    group="Nozzle",
+                    shape="nozzle",
+                    params={"dn": 80, "od": 88.9, "projection": 200, "flange_od": 200, "flange_t": 20},
+                    placement={"host": "s1", "bearing_deg": 45, "elevation_mm": 1500},
+                ),
+                part(
+                    "pr1",
+                    group="Internal",
+                    shape="pipe_run",
+                    params={"od": 100, "points_mm": [[0, 500, 0], [0, 2500, 0]]},
+                ),
+            ]
+        }
+    )
+    r = validate(spec)
+    assert r.ok
+    assert "overlap" not in codes(r.warnings)
