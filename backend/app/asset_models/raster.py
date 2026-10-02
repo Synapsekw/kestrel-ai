@@ -60,8 +60,13 @@ def _basis(view: View) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         elif view.kind == "section":
             f = bearing_dir(view.bearing_deg or 0.0)
         else:
+            if view.direction is None:
+                raise ValueError("a custom view needs a direction")
             f = np.asarray(view.direction, dtype=float)
-        f = f / np.linalg.norm(f)
+        norm = np.linalg.norm(f)
+        if not np.isfinite(norm) or norm < 1e-9:
+            raise ValueError("view direction must be a non-zero finite vector")
+        f = f / norm
         up = up_world - f * (up_world @ f)
         if np.linalg.norm(up) < 1e-6:
             up = np.array([1.0, 0.0, 0.0])
@@ -86,12 +91,11 @@ def render(
     if view.kind == "section":  # keep what lies beyond the vertical plane through the axis
         keep = (tris.mean(axis=1) @ f) >= 0
         tris, owner, normals = tris[keep], owner[keep], normals[keep]
+        if len(tris) == 0:
+            return Image.new("RGB", (size, size), BG)
     sx, sy, sd = tris @ right, tris @ up, tris @ f  # (T,3) each
-    half_w = float(
-        max(abs(sx.min()), abs(sx.max()))
-    )  # centre on the asset axis, so a nozzle can't shift the frame
-    lo = np.array([-half_w, sy.min()])
-    hi = np.array([half_w, sy.max()])
+    lo = np.array([sx.min(), sy.min()])
+    hi = np.array([sx.max(), sy.max()])
     span = float(max(hi - lo)) or 1.0
     scale = size * (1 - 2 * MARGIN) / span
     off = (size - (hi - lo) * scale) / 2
@@ -173,13 +177,17 @@ def render(
 
 def grid(images: list[Image.Image], titles: list[str]) -> Image.Image:
     n = len(images)
+    if n == 0:
+        raise ValueError("grid needs at least one image")
+    if n != len(titles):
+        raise ValueError("grid needs one title per image")
     cols = 2 if n == 4 else n
     rows = math.ceil(n / cols)
     cell = min(800, 1600 // cols, 1600 // rows - 20)
     sheet = Image.new("RGB", (cols * cell, rows * (cell + 20)), BG)
     draw = ImageDraw.Draw(sheet)
     font = ImageFont.load_default()
-    for k, (img, title) in enumerate(zip(images, titles, strict=False)):
+    for k, (img, title) in enumerate(zip(images, titles, strict=True)):
         r, c = divmod(k, cols)
         sheet.paste(img.resize((cell, cell)), (c * cell, r * (cell + 20) + 20))
         draw.text((c * cell + 6, r * (cell + 20) + 4), title, fill=(230, 230, 230), font=font)

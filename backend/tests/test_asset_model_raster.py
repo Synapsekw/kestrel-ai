@@ -77,9 +77,8 @@ def test_front_view_is_taller_than_wide(meshes):
 def test_nozzle_at_bearing_90_shows_on_the_right_in_front_view(meshes):
     # looking north, east (+Z) is to the right
     with_n = arr(render(meshes, View("front"), size=256, groups=GROUPS))
-    without = arr(
-        render({k: v for k, v in meshes.items() if k != "N7"}, View("front"), size=256, groups=GROUPS)
-    )
+    # same meshes and frame; highlighting N7 recolours only its pixels
+    without = arr(render(meshes, View("front"), size=256, groups=GROUPS, highlight={"N7"}))
     diff_cols = np.where(np.any(with_n != without, axis=2))[1]
     assert diff_cols.mean() > 128
 
@@ -108,3 +107,27 @@ def test_grid_contact_sheet(meshes):
     imgs = [render(meshes, View(k), size=512, groups=GROUPS) for k in ("iso", "front", "side", "top")]
     sheet = grid(imgs, ["iso", "front", "side", "top"])
     assert max(sheet.size) <= 1600
+
+
+def test_section_that_culls_everything_returns_background(meshes):
+    import trimesh
+
+    box = trimesh.creation.box(extents=(1, 1, 1))
+    box.apply_translation((-5, 0, 0))  # in front of the plane for bearing 0 (looking +X)
+    img = render({"b": box}, View("section", bearing_deg=0), size=128)
+    assert img.size == (128, 128)
+    assert (arr(img) == arr(img)[0, 0]).all()
+
+
+def test_custom_view_needs_a_usable_direction(meshes):
+    with pytest.raises(ValueError, match="direction"):
+        render(meshes, View("custom"), size=64)
+    with pytest.raises(ValueError, match="non-zero"):
+        render(meshes, View("custom", direction=(0, 0, 0)), size=64)
+
+
+def test_grid_rejects_empty_and_mismatched_input():
+    with pytest.raises(ValueError, match="at least one"):
+        grid([], [])
+    with pytest.raises(ValueError, match="title"):
+        grid([Image.new("RGB", (8, 8))], ["a", "b"])
