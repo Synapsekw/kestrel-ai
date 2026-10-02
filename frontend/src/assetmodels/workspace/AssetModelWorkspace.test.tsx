@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders } from "@/test/render";
+import { LocationProbe, renderWithProviders } from "@/test/render";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { MODEL, RUN, SPEC_V1, SPEC_V2, VERSION_1, VERSION_2 } from "@/test/assetModelFixtures";
 import { useToastStore } from "@/ui";
@@ -8,7 +8,7 @@ import { useToastStore } from "@/ui";
 vi.mock("@/assetmodels/viewer/ModelViewer", async () => ({
   ModelViewer: (await import("@/test/fakeModelViewer")).FakeModelViewer,
 }));
-import { callsTo, emitParts, emitState, resetFake } from "@/test/fakeModelViewer";
+import { callsTo, emitParts, emitState, fake, resetFake } from "@/test/fakeModelViewer";
 import { AssetModelWorkspace } from "./AssetModelWorkspace";
 
 /** Extra routes go first: the first matching route wins, so a test can override a default. */
@@ -24,12 +24,50 @@ const routes = (extra: unknown[] = []) => [
 
 const open = (extra: unknown[] = []) => {
   const client = fakeClient(routes(extra) as never);
-  renderWithProviders(<AssetModelWorkspace />, {
-    api: client.api,
-    route: `/p/${PROJECT_ID}/models/m1`,
-    path: "/p/:projectId/models/:modelId",
-  });
+  renderWithProviders(
+    <>
+      <AssetModelWorkspace />
+      <LocationProbe />
+    </>,
+    {
+      api: client.api,
+      route: `/p/${PROJECT_ID}/models/m1`,
+      path: "/p/:projectId/models/:modelId?",
+    },
+  );
   return client;
+};
+
+const resetCalls = () => {
+  fake.calls = [];
+};
+
+/** URL.createObjectURL / revokeObjectURL (jsdom has neither), restored by vi.unstubAllGlobals. */
+function stubObjectUrls() {
+  const create = vi.fn(() => "blob:file");
+  const revoke = vi.fn();
+  class TestURL extends URL {
+    static createObjectURL = create;
+    static revokeObjectURL = revoke;
+  }
+  vi.stubGlobal("URL", TestURL);
+  return { create, revoke };
+}
+
+/** Records each anchor click (href and download name) instead of navigating; restored in afterEach. */
+function recordClicks() {
+  const clicked: { href: string; download: string }[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+    clicked.push({ href: this.getAttribute("href") ?? "", download: this.download });
+  });
+  return clicked;
+}
+
+const openDetails = async () => {
+  await screen.findByTestId("model-workspace");
+  fireEvent.click(screen.getByRole("button", { name: /asset model: feed tank/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /details…/i }));
+  return screen.findByRole("dialog", { name: /asset model details/i });
 };
 
 describe("AssetModelWorkspace", () => {
@@ -37,7 +75,10 @@ describe("AssetModelWorkspace", () => {
     resetFake();
     useToastStore.getState().clear();
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it("shows the empty state when there are no models", async () => {
     const { api } = fakeClient([{ method: "GET", path: /\/asset-models$/, body: { items: [] } }]);
@@ -235,31 +276,137 @@ describe("AssetModelWorkspace", () => {
     expect(await screen.findByText("median 4.2 mm · p95 9.8 mm")).toBeInTheDocument();
   });
 
-  it("downloads the spec as JSON named after the model and version", async () => {
-    const saved = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
-    URL.createObjectURL = vi.fn(() => "blob:spec");
-    URL.revokeObjectURL = vi.fn();
-    const clicked: { href: string; download: string }[] = [];
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
-      this: HTMLAnchorElement,
-    ) {
-      clicked.push({ href: this.href, download: this.download });
-    });
+  it("downloads the spec and the GLB through same-origin blob URLs named after the model and version", async () => {
+    const { create, revoke } = stubObjectUrls();
+    const clicked = recordClicks();
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([103, 108, 84, 70]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     open();
     await screen.findByTestId("fake-model-viewer");
     fireEvent.click(screen.getByRole("button", { name: /download/i }));
     await waitFor(() => expect(screen.getByRole("menuitem", { name: /spec \(json\)/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("menuitem", { name: /spec \(json\)/i }));
-    expect(clicked).toEqual([{ href: "blob:spec", download: "Feed tank T-101-v2.json" }]);
+    expect(clicked).toEqual([{ href: "blob:file", download: "Feed tank T-101-v2.json" }]);
     fireEvent.click(screen.getByRole("button", { name: /download/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /3d model \(glb\)/i }));
-    expect(clicked[1].download).toBe("Feed tank T-101-v2.glb");
-    expect(clicked[1].href).toMatch(/\/asset-models\/m1\/versions\/2\/glb\?token=t$/);
-    click.mockRestore();
-    // The blob URL is released on the next turn; let that run before the stubs go.
-    await new Promise((r) => setTimeout(r, 0));
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:spec");
-    URL.createObjectURL = saved.create;
-    URL.revokeObjectURL = saved.revoke;
+    await waitFor(() => expect(clicked).toHaveLength(2));
+    expect(String(fetchMock.mock.calls[0]?.[0 as never])).toMatch(
+      /\/asset-models\/m1\/versions\/2\/glb\?token=t$/,
+    );
+    expect(clicked[1]).toEqual({ href: "blob:file", download: "Feed tank T-101-v2.glb" });
+    expect(create).toHaveBeenCalledTimes(2);
+    // Each blob URL is released on the next turn.
+    await waitFor(() => expect(revoke).toHaveBeenCalledTimes(2));
+  });
+
+  it("a failed GLB download says so without the URL", async () => {
+    stubObjectUrls();
+    const clicked = recordClicks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("no", { status: 404 })),
+    );
+    open();
+    await screen.findByTestId("fake-model-viewer");
+    fireEvent.click(screen.getByRole("button", { name: /download/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /3d model \(glb\)/i }));
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => t.text)).toEqual([
+        "The 3D model could not be downloaded.",
+      ]),
+    );
+    expect(clicked).toEqual([]);
+  });
+
+  it("details renames the model without ever sending an empty name", async () => {
+    const { requests } = open([
+      {
+        method: "PATCH",
+        path: /\/asset-models\/m1$/,
+        body: { ...MODEL, name: "Feed tank", tag: null, asset_type: "tank" },
+      },
+    ]);
+    const dialog = await openDetails();
+    const name = within(dialog).getByLabelText(/^name/i);
+    fireEvent.change(name, { target: { value: "  " } });
+    expect(within(dialog).getByRole("button", { name: /^save$/i })).toBeDisabled();
+    fireEvent.change(name, { target: { value: " Feed tank " } });
+    fireEvent.change(within(dialog).getByLabelText(/^tag/i), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(requests.some((r) => r.method === "PATCH")).toBe(true));
+    expect(requests.find((r) => r.method === "PATCH")!.body).toEqual({
+      name: "Feed tank",
+      tag: null,
+      asset_type: "tank",
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("details deletes the model only after a confirm, then leaves for the models page", async () => {
+    const { requests } = open([{ method: "DELETE", path: /\/asset-models\/m1$/, status: 204 }]);
+    const dialog = await openDetails();
+    fireEvent.click(within(dialog).getByRole("button", { name: /delete asset model…/i }));
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    expect(within(dialog).getByText(/every version and its 3d model go with it/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: /delete permanently/i }));
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "DELETE" && /\/asset-models\/m1$/.test(r.url))).toBe(true),
+    );
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models`));
+    expect(screen.getByTestId("location")).not.toHaveTextContent(/models\/m1/);
+    expect(await screen.findByText(/build a 3d model of the asset/i)).toBeInTheDocument();
+  });
+
+  it("a failed versions read offers a retry instead of saying there are none", async () => {
+    const { requests } = open([
+      {
+        method: "GET",
+        path: /\/asset-models\/m1\/versions$/,
+        status: 500,
+        body: { error: { code: "internal", message: "Boom.", details: {} } },
+      },
+    ]);
+    await screen.findByTestId("model-workspace");
+    fireEvent.click(screen.getByRole("tab", { name: /versions/i }));
+    const panel = await screen.findByRole("tabpanel", { name: /versions/i });
+    expect(await within(panel).findByText("The versions could not be loaded.")).toBeInTheDocument();
+    expect(within(panel).queryByText(/no versions yet/i)).not.toBeInTheDocument();
+    const reads = () => requests.filter((r) => r.method === "GET" && /\/versions$/.test(r.url)).length;
+    const before = reads();
+    fireEvent.click(within(panel).getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(reads()).toBe(before + 1));
+  });
+
+  it("a part with no scan points says so instead of printing null", async () => {
+    const run = {
+      ...RUN,
+      comparison: {
+        ...(RUN.comparison as object),
+        parts: [{ id: "N7", n: 0, median_mm: null, p95_mm: null }],
+      },
+    };
+    open([{ method: "GET", path: /\/asset-models\/m1\/runs$/, body: { items: [run] } }]);
+    await screen.findByTestId("fake-model-viewer");
+    act(() => emitParts([{ id: "N7", name: "Nozzle N7", group: "Nozzle" }]));
+    await waitFor(() => expect(screen.getByRole("switch", { name: /show scan overlay/i })).toBeEnabled());
+    fireEvent.click(await screen.findByRole("button", { name: /nozzle n7/i }));
+    const part = await screen.findByRole("tabpanel", { name: /part/i });
+    expect(part).toHaveTextContent("no scan points on this part");
+    expect(part).not.toHaveTextContent(/null/);
+  });
+
+  it("a viewer that starts running gets the panels' view state and the selection", async () => {
+    open();
+    await screen.findByTestId("fake-model-viewer");
+    act(() => emitParts([{ id: "N7", name: "Nozzle N7", group: "Nozzle" }]));
+    fireEvent.click(await screen.findByRole("switch", { name: /nozzle/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /nozzle n7/i }));
+    resetCalls();
+    act(() => emitState("running"));
+    expect(callsTo("setGroupVisible")).toContainEqual(["Nozzle", false]);
+    expect(callsTo("setCut")).toEqual([[null]]);
+    expect(callsTo("setLevels")).toEqual([[false]]);
+    expect(callsTo("setHeadOff")).toEqual([[false]]);
+    expect(callsTo("select")).toEqual([["N7"]]);
   });
 });

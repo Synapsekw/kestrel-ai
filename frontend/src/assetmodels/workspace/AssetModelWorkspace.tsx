@@ -31,6 +31,7 @@ import {
   useToolShortcuts,
 } from "@/ui";
 import { downloadGlb, downloadSpec } from "./download";
+import { ModelDetailsDialog } from "./ModelDetailsDialog";
 import { ModelInspector, type ModelInspectorTab } from "./ModelInspector";
 import { ModelPanel } from "./ModelPanel";
 import { NewModelDialog } from "./NewModelDialog";
@@ -114,15 +115,16 @@ interface ModelWorkspaceProps {
   model: AssetModel;
   models: readonly AssetModel[];
   onNew(): void;
+  onDetails(): void;
   onModelChanged(): void;
 }
 
 /** The viewer and the glass panels for one asset model (keyed by model id: a switch starts afresh). */
-function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: ModelWorkspaceProps) {
+function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelChanged }: ModelWorkspaceProps) {
   const api = useApi();
   const backend = useBackend();
   const viewer = useRef<ModelViewerHandle>(null);
-  const { versions, reload: reloadVersions } = useVersions(projectId, model.id);
+  const { versions, error: versionsError, reload: reloadVersions } = useVersions(projectId, model.id);
   const [picked, setPicked] = useState<number | null>(null);
   const shown = picked ?? model.current_version ?? versions?.[0]?.version ?? null;
   const { detail, error: detailError, reload: reloadDetail } = useVersionDetail(projectId, model.id, shown);
@@ -140,7 +142,16 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
   const [view, setView] = useState<{ url: string | null; state: ModelViewState } | null>(null);
   const viewState = view && view.url === viewerUrl ? view.state : null;
   const [viewerParts, setViewerParts] = useState<{ url: string | null; parts: ModelPart[] } | null>(null);
-  const onState = useCallback((state: ModelViewState) => setView({ url: viewerUrl, state }), [viewerUrl]);
+  // A viewer that mounts afresh (after a failed or still-building version) starts with nothing hidden,
+  // cut or selected: when it is running, it gets what the panels say (the latest render's values).
+  const replay = useRef<() => void>(() => {});
+  const onState = useCallback(
+    (state: ModelViewState) => {
+      setView({ url: viewerUrl, state });
+      if (state === "running") replay.current();
+    },
+    [viewerUrl],
+  );
   const onParts = useCallback((parts: ModelPart[]) => setViewerParts({ url: viewerUrl, parts }), [viewerUrl]);
 
   // The parts list never depends on the 3D view: without WebGL, a GLB that failed to load or build,
@@ -223,16 +234,22 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
   const [overlayWanted, setOverlayWanted] = useState(false);
   const overlayOn = overlayWanted && !!overlayRun;
   const overlayCache = useRef(new Map<string, Float32Array | null>());
+  /** The points last sent to the viewer, replayed onto a fresh one. */
+  const overlayPoints = useRef<Float32Array | null>(null);
+  const showOverlay = (points: Float32Array | null) => {
+    overlayPoints.current = points;
+    viewer.current?.setOverlay(points);
+  };
   const overlayCloud = comparison?.cloud_id ?? null;
   const overlayRunId = overlayRun?.id ?? null;
   useEffect(() => {
     if (!overlayOn || !overlayRunId || !overlayCloud) {
-      viewer.current?.setOverlay(null);
+      showOverlay(null);
       return;
     }
     const key = `${overlayRunId}/${overlayCloud}`;
     if (overlayCache.current.has(key)) {
-      viewer.current?.setOverlay(overlayCache.current.get(key) ?? null);
+      showOverlay(overlayCache.current.get(key) ?? null);
       return;
     }
     let live = true;
@@ -249,7 +266,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
         (buf) => {
           const points = buf ? new Float32Array(buf, 0, Math.floor(buf.byteLength / 4)) : null;
           overlayCache.current.set(key, points);
-          if (live) viewer.current?.setOverlay(points);
+          if (live) showOverlay(points);
         },
         () => {
           if (!live) return;
@@ -262,6 +279,18 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
     };
   }, [overlayOn, overlayRunId, overlayCloud, backend.baseUrl, backend.token, projectId, model.id]);
   const deviation = comparison?.parts?.find((p) => p.id === selected) ?? null;
+  useEffect(() => {
+    replay.current = () => {
+      const v = viewer.current;
+      if (!v) return;
+      for (const g of hiddenGroups) v.setGroupVisible(g, false);
+      v.setCut(tools.cut ? bearing : null);
+      v.setLevels(tools.levels);
+      v.setHeadOff(tools.headOff);
+      v.setOverlay(overlayPoints.current);
+      if (selected) v.select(selected);
+    };
+  });
 
   // New versions: an edit or a restore starts a GLB job; the notice follows it and the view swaps when it ends.
   const [glbJob, setGlbJob] = useState<{ version: number; jobId: string } | null>(null);
@@ -304,6 +333,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
       model={model}
       models={models}
       onNew={onNew}
+      onDetails={onDetails}
       groups={groups}
       hiddenGroups={hiddenGroups}
       onGroup={onGroup}
@@ -398,7 +428,12 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
               id: "glb",
               label: "3D model (GLB)",
               disabled: glbStatus !== "ready" || shown === null,
-              onSelect: () => shown !== null && downloadGlb(backend, projectId, model, shown),
+              onSelect: () => {
+                if (shown === null) return;
+                downloadGlb(backend, projectId, model, shown).catch(() =>
+                  toast("danger", "The 3D model could not be downloaded."),
+                );
+              },
             },
             {
               id: "spec",
@@ -442,6 +477,8 @@ function ModelWorkspace({ projectId, model, models, onNew, onModelChanged }: Mod
             shown={shown}
             onShow={setPicked}
             onRestore={restore}
+            error={versionsError}
+            onRetry={reloadVersions}
           />
         }
       />
@@ -505,8 +542,15 @@ export function AssetModelWorkspace() {
   const { models, error, reload } = useAssetModelList(projectId);
   const [created, setCreated] = useState<AssetModel | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // A deleted model leaves the list at once, before the reload confirms it, so a redirect never lands on it.
+  const [deleted, setDeleted] = useState<ReadonlySet<string>>(() => new Set());
   // The list learns of a new model before the navigation that depends on it; the reload confirms it.
-  const all = models && created && !models.some((m) => m.id === created.id) ? [...models, created] : models;
+  const all = useMemo(() => {
+    const listed =
+      models && created && !models.some((m) => m.id === created.id) ? [...models, created] : models;
+    return listed?.filter((m) => !deleted.has(m.id)) ?? null;
+  }, [models, created, deleted]);
   const dialog = newOpen && (
     <NewModelDialog
       projectId={projectId}
@@ -551,6 +595,26 @@ export function AssetModelWorkspace() {
     );
   if (!modelId) return <Navigate replace to={`/p/${projectId}/models/${all[0].id}`} />;
   const model = all.find((m) => m.id === modelId) ?? null;
+  const details = detailsOpen && model && (
+    <ModelDetailsDialog
+      projectId={projectId}
+      model={model}
+      onClose={() => setDetailsOpen(false)}
+      onSaved={(m) => {
+        setDetailsOpen(false);
+        if (created?.id === m.id) setCreated(m);
+        toast("ok", "Saved the details");
+        reload();
+      }}
+      onDeleted={(m) => {
+        setDetailsOpen(false);
+        setDeleted((d) => new Set(d).add(m.id));
+        toast("ok", `Deleted ${m.name}`);
+        reload();
+        navigate(`/p/${projectId}/models`);
+      }}
+    />
+  );
   return (
     <div data-testid="model-workspace" className="relative flex h-full min-h-0 w-full">
       <h1 className="sr-only">Asset models</h1>
@@ -562,6 +626,7 @@ export function AssetModelWorkspace() {
             model={model}
             models={all}
             onNew={onNew}
+            onDetails={() => setDetailsOpen(true)}
             onModelChanged={reload}
           />
         ) : (
@@ -569,6 +634,7 @@ export function AssetModelWorkspace() {
         )}
       </div>
       {dialog}
+      {details}
     </div>
   );
 }

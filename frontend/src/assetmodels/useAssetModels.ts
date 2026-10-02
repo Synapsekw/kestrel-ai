@@ -25,23 +25,36 @@ export function useAssetModelList(projectId: string) {
   return { models, error, reload };
 }
 
-/** One model's version list; null until loaded or while no model is selected. */
+/**
+ * One model's version list; null until loaded or while no model is selected. A failed read sets
+ * `error` (keeping a list loaded before), so the Versions tab can offer a retry instead of "no versions".
+ */
 export function useVersions(projectId: string, modelId: string | null) {
   const api = useApi();
   // Keyed by model so a switch never shows the previous model's versions.
-  const [loaded, setLoaded] = useState<{ key: string; versions: AssetModelVersion[] } | null>(null);
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    versions: AssetModelVersion[] | null;
+    error: string | null;
+  } | null>(null);
   const reload = useCallback(() => {
     if (!modelId) return;
     const key = `${projectId}/${modelId}`;
     void listVersions(api, projectId, modelId)
-      .then((versions) => setLoaded({ key, versions }))
-      .catch(() => setLoaded({ key, versions: [] }));
+      .then((versions) => setLoaded({ key, versions, error: null }))
+      .catch((e: unknown) =>
+        setLoaded((prev) => ({
+          key,
+          versions: prev?.key === key ? prev.versions : null,
+          error: message(e),
+        })),
+      );
   }, [api, projectId, modelId]);
   useEffect(reload, [reload]);
   useOnJobsFinished("asset_model_glb", reload);
   useOnJobsFinished("asset_model_run", reload);
-  const versions = modelId && loaded?.key === `${projectId}/${modelId}` ? loaded.versions : null;
-  return { versions, reload };
+  const current = modelId && loaded?.key === `${projectId}/${modelId}` ? loaded : null;
+  return { versions: current?.versions ?? null, error: current?.error ?? null, reload };
 }
 
 /** One version with its spec and overlay; reloads when a build finishes. */

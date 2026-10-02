@@ -1,46 +1,27 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { AssetPart, AssetSpec } from "@contract/client";
-import { editNote, numericParams, withNote, withParam, withPlacement } from "@/assetmodels/partEdit";
+import {
+  editNote,
+  numericParams,
+  paramLabel,
+  paramUnit,
+  withNote,
+  withParam,
+  withPlacement,
+} from "@/assetmodels/partEdit";
 import { ApiFailure, messageOf } from "@/api/errors";
 import { Alert, Button, EmptyState, Field, Input, Pill, Textarea, toast } from "@/ui";
 
 type PlacementKey = "bearing_deg" | "elevation_mm" | "e_mm" | "n_mm";
 const PLACEMENT_KEYS: readonly PlacementKey[] = ["bearing_deg", "elevation_mm", "e_mm", "n_mm"];
 
-const NAMES: Record<string, string> = {
-  id: "Inside diameter",
-  od: "Outside diameter",
-  dn: "DN",
-  d: "Diameter",
-  w: "Width",
-  l: "Length",
-  h: "Height",
-  r: "Radius",
-  d_bottom: "Bottom diameter",
-  d_top: "Top diameter",
-  crown_r: "Crown radius",
-  knuckle_r: "Knuckle radius",
-  flange_od: "Flange OD",
-  flange_t: "Flange thickness",
-  sweep_deg: "Sweep",
-  bearing_deg: "Bearing",
-  elevation_mm: "Elevation",
-  e_mm: "East",
-  n_mm: "North",
-};
-const UNITLESS = new Set(["dn", "ratio", "slope"]);
-
-const label = (key: string) => {
-  const plain = key.replace(/_deg$|_mm$/, "").replace(/_/g, " ");
-  return NAMES[key] ?? plain.charAt(0).toUpperCase() + plain.slice(1);
-};
-const unit = (key: string) => (key.endsWith("_deg") ? "°" : UNITLESS.has(key) ? "" : "mm");
 const CONFIDENCE = { high: "ok", medium: "neutral", low: "warn" } as const;
 
+/** A run's per-part scan deviation; median and p95 are null when no scan point fell on the part. */
 export interface Deviation {
-  median_mm: number;
-  p95_mm: number;
+  median_mm: number | null;
+  p95_mm: number | null;
 }
 
 function NumberField({
@@ -59,8 +40,8 @@ function NumberField({
       htmlFor={id}
       label={
         <>
-          {label(name)}
-          {unit(name) && <span className="ml-1 text-dim">{unit(name)}</span>}
+          {paramLabel(name)}
+          {paramUnit(name) && <span className="ml-1 text-dim">{paramUnit(name)}</span>}
         </>
       }
     >
@@ -118,7 +99,7 @@ function OtherParams({ part }: { part: AssetPart }) {
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
       {rows.map(([k, v]) => (
         <div key={k} className="contents">
-          <dt className="text-muted">{label(k)}</dt>
+          <dt className="text-muted">{paramLabel(k)}</dt>
           <dd className="font-mono text-ink">
             {typeof v === "boolean"
               ? v
@@ -242,9 +223,13 @@ export function PartTab({
         {deviation && (
           <p className="text-xs text-muted">
             Scan deviation{" "}
-            <span className="font-mono tabular-nums text-ink">
-              {`median ${deviation.median_mm} mm · p95 ${deviation.p95_mm} mm`}
-            </span>
+            {deviation.median_mm === null || deviation.p95_mm === null ? (
+              <span className="text-ink">no scan points on this part</span>
+            ) : (
+              <span className="font-mono tabular-nums text-ink">
+                {`median ${deviation.median_mm} mm · p95 ${deviation.p95_mm} mm`}
+              </span>
+            )}
           </p>
         )}
       </header>

@@ -17,11 +17,13 @@ function ModelPicker({
   model,
   models,
   onNew,
+  onDetails,
 }: {
   projectId: string;
   model: AssetModel;
   models: readonly AssetModel[];
   onNew(): void;
+  onDetails(): void;
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
@@ -95,7 +97,7 @@ function ModelPicker({
             </li>
           ))}
         </ul>
-        <div className="mt-2 border-t border-line pt-2">
+        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-line pt-2">
           <Button
             size="sm"
             icon="plus"
@@ -105,6 +107,17 @@ function ModelPicker({
             }}
           >
             New asset model…
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="settings"
+            onClick={() => {
+              setOpen(false);
+              onDetails();
+            }}
+          >
+            Details…
           </Button>
         </div>
       </Popover>
@@ -121,6 +134,7 @@ export function ModelPanel({
   model,
   models,
   onNew,
+  onDetails,
   groups,
   hiddenGroups,
   onGroup,
@@ -133,6 +147,8 @@ export function ModelPanel({
   model: AssetModel;
   models: readonly AssetModel[];
   onNew(): void;
+  /** Opens the dialog to rename, re-tag or delete the shown model. */
+  onDetails(): void;
   groups: readonly string[];
   hiddenGroups: ReadonlySet<string>;
   onGroup(group: string, visible: boolean): void;
@@ -152,7 +168,7 @@ export function ModelPanel({
       style={stagger(1)}
       className="stagger absolute left-[72px] top-3.5 z-10 flex max-h-[calc(100%-28px)] w-[282px] flex-col gap-[11px] overflow-y-auto p-3 animate-reveal reduce-motion:animate-none"
     >
-      <ModelPicker projectId={projectId} model={model} models={models} onNew={onNew} />
+      <ModelPicker projectId={projectId} model={model} models={models} onNew={onNew} onDetails={onDetails} />
       {groups.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted">Groups</span>

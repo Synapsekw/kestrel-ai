@@ -6,7 +6,7 @@ import { messageOf } from "@/api/errors";
 import { diffSpecs, type SpecDiff } from "@/assetmodels/specDiff";
 import { relativeTime } from "@/findings/format";
 import { useNow } from "@/jobs/useNow";
-import { Button, Checkbox, EmptyState, Pill, cx, focusRing, transition } from "@/ui";
+import { Alert, Button, Checkbox, EmptyState, Pill, cx, focusRing, transition } from "@/ui";
 
 /** "v3 · manual · Restored from version 1 · 2 min ago" */
 function rowText(v: AssetModelVersion, now: number): string {
@@ -88,6 +88,8 @@ export function VersionsTab({
   shown,
   onShow,
   onRestore,
+  error = null,
+  onRetry,
 }: {
   projectId: string;
   modelId: string;
@@ -96,12 +98,30 @@ export function VersionsTab({
   shown: number | null;
   onShow(version: number): void;
   onRestore(version: number): Promise<void>;
+  /** The list could not be read; shown with a retry (never as "no versions"). */
+  error?: string | null;
+  onRetry?(): void;
 }) {
   const now = useNow(60_000);
   const [pair, setPair] = useState<number[]>([]);
   const [restoring, setRestoring] = useState<number | null>(null);
   const comparison = useComparison(projectId, modelId, pair);
-  if (versions === null) return <p className="p-2 text-sm text-muted">Loading the versions…</p>;
+  const failed = error && (
+    <Alert
+      tone="danger"
+      title="The versions could not be loaded."
+      actions={
+        onRetry && (
+          <Button size="sm" icon="refresh" onClick={onRetry}>
+            Retry
+          </Button>
+        )
+      }
+    >
+      <p className="text-xs text-muted">{error}</p>
+    </Alert>
+  );
+  if (versions === null) return failed || <p className="p-2 text-sm text-muted">Loading the versions…</p>;
   if (versions.length === 0)
     return (
       <EmptyState icon="cube" title="No versions yet">
@@ -112,6 +132,7 @@ export function VersionsTab({
     setPair((p) => (on ? [...p.filter((x) => x !== n), n].slice(-2) : p.filter((x) => x !== n)));
   return (
     <div className="flex flex-col gap-3">
+      {failed}
       <ul aria-label="Versions" className="flex flex-col gap-1">
         {versions.map((v) => (
           <li
