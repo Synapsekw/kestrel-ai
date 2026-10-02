@@ -131,3 +131,8 @@ def test_grid_rejects_empty_and_mismatched_input():
         grid([], [])
     with pytest.raises(ValueError, match="title"):
         grid([Image.new("RGB", (8, 8))], ["a", "b"])
+
+
+def test_unknown_view_kind_is_rejected(meshes):
+    with pytest.raises(ValueError, match="unknown view kind"):
+        render(meshes, View("bogus"), size=64)

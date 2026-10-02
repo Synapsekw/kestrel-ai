@@ -59,10 +59,12 @@ def _basis(view: View) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             f = np.array([1.0, -0.8, 1.0])
         elif view.kind == "section":
             f = bearing_dir(view.bearing_deg or 0.0)
-        else:
+        elif view.kind == "custom":
             if view.direction is None:
                 raise ValueError("a custom view needs a direction")
             f = np.asarray(view.direction, dtype=float)
+        else:
+            raise ValueError(f"unknown view kind: {view.kind!r}")
         norm = np.linalg.norm(f)
         if not np.isfinite(norm) or norm < 1e-9:
             raise ValueError("view direction must be a non-zero finite vector")

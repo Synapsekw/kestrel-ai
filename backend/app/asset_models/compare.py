@@ -16,6 +16,7 @@ from scipy.spatial import cKDTree
 SURFACE_SAMPLES = 400_000
 CANDIDATES = 8
 SEED = 7
+BLOCK = 25_000  # points per KD-tree / closest-point batch; bounds peak memory
 
 
 @dataclass(frozen=True)
@@ -111,7 +112,13 @@ def _stat(pid: str, d_m: np.ndarray) -> PartStat:
 def compare(meshes, points, *, max_points: int = 200_000, inlier_m: float = 0.25) -> Comparison:
     """Distance of each scan point to its nearest model part; points beyond inlier_m are dropped."""
     rng = np.random.default_rng(SEED)
-    pts = np.asarray(points, dtype=float).reshape(-1, 3)
+    pts = np.asarray(points, dtype=float)
+    if pts.size == 0:
+        pts = pts.reshape(0, 3)
+    elif pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(f"points must be an (N, 3) array with 3 columns, got shape {pts.shape}")
+    elif not np.isfinite(pts).all():
+        raise ValueError("points must be finite (no NaN or inf)")
     if len(pts) > max_points:
         pts = pts[np.sort(rng.choice(len(pts), max_points, replace=False))]
     ids = list(meshes)
@@ -131,16 +138,21 @@ def compare(meshes, points, *, max_points: int = 200_000, inlier_m: float = 0.25
     u[flip], v[flip] = 1 - u[flip], 1 - v[flip]
     t = tris[tri_of]
     samples = t[:, 0] + u[:, None] * (t[:, 1] - t[:, 0]) + v[:, None] * (t[:, 2] - t[:, 0])
-    _, nn = cKDTree(samples).query(pts, k=CANDIDATES)
-    cand = tri_of[nn]  # (N,k) triangle ids
-    p_rep = np.repeat(pts, CANDIDATES, axis=0)
-    flat = cand.ravel()
-    cp = closest_points(p_rep, tris[flat, 0], tris[flat, 1], tris[flat, 2])
-    dist = np.linalg.norm(cp - p_rep, axis=1).reshape(-1, CANDIDATES)
-    best = dist.argmin(axis=1)
-    rows = np.arange(len(pts))
-    d = dist[rows, best]
-    part = owner[cand[rows, best]]
+    tree = cKDTree(samples)
+    d = np.empty(len(pts))
+    part = np.empty(len(pts), dtype=owner.dtype)
+    for lo in range(0, len(pts), BLOCK):
+        blk = pts[lo : lo + BLOCK]
+        _, nn = tree.query(blk, k=CANDIDATES)
+        cand = tri_of[nn]  # (n,k) triangle ids
+        p_rep = np.repeat(blk, CANDIDATES, axis=0)
+        flat = cand.ravel()
+        cp = closest_points(p_rep, tris[flat, 0], tris[flat, 1], tris[flat, 2])
+        dist = np.linalg.norm(cp - p_rep, axis=1).reshape(-1, CANDIDATES)
+        best = dist.argmin(axis=1)
+        rows = np.arange(len(blk))
+        d[lo : lo + len(blk)] = dist[rows, best]
+        part[lo : lo + len(blk)] = owner[cand[rows, best]]
     inlier = d <= inlier_m
     stats = [_stat(pid, d[inlier & (part == k)]) for k, pid in enumerate(ids)]
     return Comparison(_stat("overall", d[inlier]), stats, float(inlier.mean()), int(len(pts)))

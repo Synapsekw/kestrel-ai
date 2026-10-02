@@ -92,3 +92,17 @@ def test_degenerate_input_returns_an_empty_comparison():
     assert [p.id for p in no_points.parts] == ["shell"] and no_points.parts[0].n == 0
     no_meshes = compare({}, ring_points(2.0, 10))
     assert no_meshes.overall.n == 0 and no_meshes.points_used == 10
+
+
+@pytest.mark.parametrize(
+    "bad, match",
+    [
+        (np.zeros((10, 4)), "3 columns"),
+        (np.zeros(9), "3 columns"),
+        (np.array([[0.0, 1.0, np.nan]]), "finite"),
+        (np.array([[0.0, np.inf, 1.0]]), "finite"),
+    ],
+)
+def test_bad_point_input_raises_a_clear_error(bad, match):
+    with pytest.raises(ValueError, match=match):
+        compare({"shell": tube(2.0)}, bad)
