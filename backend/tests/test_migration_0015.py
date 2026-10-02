@@ -20,7 +20,6 @@ TABLES = {
     "asset_model_version": AssetModelVersion,
     "asset_model_run": AssetModelRun,
 }
-STRUCTURAL = {"add_table", "remove_table", "add_column", "remove_column", "add_index", "remove_index"}
 
 
 def _cfg(folder=None) -> Config:
@@ -33,17 +32,6 @@ def _cfg(folder=None) -> Config:
 
 def _tables(con) -> set[str]:
     return {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-
-
-def _table(diff) -> str:
-    kind = diff[0]
-    if kind in ("add_table", "remove_table"):
-        return diff[1].name
-    if kind in ("add_column", "remove_column"):
-        return diff[2]
-    if kind in ("add_index", "remove_index"):
-        return diff[1].table.name
-    return ""
 
 
 @pytest.fixture
@@ -68,8 +56,8 @@ def test_tables_exist_after_upgrade(engine):
 def test_orm_matches_migration(engine):
     with engine.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
-    # Structural kinds only (as 0014): the migration uses DateTime where the ORM uses UTCDateTime.
-    ours = [d for d in diff if isinstance(d, tuple) and d[0] in STRUCTURAL and _table(d) in TABLES]
+    # Scoped to our tables by name; every diff kind (types, nullability, defaults, indexes) counts.
+    ours = [d for d in diff if any(name in repr(d) for name in TABLES)]
     assert ours == []
 
 

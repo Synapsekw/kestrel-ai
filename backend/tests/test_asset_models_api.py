@@ -124,6 +124,23 @@ def test_delete_removes_rows_and_folder(client, base, handle, project_id, wait_j
     assert client.delete(f"{base}/{m['id']}").status_code == 204
     assert not folder.exists()
     assert client.get(f"{base}/{m['id']}").status_code == 404
+    from app.db.models import AssetModelVersion
+
+    with handle.session() as s:
+        assert s.query(AssetModelVersion).filter_by(model_id=m["id"]).count() == 0
+
+
+def test_patch_name_null_is_422(client, base):
+    m = create(client, base)
+    r = client.patch(f"{base}/{m['id']}", json={"name": None})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+    r = client.patch(f"{base}/{m['id']}", json={"tag": None})
+    assert r.status_code == 200 and r.json()["tag"] is None
+
+
+def test_bad_spec_on_a_missing_model_is_404(client, base):
+    r = client.post(f"{base}/missing/versions", json={"spec": {"parts": "nope"}})
+    assert r.status_code == 404
 
 
 def test_run_operations_are_501_until_u5(client, base):

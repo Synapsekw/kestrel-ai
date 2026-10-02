@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.asset_models.spec import AssetSpec
 from app.jobs.schemas import JobOut
@@ -51,6 +51,13 @@ class AssetModelPatch(BaseModel):
     asset_type: str | None = Field(None, max_length=80)
     tag: str | None = Field(None, max_length=80)
     captured_on: date | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_null(cls, v):
+        if v is None:
+            raise ValueError("name cannot be null")
+        return v
 
 
 class SpecIssueOut(BaseModel):

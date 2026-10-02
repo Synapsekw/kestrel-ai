@@ -122,11 +122,14 @@ def create_asset_model_version(
     request: Request,  # noqa: N803
     handle: ProjectHandle = Depends(get_project),
 ):
+    with handle.session() as s:
+        store.get_model(s, assetModelId)  # 404 before the body's spec is judged
+    spec = service.parse_spec(body.spec)
     row, job = service.add_version(
         handle,
         request.app.state.jobs,
         assetModelId,
-        service.parse_spec(body.spec),
+        spec,
         kind="manual",
         note=body.note,
     )

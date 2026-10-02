@@ -106,8 +106,7 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
-# Asset model builder (spec 2026-10-02): app/asset_models/stubs.py. Until U3 task 3b the models and
-# versions operations are stubbed too; U5 removes the run operations.
+# Asset model builder (spec 2026-10-02): the run operations of app/asset_models/stubs.py; U5 removes them.
 EXPECTED_STUBS |= asset_models_stub_operation_ids()  # asset models U3; U5 removes
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of

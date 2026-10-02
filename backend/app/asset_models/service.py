@@ -5,12 +5,11 @@ from __future__ import annotations
 from pydantic import ValidationError
 
 from app.asset_models import store
+from app.asset_models.jobs_glb import GLB_JOB
 from app.asset_models.spec import AssetSpec
 from app.asset_models.validate import validate
 from app.db.models import AssetModelVersion
 from app.errors import AppError
-
-GLB_JOB = "asset_model_glb"
 
 
 def issues(report_list) -> list[dict]:
