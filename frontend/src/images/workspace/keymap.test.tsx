@@ -47,7 +47,7 @@ describe("the images key table (spec §13)", () => {
   });
 
   it("covers every images, global and review action except FA's and the app's own", () => {
-    const appLevel = new Set(["palette", "shortcuts", "pan-hold"]);
+    const appLevel = new Set(["palette", "shortcuts", "pan-hold", "toggle-panel"]);
     const wanted = new Set(
       keysFor("images")
         .map((e) => e.action)
