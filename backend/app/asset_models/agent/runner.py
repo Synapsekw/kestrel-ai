@@ -17,6 +17,7 @@ from PIL import Image
 from app.asset_models import service, store
 from app.asset_models.agent.prompt import SYSTEM, first_message
 from app.asset_models.agent.tools import RunContext, run_tool, tool_specs
+from app.asset_models.look import LookError
 from app.asset_models.look.cloud import CloudSample, sample_cloud, source_of
 from app.asset_models.spec import AssetSpec
 from app.db.models import AssetModel, AssetModelRun, Drawing, PointCloud
@@ -32,6 +33,7 @@ MAX_TOKENS = 3_000_000
 MAX_SECONDS = 1200
 EFFORT = "high"
 KEY_MISSING = "Add this provider's API key in App settings."
+INTERNAL = "The run stopped because of an internal error."
 NUDGE = "Continue with the tools, or call finish with a summary and open questions."
 
 
@@ -115,31 +117,29 @@ def _thumb(ctx, run_id, model_id, n, jpeg):
 @register_job_type(RUN_JOB)
 def run_asset_model(ctx) -> dict:
     model_id, run_id = ctx.params["model_id"], ctx.params["run_id"]
-    with ctx.project.session() as s:
-        run = s.get(AssetModelRun, run_id)
-        model = s.get(AssetModel, model_id)
-        provider, model_name, mode, notes, sources = (
-            run.provider,
-            run.model_name,
-            run.mode,
-            run.notes,
-            list(run.sources),
-        )
-        spec = AssetSpec()
-        if mode == "refine" and model.current_version:
-            spec = AssetSpec.model_validate(store.get_version(s, model_id, model.current_version).spec)
     rc = RunContext(
-        handle=ctx.project,
-        model_id=model_id,
-        run_id=run_id,
-        sources=_describe_sources(ctx, sources),
-        spec=spec,
-        samples={},
+        handle=ctx.project, model_id=model_id, run_id=run_id, sources=[], spec=AssetSpec(), samples={}
     )
+    base = rc.spec.model_dump_json()  # the spec the run started with; a version is written only if it changed
     usage = {"input_tokens": 0, "output_tokens": 0}
     calls = 0
     started = time.monotonic()
     try:
+        with ctx.project.session() as s:
+            run = s.get(AssetModelRun, run_id)
+            model = s.get(AssetModel, model_id)
+            provider, model_name, mode, notes, sources = (
+                run.provider,
+                run.model_name,
+                run.mode,
+                run.notes,
+                list(run.sources),
+            )
+            if mode == "refine" and model.current_version:
+                rc.spec = AssetSpec.model_validate(store.get_version(s, model_id, model.current_version).spec)
+        spec = rc.spec
+        base = spec.model_dump_json()
+        rc.sources = _describe_sources(ctx, sources)
         # ---- sampling (one streamed pass per cloud, bounded)
         clouds = [x["id"] for x in sources if x["type"] == "point_cloud"]
         for k, cid in enumerate(clouds):
@@ -169,6 +169,8 @@ def run_asset_model(ctx) -> dict:
             ctx.check_cancelled()
             if time.monotonic() - started > MAX_SECONDS:
                 raise _Stop("stopped", "timeout", "The run reached its 20-minute limit.")
+            if calls >= MAX_CALLS:  # no further paid call once the tool-call budget is spent
+                raise _Stop("stopped", "budget", "The run reached its limit of tool calls.")
             key = ctx.runner.keys.get(provider)
             if not key:
                 raise _Stop("failed", "provider_error", KEY_MISSING)
@@ -225,6 +227,11 @@ def run_asset_model(ctx) -> dict:
             results = []
             stop = None
             for call in reply.tool_calls:
+                if rc.finished:
+                    results.append(
+                        ToolResult(call.id, call.name, "Not run: the run already finished.", is_error=True)
+                    )
+                    continue
                 if calls >= MAX_CALLS:
                     results.append(
                         ToolResult(
@@ -275,20 +282,34 @@ def run_asset_model(ctx) -> dict:
             if rc.finished:
                 break
         return _end(
-            ctx, rc, "finished", None, rc.finished["summary"], rc.finished["open_questions"], kind="agent"
+            ctx,
+            rc,
+            "finished",
+            None,
+            rc.finished["summary"],
+            rc.finished["open_questions"],
+            base,
+            kind="agent",
         )
     except _Stop as e:
-        return _end(ctx, rc, e.state, e.reason, e.summary, [], kind="draft")
+        return _end(ctx, rc, e.state, e.reason, e.summary, [], base, kind="draft")
     except JobCancelled:
-        _end(ctx, rc, "stopped", "user", "Stopped by the operator.", [], kind="draft")
+        try:
+            _end(ctx, rc, "stopped", "user", "Stopped by the operator.", [], base, kind="draft")
+        except Exception as e:  # noqa: BLE001 - the cancel must still propagate
+            log.error("asset model run could not record its stop (%s)", type(e).__name__)
         raise
     except LlmError as e:
-        return _end(ctx, rc, "failed", "provider_error", e.message, [], kind="draft")
+        return _end(ctx, rc, "failed", "provider_error", e.message, [], base, kind="draft")
+    except Exception as e:  # noqa: BLE001 - never leave a run stuck "running"; fixed text, type name only
+        log.error("asset model run failed (%s)", type(e).__name__)
+        text = e.message if isinstance(e, LookError) else INTERNAL
+        return _end(ctx, rc, "failed", None, text, [], base, kind="draft")
 
 
-def _end(ctx, rc: RunContext, state, reason, summary, questions, *, kind) -> dict:
+def _end(ctx, rc: RunContext, state, reason, summary, questions, base, *, kind) -> dict:
     version = None
-    if rc.spec.parts:
+    if rc.spec.parts and rc.spec.model_dump_json() != base:
         try:
             row, _job = service.add_version(
                 ctx.project,

@@ -287,3 +287,92 @@ def test_sources_get_labels_and_facts(handle, app, seeded):
     assert out[0]["label"] == "GA.dxf" and out[0]["facts"] == "view: no, text: yes"
     assert out[1]["label"] == "Scan" and "1234" in out[1]["facts"]
     assert out[2]["label"] == "gone" and out[2]["facts"] == "missing"
+
+
+def _set_sources(handle, run_id, sources):
+    with handle.session() as s:
+        s.get(AssetModelRun, run_id).sources = sources
+
+
+def test_missing_cloud_source_fails_the_run_and_unsticks_the_model(handle, app, seeded):
+    _set_sources(handle, seeded[1], [{"type": "point_cloud", "id": "gone"}])
+    fake, result, run, model = go(handle, app, seeded, [])
+    assert run.state == "failed" and run.summary and run.ended_at is not None
+    assert result == {"run_id": seeded[1], "version": None} and fake.calls == []
+    assert model.live_run_id is None and model.status != "building"
+
+
+def test_unknown_source_type_fails_the_run_with_fixed_text(handle, app, seeded):
+    _set_sources(handle, seeded[1], [{"type": "mystery", "id": "x"}])
+    _, _, run, model = go(handle, app, seeded, [])
+    assert run.state == "failed" and run.summary == R.INTERNAL and run.stop_reason is None
+    assert model.live_run_id is None
+
+
+def test_thumbnail_failure_fails_the_run_and_keeps_a_draft(handle, app, seeded, monkeypatch):
+    from app.asset_models.agent.tools import ToolOut
+
+    def boom(*_a):
+        raise OSError("disk full C:/secret/path")
+
+    monkeypatch.setattr(R, "_thumb", boom)
+    monkeypatch.setattr(
+        R,
+        "run_tool",
+        lambda rc, name, args: ToolOut("t", "s", image=b"x") if name == "validate" else _real(rc, name, args),
+    )
+    _, _, run, model = go(
+        handle,
+        app,
+        seeded,
+        [reply(("upsert_parts", {"parts": [SHELL]})), reply(("validate", {}))],
+    )
+    assert run.state == "failed" and run.summary == R.INTERNAL and "secret" not in run.summary
+    assert model.live_run_id is None and run.version == 1
+
+
+_real = R.run_tool
+
+
+def _refine_seed(handle, app, seeded):
+    from app.asset_models import service
+    from app.asset_models.spec import AssetSpec
+
+    mid, rid = seeded
+    spec = AssetSpec.model_validate({"parts": [SHELL]})
+    service.add_version(handle, app.state.jobs, mid, spec, kind="agent")
+    with handle.session() as s:
+        s.get(AssetModelRun, rid).mode = "refine"
+        s.get(AssetModel, mid).live_run_id = rid
+
+
+def test_refine_that_changes_nothing_writes_no_version(handle, app, seeded):
+    _refine_seed(handle, app, seeded)
+    app.state.keys.delete("anthropic")
+    _, _, run, model = go(handle, app, seeded, [])
+    assert run.state == "failed" and run.version is None and model.current_version == 1
+
+
+def test_refine_finish_without_changes_writes_no_version(handle, app, seeded):
+    _refine_seed(handle, app, seeded)
+    _, result, run, model = go(handle, app, seeded, [reply(("finish", {"summary": "nothing to change"}))])
+    assert run.state == "finished" and run.version is None and result["version"] is None
+    assert model.current_version == 1
+
+
+def test_no_model_call_after_the_tool_budget_is_spent(handle, app, seeded, monkeypatch):
+    monkeypatch.setattr(R, "MAX_CALLS", 1)
+    fake, _, run, _ = go(
+        handle, app, seeded, [reply(("upsert_parts", {"parts": [SHELL]})), reply(("validate", {}))]
+    )
+    assert run.stop_reason == "budget" and len(fake.calls) == 1 and run.version == 1
+
+
+def test_calls_after_finish_in_the_same_reply_are_not_run(handle, app, seeded):
+    _, _, run, _ = go(
+        handle,
+        app,
+        seeded,
+        [reply(("upsert_parts", {"parts": [SHELL]})), reply(("finish", {"summary": "s"}), ("validate", {}))],
+    )
+    assert run.state == "finished" and [s["tool"] for s in run.steps] == ["upsert_parts", "finish"]
