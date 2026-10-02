@@ -128,7 +128,7 @@ const DATA_ICON: Record<string, IconName> = {
   elevation: "elevation",
   point_cloud: "cloud",
   drawing: "drawing",
-  asset_model: "layers",
+  asset_model: "cube",
 };
 
 export function dataHref(projectId: string, item: { id: string; type: string }): string {

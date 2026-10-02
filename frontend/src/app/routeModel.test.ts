@@ -61,6 +61,8 @@ describe("routeInfo", () => {
     expect(routeInfo("/p/a/maps/m1").layout).toBe("fullbleed");
     expect(routeInfo("/p/a/clouds").layout).toBe("page");
     expect(routeInfo("/p/a/clouds/c1").layout).toBe("fullbleed");
+    expect(layoutOf("models", false)).toBe("fullbleed");
+    expect(PROJECT_TABS.map((t) => t.id)).toContain("models");
     expect(layoutOf("findings", true)).toBe("page");
     // R7: the report builder fills the page under the tabs; the list and Data exports are pages.
     expect(routeInfo("/p/a/reports").layout).toBe("page");
@@ -86,6 +88,7 @@ describe("routeInfo", () => {
       "Images",
       "Maps",
       "Point clouds",
+      "Asset models",
       "Findings",
       "Measurements",
       "Reports",
