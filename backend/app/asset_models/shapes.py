@@ -2,7 +2,7 @@
 """One mesh per shape (spec 2026-10-02 §6.2), in a local frame: millimetres, axis +Y, base at y = 0.
 
 Rotationally symmetric shapes are a closed (r, y) profile revolved about Y, so they come out
-watertight. Segment counts follow a 2 mm chord tolerance, capped, so a large shell stays light.
+watertight. Segment counts follow a 0.5 mm chord tolerance, capped, so a large shell stays light.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def _revolve(profile_ry: list[tuple[float, float]], sweep_deg: float = 360.0) ->
     r_max = float(pts[:, 0].max())
     sections = max(4, round(segments_for(r_max) * sweep_deg / 360))
     angle = None if sweep_deg >= 360 else math.radians(sweep_deg)
-    mesh = trimesh.creation.revolve(pts, angle=angle, sections=sections)
+    mesh = trimesh.creation.revolve(pts, angle=angle, cap=angle is not None, sections=sections)
     mesh.apply_transform(_Z_TO_Y)
     mesh.fix_normals()
     return mesh
@@ -177,7 +177,10 @@ def _lathe(p: s.LatheParams):
 def _extrusion(p: s.ExtrusionParams):
     # outline is in plan (x north, z east); extrude_polygon builds along +Z from a polygon in XY
     m = trimesh.creation.extrude_polygon(Polygon(p.outline_mm), p.height)
-    m.apply_transform(_Z_TO_Y)
+    # +90 deg about X sends (x, y, z) to (x, -z, y): plan y lands on asset z and the extrusion runs
+    # down -Y, so lift it by the height to put the base at y = 0 (a rotation keeps the winding).
+    m.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0]))
+    m.apply_translation([0, p.height, 0])
     return m
 
 

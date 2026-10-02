@@ -27,6 +27,7 @@ def test_cylinder_shell_volume_and_bounds():
 def test_partial_sweep_halves_the_volume():
     full = build_shape("cylinder", s.CylinderParams(id=1000, thickness=10, height=100))
     half = build_shape("cylinder", s.CylinderParams(id=1000, thickness=10, height=100, sweep_deg=180))
+    assert half.is_watertight
     assert half.volume == pytest.approx(full.volume / 2, rel=REL)
 
 
@@ -105,6 +106,14 @@ def test_lathe_and_extrusion_and_sweep():
     )
     assert ext.volume == pytest.approx(100 * 10 * 500)
     assert ext.bounds[1][1] == pytest.approx(500)
+    assert ext.is_watertight
+    assert ext.bounds[0].tolist() == pytest.approx([0, 0, 0])
+    assert ext.bounds[1].tolist() == pytest.approx([100, 500, 10])
+    part = build_shape(
+        "lathe", s.LatheParams(profile_mm=[[0, 0], [100, 0], [100, 50], [0, 50]], sweep_deg=90)
+    )
+    assert part.is_watertight
+    assert part.volume == pytest.approx(math.pi * 100**2 * 50 / 4, rel=REL)
     sw = build_shape("sweep", s.SweepParams(section="circle", r=10, path_mm=[[0, 0, 0], [0, 0, 1000]]))
     assert sw.volume == pytest.approx(math.pi * 100 * 1000, rel=0.02)
 
