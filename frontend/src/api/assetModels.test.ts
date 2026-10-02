@@ -23,7 +23,12 @@ describe("asset model api", () => {
 
   it("posts a spec as a new version", async () => {
     const { api, requests } = fakeClient([
-      { method: "POST", path: /\/asset-models\/m1\/versions$/, status: 201, body: { version: { version: 2 }, job: { id: "j" } } },
+      {
+        method: "POST",
+        path: /\/asset-models\/m1\/versions$/,
+        status: 201,
+        body: { version: { version: 2 }, job: { id: "j" } },
+      },
     ]);
     const out = await createVersion(api, PROJECT_ID, "m1", { parts: [] } as never, "edit");
     expect(out.version.version).toBe(2);
@@ -32,8 +37,18 @@ describe("asset model api", () => {
 
   it("restores and starts runs on the right paths", async () => {
     const { api, requests } = fakeClient([
-      { method: "POST", path: /\/versions\/1\/restore$/, status: 201, body: { version: { version: 3 }, job: { id: "j" } } },
-      { method: "POST", path: /\/asset-models\/m1\/runs$/, status: 202, body: { run: { id: "r" }, job: { id: "j" } } },
+      {
+        method: "POST",
+        path: /\/versions\/1\/restore$/,
+        status: 201,
+        body: { version: { version: 3 }, job: { id: "j" } },
+      },
+      {
+        method: "POST",
+        path: /\/asset-models\/m1\/runs$/,
+        status: 202,
+        body: { run: { id: "r" }, job: { id: "j" } },
+      },
     ]);
     await restoreVersion(api, PROJECT_ID, "m1", 1);
     await startRun(api, PROJECT_ID, "m1", {

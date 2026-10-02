@@ -109,6 +109,7 @@ const m = entry("maps");
 const c = entry("clouds");
 const fly = entry("clouds.fly");
 const fd = entry("findings");
+const md = entry("models");
 
 export const GLOBAL_KEYS: KeyEntry[] = [
   g("Ctrl+K", "palette", "Command palette"),
@@ -220,8 +221,16 @@ export const WORKSPACE_KEYS: Record<WorkspaceScope, KeyEntry[]> = {
     fly("Q", "move-down", "Fly down"),
     fly("E", "move-up", "Fly up"),
   ],
-  // The Asset models tab: no workspace keys yet (the global ones apply).
-  models: [],
+  // The Asset models workspace (M1 spec §8); F (fit) is the global key.
+  models: [
+    md("C", "cut", "Cut the model at a bearing"),
+    md("L", "levels", "Show elevation levels"),
+    md("U", "head-off", "Take the head off"),
+    md("Alt+1", "view-top", "Top view"),
+    md("Alt+2", "view-front", "Front view"),
+    md("Alt+3", "view-side", "Side view"),
+    md("Alt+4", "view-iso", "Iso view"),
+  ],
   // The Findings tab (F §8.6): 1-9 and T are the review keys, Enter and Esc the global ones.
   findings: [
     fd("J", "next-row", "Next finding"),

@@ -41,7 +41,11 @@ export async function patchAssetModel(
 export async function deleteAssetModel(api: ApiClient, projectId: string, id: string): Promise<void> {
   await unwrap(api.DELETE(`${P}/{assetModelId}`, path(projectId, id)));
 }
-export async function listVersions(api: ApiClient, projectId: string, id: string): Promise<AssetModelVersion[]> {
+export async function listVersions(
+  api: ApiClient,
+  projectId: string,
+  id: string,
+): Promise<AssetModelVersion[]> {
   return (await unwrap(api.GET(`${P}/{assetModelId}/versions`, path(projectId, id)))).items;
 }
 export async function getVersion(
@@ -75,7 +79,12 @@ export async function restoreVersion(
 export async function listRuns(api: ApiClient, projectId: string, id: string): Promise<AssetModelRun[]> {
   return (await unwrap(api.GET(`${P}/{assetModelId}/runs`, path(projectId, id)))).items;
 }
-export async function getRun(api: ApiClient, projectId: string, id: string, runId: string): Promise<AssetModelRun> {
+export async function getRun(
+  api: ApiClient,
+  projectId: string,
+  id: string,
+  runId: string,
+): Promise<AssetModelRun> {
   return unwrap(api.GET(`${P}/{assetModelId}/runs/{runId}`, rPath(projectId, id, runId)));
 }
 export async function startRun(
@@ -86,6 +95,11 @@ export async function startRun(
 ): Promise<{ run: AssetModelRun; job: Job }> {
   return unwrap(api.POST(`${P}/{assetModelId}/runs`, { ...path(projectId, id), body }));
 }
-export async function stopRun(api: ApiClient, projectId: string, id: string, runId: string): Promise<AssetModelRun> {
+export async function stopRun(
+  api: ApiClient,
+  projectId: string,
+  id: string,
+  runId: string,
+): Promise<AssetModelRun> {
   return unwrap(api.POST(`${P}/{assetModelId}/runs/{runId}/stop`, rPath(projectId, id, runId)));
 }

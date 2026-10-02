@@ -12,6 +12,8 @@ export interface ModelViewerProps {
   onSelect(id: string | null): void;
   /** The view is loading, showing the model, could not start (no WebGL), or could not load the GLB. */
   onState?(s: ModelViewState): void;
+  /** Where the notices go (px from the viewer's edges), so the workspace's panels never cover them. */
+  noticeInset?: { left: number; right: number; top: number };
 }
 
 /** What the workspace last asked for; replayed onto each new engine (a reload, a new GLB). */
@@ -26,7 +28,7 @@ interface Wanted {
 
 /** The React shell around `engine.ts`: the canvas, the notices, and the handle the workspace drives. */
 export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(function ModelViewer(props, ref) {
-  const { glbUrl } = props;
+  const { glbUrl, noticeInset } = props;
   const box = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engine = useRef<ModelEngine | null>(null);
@@ -175,6 +177,7 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         <div
           data-testid="model-viewer-notice"
           className="absolute left-4 right-4 top-4 z-[15] rounded-control bg-glass-solid shadow-elev-2"
+          style={noticeInset}
         >
           {notice}
         </div>
