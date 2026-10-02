@@ -19,6 +19,25 @@ def test_ram_need_is_45_mb_per_million_points_plus_a_gib():
     assert admission.ram_needed(195_274_656) == 9_861_101_344
 
 
+def test_ram_need_flattens_past_the_converter_plateau():
+    # Measured 2026-10-02: 842 M points peaked at 10.3 GB private, not the 39 GB the linear rate gave.
+    # Past ~212 M points the need grows at 2.5 MB/Mpt from a 9 GB base (measured slope 2.4 MB/Mpt).
+    assert admission.ram_needed(842_000_000) == 9 * GB + int(2_500_000 * 842) + 2**30
+    assert 10.3 * GB < admission.ram_needed(842_000_000) < 13 * GB
+
+
+def test_ram_need_never_falls_as_the_cloud_grows():
+    counts = range(0, 3_000_000_001, 10_000_000)
+    needs = [admission.ram_needed(n) for n in counts]
+    assert needs == sorted(needs)
+
+
+def test_admits_the_842m_lng_cloud_with_36_gb_free(monkeypatch, tmp_path):
+    monkeypatch.setattr(admission, "available_ram", lambda: 36 * GB)
+    monkeypatch.setattr(admission, "free_disk", lambda folder: 2_000 * GB)
+    assert admission.assess(842_000_000, 3_941_331_314, 34, tmp_path).ok
+
+
 def test_disk_need_counts_the_work_copy_chunks_octree_and_margin():
     need = admission.disk_needed(point_count=1_000_000, source_size=34_000_000, record_len=34)
     assert need == 34_000_000 + 40 * 1_000_000 + int(0.25 * 1_000_000 * 34) + 2**30

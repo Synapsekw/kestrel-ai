@@ -59,7 +59,7 @@ spec's own decisions.
 | Rejected | Patching only when the header is wrong | That is two code paths, the NAS source is read two or three times, and the common Pix4D case needs the copy anyway. |
 | Rejected | Rewriting the file through laspy | About 3 × slower than a byte copy, with nothing gained. |
 | CRS | laspy `header.parse_crs()`. For a compound CRS, the horizontal part gives `epsg`/`proj4` and the vertical part's name goes in `vertical_crs`. When the file has no CRS, the operator may **assign** an EPSG (`crs_source = "assigned"`). The cloud is never reprojected. | PotreeConverter drops the CRS (spike), so it is stored ourselves. Pix4D writes GeoKeys, and the spike's LAS 1.2 parsed to 32639. |
-| RAM admission | Need = **45 MB per million points + 1 GiB**, compared with `psutil.virtual_memory().available`. Checked when the file is inspected, when the import is submitted, and again right before the converter starts. | 45 MB/Mpt is the spike's measurement (8.7 GB for 195 M). The check runs three times because free RAM changes between the dialog and the job. |
+| RAM admission | Need = **min(45 MB/Mpt, 9 GB + 2.5 MB/Mpt) + 1 GiB** (amended 2026-10-02), compared with `psutil.virtual_memory().available`. Checked when the file is inspected, when the import is submitted, and again right before the converter starts. | 45 MB/Mpt is the spike's measurement (8.7 GB for 195 M); the converter then plateaus (842 M peaked at 10.3 GB, see `vault/decisions/2026-10-02-gotcha-potreeconverter-ram-plateaus.md`). The check runs three times because free RAM changes between the dialog and the job. |
 | Converter concurrency | **One PotreeConverter at a time, per process** (a module lock). A second import waits, cancellably, showing "waiting for another point-cloud import". | The job pool has 2 workers. Two converters could each pass admission and then exhaust RAM together. |
 | Orphan converters | The converter runs inside a **Windows Job Object** with `KILL_ON_JOB_CLOSE` (ctypes). Cancelling uses `taskkill /T /F` (the trainer's `_terminate_tree`). | If the sidecar crashes, the converter dies with it, so the startup sweep never deletes a folder that a live orphan is still writing. |
 | Octree serving | A **backend endpoint with HTTP Range**, restricted to exactly three filenames (an enum). The token goes in a query param, appended by a potree-core `RequestManager.getUrl`. | The loader asks for `…/metadata.json` and then derives the other two URLs with `.replace("/metadata.json", "/octree.bin")`, so a `?token=` query survives (checked in potree-core 2.0.15's bundle). The existing auth accepts `?token=`, as map tiles already do. |
@@ -760,7 +760,7 @@ converter is started by the sidecar, not by Tauri, so `capabilities/default.json
 - **Never in memory:**
   - The point set. Scan and export hold one 2 M-point chunk, about 250 MB peak. The percentile
     sample is ≤ 2 M floats. The class histogram is 256 ints. The copy buffer is 64 MiB.
-  - The converter runs out of process. It is admitted at 45 MB/Mpt + 1 GiB, and only one runs at a
+  - The converter runs out of process. It is admitted at min(45 MB/Mpt, 9 GB + 2.5 MB/Mpt) + 1 GiB, and only one runs at a
     time.
   - In the webview, the point budget (≤ 8 M) bounds memory. The spike measured a peak of about
     1.6 GB at 3 M and 2.1 GB at 8 M.

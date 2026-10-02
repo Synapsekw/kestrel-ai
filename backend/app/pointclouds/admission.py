@@ -17,6 +17,11 @@ from app.jobs.cancellation import JobFailure
 MB = 1_000_000
 GIB = 1 << 30
 RAM_PER_MPOINT = 45 * MB  # spike: 8.7 GB peak for 195 M points
+# The converter's peak flattens once its chunks hit their cap: 842 M points peaked at 10.3 GB
+# (measured 2026-10-02, 24 threads), not the 39 GB the linear rate gives. Past ~212 M points the
+# need is a 9 GB base plus 2.5 MB/Mpt (the measured slope between 195 M and 842 M is 2.4).
+RAM_PLATEAU_BASE = 9_000 * MB
+RAM_PLATEAU_PER_MPOINT = 2.5 * MB
 CHUNK_BYTES_PER_POINT = 40  # the converter's temporary chunks
 OCTREE_FRACTION = 0.25  # measured 0.186 x the LAS size
 
@@ -37,7 +42,8 @@ def gb(n: int) -> str:
 
 
 def ram_needed(point_count: int) -> int:
-    return int(RAM_PER_MPOINT * point_count / 1e6) + GIB
+    mpts = point_count / 1e6
+    return int(min(RAM_PER_MPOINT * mpts, RAM_PLATEAU_BASE + RAM_PLATEAU_PER_MPOINT * mpts)) + GIB
 
 
 def disk_needed(point_count: int, source_size: int, record_len: int) -> int:
