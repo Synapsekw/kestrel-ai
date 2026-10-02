@@ -1,8 +1,8 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorkspaceRail } from "@/ui";
+import { RAIL_STORAGE_PREFIX, WorkspaceRail } from "@/ui";
 import { composeFeatures } from "./compose";
 import type { CloudToolId } from "./tools";
 import { useCloudRail } from "./useCloudRail";
@@ -17,13 +17,15 @@ let armTool: (id: CloudToolId) => void = () => {};
 function Harness({
   available = () => true,
   onArm = vi.fn(),
-  findingDetail = null,
-  measureDetail = null,
+  finding = null,
+  measurement = null,
 }: {
   available?: (id: CloudToolId) => boolean;
   onArm?: (id: CloudToolId) => void;
-  findingDetail?: ReactNode;
-  measureDetail?: ReactNode;
+  /** The selected finding's id (its detail reads "finding <id>"). */
+  finding?: string | null;
+  /** The selected measurement's id (its detail reads "measurement <id>"). */
+  measurement?: string | null;
 }) {
   const [active, setActive] = useState<CloudToolId>("orbit");
   useEffect(() => {
@@ -37,17 +39,24 @@ function Harness({
       name: "f",
       findings: {
         list: <p>pin list</p>,
-        detail: findingDetail,
+        detail: finding ? <p>finding {finding}</p> : null,
+        selectionKey: finding,
         count: 2,
         menu: [{ id: "m", label: "Do", onSelect() {} }],
       },
-      measure: { list: <p>measure list</p>, detail: measureDetail, count: 0 },
+      measure: {
+        list: <p>measure list</p>,
+        detail: measurement ? <p>measurement {measurement}</p> : null,
+        selectionKey: measurement,
+        count: 0,
+      },
     },
   ]);
   const rail = useCloudRail({
     active,
     arm: (id) => armTool(id),
     isAvailable: available,
+    ready: true,
     features,
     layersBody: <p>layers body</p>,
     clipBody: <p>clip help</p>,
@@ -96,34 +105,63 @@ describe("useCloudRail", () => {
     expect(screen.getByRole("button", { name: "Area" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("disables Clipping box with its reason (and Fly) when the engine cannot clip", async () => {
-    const onArm = vi.fn();
-    render(<Harness available={(id) => id !== "clip" && id !== "fly"} onArm={onArm} />);
-    await userEvent.click(
-      within(screen.getByRole("toolbar", { name: "Point cloud" })).getByRole("button", { name: "Clip" }),
-    );
-    const clip = within(screen.getByRole("region", { name: "Clip" })).getByRole("button", {
-      name: "Clipping box — This view cannot clip",
-    });
-    expect(clip).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Fly" })).toBeDisabled();
+  it("hides the Clip topic when the engine cannot clip; Fly is disabled", () => {
+    render(<Harness available={(id) => id !== "clip" && id !== "fly"} />);
+    const rail = screen.getByRole("toolbar", { name: "Point cloud" });
+    expect(within(rail).queryByRole("button", { name: "Clip" })).toBeNull();
+    expect(
+      within(rail)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Orbit", "Pan", "Fly", "Layers", "Findings", "Measure", "Photos"]);
+    expect(within(rail).getByRole("button", { name: "Fly" })).toBeDisabled();
+  });
+
+  it("a remembered Clip topic falls back to Findings when the engine cannot clip", () => {
+    localStorage.setItem(`${RAIL_STORAGE_PREFIX}clouds`, JSON.stringify({ open: true, topic: "clip" }));
+    render(<Harness available={(id) => id !== "clip" && id !== "fly"} />);
+    expect(screen.getByRole("region", { name: "Findings" })).toHaveTextContent("pin list");
+  });
+
+  it("with clip available, a remembered Clip topic opens it", () => {
+    localStorage.setItem(`${RAIL_STORAGE_PREFIX}clouds`, JSON.stringify({ open: true, topic: "clip" }));
+    render(<Harness />);
     expect(screen.getByRole("region", { name: "Clip" })).toHaveTextContent("clip help");
   });
 
-  it("the inspector shows the selection of the topic last opened, else whichever there is", async () => {
-    window.innerWidth = 1600; // a wide window: the inspector does not close the panel
-    const { rerender } = render(<Harness findingDetail={<p>finding F-0001</p>} />);
+  // Ruling R10: the inspector shows the most recent selection, whatever the rail shows. At 1024 px
+  // (narrow) the inspector closes the panel, so the rail's topic cannot be what decides.
+  it("the inspector shows the most recently selected item: a measurement, then a finding", () => {
+    const { rerender } = render(<Harness measurement="m-1" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("measurement m-1");
+    rerender(<Harness measurement="m-1" finding="F-0001" />);
     expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
-    // A finding and a measurement both selected: Findings is open, so the finding shows ...
-    rerender(<Harness findingDetail={<p>finding F-0001</p>} measureDetail={<p>Area 1</p>} />);
-    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
-    // ... and opening Measure shows the measurement.
-    const rail = screen.getByRole("toolbar", { name: "Point cloud" });
-    await userEvent.click(within(rail).getByRole("button", { name: "Measure" }));
-    expect(screen.getByTestId("detail")).toHaveTextContent("Area 1");
-    rerender(<Harness findingDetail={<p>finding F-0001</p>} />);
+    // another measurement while the finding stays selected
+    rerender(<Harness measurement="m-2" finding="F-0001" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("measurement m-2");
+    // the measurement deselected: the finding is still selected
+    rerender(<Harness finding="F-0001" />);
     expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
     rerender(<Harness />);
     expect(screen.getByTestId("detail")).toBeEmptyDOMElement();
+  });
+
+  it("the inspector shows the most recently selected item: a finding, then a measurement", () => {
+    const { rerender } = render(<Harness finding="F-0001" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001");
+    rerender(<Harness finding="F-0001" measurement="m-1" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("measurement m-1");
+    // another finding (picked on the stage) while the measurement stays selected
+    rerender(<Harness finding="F-0002" measurement="m-1" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0002");
+    rerender(<Harness measurement="m-1" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("measurement m-1");
+  });
+
+  it("choosing the selected item again makes it the latest (a new selection key)", () => {
+    const { rerender } = render(<Harness measurement="m-1#1" finding="F-0001#1" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001#1");
+    rerender(<Harness measurement="m-1#2" finding="F-0001#1" />);
+    expect(screen.getByTestId("detail")).toHaveTextContent("measurement m-1#2");
   });
 });

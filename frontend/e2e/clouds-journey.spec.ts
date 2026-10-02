@@ -192,6 +192,9 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
   }
 
   // 7. M1: attach the area to the finding
+  // Area 1 is still selected from step 2, but the finding (selected since) is the latest selection,
+  // which the inspector shows (ruling R10). Esc in Orbit clears the finding: the area shows again.
+  await page.keyboard.press("Escape");
   await w.openTopic("Measure");
   await choose(w.measurementRow("Area 1"));
   await w.attachFinding.click();

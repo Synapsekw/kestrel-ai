@@ -143,12 +143,13 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   );
 
   // Keyed by cloud, so a cloud switch clears the selection without an effect.
-  const [sel, setSel] = useState<{ cloudId: string; id: string } | null>(null);
+  // `n` counts select calls: choosing the selected pin again makes it the latest selection (R10).
+  const [sel, setSel] = useState<{ cloudId: string; id: string; n: number } | null>(null);
   const selectedId = sel && sel.cloudId === cloud.id ? sel.id : null;
   const selectedPin: CloudPin | null = pins.pins.find((p) => p.id === selectedId) ?? null;
   const select = useCallback(
     (id: string | null) => {
-      setSel(id ? { cloudId: cloud.id, id } : null);
+      setSel((s) => (id ? { cloudId: cloud.id, id, n: (s?.n ?? 0) + 1 } : null));
       if (id) latest.current.showTopic("findings");
     },
     [cloud.id],
@@ -399,6 +400,7 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
       count: pins.total,
       list: <FindingsList {...findingsProps} />,
       detail: selectedPin ? <FindingDetail {...findingsProps} /> : null,
+      selectionKey: selectedPin && sel ? `${selectedPin.id}#${sel.n}` : null,
     },
     layer: (
       <PinsLayer

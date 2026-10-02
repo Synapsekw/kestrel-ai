@@ -11,6 +11,7 @@ import {
   type TopicTool,
 } from "@/ui";
 import type { ComposedFeatures } from "./compose";
+import type { TopicContent } from "./types";
 import { PALETTE, type CloudToolId } from "./tools";
 import { CLOUD_TOPICS, TOPIC_OF_TOOL, type CloudTopicId } from "./topics";
 
@@ -24,6 +25,8 @@ export function useCloudRail(p: {
   active: CloudToolId;
   arm(id: CloudToolId): void;
   isAvailable(id: CloudToolId): boolean;
+  /** The view is up, so `isAvailable` is settled (the engine's clip support is known). */
+  ready: boolean;
   features: ComposedFeatures;
   layersBody: ReactNode;
   clipBody: ReactNode;
@@ -31,6 +34,13 @@ export function useCloudRail(p: {
 }): { store: StoreApi<RailState>; topics: RailTopic[]; nav: ReactNode; detail: ReactNode | null } {
   const [store] = useState(() => createRailStore("clouds", CLOUD_TOPICS, "findings"));
   const topic = useStore(store, (s) => s.topic);
+  const canClip = p.isAvailable("clip");
+
+  // Spec §3.2 (ruling R9): without engine clipping the Clip topic is hidden; a remembered Clip
+  // topic falls back to the default so the rail still shows a panel.
+  useEffect(() => {
+    if (p.ready && !canClip && topic === "clip") store.setState({ topic: "findings" });
+  }, [p.ready, canClip, topic, store]);
 
   // Spec §4 "Tool keys": if the panel is open it switches to the armed tool's topic.
   useEffect(() => {
@@ -64,12 +74,8 @@ export function useCloudRail(p: {
   ));
 
   const { findings, measure } = p.features;
-  // Spec §3.2: the inspector shows one selection. With a finding and a measurement both selected,
-  // the one of the topic last opened wins (the rail's topic, open or not).
-  const findingDetail = findings?.detail ?? null;
-  const measureDetail = measure?.detail ?? null;
-  const detail = topic === "measure" ? (measureDetail ?? findingDetail) : (findingDetail ?? measureDetail);
-  const topics: RailTopic[] = [
+  const detail = useLatestDetail(findings, measure);
+  const all: RailTopic[] = [
     {
       id: "layers",
       label: "Layers",
@@ -131,5 +137,33 @@ export function useCloudRail(p: {
       ),
     },
   ];
+  const topics = canClip ? all : all.filter((t) => t.id !== "clip");
   return { store, topics, nav, detail };
+}
+
+type Selection = string | null;
+const keyOf = (t: TopicContent | null): Selection => (t?.detail ? (t.selectionKey ?? "selected") : null);
+
+/**
+ * Ruling R10: the inspector shows the most recently selected item, a finding or a measurement,
+ * whatever the rail shows; when that one is deselected, the other (if any) shows.
+ */
+function useLatestDetail(findings: TopicContent | null, measure: TopicContent | null): ReactNode | null {
+  const f = keyOf(findings);
+  const m = keyOf(measure);
+  // Derived from the previous render's selections (React's "adjust state on a prop change").
+  const [seen, setSeen] = useState<{ f: Selection; m: Selection; last: "findings" | "measure" }>(() => ({
+    f,
+    m,
+    last: f === null && m !== null ? "measure" : "findings",
+  }));
+  let last = seen.last;
+  if (seen.f !== f || seen.m !== m) {
+    if (m !== null && m !== seen.m) last = "measure";
+    if (f !== null && f !== seen.f) last = "findings";
+    setSeen({ f, m, last });
+  }
+  const fd = findings?.detail ?? null;
+  const md = measure?.detail ?? null;
+  return last === "measure" ? (md ?? fd) : (fd ?? md);
 }

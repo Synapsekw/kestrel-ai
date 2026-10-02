@@ -73,6 +73,11 @@ export interface TopicContent {
   list: ReactNode;
   /** The selected item's details, shown in the inspector; null when nothing is selected. */
   detail: ReactNode | null;
+  /**
+   * Changes with every selection, the same item chosen again included: the inspector shows the
+   * most recent selection (ruling R10). Null when nothing is selected.
+   */
+  selectionKey?: string | null;
   count?: number | null;
   menu?: readonly MenuItem[];
 }

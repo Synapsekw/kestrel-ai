@@ -87,6 +87,8 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
   const geographic = isGeographic(cloud);
   const live = useMemo(() => liveResult(state, geographic), [state, geographic]);
   const [saving, setSaving] = useState(false);
+  /** Rows chosen so far: choosing the selected row again makes it the latest selection (R10). */
+  const [chosen, setChosen] = useState(0);
   const inFlight = useRef(false);
   const viewDir = useRef<[number, number, number] | null>(null);
   /** The line the latest preview request was for; answers for any other line are dropped. */
@@ -281,6 +283,7 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
 
   const choose = (m: CloudMeasurement) => {
     list.select(m.id);
+    setChosen((n) => n + 1);
     const v = viewer.current;
     if (v) {
       if (m.view) v.goToPose(m.view.pose);
@@ -354,6 +357,7 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
         <MeasurementsList projectId={projectId} cloud={cloud} list={list} onSelect={choose} onRetry={retry} />
       ),
       detail: list.selected ? <MeasurementDetail projectId={projectId} cloud={cloud} list={list} /> : null,
+      selectionKey: list.selected ? `${list.selected.id}#${chosen}` : null,
     },
     layer:
       labelText && anchor ? <MeasureLabel viewer={viewer} anchor={anchor} text={labelText} /> : undefined,

@@ -193,6 +193,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
     active: control.active,
     arm: control.arm,
     isAvailable,
+    ready: hasView,
     features,
     layersBody,
     clipBody: <p className="px-1 text-xs text-muted">{CLIP_HELP}</p>,
