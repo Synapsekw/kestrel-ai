@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from app.asset_models.look import LookError
+from app.asset_models.look import LookError, finite_numbers
 
 MAX_SAMPLE = 2_000_000
 CHUNK = 2_000_000
@@ -51,9 +51,14 @@ def source_of(handle, cloud_id: str) -> Path:
 
     try:
         cloud = rows.require_ready(handle, cloud_id)
+    except AppError as e:  # fixed sentences only: library messages can carry local paths
+        if e.code == "not_found":
+            raise LookError("There is no point cloud with that id in this project.") from None
+        raise LookError("That point cloud is still importing or failed to import.") from None
+    try:
         return export.check_source(cloud)
-    except (AppError, JobFailure) as e:
-        raise LookError(f"That point cloud can't be read: {getattr(e, 'message', str(e))}") from None
+    except (JobFailure, OSError):
+        raise LookError("That point cloud's source file is not reachable or changed since import.") from None
 
 
 def sample_cloud(
@@ -86,10 +91,20 @@ def sample_cloud(
     return CloudSample(offset, xyz, total)
 
 
-def _in_box(pts: np.ndarray, region) -> np.ndarray:
+def _box(region) -> np.ndarray | None:
     if region is None:
+        return None
+    vals = finite_numbers(region, 6)
+    if vals is None:
+        raise LookError("The region must be [xmin, ymin, zmin, xmax, ymax, zmax]: six numbers, in metres.")
+    return np.asarray(vals)
+
+
+def _in_box(pts: np.ndarray, region) -> np.ndarray:
+    box = _box(region)
+    if box is None:
         return pts
-    lo, hi = np.asarray(region[:3]), np.asarray(region[3:])
+    lo, hi = box[:3], box[3:]
     return pts[np.all((pts >= lo) & (pts <= hi), axis=1)]
 
 
@@ -123,7 +138,13 @@ def cloud_slice(
     max_points: int = 5000,
     image_px: int = 1024,
 ) -> SliceResult:
-    k = AXES[axis]
+    k = AXES.get(axis.lower()) if isinstance(axis, str) else None
+    if k is None:
+        raise LookError("The axis must be one of x | y | z.")
+    nums = finite_numbers([at_m, thickness_m], 2)
+    if nums is None or nums[1] <= 0:
+        raise LookError("at_m must be a finite number and thickness_m a finite number above zero (metres).")
+    at_m, thickness_m = nums
     pts = sample.points()
     slab = pts[np.abs(pts[:, k] - at_m) <= thickness_m / 2]
     if len(slab) == 0:
@@ -201,7 +222,13 @@ def _ransac_circle_local(xy: np.ndarray, thr: float, iters: int):
     return c, r, float(np.sqrt((resid**2).mean())), float(best.mean())
 
 
+FIT_KINDS = ("circle", "cylinder_vertical", "plane")
+
+
 def cloud_fit(sample: CloudSample, kind: str, region, *, max_points: int = 200_000) -> dict:
+    kind = "cylinder_vertical" if kind == "cylinder" else kind
+    if kind not in FIT_KINDS:
+        raise LookError("The fit kind must be one of circle | cylinder_vertical | plane.")
     pts = _cap(_in_box(sample.points(), region), max_points)
     if len(pts) < 3 or (kind == "cylinder_vertical" and len(pts) < 30):
         return {"kind": kind, "n": int(len(pts)), "note": "too few points in that region to fit"}

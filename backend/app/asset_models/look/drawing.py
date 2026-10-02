@@ -11,8 +11,12 @@ from PIL import Image
 from app.asset_models.look import LookError, LookImage, clamp_region, to_jpeg
 from app.db.models import Drawing
 from app.drawings import store as dstore
+from app.drawings.placement import VECTOR
 
 __all__ = ["LookError", "LookImage", "TextResult", "drawing_text", "drawing_view"]
+
+
+VECTOR_TEXT = ("pdf", "dxf")  # the formats whose source carries a text layer
 
 
 class TextResult:
@@ -42,10 +46,16 @@ def drawing_view(handle, drawing_id: str, region=None, *, max_side: int = 1600) 
 
     from app.drawings.raster_io import read_rgba
 
-    _drawing(handle, drawing_id)
+    d = _drawing(handle, drawing_id)
     plan = dstore.plan_path(handle, drawing_id)
     if not plan.exists():
-        raise LookError("That is a vector drawing with no rendered image - read its text with drawing_text.")
+        if d.format == "dxf":
+            raise LookError(
+                "That is a vector drawing with no rendered image - read its text with drawing_text."
+            )
+        raise LookError(
+            "This drawing has no page image and no text layer for these tools (a terrain or alignment file)."
+        )
     region, note = clamp_region(region)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", NotGeoreferencedWarning)
@@ -114,20 +124,52 @@ def _dxf_spans(path: Path, extent) -> list[dict]:
     return spans
 
 
+def _unreadable(fmt: str) -> LookError:
+    tail = " - read it with drawing_view." if fmt == "pdf" else "."
+    return LookError(f"The drawing's source file can't be read{tail}")
+
+
+def _read_spans(d: Drawing, src: Path) -> list[dict]:
+    from app.jobs.cancellation import JobFailure
+
+    if d.format == "pdf":
+        import pypdfium2
+
+        errors = (OSError, IndexError, pypdfium2.PdfiumError, JobFailure)
+    else:
+        import ezdxf
+
+        errors = (OSError, IndexError, ezdxf.DXFError)
+    try:
+        if d.format == "pdf":
+            return _pdf_spans(src, d.page or 1)
+        return _dxf_spans(src, d.extent_src or [0, 0, 1, 1])
+    except errors:
+        raise _unreadable(d.format) from None
+
+
 def drawing_text(handle, drawing_id: str, region=None, *, max_spans: int = 4000) -> TextResult:
     d = _drawing(handle, drawing_id)
     region, _ = clamp_region(region)
     src = Path(d.source_path)
-    if d.format not in ("pdf", "dxf"):
+    if d.format not in VECTOR_TEXT:
+        if d.format in VECTOR:  # LandXML: linework and surfaces only
+            return TextResult(
+                [],
+                "This drawing has neither a page image nor a text layer for these tools "
+                "(a terrain or alignment file).",
+            )
         return TextResult(
             [], "This drawing is a raster image with no text layer - read it with drawing_view."
         )
     if not src.exists():
-        return TextResult([], "The drawing's source file is not reachable - read it with drawing_view.")
-    spans = (
-        _pdf_spans(src, d.page or 1) if d.format == "pdf" else _dxf_spans(src, d.extent_src or [0, 0, 1, 1])
-    )
+        return TextResult([], _unreadable(d.format).message)
+    spans = _read_spans(d, src)
+    if not spans:
+        if d.format == "pdf":
+            return TextResult([], "This page has no text layer (a scan?) - read it with drawing_view.")
+        return TextResult([], "This drawing has no text entities.")
     spans = [sp for sp in spans if _overlaps(sp["box"], region)]
     if not spans:
-        return TextResult([], "This page has no text layer (a scan?) - read it with drawing_view.")
+        return TextResult([], "There is no text in that region.")
     return TextResult(spans[:max_spans], "", truncated=len(spans) > max_spans)
