@@ -122,6 +122,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 const layers = (page: Page) => page.getByTestId("layer-row");
+const railPanel = (page: Page) => page.getByTestId("rail-panel");
+
+/** Opens a topic from the map rail (workspace rail spec §2); layer rows live in the Layers topic. */
+async function openTopic(page: Page, name: string) {
+  await page.getByRole("toolbar", { name: "Map" }).getByRole("button", { name }).click();
+  await expect(railPanel(page)).toHaveAttribute("data-topic", name.toLowerCase());
+}
 
 /**
  * Show the Sep DSM (surface rows are hidden by default, R-DSM), wait for its Z readout, then hover
@@ -145,6 +152,7 @@ test("flow 1: two orthos aligned, swipe the divider, side-by-side mirrors the cr
   await page.goto(`/p/${P}/maps?l=${AUG}&r=${SEP}`);
   await expect(page.getByTestId("map-workspace")).toHaveAttribute("data-frame", "crs");
   await expect(page.getByTestId("coord-readout")).toContainText("EPSG:32633");
+  await openTopic(page, "Layers");
   await expect(layers(page).filter({ hasText: "14 Aug 2026" })).toBeVisible();
   await expect(layers(page).filter({ hasText: "14 Sep 2026" })).toBeVisible();
 
@@ -174,7 +182,8 @@ test("flow 1: two orthos aligned, swipe the divider, side-by-side mirrors the cr
   const right = page.getByTestId("site-map-right");
   await expect(left).toBeVisible();
   await expect(right).toBeVisible();
-  await expect(page.getByRole("region", { name: "Layers" }).getByTestId("layer-row").first()).toBeHidden();
+  // Ruling R6: Side-by-side closes the rail panel, which would cover the left pane.
+  await expect(railPanel(page)).toHaveCount(0);
   const lb = (await left.boundingBox())!;
   await page.mouse.move(lb.x + lb.width / 2, lb.y + lb.height / 2);
   const ghost = page.getByTestId("ghost-crosshair");
@@ -187,9 +196,9 @@ test("flow 1: two orthos aligned, swipe the divider, side-by-side mirrors the cr
     path: evidencePath("maps", "flow1-side-by-side.png"),
   });
 
-  // Blend: the right date's opacity; the layers panel comes back after Side-by-side (§5).
+  // Blend: the right date's opacity; leaving Side-by-side does not reopen the panel (ruling R6).
   await page.getByRole("radio", { name: "Blend" }).click();
-  await expect(layers(page).first()).toBeVisible();
+  await expect(railPanel(page)).toHaveCount(0);
   const blend = page.getByRole("slider", { name: "Blend" });
   const before = Number(await blend.getAttribute("aria-valuenow"));
   await blend.focus();

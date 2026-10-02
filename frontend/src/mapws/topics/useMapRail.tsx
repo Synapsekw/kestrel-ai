@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import { createRailStore, ToolButton, type RailState, type RailTopic } from "@/ui";
-import { useTools } from "../context";
+import { useTools, useWorkspace } from "../context";
 import { useRegistry } from "../registry";
 import { shortcutFor, toolRegistry, toolsOfTopic } from "../tools/toolStore";
 import { AiTopic } from "./AiTopic";
@@ -37,9 +37,18 @@ export function useMapRail(p: MapTopicProps & { hasBaseData: boolean }): {
     store.getState().revealTopicFor(topic);
     const eyes: Partial<Record<MapTopicId, TopicVisibility>> = { findings, measure, ai };
     const vis = eyes[topic];
-    if (vis && !vis.value) vis.show();
+    // Ruling R7: any hidden row of the topic comes back, not only a fully hidden topic.
+    if (vis && !vis.all) vis.show();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- react to the armed tool only
   }, [active]);
+
+  // Ruling R6: Side-by-side needs the left pane, so entering it closes the panel; leaving does not reopen it.
+  const mode = useWorkspace((s) => s.mode);
+  const lastMode = useRef(mode);
+  useEffect(() => {
+    if (mode === "side" && lastMode.current !== "side") store.getState().close();
+    lastMode.current = mode;
+  }, [mode, store]);
 
   const nav = toolsOfTopic(registry, "nav").map((t) => (
     <ToolButton

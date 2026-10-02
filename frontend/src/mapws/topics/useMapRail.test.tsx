@@ -63,6 +63,26 @@ describe("useMapRail", () => {
     expect(workspace.getState().layerState["findings:all"]?.visible).toBe(true);
   });
 
+  it("a tool key shows its topic's hidden row even while another row keeps the eye on (R7)", () => {
+    const { tools, workspace } = renderMapRail();
+    act(() => workspace.getState().setLayerState("findings:all", { visible: false }));
+    expect(workspace.getState().layerState["zones:all"]?.visible ?? true).toBe(true);
+    act(() => tools.getState().activate("finding-point"));
+    expect(workspace.getState().layerState["findings:all"]?.visible).toBe(true);
+  });
+
+  it("entering Side-by-side closes the panel; leaving it does not reopen it (R6)", () => {
+    const { workspace, rail } = renderMapRail();
+    expect(rail.getState().open).toBe(true);
+    act(() => workspace.getState().setMode("side"));
+    expect(rail.getState().open).toBe(false);
+    act(() => workspace.getState().setMode("single"));
+    expect(rail.getState().open).toBe(false);
+    act(() => rail.getState().openTopic("layers"));
+    act(() => workspace.getState().setMode("swipe"));
+    expect(rail.getState().open).toBe(true);
+  });
+
   it("defaults to Layers when the project has no base data", () => {
     const { rail } = renderMapRail({ hasBaseData: false });
     expect(rail.getState().topic).toBe("layers");

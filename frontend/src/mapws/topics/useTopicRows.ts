@@ -15,6 +15,8 @@ export const TOPIC_KINDS: Record<MapTopicId, readonly string[]> = {
 
 export interface TopicVisibility {
   value: boolean;
+  /** Every row of the topic is visible (a creation tool needs its own row on, ruling R7). */
+  all: boolean;
   toggle(): void;
   /** Turns every row of the topic on (a creation tool of a hidden topic was picked). */
   show(): void;
@@ -25,9 +27,11 @@ export function useTopicVisibility(rows: readonly LayerRow[], topic: MapTopicId)
   const own = useMemo(() => rows.filter((r) => TOPIC_KINDS[topic].includes(r.kind)), [rows, topic]);
   const layerState = useWorkspace((s) => s.layerState);
   const setLayerState = useWorkspace((s) => s.setLayerState);
-  const value = own.some((r) => effectiveState(r, layerRegistry.get(r.kind), layerState).visible);
+  const shown = own.map((r) => effectiveState(r, layerRegistry.get(r.kind), layerState).visible);
+  const value = shown.some(Boolean);
   return {
     value,
+    all: shown.every(Boolean),
     toggle: () => own.forEach((r) => setLayerState(r.key, { visible: !value })),
     show: () => own.forEach((r) => setLayerState(r.key, { visible: true })),
   };
