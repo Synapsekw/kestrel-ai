@@ -28,7 +28,7 @@ Facing = Literal["up", "down"]
 
 
 class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class CylinderParams(_Strict):
@@ -176,6 +176,8 @@ class Placement(_Strict):
         if sum(abs(c) for c in self.axis) == 0:
             raise ValueError("axis must not be zero")
         if self.host is None:
+            if any(v is not None for v in (self.bearing_deg, self.elevation_mm, self.e_mm, self.n_mm)):
+                raise ValueError("bearing_deg, elevation_mm, e_mm and n_mm need a host")
             return self
         shell = self.bearing_deg is not None or self.elevation_mm is not None
         head = self.e_mm is not None or self.n_mm is not None

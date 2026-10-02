@@ -106,3 +106,27 @@ def test_flat_plate_takes_d_or_w_and_l_never_a_mix(outline, ok):
     else:
         with pytest.raises(ValidationError, match="either d, or both w and l"):
             Part.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"params": {"id": float("inf"), "thickness": 8, "height": 3000}},
+        {"placement": {"origin_mm": [0, float("inf"), 0]}},
+        {"placement": {"axis": [float("nan"), 1, 0]}},
+        {
+            "shape": "nozzle",
+            "params": {"dn": 50, "od": 60.3, "projection": 200, "flange_od": 165, "flange_t": 20},
+            "placement": {"host": "x", "bearing_deg": float("nan"), "elevation_mm": 10},
+        },
+    ],
+)
+def test_nan_and_inf_are_rejected_everywhere(bad):
+    with pytest.raises(ValidationError):
+        Part.model_validate(shell(**bad))
+
+
+@pytest.mark.parametrize("field", ["bearing_deg", "elevation_mm", "e_mm", "n_mm"])
+def test_mounting_fields_without_a_host_are_rejected(field):
+    with pytest.raises(ValidationError, match="need a host"):
+        Part.model_validate(shell(placement={field: 5}))
