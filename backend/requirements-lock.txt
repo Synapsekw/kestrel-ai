@@ -53,6 +53,7 @@ kiwisolver==1.5.1
 laspy==2.7.0
 lazrs==0.8.2
 mako==1.4.1
+mapbox-earcut==1.0.3
 markdown-it-py==4.2.0
 markupsafe==3.0.3
 matplotlib==3.11.2
@@ -118,6 +119,7 @@ termcolor==3.3.0
 torch==2.14.0+cu130
 torchvision==0.29.0+cu130
 tqdm==4.66.5
+trimesh==4.12.2
 truststore==0.10.4
 typing-extensions==4.16.0
 typing-inspection==0.4.4

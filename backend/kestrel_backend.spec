@@ -23,6 +23,8 @@ hiddenimports = (
     # point clouds (spec 2026-09-23-point-clouds section 5 item 6): laspy picks its LAZ backend
     # at runtime, so lazrs is named; PotreeConverter's own payload is added by unit K1.
     + collect_submodules("laspy")
+    # trimesh imports its exporters and creation helpers lazily by name (asset models, 2026-10-02).
+    + collect_submodules("trimesh")
     + [
         "torch",
         "torchvision",
@@ -88,6 +90,8 @@ datas = (
     # PDF drawings (plan 2026-09-27-maps-b3): pypdfium2's version.json files; PDFium itself is below.
     + collect_data_files("pypdfium2")
     + collect_data_files("pypdfium2_raw")
+    # trimesh ships JSON templates under trimesh/resources/ that the glTF exporter reads.
+    + collect_data_files("trimesh")
     # Report fonts (spec 2026-09-26-reports §5): Space Grotesk + JetBrains Mono TTFs and their OFL texts,
     # read from disk by app/reports/pdf/fonts.py (Path(__file__)-relative, like the Alembic folders).
     + [(str(Path(SPECPATH) / "app" / "reports" / "fonts"), "app/reports/fonts")]
