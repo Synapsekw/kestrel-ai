@@ -22,6 +22,7 @@ import {
   stagger,
   transition,
 } from "@/ui";
+import { CLOUD_PANEL_WIDTH } from "./layout";
 import type { RenderSettings } from "./types";
 
 const TONE = { ready: "ok", importing: "accent", failed: "danger" } as const;
@@ -139,13 +140,18 @@ function CloudPicker({
   );
 }
 
-/** The cloud panel (spec §6: left 72, top 14, width 282, padding 12, gap 11). */
+/**
+ * The cloud picker and the render rows. `embedded`: the body of the rail's Layers topic (spec §3.2),
+ * no shell of its own. Otherwise (importing, failed, no view yet) its own glass panel at left 72,
+ * top 14, the rail panel's 340 wide, padding 12, gap 11.
+ */
 export function CloudPanel({
   projectId,
   cloud,
   clouds,
   onImport,
   onDetails,
+  embedded = false,
   children,
 }: {
   projectId: string;
@@ -153,18 +159,11 @@ export function CloudPanel({
   clouds: readonly PointCloud[];
   onImport(): void;
   onDetails(): void;
+  embedded?: boolean;
   children?: ReactNode;
 }) {
-  return (
-    <GlassPanel
-      variant="float"
-      radius="panel"
-      as="section"
-      aria-label="Point cloud"
-      data-testid="cloud-panel"
-      style={stagger(1)}
-      className="stagger absolute left-[72px] top-3.5 z-10 flex max-h-[calc(100%-28px)] w-[282px] flex-col gap-[11px] overflow-y-auto p-3 animate-reveal reduce-motion:animate-none"
-    >
+  const body = (
+    <>
       <CloudPicker
         projectId={projectId}
         cloud={cloud}
@@ -173,6 +172,25 @@ export function CloudPanel({
         onDetails={onDetails}
       />
       {children}
+    </>
+  );
+  if (embedded)
+    return (
+      <div data-testid="cloud-panel" className="flex min-h-0 flex-1 flex-col gap-[11px] overflow-y-auto">
+        {body}
+      </div>
+    );
+  return (
+    <GlassPanel
+      variant="float"
+      radius="panel"
+      as="section"
+      aria-label="Point cloud"
+      data-testid="cloud-panel"
+      style={{ ...stagger(1), width: CLOUD_PANEL_WIDTH }}
+      className="stagger absolute left-[72px] top-3.5 z-10 flex max-h-[calc(100%-28px)] flex-col gap-[11px] overflow-y-auto p-3 animate-reveal reduce-motion:animate-none"
+    >
+      {body}
     </GlassPanel>
   );
 }

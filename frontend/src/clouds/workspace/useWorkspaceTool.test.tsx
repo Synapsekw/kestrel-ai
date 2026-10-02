@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import { HintBar } from "./HintBar";
-import { Palette } from "./Palette";
-import { ENTRY, type CloudToolId } from "./tools";
+import { ToolButton } from "@/ui";
+import { ENTRY, PALETTE, type CloudToolId } from "./tools";
 import type { WorkspaceTool } from "./types";
 import { useWorkspaceTool } from "./useWorkspaceTool";
 
@@ -25,6 +25,33 @@ const handle = {
 };
 const renderFrame = () => act(() => [...frames].forEach((cb) => cb()));
 
+/** Every tool as a button, as the rail and its topic panels show them (keys bound by the hook). */
+function Tools({
+  active,
+  isAvailable,
+  onArm,
+}: {
+  active: CloudToolId;
+  isAvailable(id: CloudToolId): boolean;
+  onArm(id: CloudToolId): void;
+}) {
+  return (
+    <div role="toolbar" aria-label="Point cloud tools">
+      {PALETTE.flat().map((t) => (
+        <ToolButton
+          key={t.id}
+          icon={t.icon}
+          label={t.label}
+          shortcut={t.shortcut}
+          active={active === t.id}
+          disabled={!isAvailable(t.id)}
+          onClick={() => onArm(t.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function Harness({
   tools,
   available = () => true,
@@ -38,7 +65,7 @@ function Harness({
   const c = useWorkspaceTool({ active, setActive, tools, viewer, enabled: true, isAvailable: available });
   return (
     <>
-      <Palette active={c.active} isAvailable={available} onArm={c.arm} />
+      <Tools active={c.active} isAvailable={available} onArm={c.arm} />
       <HintBar entry={ENTRY[c.active]} tool={c.tool} progress={null} onCancel={c.escape} />
       <input aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} />
       <div role="dialog" aria-label="Some dialog">

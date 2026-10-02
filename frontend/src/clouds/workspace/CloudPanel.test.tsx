@@ -74,6 +74,35 @@ describe("the cloud panel (spec §6)", () => {
     expect(onImport).toHaveBeenCalledOnce();
   });
 
+  it("keeps its glass shell on its own, and drops it as the Layers topic's body (embedded)", () => {
+    const { unmount } = show(
+      <CloudPanel
+        projectId={PROJECT_ID}
+        cloud={exampleCloud}
+        clouds={[exampleCloud]}
+        onImport={vi.fn()}
+        onDetails={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("region", { name: "Point cloud" })).toBeInTheDocument();
+    unmount();
+    show(
+      <CloudPanel
+        embedded
+        projectId={PROJECT_ID}
+        cloud={exampleCloud}
+        clouds={[exampleCloud]}
+        onImport={vi.fn()}
+        onDetails={vi.fn()}
+      >
+        <p>render rows</p>
+      </CloudPanel>,
+    );
+    expect(screen.queryByRole("region", { name: "Point cloud" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Point cloud: Chimney stack 3D/ })).toBeInTheDocument();
+    expect(screen.getByText("render rows")).toBeInTheDocument();
+  });
+
   it("offers the four colour modes and says which the cloud lacks", async () => {
     show(<Panel />);
     expect(screen.getByRole("radio", { name: "Intensity" })).toBeDisabled();

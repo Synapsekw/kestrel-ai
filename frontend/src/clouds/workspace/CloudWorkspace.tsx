@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { StoreApi } from "zustand/vanilla";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { cloudOctreeUrl, type GeoMap } from "@contract/client";
 import { useBackend } from "@/api/client";
@@ -13,7 +14,7 @@ import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOp
 import type { ColourAvailability } from "@/clouds/viewer/types";
 import { ReportViewCard as ReportViewCardView } from "@/clouds/views/ReportViewCard";
 import { useViewCapture } from "@/clouds/views/useViewCapture";
-import { Alert, Button } from "@/ui";
+import { Alert, Button, WorkspaceRail, type RailState } from "@/ui";
 import { canClip } from "./clipEngine";
 import { defaultCloud } from "./cloudActions";
 import { CloudDetailsDialog } from "./CloudDetailsDialog";
@@ -25,20 +26,23 @@ import { usePinsFeature } from "./features/pins";
 import { useReportViewsFeature } from "./features/reportViews";
 import { Gizmo } from "./ViewGizmo";
 import { HintBar } from "./HintBar";
-import { Inspector, type InspectorTab, type TabContent } from "./Inspector";
+import { Inspector } from "./Inspector";
 import { NOTICE_INSET } from "./layout";
 import { Minimap } from "./SiteMinimap";
-import { Palette } from "./Palette";
 import { Readout } from "./Readout";
 import { LikelyViews as LikelyViewsSeam } from "@/clouds/cameras/LikelyViews";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "./seams";
 import { ENTRY, type CloudToolId } from "./tools";
-import type { FeatureContext, RenderSettings, TopicContent } from "./types";
+import type { FeatureContext, RenderSettings } from "./types";
+import { useCloudRail } from "./useCloudRail";
 import { useClipTool } from "./useClipTool";
 import { useCloudExports } from "./useCloudExports";
 import { useCloudList } from "./useCloudList";
 import { useWorkspaceTool } from "./useWorkspaceTool";
 import { FailedCloud, ImportingCloud, MissingCloud, NoClouds } from "./WorkspaceStates";
+
+const CLIP_HELP = "Press C and click the cloud to centre the box; set its size in the hint bar.";
+const PHOTOS_HELP = "Press I and click a point to list the drone photos that saw it.";
 
 interface ReadyProps {
   projectId: string;
@@ -75,7 +79,6 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
   const [pointsShown, setPointsShown] = useState<number | null>(null);
   const [pick, setPick] = useState<CloudPick | null>(null);
   const [hover, setHover] = useState<CloudPick | null>(null);
-  const [tab, setTab] = useState<InspectorTab>("findings");
   const [activeTool, setActiveTool] = useState<CloudToolId>("orbit");
   const running = viewState === "running";
   const hasView = viewState === "running" || viewState === "lost";
@@ -119,6 +122,8 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
   );
 
   const armRef = useRef<(id: CloudToolId) => void>(() => {});
+  // The context is built before useCloudRail returns its store, so features reach it through a ref.
+  const railStoreRef = useRef<StoreApi<RailState> | null>(null);
   const ctx = useMemo<FeatureContext>(
     () => ({
       projectId,
@@ -132,10 +137,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
       render,
       clipBox: clip.box,
       arm: (id) => armRef.current(id),
-      // Task 8 replaces this with the rail.
-      showTopic: (id) => {
-        if (id === "findings" || id === "measure") setTab(id === "measure" ? "measurements" : "findings");
-      },
+      showTopic: (id) => railStoreRef.current?.getState().revealTopicFor(id),
       restoreClipBox: clip.restore,
     }),
     [projectId, cloud, maps, viewState, activeTool, location.search, seams, render, clip.box, clip.restore],
@@ -160,6 +162,46 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
   useEffect(() => {
     armRef.current = control.arm;
   }, [control.arm]);
+
+  const layersBody = (
+    <CloudPanel
+      embedded
+      projectId={projectId}
+      cloud={cloud}
+      clouds={clouds}
+      onImport={onImport}
+      onDetails={onDetails}
+    >
+      <RenderControls
+        cloud={cloud}
+        render={render}
+        onRender={(r) => {
+          if (r.budget !== render.budget) writeBudget(r.budget);
+          setRender(r);
+        }}
+        availability={availability}
+        hiddenClasses={hiddenClasses}
+        onToggleClass={(code) => setHiddenClasses((h) => toggle(h, code))}
+        pointsShown={pointsShown}
+      />
+      {features.layersRows.map((s) => (
+        <Fragment key={s.key}>{s.node}</Fragment>
+      ))}
+    </CloudPanel>
+  );
+  const rail = useCloudRail({
+    active: control.active,
+    arm: control.arm,
+    isAvailable,
+    features,
+    layersBody,
+    clipBody: <p className="px-1 text-xs text-muted">{CLIP_HELP}</p>,
+    photosBody: <p className="px-1 text-xs text-muted">{PHOTOS_HELP}</p>,
+  });
+  useEffect(() => {
+    railStoreRef.current = rail.store;
+  }, [rail.store]);
+  const detail = features.findings?.detail ?? features.measure?.detail ?? null;
 
   const onViewState = useCallback((s: ViewState) => {
     setViewState(s);
@@ -227,7 +269,14 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
       )}
       {hasView && (
         <>
-          <Palette active={control.active} isAvailable={isAvailable} onArm={control.arm} />
+          <WorkspaceRail
+            label="Point cloud"
+            store={rail.store}
+            nav={rail.nav}
+            topics={rail.topics}
+            inspectorOpen={detail !== null}
+            bottomInset={120}
+          />
           <HintBar
             entry={ENTRY[control.active]}
             tool={active}
@@ -269,54 +318,18 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
           ))}
         </div>
       )}
-      <CloudPanel
-        projectId={projectId}
-        cloud={cloud}
-        clouds={clouds}
-        onImport={onImport}
-        onDetails={onDetails}
-      >
-        {hasView && (
-          <RenderControls
-            cloud={cloud}
-            render={render}
-            onRender={(r) => {
-              if (r.budget !== render.budget) writeBudget(r.budget);
-              setRender(r);
-            }}
-            availability={availability}
-            hiddenClasses={hiddenClasses}
-            onToggleClass={(code) => setHiddenClasses((h) => toggle(h, code))}
-            pointsShown={pointsShown}
-          />
-        )}
-        {features.layersRows.map((s) => (
-          <Fragment key={s.key}>{s.node}</Fragment>
-        ))}
-      </CloudPanel>
-      <Inspector
-        tab={tab}
-        onTab={setTab}
-        findings={asTab(features.findings)}
-        measurements={asTab(features.measure)}
-        findingsMenu={features.findings?.menu ?? []}
-      />
+      {!hasView && (
+        // No view yet (starting, or no WebGL): no rail, but the picker stays reachable.
+        <CloudPanel
+          projectId={projectId}
+          cloud={cloud}
+          clouds={clouds}
+          onImport={onImport}
+          onDetails={onDetails}
+        />
+      )}
+      <Inspector detail={detail} />
     </WorkspaceSeamsContext.Provider>
-  );
-}
-
-/** Task 8 replaces this with the rail: a topic's list above its detail, as one inspector tab. */
-function asTab(t: TopicContent | null): TabContent | null {
-  return (
-    t && {
-      count: t.count,
-      body: (
-        <>
-          {t.list}
-          {t.detail}
-        </>
-      ),
-    }
   );
 }
 

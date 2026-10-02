@@ -17,10 +17,13 @@ export const READOUT_BAND = {
   right: EDGE + MINIMAP_WIDTH + READOUT_GAP,
 } as const;
 
-/** Cloud panel: left 72, top 14, width 282. Inspector: right 14, top 14, width 330 (spec §6). */
+/**
+ * The rail's topic panel: left 72, top 14. Inspector: right 14, top 14. Both use DESIGN.md's
+ * `InspectorPane` width, 340 (workspace-rail spec §2).
+ */
 export const CLOUD_PANEL_LEFT = GIZMO_LEFT;
-export const CLOUD_PANEL_WIDTH = 282;
-export const INSPECTOR_WIDTH = 330;
+export const CLOUD_PANEL_WIDTH = 340;
+export const INSPECTOR_WIDTH = 340;
 /** The hint bar's height (one line of `sm` buttons in a py-2 pill), rounded up. */
 export const HINT_BAR_HEIGHT = 48;
 /**

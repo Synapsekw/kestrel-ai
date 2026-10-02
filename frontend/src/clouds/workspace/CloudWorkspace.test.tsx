@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiClient, type Job } from "@contract/client";
 import { useJobsStore } from "@/store/jobs";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
+import { baseRoutes, exampleFinding, exampleFindingDetail } from "@/test/findingFixtures";
 import { callsTo, emitViewState, resetFake } from "@/test/fakeCloudViewer";
 import { exampleGeoMap, fakeClient, fakeFetch, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders, TestApiProvider } from "@/test/render";
@@ -112,6 +113,7 @@ function watchFor(text: string) {
 const MISSING = "This point cloud is not in the project";
 
 async function deleteFromDetails(name: string) {
+  await openTopic("Layers");
   await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
   await userEvent.click(screen.getByRole("button", { name: "Details…" }));
   await userEvent.click(
@@ -121,12 +123,20 @@ async function deleteFromDetails(name: string) {
   await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
 }
 
-const toolbar = () => screen.getByRole("toolbar", { name: "Point cloud tools" });
-const pressed = (name: string) =>
-  toolbar().querySelector(`[aria-label="${name}"]`)!.getAttribute("aria-pressed");
+/** A tool button on the rail or in the open topic panel. */
+const tool = (name: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!;
+const pressed = (name: string) => tool(name).getAttribute("aria-pressed");
+/** Opens a rail topic (a no-op when it is already open: a second click would close it). */
+async function openTopic(name: string) {
+  const rail = await screen.findByRole("toolbar", { name: "Point cloud" });
+  if (screen.queryByRole("region", { name })) return;
+  await userEvent.click(within(rail).getByRole("button", { name }));
+  await screen.findByRole("region", { name });
+}
 
 beforeEach(() => {
   listGate = null;
+  window.innerWidth = 1024; // jsdom's default; a test that needs a wide window sets its own
   resetFake();
   localStorage.clear();
 });
@@ -146,42 +156,45 @@ describe("CloudWorkspace (spec §6)", () => {
     );
   });
 
-  it("lays out the ready workspace: palette in Orbit, panel, inspector, gizmo, readout, minimap", async () => {
+  it("lays out the ready workspace: the rail in Orbit with Findings open, gizmo, readout, minimap", async () => {
     open([exampleCloud]);
-    expect(await screen.findByRole("toolbar", { name: "Point cloud tools" })).toBeInTheDocument();
+    const rail = await screen.findByRole("toolbar", { name: "Point cloud" });
+    expect(
+      within(rail)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Orbit", "Pan", "Fly", "Layers", "Findings", "Measure", "Clip", "Photos"]);
     expect(pressed("Orbit")).toBe("true");
-    for (const [name, enabled] of [
-      ["Fly", true],
-      ["Distance", true],
-      ["Clipping box", true],
-      ["Area", true],
-      ["Cross-section", true],
-      ["Pin a finding", true], // C-P1 Task 10: the pins feature now registers its tool
-      ["Photo link", true],
-    ] as const)
-      expect(toolbar().querySelector(`[aria-label="${name}"]`)!.hasAttribute("disabled"), name).toBe(
-        !enabled,
-      );
-    for (const id of [
-      "cloud-panel",
-      "cloud-inspector",
-      "cloud-gizmo",
-      "cloud-readout",
-      "cloud-minimap",
-      "cloud-hintbar",
-    ])
+    expect(screen.getByRole("region", { name: "Findings" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Findings" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("toolbar", { name: "Point cloud tools" })).toBeNull();
+    expect(tool("Fly")).toBeEnabled();
+    // C-P1 Task 10: the pins feature registers its tool
+    expect(tool("Pin a finding")).toBeEnabled();
+    for (const [topic, names] of [
+      ["Measure", ["Point", "Distance", "Height", "Verticality", "Area", "Cross-section"]],
+      ["Clip", ["Clipping box"]],
+      ["Photos", ["Photo link"]],
+    ] as const) {
+      await openTopic(topic);
+      for (const name of names) expect(tool(name), name).toBeEnabled();
+    }
+    // Spec §3.2: the inspector shows a selection only; nothing is selected yet.
+    expect(screen.queryByTestId("cloud-inspector")).toBeNull();
+    await openTopic("Layers");
+    for (const id of ["cloud-panel", "cloud-gizmo", "cloud-readout", "cloud-minimap", "cloud-hintbar"])
       expect(screen.getByTestId(id)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Point clouds" })).toBeInTheDocument();
     expect(screen.getByTestId("cloud-points-shown")).toHaveTextContent("2.4 M shown");
   });
 
-  it("arms Distance from L, opens the Measurements tab, and Esc twice returns to Orbit", async () => {
+  it("arms Distance from L, opens the Measure topic, and Esc twice returns to Orbit", async () => {
     open([exampleCloud]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     await userEvent.keyboard("l");
+    expect(screen.getByRole("region", { name: "Measure" })).toBeInTheDocument();
     expect(pressed("Distance")).toBe("true");
     expect(screen.getByTestId("cloud-hintbar")).toHaveTextContent("Click two points to measure a distance");
-    expect(screen.getByRole("tab", { name: /Measurements/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("cloud-viewer")).toHaveAttribute("data-armed", "true");
     await userEvent.click(screen.getByRole("button", { name: "fake pick" }));
     expect(screen.getByTestId("cloud-readout")).toHaveTextContent("E243500.50");
@@ -198,10 +211,11 @@ describe("CloudWorkspace (spec §6)", () => {
       JSON.stringify({ centre: [1, 2, 3], size: [4, 5, 6], yaw_deg: 0, mode: "show_inside" }),
     );
     open([exampleCloud, other]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     await userEvent.keyboard("c");
     await userEvent.click(screen.getByRole("button", { name: "fake pick" }));
     expect(callsTo("setClipBox").at(-1)?.[0]).toMatchObject({ centre: [243500.5, 3178000.25, 12.5] });
+    await openTopic("Layers");
     await userEvent.click(screen.getByRole("button", { name: /^Point cloud: / }));
     await userEvent.click(screen.getByRole("link", { name: /Tower/ }));
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/clouds/c-2"));
@@ -211,7 +225,7 @@ describe("CloudWorkspace (spec §6)", () => {
 
   it("drives the engine from the cloud panel: EDL, classes and the budget key", async () => {
     open([{ ...exampleCloud, class_counts: { "2": 10, "6": 5 } }]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await openTopic("Layers");
     await userEvent.click(screen.getByRole("switch", { name: "EDL shading" }));
     expect(callsTo("setEdl").at(-1)).toEqual([false]);
     await userEvent.click(screen.getByRole("radio", { name: "Class" }));
@@ -226,7 +240,7 @@ describe("CloudWorkspace (spec §6)", () => {
 
   it("leaves Space to a focused panel control: the EDL switch toggles and the view never pans", async () => {
     open([exampleCloud]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await openTopic("Layers");
     const edl = screen.getByRole("switch", { name: "EDL shading" });
     const before = edl.getAttribute("aria-checked");
     edl.focus();
@@ -237,7 +251,7 @@ describe("CloudWorkspace (spec §6)", () => {
 
   it("holds Space to pan from the body or the viewport itself, never from its controls", async () => {
     open([exampleCloud]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     const pans = () => callsTo("setNavMode").filter(([m]) => m === "pan").length;
     fireEvent.keyDown(document.body, { key: " " });
     expect(pans()).toBe(1);
@@ -251,7 +265,7 @@ describe("CloudWorkspace (spec §6)", () => {
 
   it("re-applies the EDL switch whenever the view (re)starts", async () => {
     open([exampleCloud]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await openTopic("Layers");
     await userEvent.click(screen.getByRole("switch", { name: "EDL shading" }));
     const before = callsTo("setEdl").length;
     act(() => emitViewState("running")); // a new engine after "Reload view" starts with the global EDL default
@@ -291,7 +305,7 @@ describe("CloudWorkspace (spec §6)", () => {
         </MemoryRouter>
       </TestApiProvider>,
     );
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     expect(screen.queryByRole("button", { name: "Show on map" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "fake pick" }));
     await userEvent.click(await screen.findByRole("button", { name: "Show on map" }));
@@ -300,7 +314,7 @@ describe("CloudWorkspace (spec §6)", () => {
 
   it("has no Show on map without a linked map, even with a pick", async () => {
     open([exampleCloud]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     await userEvent.click(screen.getByRole("button", { name: "fake pick" }));
     expect(screen.getByTestId("cloud-readout")).toHaveTextContent("E243500.50");
     expect(screen.queryByRole("button", { name: "Show on map" })).toBeNull();
@@ -309,32 +323,33 @@ describe("CloudWorkspace (spec §6)", () => {
   it("moves to a jump's spot only after the octree has loaded (its whole-site view would undo it)", async () => {
     resetFake({ availability: null }); // running, but onAttributes (the load) never arrives
     open([exampleCloud], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}?at=243500,3178000`);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     await new Promise((r) => setTimeout(r, 450));
     expect(callsTo("lookAt")).toHaveLength(0);
   });
 
   it("moves to a jump's spot once the octree has loaded", async () => {
     open([exampleCloud], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}?at=243500,3178000`);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     await waitFor(() => expect(callsTo("lookAt").at(0)?.[0]).toMatchObject({ x: 243500, y: 3178000 }));
   });
 
-  it("without WebGL only the picker and the inspector render", async () => {
+  it("without WebGL only the picker renders, in its own panel (no rail, nothing selected)", async () => {
     resetFake({ state: "no-webgl" });
     open([exampleCloud]);
-    expect(await screen.findByTestId("cloud-inspector")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Point cloud" })).toBeInTheDocument();
+    expect(screen.queryByTestId("cloud-inspector")).toBeNull();
     for (const id of ["cloud-readout", "cloud-minimap", "cloud-gizmo", "cloud-hintbar", "cloud-points-shown"])
       expect(screen.queryByTestId(id)).toBeNull();
-    expect(screen.queryByRole("toolbar", { name: "Point cloud tools" })).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Point cloud" })).toBeNull();
   });
 
   it("a lost context keeps the tool", async () => {
     resetFake({ state: "lost" });
     open([exampleCloud]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
-    await userEvent.click(toolbar().querySelector('[aria-label="Distance"]')!);
+    await openTopic("Measure");
+    await userEvent.click(tool("Distance"));
     expect(pressed("Distance")).toBe("true");
     expect(screen.getByTestId("cloud-readout")).toBeInTheDocument();
   });
@@ -342,7 +357,7 @@ describe("CloudWorkspace (spec §6)", () => {
   it("opens a cloud without colour in Elevation, with RGB off (ported from S1)", async () => {
     resetFake({ availability: { rgb: false, elevation: true, intensity: false, classification: false } });
     open([{ ...exampleCloud, has_rgb: false }]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await openTopic("Layers");
     expect(screen.getByRole("radio", { name: "RGB" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Elevation" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText("Lowest")).toHaveValue(-44);
@@ -372,9 +387,10 @@ describe("CloudWorkspace (spec §6)", () => {
     ]);
     // The importing card is shown until the poll answers the import finished and the list reloads.
     expect(
-      await screen.findByRole("toolbar", { name: "Point cloud tools" }, { timeout: 5000 }),
+      await screen.findByRole("toolbar", { name: "Point cloud" }, { timeout: 5000 }),
     ).toBeInTheDocument();
     expect(lists).toBeGreaterThanOrEqual(2);
+    await openTopic("Layers");
     expect(screen.getByRole("radio", { name: "RGB" })).toHaveAttribute("aria-checked", "true");
     await userEvent.click(screen.getByRole("radio", { name: "Elevation" }));
     expect(screen.getByLabelText("Lowest")).toHaveValue(-44);
@@ -383,7 +399,7 @@ describe("CloudWorkspace (spec §6)", () => {
   it("says what an importing cloud is doing, with the picker still there", async () => {
     open([{ ...exampleCloud, status: "importing", z_stats: null, has_rgb: null }]);
     expect(await screen.findByTestId("cloud-importing")).toHaveTextContent("Building the 3D view copy…");
-    expect(screen.queryByRole("toolbar", { name: "Point cloud tools" })).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Point cloud" })).toBeNull();
     expect(screen.getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
   });
 
@@ -392,7 +408,7 @@ describe("CloudWorkspace (spec §6)", () => {
     const card = await screen.findByTestId("cloud-failed");
     expect(card).toHaveTextContent(`${exampleCloud.name} could not be imported`);
     expect(card).toHaveTextContent("the file has no points");
-    expect(screen.queryByRole("toolbar", { name: "Point cloud tools" })).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Point cloud" })).toBeNull();
     expect(screen.getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
   });
 
@@ -412,14 +428,14 @@ describe("CloudWorkspace (spec §6)", () => {
         body: () => ({ items: deleted ? [other] : [exampleCloud, other] }),
       },
     ]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     const missingSeen = watchFor(MISSING);
     const release = holdListReads(); // the reload after the delete has not answered yet
     await deleteFromDetails(exampleCloud.name);
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`),
     );
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     act(() => release());
     await new Promise((r) => setTimeout(r, 50)); // the list reload lands
     expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`);
@@ -437,7 +453,7 @@ describe("CloudWorkspace (spec §6)", () => {
       },
       { method: "GET", path: /\/pointclouds$/, body: () => ({ items: deleted ? [] : [exampleCloud] }) },
     ]);
-    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    await screen.findByRole("toolbar", { name: "Point cloud" });
     const missingSeen = watchFor(MISSING);
     const release = holdListReads();
     await deleteFromDetails(exampleCloud.name);
@@ -482,6 +498,7 @@ describe("CloudWorkspace (spec §6)", () => {
       },
       { method: "GET", path: /\/jobs\/j-import-5$/, body: importJob },
     ]);
+    await openTopic("Layers");
     await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
     await userEvent.click(screen.getByRole("button", { name: "Import point cloud…" }));
     const missingSeen = watchFor(MISSING);
@@ -547,6 +564,7 @@ describe("CloudWorkspace (spec §6)", () => {
       },
     ]);
     useToastStore.getState().clear();
+    await openTopic("Layers");
     await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
     await userEvent.click(screen.getByRole("button", { name: "Details…" }));
     await userEvent.click(await screen.findByRole("button", { name: "Export LAZ" }));
@@ -586,6 +604,7 @@ describe("CloudWorkspace (spec §6)", () => {
       },
     ]);
     // Details knows the seeded export is still running: no second export can start.
+    await openTopic("Layers");
     await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
     await userEvent.click(screen.getByRole("button", { name: "Details…" }));
     await waitFor(() =>
@@ -601,10 +620,57 @@ describe("CloudWorkspace (spec §6)", () => {
 
   it("shows R1's Capture missing views item and the Saving views progress (C-R1)", async () => {
     open([exampleCloud]);
-    await userEvent.click(await screen.findByRole("tab", { name: /Findings/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Findings actions" }));
+    const findings = await screen.findByRole("region", { name: "Findings" });
+    await userEvent.click(within(findings).getByRole("button", { name: "Findings actions" }));
     expect(await screen.findByRole("menuitem", { name: "Capture missing views" })).toBeInTheDocument();
     act(() => useViewStore.getState().setBulk({ done: 1, total: 3 }));
     expect(await screen.findByText("Saving views 1 / 3")).toBeInTheDocument();
+  });
+  it("the Layers topic holds the colour mode, the render rows and Show camera positions", async () => {
+    open([exampleCloud]);
+    await openTopic("Layers");
+    const layers = screen.getByRole("region", { name: "Layers" });
+    expect(within(layers).getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
+    expect(within(layers).getByRole("radiogroup", { name: "Colour by" })).toBeInTheDocument();
+    expect(within(layers).getByRole("switch", { name: "EDL shading" })).toBeInTheDocument();
+    expect(await within(layers).findByRole("switch", { name: "Show camera positions" })).toBeInTheDocument();
+  });
+
+  it("selecting a pin shows the finding in the inspector while the Findings list stays in the rail", async () => {
+    const saved = {
+      ...exampleFinding,
+      id: "f-a",
+      number: 217,
+      anchor: { kind: "cloud", cloud_id: CLOUD_ID, x: 243500, y: 3178000, z: 12, uncertainty_m: 0.05 },
+      data_type: "point_cloud",
+      data_id: CLOUD_ID,
+    };
+    open(
+      [exampleCloud],
+      undefined,
+      baseRoutes([
+        { method: "GET", path: /\/findings$/, body: { items: [saved], next_cursor: null } },
+        { method: "GET", path: /\/findings\/f-a$/, body: { ...exampleFindingDetail, ...saved } },
+        { method: "GET", path: /\/findings\/f-a\/attachments$/, body: { items: [] } },
+        { method: "GET", path: /\/findings\/f-a\/comments/, body: { items: [], next_cursor: null } },
+        { method: "GET", path: /\/activity/, body: { items: [], next_cursor: null } },
+      ]),
+    );
+    // A wide window: below 1200 px the inspector takes the panel's room (spec §4 "Narrow windows").
+    window.innerWidth = 1600;
+    const findings = await screen.findByRole("region", { name: "Findings" });
+    expect(within(findings).getByRole("heading", { name: "Findings" })).toBeInTheDocument();
+    const list = await within(findings).findByRole("list", { name: "Findings on this cloud" });
+    await userEvent.click(within(list).getByRole("button", { name: /F-0217/ }));
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    expect(await within(inspector).findByRole("button", { name: "Move pin" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
+    // The list stays in the rail panel, not in the inspector.
+    expect(within(inspector).queryByRole("list", { name: "Findings on this cloud" })).toBeNull();
+    expect(
+      within(screen.getByRole("region", { name: "Findings" })).getByRole("list", {
+        name: "Findings on this cloud",
+      }),
+    ).toBeInTheDocument();
   });
 });

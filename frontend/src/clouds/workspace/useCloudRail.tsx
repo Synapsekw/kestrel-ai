@@ -1,0 +1,128 @@
+import { useEffect, useState, type ReactNode } from "react";
+import type { StoreApi } from "zustand/vanilla";
+import {
+  createRailStore,
+  MenuButton,
+  TopicPanel,
+  ToolButton,
+  type RailState,
+  type RailTopic,
+  type TopicTool,
+} from "@/ui";
+import type { ComposedFeatures } from "./compose";
+import { PALETTE, type CloudToolId } from "./tools";
+import { CLOUD_TOPICS, TOPIC_OF_TOOL, type CloudTopicId } from "./topics";
+
+const toolsOf = (topic: CloudTopicId | "nav") => PALETTE.flat().filter((e) => TOPIC_OF_TOOL[e.id] === topic);
+
+/**
+ * The point cloud rail (workspace-rail spec §2/§3.2): Orbit, Pan and Fly on the rail, then Layers,
+ * Findings, Measure, Clip and Photos. One store per mount; the open panel follows the armed tool.
+ */
+export function useCloudRail(p: {
+  active: CloudToolId;
+  arm(id: CloudToolId): void;
+  isAvailable(id: CloudToolId): boolean;
+  features: ComposedFeatures;
+  layersBody: ReactNode;
+  clipBody: ReactNode;
+  photosBody: ReactNode;
+}): { store: StoreApi<RailState>; topics: RailTopic[]; nav: ReactNode } {
+  const [store] = useState(() => createRailStore("clouds", CLOUD_TOPICS, "findings"));
+
+  // Spec §4 "Tool keys": if the panel is open it switches to the armed tool's topic.
+  useEffect(() => {
+    const t = TOPIC_OF_TOOL[p.active];
+    if (t !== "nav") store.getState().revealTopicFor(t);
+  }, [p.active, store]);
+
+  const tools = (topic: CloudTopicId): TopicTool[] =>
+    toolsOf(topic).map((e) => ({
+      id: e.id,
+      icon: e.icon,
+      label: e.label,
+      shortcut: e.shortcut,
+      active: p.active === e.id,
+      disabledReason: p.isAvailable(e.id)
+        ? null
+        : "This view cannot " + (e.id === "clip" ? "clip" : "do this"),
+      onClick: () => p.arm(e.id),
+    }));
+
+  const nav = toolsOf("nav").map((e) => (
+    <ToolButton
+      key={e.id}
+      icon={e.icon}
+      label={e.label}
+      shortcut={e.shortcut}
+      active={p.active === e.id}
+      disabled={!p.isAvailable(e.id)}
+      onClick={() => p.arm(e.id)}
+    />
+  ));
+
+  const { findings, measure } = p.features;
+  const topics: RailTopic[] = [
+    {
+      id: "layers",
+      label: "Layers",
+      icon: "layers",
+      group: "shared",
+      body: <TopicPanel title="Layers">{p.layersBody}</TopicPanel>,
+    },
+    {
+      id: "findings",
+      label: "Findings",
+      icon: "findings",
+      group: "shared",
+      body: (
+        <TopicPanel
+          title="Findings"
+          count={findings?.count ?? null}
+          tools={tools("findings")}
+          menu={
+            findings?.menu?.length ? (
+              <MenuButton label="Findings actions" iconOnly size="sm" items={[...findings.menu]} />
+            ) : undefined
+          }
+        >
+          {findings?.list}
+        </TopicPanel>
+      ),
+    },
+    {
+      id: "measure",
+      label: "Measure",
+      icon: "measure",
+      group: "shared",
+      body: (
+        <TopicPanel title="Measure" count={measure?.count ?? null} tools={tools("measure")}>
+          {measure?.list}
+        </TopicPanel>
+      ),
+    },
+    {
+      id: "clip",
+      label: "Clip",
+      icon: "clip-box",
+      group: "workspace",
+      body: (
+        <TopicPanel title="Clip" tools={tools("clip")}>
+          {p.clipBody}
+        </TopicPanel>
+      ),
+    },
+    {
+      id: "photos",
+      label: "Photos",
+      icon: "camera",
+      group: "workspace",
+      body: (
+        <TopicPanel title="Photos" tools={tools("photos")}>
+          {p.photosBody}
+        </TopicPanel>
+      ),
+    },
+  ];
+  return { store, topics, nav };
+}
