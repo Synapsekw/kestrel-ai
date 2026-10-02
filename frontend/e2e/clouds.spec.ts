@@ -275,7 +275,8 @@ test("import from the empty workspace: a refusal, then an admissible file goes i
   // the importing cloud is a centred glass card with the job's progress (spec §6, non-ready states)
   await expect(page.getByTestId("cloud-importing")).toContainText("Building the 3D view copy…");
   importingSeen = true;
-  await expect(ws(page).palette).toBeVisible({ timeout: 20_000 });
+  await expect(ws(page).rail).toBeVisible({ timeout: 20_000 });
+  await ws(page).openTopic("Layers"); // the picker lives in the Layers topic (workspace-rail spec §3.2)
   await expect(ws(page).picker()).toBeVisible();
 });
 
@@ -283,6 +284,7 @@ test("cloud panel: the point budget is remembered and Elevation shows its range"
   await serveCloudWorld(page, { octree: grid(2) });
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   const w = ws(page);
+  await w.openTopic("Layers");
   await w.budget.focus();
   await w.budget.press("End"); // the last stop: 8 M
   await expect
@@ -326,6 +328,7 @@ test("export LAZ from the Details dialog ends with a toast that reveals the fold
     (route) => route.fulfill({ contentType: "application/json", headers: CORS, body: JSON.stringify(done) }),
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await ws(page).openTopic("Layers");
   await ws(page).picker().click();
   await page.getByRole("button", { name: "Details…" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Export LAZ" }).click();
@@ -351,9 +354,10 @@ test("measure a distance with two picks, save it with Enter, copy the CSV", asyn
   await expect.poll(() => world.measurementPosts.length).toBe(1);
   expect(world.measurementPosts[0]).toMatchObject({ kind: "distance" });
   expect((world.measurementPosts[0] as { points: unknown[] }).points).toHaveLength(2);
-  await w.measurementsTab.click();
-  await expect(w.inspectorPanel).toContainText("Distance 1");
-  await w.inspectorPanel.getByRole("button", { name: "Copy all as CSV" }).click();
+  // The saved list and its CSV export live in the rail's Measure topic (workspace-rail spec §3.2).
+  await w.openTopic("Measure");
+  await expect(w.topicPanel("Measure")).toContainText("Distance 1");
+  await w.topicPanel("Measure").getByRole("button", { name: "Copy all as CSV" }).click();
   const header = (await page.evaluate(() => navigator.clipboard.readText())).split("\r\n")[0];
   expect(header.startsWith("id,name,kind,note,")).toBe(true);
   expect(header.split(",")).toEqual(expect.arrayContaining(["vertex_count", "geometry_wkt", "area_m2"]));
@@ -579,6 +583,7 @@ test("colour modes: Intensity and Class are off for a cloud without those attrib
   await viewerSettled(page);
   await edlOn(page);
   const w = ws(page);
+  await w.openTopic("Layers");
   await expect(w.colour("RGB")).toBeEnabled();
   await expect(w.colour("Elevation")).toBeEnabled();
   await expect(w.colour("Intensity")).toBeDisabled();
@@ -599,6 +604,7 @@ async function classifiedCloud(page: Page) {
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
   await edlOn(page);
+  await ws(page).openTopic("Layers"); // Colour by lives in the Layers topic (workspace-rail spec §3.2)
 }
 
 test("colour modes: a cloud with intensity and classification draws in both", async ({ page }) => {

@@ -16,15 +16,15 @@ test("without WebGL the view says it cannot start, and the Findings and Measurem
   // the rest of the screen is still there (spec §14 "No WebGL"). Text, not visibility: with no
   // rasteriser this browser reports every box hidden.
   const w = ws(page);
-  await expect(w.findingsTab).toHaveCount(1);
-  await expect(w.measurementsTab).toHaveCount(1);
   await expect(page.locator("body")).toContainText("Fixture cloud");
-  // CloudPanel.tsx renders the picker regardless of the viewer's state, point count and all
-  // (old S1 assertion on "10 201 points", kept on the same text via the picker's own locator).
+  // Without a view CloudWorkspace.tsx renders the picker in CloudPanel's own glass panel, point
+  // count and all (old S1 assertion on "10 201 points", kept on the same text via the picker).
   await expect(w.picker()).toContainText("10 201 points");
-  // the panels that need the view are not rendered (CloudWorkspace.tsx: Palette/Readout/Minimap
-  // all sit behind `hasView`, which never becomes true here)
-  await expect(w.palette).toHaveCount(0);
+  // the panels that need the view are not rendered (CloudWorkspace.tsx: the rail, Readout and
+  // Minimap all sit behind `hasView`, which never becomes true here); nothing is selected, so no
+  // inspector either (workspace-rail spec §3.2)
+  await expect(w.rail).toHaveCount(0);
+  await expect(w.inspectorPanel).toHaveCount(0);
   await expect(w.readout).toHaveCount(0);
   await expect(w.minimap).toHaveCount(0);
 });

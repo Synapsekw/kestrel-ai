@@ -141,7 +141,8 @@ test("pin flow: M, pick, choose a type, Enter creates with F's cloud anchor, the
   await expect.poll(projectGetsInFlight).toBe(0);
 
   await page.keyboard.press("m");
-  const toolbar = page.getByRole("toolbar", { name: "Point cloud tools" });
+  // M arms the pin tool; the open rail panel follows it to the Findings topic's tool row.
+  const toolbar = page.getByRole("region", { name: "Findings", exact: true });
   await expect(toolbar.getByRole("button", { name: "Pin a finding" })).toHaveAttribute(
     "aria-pressed",
     "true",

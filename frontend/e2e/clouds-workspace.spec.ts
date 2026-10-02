@@ -74,18 +74,18 @@ test("layout: every panel sits at its mockup position and the canvas fills the v
   const right = (b: { x: number; width: number }) => vp.x + vp.width - (b.x + b.width);
   const bottom = (b: { y: number; height: number }) => vp.y + vp.height - (b.y + b.height);
 
-  const pal = await box(page.getByRole("toolbar", { name: "Point cloud tools" }));
-  near(pal.x - vp.x, 14, "palette left");
-  near(pal.y - vp.y, 14, "palette top");
-  const panel = await box(page.getByTestId("cloud-panel"));
-  near(panel.x - vp.x, 72, "cloud panel left");
-  near(panel.y - vp.y, 14, "cloud panel top");
-  near(panel.width, 282, "cloud panel width");
-  const insp = await box(page.getByTestId("cloud-inspector"));
-  near(right(insp), 14, "inspector right");
-  near(insp.y - vp.y, 14, "inspector top");
-  near(bottom(insp), 204, "inspector bottom");
-  near(insp.width, 330, "inspector width");
+  const rail = await box(page.getByRole("toolbar", { name: "Point cloud" }));
+  near(rail.x - vp.x, 14, "rail left");
+  near(rail.y - vp.y, 14, "rail top");
+  // Workspace-rail spec §2: one topic panel (Findings by default) next to the rail, 340 wide,
+  // full height above the bottom-left chrome; the inspector shows a selection only, so none yet.
+  const panel = await box(page.getByTestId("rail-panel"));
+  near(panel.x - vp.x, 72, "topic panel left");
+  near(panel.y - vp.y, 14, "topic panel top");
+  near(panel.width, 340, "topic panel width");
+  near(bottom(panel), 120, "topic panel bottom");
+  await expect(page.getByRole("region", { name: "Findings", exact: true })).toBeVisible();
+  await expect(page.getByTestId("cloud-inspector")).toHaveCount(0);
   const giz = await box(page.getByTestId("cloud-gizmo"));
   near(giz.x - vp.x, 72, "gizmo left");
   near(bottom(giz), 14, "gizmo bottom");
@@ -133,26 +133,43 @@ test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orb
   page,
 }) => {
   await openSettled(page);
-  const toolbar = page.getByRole("toolbar", { name: "Point cloud tools" });
+  // The rail and its open topic panel (the panel follows the armed tool's topic).
+  const toolbar = page.getByRole("toolbar", { name: "Point cloud" }).or(page.getByTestId("rail-panel"));
   const hint = page.getByTestId("cloud-hintbar");
   // C-V2 is merged: the real handle has the clip box, so Fly (W) and Clip (C) are offered.
-  await expect(toolbar.getByRole("button", { name: "Fly" })).toBeEnabled();
-  await expect(toolbar.getByRole("button", { name: "Clipping box" })).toBeEnabled();
+  await expect(toolbar.getByRole("button", { name: "Fly", exact: true })).toBeEnabled();
+  await page.getByRole("toolbar", { name: "Point cloud" }).getByRole("button", { name: "Clip" }).click();
+  await expect(toolbar.getByRole("button", { name: "Clipping box", exact: true })).toBeEnabled();
   await page.keyboard.press("l");
-  await expect(toolbar.getByRole("button", { name: "Distance" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Distance", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(hint).toContainText("Click two points to measure a distance");
   await page.keyboard.press("z");
-  await expect(toolbar.getByRole("button", { name: "Height" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Height", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(hint).toContainText("Click a base point, then a top point");
   const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
   await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2); // one pick
   await page.keyboard.press("Escape");
-  await expect(toolbar.getByRole("button", { name: "Height" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Height", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page.keyboard.press("Escape");
-  await expect(toolbar.getByRole("button", { name: "Orbit" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Orbit", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(hint).toContainText("Drag to orbit");
   await page.keyboard.press("h");
-  await expect(toolbar.getByRole("button", { name: "Pan" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Pan", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   expect(await page.evaluate(() => window.__kestrelCloudViewer!.navMode())).toBe("pan");
   // The arrival view is already from the south (40° oblique), so Top goes first: Alt+1 puts the
   // camera straight above the target, then Alt+2 (Front) must bring it level and south of it.
@@ -172,14 +189,20 @@ test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orb
 // C-G final review m6: the clip box's pick must not leave focus where tool keys stop working.
 test("after C and a canvas click places the clip box, P still arms Point", async ({ page }) => {
   await openSettled(page);
-  const toolbar = page.getByRole("toolbar", { name: "Point cloud tools" });
+  const toolbar = page.getByRole("toolbar", { name: "Point cloud" }).or(page.getByTestId("rail-panel"));
   await page.keyboard.press("c");
-  await expect(toolbar.getByRole("button", { name: "Clipping box" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Clipping box", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
   await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
   await expect(page.getByLabel("Box yaw (°)")).toBeVisible(); // the clip hint's fields are up
   await page.keyboard.press("p");
-  await expect(toolbar.getByRole("button", { name: "Point" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar.getByRole("button", { name: "Point", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });
 
 test("at 1280 x 720 a lost context's Reload view sits clear of every panel and takes the click", async ({
@@ -198,7 +221,7 @@ test("at 1280 x 720 a lost context's Reload view sits clear of every panel and t
   // nothing paints above the button: Playwright's hit test must land on it
   await reload.click({ trial: true, timeout: 5_000 });
   const notice = (await page.getByTestId("cloud-viewer-notice").boundingBox())!;
-  for (const id of ["cloud-panel", "cloud-inspector", "cloud-hintbar"]) {
+  for (const id of ["rail-panel", "cloud-hintbar"]) {
     const other = (await page.getByTestId(id).boundingBox())!;
     expect(
       intersects(notice, other),

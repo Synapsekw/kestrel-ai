@@ -15,6 +15,8 @@ export const SWIFTSHADER = {
   launchOptions: { args: ["--use-angle=swiftshader-webgl", "--enable-unsafe-swiftshader"] },
 };
 
+export type TopicName = "Layers" | "Findings" | "Measure" | "Clip" | "Photos";
+
 export type ToolName =
   | "Orbit"
   | "Pan"
@@ -47,9 +49,17 @@ export const TOOL_KEYS: Record<ToolName, string> = {
 
 /** The workspace's controls, each scoped to its container so no name can match twice. */
 export function ws(page: Page) {
-  // Palette.tsx: <FloatingToolbar label="Point cloud tools" ...> (brief/spec said "Tools").
-  const palette = page.getByRole("toolbar", { name: "Point cloud tools" });
-  const inspectorTabs = page.getByRole("tablist", { name: "Inspector" }); // C-W1, confirmed (Inspector.tsx)
+  // Workspace rail (workspace-rail spec §2): Orbit, Pan, Fly, then the topics, on one toolbar.
+  const rail = page.getByRole("toolbar", { name: "Point cloud" });
+  // The open topic's panel (WorkspaceRail.tsx: a region named after the topic, one at a time).
+  const railPanel = page.getByTestId("rail-panel");
+  const topicPanel = (name: TopicName): Locator => page.getByRole("region", { name, exact: true });
+  /** Opens a topic; a no-op when it is open already (a second click on its icon closes it). */
+  const openTopic = async (name: TopicName): Promise<void> => {
+    if (await topicPanel(name).isVisible()) return;
+    await rail.getByRole("button", { name, exact: true }).click();
+    await expect(topicPanel(name)).toBeVisible();
+  };
   const colourBy = page.getByRole("radiogroup", { name: "Colour by" }); // C-W1 + C-V1, confirmed (CloudPanel.tsx)
   return {
     viewport: page.getByTestId("cloud-centre"), // S1 test id kept by C-W1, confirmed
@@ -59,8 +69,13 @@ export function ws(page: Page) {
     // HintBar.tsx: data-testid="cloud-hintbar" (brief/spec said "cloud-hint-bar").
     hint: page.getByTestId("cloud-hintbar"),
     callout: page.getByTestId("cloud-callout"), // C-P1, confirmed (pins.tsx)
-    palette,
-    tool: (name: ToolName): Locator => palette.getByRole("button", { name, exact: true }),
+    rail,
+    railPanel,
+    topicPanel,
+    openTopic,
+    // A nav tool sits on the rail; every other tool in its topic's tool row (open that topic first,
+    // or press the tool's key while the panel is open: the panel follows the armed tool).
+    tool: (name: ToolName): Locator => rail.or(railPanel).getByRole("button", { name, exact: true }),
     // CloudPanel.tsx's CloudPicker: aria-label="Point cloud: {name} · {date} · {count}. Choose another"
     // (brief/spec expected the button's name to start with the cloud's own name).
     picker: (cloudName = "Fixture cloud"): Locator =>
@@ -71,17 +86,8 @@ export function ws(page: Page) {
     pointSize: page.getByRole("slider", { name: "Point size" }),
     edl: page.getByRole("switch", { name: "EDL shading" }),
     cameras: page.getByRole("switch", { name: "Show camera positions" }),
-    inspectorTabs,
-    findingsTab: inspectorTabs.getByRole("tab", { name: /^Findings/ }),
-    measurementsTab: inspectorTabs.getByRole("tab", { name: /^Measurements/ }),
-    // Inspector.tsx has no `role="tabpanel"` anywhere (Tabs.tsx's tab buttons carry no
-    // aria-controls either): the active tab's body is a plain, unlabelled <div> inside the same
-    // GlassPanel as the tab bar. `cloud-inspector` (the GlassPanel's own test id) is the closest
-    // real, stable container — it includes the tab bar, not just the body, so a caller that needs
-    // only the body's content should scope further (e.g. `findingsTab`/`measurementsTab`'s own
-    // named regions: `getByRole("list", { name: "Findings on this cloud" })` /
-    // `getByRole("list", { name: "Saved measurements" })`, or FindingsTab's own
-    // `getByTestId("cloud-findings-tab")`).
+    // Spec §3.2: the inspector shows the selected finding or measurement only; the lists live in
+    // the rail's Findings and Measure topics.
     inspectorPanel: page.getByTestId("cloud-inspector"),
     view: (v: "Top" | "Front" | "Side" | "Iso"): Locator =>
       page.getByRole("button", { name: v, exact: true }),

@@ -29,8 +29,8 @@ test("Point clouds opens the full-bleed workspace from the project tabs; Measure
   // <h1>Point clouds</h1> (S1's old assertion on the visible heading, kept here on the same text).
   await expect(page.getByRole("heading", { name: "Point clouds" })).toBeAttached();
   const w = ws(page);
-  // the Prism mock lists its example cloud, so the workspace opens on it: the palette is there
-  await expect(w.palette).toBeVisible({ timeout: 20_000 });
+  // the Prism mock lists its example cloud, so the workspace opens on it: the rail is there
+  await expect(w.rail).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("cloud-workspace")).toBeVisible();
   await expect(w.tool("Orbit")).toHaveAttribute("aria-pressed", "true");
 

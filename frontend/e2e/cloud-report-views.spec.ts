@@ -138,8 +138,14 @@ async function openSettled(page: Page) {
 }
 
 async function startCaptureMissing(page: Page) {
-  await page.getByRole("tab", { name: /Findings/ }).click();
-  await page.getByRole("button", { name: FINDINGS_MENU }).click();
+  // The Findings topic is the rail's default; its header holds the menu (workspace-rail spec §3.2).
+  const findings = page.getByRole("region", { name: "Findings", exact: true });
+  if (!(await findings.isVisible()))
+    await page
+      .getByRole("toolbar", { name: "Point cloud" })
+      .getByRole("button", { name: "Findings" })
+      .click();
+  await findings.getByRole("button", { name: FINDINGS_MENU }).click();
   await page.getByRole("menuitem", { name: "Capture missing views" }).click();
 }
 

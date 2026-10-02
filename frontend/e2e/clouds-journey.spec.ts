@@ -95,6 +95,7 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
 
   // 1. W1 + V1: the workspace is up; colour by elevation
   await expect(w.tool("Orbit")).toHaveAttribute("aria-pressed", "true");
+  await w.openTopic("Layers"); // Colour by lives in the Layers topic (workspace-rail spec §3.2)
   await w.colour("Elevation").click();
   await expect(w.colour("Elevation")).toHaveAttribute("aria-checked", "true");
 
@@ -114,7 +115,7 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
   expect(area.kind).toBe("area");
   expect(area.points).toHaveLength(4);
   expect(area.params.mode).toBe("surface");
-  await w.measurementsTab.click();
+  await w.openTopic("Measure");
   await expect(w.measurementRow("Area 1")).toContainText("m²");
 
   // 3. R1 + B4: the measurement's report view arrives, 1600 x 1000 and not blank, drawn in elevation
@@ -166,9 +167,9 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
   expect(colours.distinct).toBeGreaterThanOrEqual(2);
   expect(colours.nonBackground).toBeGreaterThan(0.01);
 
-  // 6. Findings tab + F's review key: severity 3 (Crack's default is 2) on the selected finding
+  // 6. Findings topic + F's review key: severity 3 (Crack's default is 2) on the selected finding
   await page.keyboard.press("Escape");
-  await w.findingsTab.click();
+  await w.openTopic("Findings");
   await choose(w.findingRow("F-0001"));
   await page.keyboard.press("3");
   await expect.poll(() => world.findingPatches.find((p) => p.id === findingId)?.severity).toBe(3);
@@ -191,7 +192,7 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
   }
 
   // 7. M1: attach the area to the finding
-  await w.measurementsTab.click();
+  await w.openTopic("Measure");
   await choose(w.measurementRow("Area 1"));
   await w.attachFinding.click();
   await page.getByRole("option", { name: /F-0001/ }).click();
@@ -200,7 +201,7 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
     .toBe(findingId);
 
   // 8. P1: the finding's inspector lists the linked measurement (C's measureSlot)
-  await w.findingsTab.click();
+  await w.openTopic("Findings");
   await choose(w.findingRow("F-0001"));
   await expect(w.linkedMeasurements).toContainText("Area 1");
 
@@ -228,6 +229,6 @@ test("a cloud becomes a graded 3D finding with a linked area, a report view and 
   await page.reload();
   await viewerSettled(page);
   await expect.poll(async () => (await pinStates(page)).map((p) => p.id)).toContain(findingId);
-  await w.measurementsTab.click();
+  await w.openTopic("Measure");
   await expect(w.measurementRow("Area 1")).toBeVisible();
 });

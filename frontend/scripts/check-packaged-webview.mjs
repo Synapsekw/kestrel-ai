@@ -100,6 +100,7 @@ if (
 const base = `${env.KESTREL_BACKEND_URL}/api/v1/projects/${env.KESTREL_PROJECT_ID}`;
 const headers = { Authorization: `Bearer ${env.KESTREL_TOKEN}`, "Content-Type": "application/json" };
 const w = ui(page);
+await w.openTopic("Layers");
 if ((await w.edl.getAttribute("aria-checked")) !== "true") await w.edl.click();
 for (const [i, [x, y]] of pinGrid(b, 50).entries()) {
   const hit = await page.evaluate(([px, py]) => window.__kestrelCloudViewer.pickDown(px, py, 2), [x, y]);

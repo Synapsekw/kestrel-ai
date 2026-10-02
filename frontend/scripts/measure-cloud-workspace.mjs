@@ -391,8 +391,8 @@ if (mode === "layout") {
   await shot(page, appShot);
   const boxes = {};
   for (const [name, loc] of Object.entries({
-    palette: w.palette,
-    inspectorTabs: w.inspectorTabs,
+    rail: w.rail,
+    railPanel: w.railPanel,
     minimap: w.minimap,
     readout: w.readout,
     viewport: w.viewport,
@@ -460,9 +460,10 @@ if (mode === "perf") {
   result.pins = rows.length;
   result.pinsVisible = rows.filter((p) => p.state === "visible").length;
   if (rows.length !== expectedPins) problem(`pins: ${rows.length} drawn, ${expectedPins} expected`);
+  await w.openTopic("Layers");
   if (effects === "full" && (await w.edl.getAttribute("aria-checked")) !== "true") await w.edl.click();
   result.edl = (await w.edl.getAttribute("aria-checked")) === "true";
-  await w.findingsTab.click(); // every panel shown: inspector on Findings, cameras as they default
+  await w.openTopic("Findings"); // the rail panel on Findings, cameras as they default
   await settle();
 
   // orbit, no profiler attached: the frame times (spec §13 orbit p50/p95). The page's own rAF calls
@@ -654,7 +655,8 @@ if (mode === "pins") {
     [20, 60],
     [-20, -60],
   ]) {
-    // the palette button, not the M key: a key goes to a focused field instead (seen in clip mode)
+    // the Findings topic's button, not the M key: a key goes to a focused field instead (seen in clip mode)
+    await w.openTopic("Findings");
     const pinTool = w.tool("Pin a finding");
     if ((await pinTool.getAttribute("aria-pressed")) !== "true") await pinTool.click();
     const c = await canvasCentre();
@@ -770,8 +772,9 @@ if (mode === "clip") {
   if (!centre) fail("no clear canvas point to recentre the clip box");
   await page.mouse.click(centre.x, centre.y);
   await settle();
-  // the Point tool from the palette (a key would go to a focused hint-bar field), re-armed before
+  // the Point tool from the Measure topic (a key would go to a focused hint-bar field), re-armed before
   // every click: a missed save must not leave the next clicks in Orbit
+  await w.openTopic("Measure");
   const point = w.tool("Point");
   const armPoint = async () => {
     if ((await point.getAttribute("aria-pressed")) !== "true") await point.click();

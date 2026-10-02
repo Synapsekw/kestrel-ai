@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { camerasJson, NADIR, PLAIN, routeCameras, routeImageRow } from "./fixtures/cameras";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
+import { ws } from "./fixtures/cloudWorkspace";
 import { buildOctree, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -53,6 +54,8 @@ async function open(page: Page, query = "", cameras: { body?: unknown; status?: 
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}${query}`);
   await settled(page);
+  // The cameras row lives in the rail's Layers topic (workspace-rail spec §3.2).
+  await ws(page).openTopic("Layers");
 }
 
 test.beforeEach(async ({ page }) => {

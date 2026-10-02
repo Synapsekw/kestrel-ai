@@ -1,5 +1,6 @@
 import { test, expect, type Page, type WebSocketRoute } from "@playwright/test";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
+import { ws } from "./fixtures/cloudWorkspace";
 import { buildOctree, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -148,7 +149,7 @@ test("area: four picks and Enter save the outline with its mode (spec §15 e2e 5
   expect(body.kind).toBe("area");
   expect(body.points).toHaveLength(4);
   expect(body.params.mode).toBe("surface");
-  await page.getByRole("tab", { name: /^Measurements/ }).click();
+  await ws(page).openTopic("Measure"); // the list lives in the rail (workspace-rail spec §3.2)
   await expect(
     page.getByRole("list", { name: "Saved measurements" }).getByRole("button", { name: /Area 1/ }),
   ).toContainText("12.50 m²");
@@ -192,7 +193,7 @@ test("cross-section: preview, Save answers 202, then Full resolution on pointclo
   expect(state.posts[0]).toMatchObject({ kind: "profile", params: { thickness_m: 0.2 } });
   const pts = state.posts[0].points as { z: number }[];
   expect(pts[1].z).toBe(pts[0].z);
-  await page.getByRole("tab", { name: /^Measurements/ }).click();
+  await ws(page).openTopic("Measure"); // the list lives in the rail (workspace-rail spec §3.2)
   await expect(page.getByRole("button", { name: /Cross-section 1/ })).toContainText("Cutting the profile…");
   state.rows[0] = {
     ...state.rows[0],
@@ -233,7 +234,7 @@ test("distance: two picks and Enter, the 3D label, then Copy all as CSV with the
   await page.keyboard.press("Enter");
   await expect.poll(() => state.posts.length).toBe(1);
   expect(state.posts[0]).toMatchObject({ kind: "distance" });
-  await page.getByRole("tab", { name: /^Measurements/ }).click();
+  await ws(page).openTopic("Measure"); // the list lives in the rail (workspace-rail spec §3.2)
   await expect(page.getByRole("button", { name: /Distance 1/ })).toBeVisible();
   await page.getByRole("button", { name: "Copy all as CSV" }).click();
   const csv = await page.evaluate(() => navigator.clipboard.readText());

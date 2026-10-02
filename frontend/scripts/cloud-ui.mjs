@@ -2,18 +2,26 @@
 // frontend/e2e/fixtures/cloudWorkspace.ts by hand: the e2e specs and these drivers must name the same
 // elements. Names below were checked against the merged code (same audit as that fixture's Task 1
 // Step 5); where the spec's draft name differed from the real one, the real one is used here too:
-//   - palette toolbar: "Point cloud tools" (not "Tools")
+//   - the workspace rail: a toolbar named "Point cloud" (Orbit, Pan, Fly, then the topics); the open
+//     topic is a region named after it (workspace-rail spec §2)
 //   - hint bar test id: "cloud-hintbar" (not "cloud-hint-bar")
 //   - the callout's Type control is a button named "Type: <label>" (PinCallout.tsx's Combobox
 //     trigger aria-label), not a role="combobox" named "Type" — that role only exists on the open
 //     popover's filter input, which isn't present until the trigger is clicked.
 
-/** The Findings-tab menu button that holds "Capture missing views" (C-R1, Inspector.tsx). */
+/** The Findings topic's menu button that holds "Capture missing views" (C-R1, useCloudRail.tsx). */
 export const CAPTURE_MENU = "Findings actions";
 
 export function ui(page) {
-  const palette = page.getByRole("toolbar", { name: "Point cloud tools" });
-  const tabs = page.getByRole("tablist", { name: "Inspector" });
+  const rail = page.getByRole("toolbar", { name: "Point cloud" });
+  const railPanel = page.getByTestId("rail-panel");
+  const topicPanel = (name) => page.getByRole("region", { name, exact: true });
+  /** Opens a topic ("Layers", "Findings", "Measure", "Clip", "Photos"); a no-op when it is open. */
+  const openTopic = async (name) => {
+    if (await topicPanel(name).isVisible()) return;
+    await rail.getByRole("button", { name, exact: true }).click();
+    await topicPanel(name).waitFor();
+  };
   const hint = page.getByTestId("cloud-hintbar");
   const callout = page.getByTestId("cloud-callout");
   return {
@@ -23,15 +31,16 @@ export function ui(page) {
     // "Site map" region) - the e2e fixture's names, docs/evidence/clouds/README.md "Deviations".
     readout: page.getByTestId("cloud-readout"),
     minimap: page.getByTestId("cloud-minimap"),
-    inspectorTabs: tabs,
-    palette,
-    tool: (name) => palette.getByRole("button", { name, exact: true }),
+    rail,
+    railPanel,
+    topicPanel,
+    openTopic,
+    // Orbit/Pan/Fly on the rail; any other tool in its open topic's tool row.
+    tool: (name) => rail.or(railPanel).getByRole("button", { name, exact: true }),
     edl: page.getByRole("switch", { name: "EDL shading" }),
     cameras: page.getByRole("switch", { name: "Show camera positions" }),
     colour: (mode) =>
       page.getByRole("radiogroup", { name: "Colour by" }).getByRole("radio", { name: mode, exact: true }),
-    findingsTab: tabs.getByRole("tab", { name: /^Findings/ }),
-    measurementsTab: tabs.getByRole("tab", { name: /^Measurements/ }),
     hint,
     hintCancel: hint.getByRole("button", { name: "Cancel", exact: true }),
     callout,
@@ -44,8 +53,8 @@ export function ui(page) {
     photoList: page.getByRole("list", { name: "Photos that saw this point" }),
     view: (v) => page.getByRole("button", { name: v, exact: true }),
     async captureMissing() {
-      await tabs.getByRole("tab", { name: /^Findings/ }).click();
-      await page.getByRole("button", { name: CAPTURE_MENU }).click();
+      await openTopic("Findings");
+      await topicPanel("Findings").getByRole("button", { name: CAPTURE_MENU }).click();
       await page.getByRole("menuitem", { name: "Capture missing views" }).click();
     },
   };
