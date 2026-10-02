@@ -54,6 +54,21 @@ MATERIALS = {
 }
 
 
+def _empty_glb() -> bytes:
+    # trimesh refuses to export an empty scene; a spec with no parts is still a valid (blank) model
+    body = json.dumps(
+        {"asset": {"version": "2.0", "generator": "kestrel"}, "scene": 0, "scenes": [{"nodes": []}]},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    body += b" " * (-len(body) % 4)
+    total = 12 + 8 + len(body)
+    return struct.pack("<4sII", b"glTF", 2, total) + struct.pack("<I4s", len(body), b"JSON") + body
+
+
+_EMPTY_GLB = _empty_glb()
+
+
 def build_meshes(spec: AssetSpec) -> dict[str, trimesh.Trimesh]:
     report = validate(spec)
     if not report.ok:
@@ -70,6 +85,8 @@ def build_meshes(spec: AssetSpec) -> dict[str, trimesh.Trimesh]:
 
 def build_glb(spec: AssetSpec) -> tuple[bytes, dict]:
     meshes = build_meshes(spec)
+    if not spec.parts:
+        return _EMPTY_GLB, {"bounds_m": [[0, 0, 0], [0, 0, 0]], "top_m": 0.0, "triangles": 0, "parts": []}
     scene = trimesh.Scene()
     parts_meta = []
     for part in spec.parts:

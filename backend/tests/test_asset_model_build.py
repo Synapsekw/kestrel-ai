@@ -96,3 +96,14 @@ def test_inject_keeps_the_binary_chunk_and_4_byte_alignment():
     shell = next(n for n in glb_json(out)["nodes"] if n.get("name") == "shell")
     assert shell["extras"] == {"k": "v" * 7}
     assert out.endswith(glb[-64:])  # the BIN chunk's tail is untouched
+
+
+def test_empty_spec_builds_a_minimal_valid_glb():
+    glb, meta = build_glb(AssetSpec(parts=[]))
+    assert meta == {"bounds_m": [[0, 0, 0], [0, 0, 0]], "top_m": 0.0, "triangles": 0, "parts": []}
+    assert len(glb) % 4 == 0
+    assert struct.unpack_from("<4sII", glb, 0)[2] == len(glb)
+    doc = glb_json(glb)
+    assert doc["asset"]["version"] == "2.0" and doc["scenes"] == [{"nodes": []}] and doc["scene"] == 0
+    assert build_glb(AssetSpec(parts=[]))[0] == glb
+    trimesh.load(io.BytesIO(glb), file_type="glb")
