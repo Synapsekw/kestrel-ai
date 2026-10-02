@@ -6,7 +6,8 @@ import type { MapTool } from "../w4host";
 const volumeTool: MapTool = {
   id: "volume",
   group: "measure",
-  order: 3,
+  topic: "measure",
+  order: 40,
   icon: "volume",
   label: "Volume",
   action: "volume",

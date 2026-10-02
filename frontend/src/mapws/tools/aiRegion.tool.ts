@@ -5,6 +5,7 @@ import type { MapTool } from "../w4host";
 const aiRegionTool: MapTool = {
   id: "ai-region",
   group: "site",
+  topic: "ai",
   order: 1,
   icon: "sparkle",
   label: "AI detect region",

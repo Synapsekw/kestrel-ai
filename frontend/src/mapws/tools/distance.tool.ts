@@ -5,6 +5,7 @@ import { DistanceOverlay } from "@/mapws/measure/MeasureOverlay";
 const distance: MapTool = {
   id: "distance",
   group: "measure",
+  topic: "measure",
   order: 10,
   icon: "measure",
   label: "Measure distance",

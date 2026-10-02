@@ -9,6 +9,7 @@ const offs: (() => void)[] = [];
 afterEach(() => offs.splice(0).forEach((off) => off()));
 
 const T = (t: Partial<MapTool> & Pick<MapTool, "id" | "action" | "group">): MapTool => ({
+  topic: "measure",
   order: 0,
   icon: "measure",
   label: t.id,

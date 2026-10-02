@@ -4,6 +4,7 @@ import { GLOBAL_KEYS, WORKSPACE_KEYS, type IconName } from "@/ui";
 import { Registry } from "../registry";
 import type { Coord, Selection, SiteFrame, Survey, WorkspaceLayer } from "../types";
 import type { SiteExtent } from "../view/siteGrid";
+import type { MapTopicId } from "../topics/topicIds";
 
 /** The palette's four groups, separated by rules (spec §5 Tool palette). */
 export type ToolGroup = "navigate" | "measure" | "annotate" | "site";
@@ -33,6 +34,8 @@ export interface ToolOverlayProps {
 export interface MapTool {
   id: string;
   group: ToolGroup;
+  /** The rail topic whose panel holds this tool (spec §3.1); "nav" sits on the rail itself. */
+  topic: MapTopicId | "nav";
   /** Position inside the group. */
   order: number;
   icon: IconName;
@@ -103,6 +106,11 @@ export function groupTools(tools: readonly MapTool[]): MapTool[][] {
   return TOOL_GROUPS.map((g) =>
     tools.filter((t) => t.group === g).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)),
   ).filter((g) => g.length > 0);
+}
+
+/** One topic's tools, by `order` then id. */
+export function toolsOfTopic(tools: readonly MapTool[], topic: MapTopicId | "nav"): MapTool[] {
+  return tools.filter((t) => t.topic === topic).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
 
 export interface ToolState {

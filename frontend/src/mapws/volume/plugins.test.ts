@@ -36,7 +36,8 @@ describe("volume plugins", () => {
       id: "volume",
       action: "volume",
       group: "measure",
-      order: 3,
+      topic: "measure",
+      order: 40,
       draw: { shape: "polygon", min: 3 },
     });
     expect(volumeTool.disabledReason?.(ctx([], "2026-04-02"))).toBe(

@@ -7,6 +7,7 @@ import { ProfileOverlay } from "@/mapws/measure/MeasureOverlay";
 const profile: MapTool = {
   id: "profile",
   group: "measure",
+  topic: "measure",
   order: 30,
   icon: "profile",
   label: "Elevation profile",

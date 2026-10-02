@@ -6,6 +6,7 @@ import { ZoneOverlay } from "@/mapws/zones/ZoneOverlay";
 const zone: MapTool = {
   id: "zone",
   group: "annotate",
+  topic: "findings",
   order: 30,
   icon: "zone",
   label: "Zone",

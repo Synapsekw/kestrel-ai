@@ -5,6 +5,7 @@ import type { MapTool } from "./toolStore";
 const alignDrawing: MapTool = {
   id: ALIGN_TOOL_ID,
   group: "site",
+  topic: "drawings",
   order: 20,
   icon: "align",
   label: "Align drawing",

@@ -6,6 +6,7 @@ import { FindingPolygonOverlay } from "@/mapws/findings/FindingOverlay";
 const findingPolygon: MapTool = {
   id: "finding-polygon",
   group: "annotate",
+  topic: "findings",
   order: 20,
   icon: "polygon",
   label: "Add finding polygon",

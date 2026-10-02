@@ -4,6 +4,7 @@ import { MAX_VERTICES, createToolStore, groupTools, type DrawSpec, type MapTool 
 const tool = (id: string, draw: DrawSpec, extra: Partial<MapTool> = {}): MapTool => ({
   id,
   group: "measure",
+  topic: "measure",
   order: 0,
   icon: "measure",
   label: id,

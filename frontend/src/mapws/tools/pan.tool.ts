@@ -3,6 +3,7 @@ import type { MapTool } from "./toolStore";
 const pan: MapTool = {
   id: "pan",
   group: "navigate",
+  topic: "nav",
   order: 1,
   icon: "hand",
   label: "Pan",

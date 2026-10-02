@@ -5,6 +5,7 @@ import { AreaOverlay } from "@/mapws/measure/MeasureOverlay";
 const area: MapTool = {
   id: "area",
   group: "measure",
+  topic: "measure",
   order: 20,
   icon: "area",
   label: "Measure area",

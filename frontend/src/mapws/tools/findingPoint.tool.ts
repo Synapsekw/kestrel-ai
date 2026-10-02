@@ -6,6 +6,7 @@ import { FindingPointOverlay } from "@/mapws/findings/FindingOverlay";
 const findingPoint: MapTool = {
   id: "finding-point",
   group: "annotate",
+  topic: "findings",
   order: 10,
   icon: "pin",
   label: "Add finding point",
