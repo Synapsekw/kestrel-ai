@@ -4,7 +4,7 @@ import { useBackend } from "@/api/client";
 import { Button, GlassPanel, Icon, Progress, Skeleton, StatusDot, cx } from "@/ui";
 import { BuildDialog, type BuildInitial, type RunMode } from "./BuildDialog";
 import { phaseLabel, stopReasonText, thumbUrl } from "./runText";
-import { draftText, endedEarly, lastThumbStep, stepShare, stepText } from "./runView";
+import { draftText, endedEarly, lastThumbStep, stepShare, stepText, tryAgainOf } from "./runView";
 
 export interface BuildBarProps {
   projectId: string;
@@ -129,14 +129,10 @@ export function BuildBar({
               variant="primary"
               size="sm"
               icon="refresh"
-              onClick={() =>
-                openDialog(ended.mode === "refine" && canRefine ? "refine" : "build", {
-                  sources: ended.sources,
-                  provider: ended.provider,
-                  model_name: ended.model_name,
-                  notes: ended.notes,
-                })
-              }
+              onClick={() => {
+                const { mode, initial } = tryAgainOf(ended, canRefine);
+                openDialog(mode, initial);
+              }}
             >
               Try again
             </Button>

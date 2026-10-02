@@ -12,10 +12,11 @@ import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { groupParts } from "@/assetmodels/groups";
 import { BuildBar } from "@/assetmodels/run/BuildBar";
+import { BuildDialog } from "@/assetmodels/run/BuildDialog";
 import { RunProgressCard } from "@/assetmodels/run/RunProgressCard";
 import { RunTab } from "@/assetmodels/run/RunTab";
 import { stopReasonText } from "@/assetmodels/run/runText";
-import { endedEarly, runEndToast } from "@/assetmodels/run/runView";
+import { endedEarly, runEndToast, tryAgainOf } from "@/assetmodels/run/runView";
 import { useLiveRun } from "@/assetmodels/run/useLiveRun";
 import { useAssetModelList, useVersionDetail, useVersions } from "@/assetmodels/useAssetModels";
 import type { ModelPart, ModelView } from "@/assetmodels/viewer/engine";
@@ -236,23 +237,35 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
   // that compared it with a cloud.
   const { runs, reload: reloadRuns } = useRuns(projectId, model.id);
 
-  // The live run: the model's own (on load or after a reload), else the one this screen just started.
+  // The live run. Once this screen has seen a run running (or started it) it keeps following that run
+  // to its end, even after a model reload has cleared `live_run_id`: the end must be seen to be
+  // reported. It hands over to the model's `live_run_id` only when that names another run and the
+  // followed run's end has been reported.
   const [started, setStarted] = useState<AssetModelRun | null>(null);
-  const liveRunId = model.live_run_id ?? started?.id ?? null;
+  const [followedId, setFollowedId] = useState<string | null>(null);
+  const [reportedId, setReportedId] = useState<string | null>(null);
+  const handOver =
+    model.live_run_id !== null &&
+    followedId !== null &&
+    model.live_run_id !== followedId &&
+    reportedId === followedId;
+  const liveRunId = handOver ? model.live_run_id : (followedId ?? model.live_run_id);
   const live = useLiveRun(projectId, model.id, liveRunId);
   const liveRun = live.run ?? (started && started.id === liveRunId ? started : null);
   const runningRun = liveRun?.state === "running" ? liveRun : null;
+  if (runningRun && runningRun.id !== followedId) setFollowedId(runningRun.id);
   /** Runs seen running here: only their end gets this screen's toast (not a run already over on load). */
   const seenRunning = useRef(new Set<string>());
   /**
-   * Job outcome claims (job id → release) for runs this screen follows: the screen's own toast names
+   * Job outcome claims (run id → release) for runs this screen follows: the screen's own toast names
    * the version, so the global job toast stays quiet. A run whose end was reported keeps its claim; one
-   * still running when the screen goes releases it, so the global toast reports it instead.
+   * still running when the screen goes, or whose progress can no longer be read, releases it, so the
+   * global toast reports it instead.
    */
   const claims = useRef(new Map<string, () => void>());
   const follow = useCallback((r: AssetModelRun) => {
     seenRunning.current.add(r.id);
-    if (!claims.current.has(r.job_id)) claims.current.set(r.job_id, claimJobOutcome(r.job_id));
+    if (!claims.current.has(r.id)) claims.current.set(r.id, claimJobOutcome(r.job_id));
   }, []);
   useEffect(() => {
     const held = claims.current;
@@ -262,30 +275,40 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     };
   }, []);
   useEffect(() => {
+    if (!live.error || !liveRunId) return;
+    claims.current.get(liveRunId)?.();
+    claims.current.delete(liveRunId);
+  }, [live.error, liveRunId]);
+  useEffect(() => {
     if (!liveRun) return;
     if (liveRun.state === "running") {
       follow(liveRun);
       return;
     }
     if (!seenRunning.current.delete(liveRun.id)) return;
-    claims.current.delete(liveRun.job_id);
+    claims.current.delete(liveRun.id);
     const { tone, text } = runEndToast(liveRun);
     toast(tone, text);
     reloadVersions();
     reloadRuns();
     onModelChanged();
+    // After this commit: the hand-over must never drop the ended run before this effect has seen it.
+    const id = liveRun.id;
+    queueMicrotask(() => setReportedId(id));
   }, [liveRun, follow, reloadVersions, reloadRuns, onModelChanged]);
   const onRunStarted = (r: AssetModelRun) => {
     setStarted(r);
+    setFollowedId(r.id);
     follow(r);
     reloadRuns();
   };
+  const [retry, setRetry] = useState<{ run: AssetModelRun; key: number } | null>(null);
   const stopLiveRun = () => {
     live.stop().catch((e: unknown) => toast("danger", messageOf(e, "The run could not be stopped.")));
   };
-  // The latest ended run: the bar says why it stopped and offers Try again.
+  // The latest ended run: the bar (or, without a version, the centre card) says why it stopped and offers Try again.
   const lastEnded = (liveRun && liveRun.state !== "running" ? liveRun : null) ?? runs[0] ?? null;
-  const buildBar = (
+  const buildBar = (withTryAgain: boolean) => (
     <BuildBar
       projectId={projectId}
       model={model}
@@ -293,7 +316,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
       run={runningRun}
       onStop={stopLiveRun}
       stopping={live.stopping}
-      lastRun={lastEnded}
+      lastRun={withTryAgain ? lastEnded : null}
       loading={liveRunId !== null && !liveRun && !live.error}
       error={live.error}
     />
@@ -434,19 +457,51 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
           <RunProgressCard projectId={projectId} model={model} run={runningRun} />
         ) : (
           <CentreCard testId="model-no-version" title="No version yet">
-            <p className="text-sm text-muted">
-              {lastEnded && endedEarly(lastEnded)
-                ? `${stopReasonText(lastEnded)}. Try again from the bar below, or pick other sources.`
-                : `${model.name} has no 3D model yet. Each build or edit saves a version, and the first one opens here.`}
-            </p>
+            {lastEnded && endedEarly(lastEnded) ? (
+              <>
+                <p className="text-sm text-muted">
+                  <span className="text-ink">{stopReasonText(lastEnded)}</span>. The last run saved no
+                  version; try it again with the same sources and notes, or build with others.
+                </p>
+                <div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon="refresh"
+                    onClick={() => setRetry((r) => ({ run: lastEnded, key: (r?.key ?? 0) + 1 }))}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted">
+                {model.name} has no 3D model yet. Each build or edit saves a version, and the first one opens
+                here.
+              </p>
+            )}
           </CentreCard>
         )}
         <div
           data-testid="model-build-slot"
           className="pointer-events-none absolute bottom-3.5 left-[72px] right-[358px] z-10"
         >
-          {buildBar}
+          {buildBar(false)}
         </div>
+        {retry && (
+          <BuildDialog
+            key={retry.key}
+            open
+            projectId={projectId}
+            model={model}
+            {...tryAgainOf(retry.run, model.current_version != null)}
+            onClose={() => setRetry(null)}
+            onStarted={(r) => {
+              setRetry(null);
+              onRunStarted(r);
+            }}
+          />
+        )}
       </>
     );
 
@@ -577,7 +632,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
         data-testid="model-build-slot"
         className="pointer-events-none absolute bottom-3.5 left-[72px] right-[358px] z-10"
       >
-        {buildBar}
+        {buildBar(true)}
       </div>
     </>
   );

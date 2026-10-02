@@ -1,5 +1,6 @@
 import type { AssetModelRun } from "@contract/client";
 import type { ToastTone } from "@/ui/toastStore";
+import type { BuildInitial } from "./BuildDialog";
 import { stopReasonText } from "./runText";
 
 /** The agent's step budget: a run ends at the latest after this many steps (spec §6). */
@@ -38,5 +39,16 @@ export function runEndToast(run: AssetModelRun): { tone: ToastTone; text: string
   return {
     tone: run.state === "failed" ? "danger" : "info",
     text: stopReasonText(run) ?? "The run did not finish",
+  };
+}
+
+/** Try again: the ended run's mode (refine only while the model has a version), sources, agent and notes. */
+export function tryAgainOf(
+  run: Pick<AssetModelRun, "mode" | "sources" | "provider" | "model_name" | "notes">,
+  canRefine: boolean,
+): { mode: AssetModelRun["mode"]; initial: BuildInitial } {
+  return {
+    mode: run.mode === "refine" && canRefine ? "refine" : "build",
+    initial: { sources: run.sources, provider: run.provider, model_name: run.model_name, notes: run.notes },
   };
 }

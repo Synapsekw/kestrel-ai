@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { MODEL, RUN, RUN_FINISHED, SPEC_V1, SPEC_V2, VERSION_1, VERSION_2 } from "@/test/assetModelFixtures";
-import { useToastStore } from "@/ui";
+import type { Job } from "@contract/client";
+import { useJobsStore } from "@/store/jobs";
+import { useJobToasts, useToastStore } from "@/ui";
 
 vi.mock("@/assetmodels/viewer/ModelViewer", async () => ({
   ModelViewer: (await import("@/test/fakeModelViewer")).FakeModelViewer,
@@ -582,6 +584,110 @@ describe("AssetModelWorkspace", () => {
       expect(within(dialog).getByLabelText(/notes/i)).toHaveValue("N7 is at 270°, not 90°");
       expect(within(dialog).getByLabelText(/^model$/i)).toHaveValue("claude-opus-5-5");
       expect(within(dialog).getByRole("button", { name: /start refine/i })).toBeInTheDocument();
+    });
+
+    it("a run adopted on load is followed to its end even after a reload clears live_run_id", async () => {
+      // The jobs store learns of the end first: its reload clears `live_run_id` before the run poll
+      // that sees the end. The screen must still toast the end exactly once (and the global job
+      // toast must stay quiet).
+      let ended = false;
+      const job = {
+        id: "jr1",
+        project_id: PROJECT_ID,
+        type: "asset_model_run",
+        state: "running",
+        params: { model_id: "m1" },
+      } as unknown as Job;
+      useJobsStore.getState().upsert(job);
+      function GlobalToasts() {
+        useJobToasts();
+        return null;
+      }
+      const client = fakeClient(
+        routes([
+          {
+            method: "GET",
+            path: /\/asset-models$/,
+            body: () => ({ items: [{ ...MODEL, live_run_id: ended ? null : "r1" }] }),
+          },
+          {
+            method: "GET",
+            path: /\/runs\/r1$/,
+            body: () =>
+              ended
+                ? { ...LIVE, state: "finished", phase: "done", version: 3, ended_at: "2026-10-02T10:00:00Z" }
+                : LIVE,
+          },
+        ]) as never,
+      );
+      renderWithProviders(
+        <>
+          <AssetModelWorkspace />
+          <GlobalToasts />
+        </>,
+        { api: client.api, route: `/p/${PROJECT_ID}/models/m1`, path: "/p/:projectId/models/:modelId?" },
+      );
+      const bar = await screen.findByTestId("model-build-bar");
+      expect(await within(bar).findByRole("button", { name: /^stop$/i })).toBeInTheDocument();
+      ended = true;
+      const listReads = () => client.requests.filter((r) => /\/asset-models$/.test(r.url)).length;
+      const before = listReads();
+      act(() => useJobsStore.getState().upsert({ ...job, state: "succeeded" }));
+      await waitFor(() => expect(listReads()).toBeGreaterThan(before));
+      await waitFor(
+        () => expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("Built version 3"),
+        { timeout: 5000 },
+      );
+      expect(useToastStore.getState().toasts.map((t) => t.text)).toEqual(["Built version 3"]);
+    }, 10_000);
+
+    it("without a version, the card offers Try again for a stopped run, prefilled", async () => {
+      const stopped = {
+        ...RUN_FINISHED,
+        id: "r0",
+        mode: "build",
+        state: "stopped",
+        stop_reason: "provider_error",
+        version: null,
+        notes: "Roof is a cone",
+        model_name: "claude-opus-5-5",
+      };
+      open([
+        { method: "GET", path: /\/asset-models$/, body: { items: [{ ...MODEL, current_version: null }] } },
+        { method: "GET", path: /\/asset-models\/m1\/versions$/, body: { items: [] } },
+        { method: "GET", path: /\/asset-models\/m1\/runs$/, body: { items: [stopped] } },
+        { method: "GET", path: /\/providers$/, body: { items: [] } },
+        {
+          method: "GET",
+          path: /\/data$/,
+          body: (req: { url: string }) => ({
+            items: req.url.includes("type=drawing")
+              ? [
+                  {
+                    id: "d1",
+                    type: "drawing",
+                    label: "GA drawing",
+                    status: "ready",
+                    captured_on: null,
+                    created_at: "2026-10-01T09:00:00Z",
+                    summary: {},
+                  },
+                ]
+              : [],
+            next_cursor: null,
+          }),
+        },
+      ]);
+      const card = await screen.findByTestId("model-no-version");
+      expect(await within(card).findByText(/the ai provider returned an error/i)).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /try again/i })).toHaveLength(1);
+      fireEvent.click(within(card).getByRole("button", { name: /try again/i }));
+      const dialog = await screen.findByRole("dialog", { name: /build with ai/i });
+      expect(within(dialog).getByLabelText(/notes/i)).toHaveValue("Roof is a cone");
+      expect(within(dialog).getByLabelText(/^model$/i)).toHaveValue("claude-opus-5-5");
+      await waitFor(() =>
+        expect(within(dialog).getByRole("checkbox", { name: /ga drawing/i })).toBeChecked(),
+      );
     });
 
     it("the Run tab shows the latest run", async () => {
