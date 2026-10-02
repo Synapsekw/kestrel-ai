@@ -22,4 +22,12 @@ describe("model engine pure helpers", () => {
       { id: "N7", name: "Nozzle N7", group: "Nozzle" },
     ]);
   });
+
+  it("keys parts by the resolved raw id, so ids with dots round-trip", () => {
+    const nodes = [{ name: "N1_2", userData: { name: "Nozzle", group: "Nozzle" }, raw: "N1.2" }];
+    const root = { traverse: (cb: (o: unknown) => void) => nodes.forEach(cb) };
+    expect(partsFromScene(root, (o: { raw: string }) => o.raw)).toEqual([
+      { id: "N1.2", name: "Nozzle", group: "Nozzle" },
+    ]);
+  });
 });

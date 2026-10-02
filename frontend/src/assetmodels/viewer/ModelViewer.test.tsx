@@ -44,7 +44,9 @@ describe("ModelViewer", () => {
 
   it("reports parts after a load and disposes on unmount", async () => {
     const dispose = vi.fn();
-    create.mockImplementation(() => stub(() => Promise.resolve([{ id: "s", name: "S", group: "Shell" }]), dispose));
+    create.mockImplementation(() =>
+      stub(() => Promise.resolve([{ id: "s", name: "S", group: "Shell" }]), dispose),
+    );
     const onParts = vi.fn();
     const onState = vi.fn();
     const { unmount } = render(

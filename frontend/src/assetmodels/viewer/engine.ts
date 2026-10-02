@@ -40,17 +40,23 @@ export function viewDirection(view: Exclude<ModelView, "fit">): [number, number,
 }
 
 // Structural so a test can pass plain objects; the three.js node it really gets carries the glTF extras in userData.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function partsFromScene(root: { traverse(cb: (o: any) => void): void }): ModelPart[] {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function partsFromScene(
+  root: { traverse(cb: (o: any) => void): void },
+  /** The part id of a node: its raw glTF name (GLTFLoader strips `.` and friends from `o.name`). */
+  idOf: (o: any) => string | undefined = (o) => o.name,
+): ModelPart[] {
   const out: ModelPart[] = [];
   root.traverse((o) => {
     const ud = o.userData ?? {};
-    if (typeof ud.group === "string" && typeof o.name === "string" && o.name) {
-      out.push({ id: o.name, name: typeof ud.name === "string" ? ud.name : o.name, group: ud.group });
+    const id = idOf(o);
+    if (typeof ud.group === "string" && typeof id === "string" && id) {
+      out.push({ id, name: typeof ud.name === "string" ? ud.name : id, group: ud.group });
     }
   });
   return out;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** Top view looks straight down; a hair of tilt keeps the camera's +Y up well defined (north up the screen). */
 const TOP_TILT = 0.002;
@@ -62,7 +68,11 @@ export function createModelEngine(o: {
 }): ModelEngine {
   let renderer: THREE.WebGLRenderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas: o.canvas, antialias: true, powerPreference: "high-performance" });
+    renderer = new THREE.WebGLRenderer({
+      canvas: o.canvas,
+      antialias: true,
+      powerPreference: "high-performance",
+    });
   } catch {
     throw new NoWebGlError("WebGL is not available");
   }
@@ -85,6 +95,7 @@ export function createModelEngine(o: {
   scene.add(modelRoot, helpers);
   const cutPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
   const nodes = new Map<string, THREE.Object3D>();
+  const idByNode = new Map<THREE.Object3D, string>();
   const hiddenGroups = new Set<string>();
   let headOff = false;
   let cutBearing: number | null = null;
@@ -212,13 +223,16 @@ export function createModelEngine(o: {
     downAt = null;
     const rect = o.canvas.getBoundingClientRect();
     raycaster.setFromCamera(
-      new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1),
+      new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      ),
       camera,
     );
     const hit = raycaster.intersectObject(modelRoot, true).find((h) => h.object.visible);
     let n: THREE.Object3D | null = hit?.object ?? null;
-    while (n && !nodes.has(n.name)) n = n.parent;
-    engine.select(n?.name ?? null);
+    while (n && !idByNode.has(n)) n = n.parent;
+    engine.select((n && idByNode.get(n)) ?? null);
   };
   o.canvas.addEventListener("pointerdown", onDown);
   o.canvas.addEventListener("pointerup", onUp);
@@ -236,13 +250,39 @@ export function createModelEngine(o: {
       }
       disposeChildren(modelRoot);
       nodes.clear();
+      idByNode.clear();
       selected = null;
       modelRoot.add(gltf.scene);
-      const parts = partsFromScene(gltf.scene);
-      const ids = new Set(parts.map((p) => p.id));
+      const { associations, json } = gltf.parser;
+      const rawId = (n: THREE.Object3D): string | undefined => {
+        const index = associations.get(n)?.nodes;
+        const raw = index === undefined ? undefined : (json.nodes?.[index]?.name as string | undefined);
+        return raw ?? n.name;
+      };
+      const parts = partsFromScene(gltf.scene, rawId);
       gltf.scene.traverse((n) => {
-        if (ids.has(n.name) && typeof n.userData.group === "string") nodes.set(n.name, n);
+        const id = rawId(n);
+        if (id && typeof n.userData.group === "string") {
+          nodes.set(id, n);
+          idByNode.set(n, id);
+        }
       });
+      // The backend shares one material per material class; give each mesh its own so a highlight stays on its part.
+      const originals = new Set<THREE.Material>();
+      for (const node of nodes.values()) {
+        node.traverse((c) => {
+          const mesh = c as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => originals.add(m));
+            mesh.material = mesh.material.map((m) => m.clone());
+          } else {
+            originals.add(mesh.material);
+            mesh.material = mesh.material.clone();
+          }
+        });
+      }
+      originals.forEach((m) => m.dispose());
       applyMaterials((m) => {
         (m as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
       });
@@ -282,7 +322,11 @@ export function createModelEngine(o: {
         geo.setAttribute("position", new THREE.BufferAttribute(points, 3));
         const cloud = new THREE.Points(
           geo,
-          new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, color: tokenColor(tokenRgb("accent")) }),
+          new THREE.PointsMaterial({
+            size: 2,
+            sizeAttenuation: false,
+            color: tokenColor(tokenRgb("accent")),
+          }),
         );
         cloud.userData.kind = "overlay";
         helpers.add(cloud);

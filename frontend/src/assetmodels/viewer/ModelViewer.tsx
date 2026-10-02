@@ -58,10 +58,14 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
     let cancelled = false;
     let eng: ModelEngine;
     try {
-      eng = createModelEngine({ canvas, host, onSelect: (id) => {
-        wanted.current.selected = id;
-        cbs.current.onSelect(id);
-      } });
+      eng = createModelEngine({
+        canvas,
+        host,
+        onSelect: (id) => {
+          wanted.current.selected = id;
+          cbs.current.onSelect(id);
+        },
+      });
     } catch (err) {
       if (err instanceof NoWebGlError) setStatus({ key: sceneKey, state: "no-webgl" });
       else setStatus({ key: sceneKey, state: "load-error" });
