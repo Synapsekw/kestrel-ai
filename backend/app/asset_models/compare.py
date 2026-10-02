@@ -11,6 +11,11 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.spatial import cKDTree
+
+SURFACE_SAMPLES = 400_000
+CANDIDATES = 8
+SEED = 7
 
 
 @dataclass(frozen=True)
@@ -64,3 +69,78 @@ def closest_points(p, a, b, c) -> np.ndarray:
         denom = 1.0 / (va + vb + vc)
         take(np.ones(len(p), bool), a + ab * (vb * denom)[:, None] + ac * (vc * denom)[:, None])
     return out
+
+
+@dataclass(frozen=True)
+class PartStat:
+    id: str
+    n: int
+    median_mm: float | None
+    p95_mm: float | None
+
+
+@dataclass(frozen=True)
+class Comparison:
+    overall: PartStat
+    parts: list[PartStat]
+    inlier_share: float
+    points_used: int
+
+    def as_dict(self) -> dict:
+        def r(v):
+            return None if v is None else round(v, 1)
+
+        def stat(s: PartStat) -> dict:
+            return {"id": s.id, "n": s.n, "median_mm": r(s.median_mm), "p95_mm": r(s.p95_mm)}
+
+        return {
+            "overall": stat(self.overall),
+            "parts": [stat(p) for p in self.parts],
+            "inlier_share": round(self.inlier_share, 4),
+            "points_used": self.points_used,
+        }
+
+
+def _stat(pid: str, d_m: np.ndarray) -> PartStat:
+    if len(d_m) == 0:
+        return PartStat(pid, 0, None, None)
+    mm = d_m * 1000.0
+    return PartStat(pid, int(len(mm)), float(np.median(mm)), float(np.percentile(mm, 95)))
+
+
+def compare(meshes, points, *, max_points: int = 200_000, inlier_m: float = 0.25) -> Comparison:
+    """Distance of each scan point to its nearest model part; points beyond inlier_m are dropped."""
+    rng = np.random.default_rng(SEED)
+    pts = np.asarray(points, dtype=float).reshape(-1, 3)
+    if len(pts) > max_points:
+        pts = pts[np.sort(rng.choice(len(pts), max_points, replace=False))]
+    ids = list(meshes)
+    empty = Comparison(
+        PartStat("overall", 0, None, None), [PartStat(i, 0, None, None) for i in ids], 0.0, len(pts)
+    )
+    if not ids or len(pts) == 0:
+        return empty
+    area = np.concatenate([meshes[i].area_faces for i in ids])
+    if len(area) == 0 or not area.sum() > 0:
+        return empty
+    tris = np.concatenate([meshes[i].triangles for i in ids])  # (T,3,3)
+    owner = np.concatenate([np.full(len(meshes[i].faces), k) for k, i in enumerate(ids)])
+    tri_of = rng.choice(len(tris), SURFACE_SAMPLES, p=area / area.sum())
+    u, v = rng.random(SURFACE_SAMPLES), rng.random(SURFACE_SAMPLES)
+    flip = u + v > 1
+    u[flip], v[flip] = 1 - u[flip], 1 - v[flip]
+    t = tris[tri_of]
+    samples = t[:, 0] + u[:, None] * (t[:, 1] - t[:, 0]) + v[:, None] * (t[:, 2] - t[:, 0])
+    _, nn = cKDTree(samples).query(pts, k=CANDIDATES)
+    cand = tri_of[nn]  # (N,k) triangle ids
+    p_rep = np.repeat(pts, CANDIDATES, axis=0)
+    flat = cand.ravel()
+    cp = closest_points(p_rep, tris[flat, 0], tris[flat, 1], tris[flat, 2])
+    dist = np.linalg.norm(cp - p_rep, axis=1).reshape(-1, CANDIDATES)
+    best = dist.argmin(axis=1)
+    rows = np.arange(len(pts))
+    d = dist[rows, best]
+    part = owner[cand[rows, best]]
+    inlier = d <= inlier_m
+    stats = [_stat(pid, d[inlier & (part == k)]) for k, pid in enumerate(ids)]
+    return Comparison(_stat("overall", d[inlier]), stats, float(inlier.mean()), int(len(pts)))

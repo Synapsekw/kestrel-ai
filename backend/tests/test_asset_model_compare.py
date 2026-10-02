@@ -2,8 +2,9 @@
 
 import numpy as np
 import pytest
+import trimesh
 
-from app.asset_models.compare import CloudTransform, closest_points, cloud_to_asset
+from app.asset_models.compare import CloudTransform, closest_points, cloud_to_asset, compare
 
 
 def test_transform_yaw_zero_maps_cloud_north_to_asset_x():
@@ -35,3 +36,59 @@ def test_closest_point_regions(p, expected):
     a, b, c = np.array([[0, 0, 0.0]]), np.array([[1, 0, 0.0]]), np.array([[0, 1, 0.0]])
     got = closest_points(np.array([p], float), a, b, c)
     assert got[0] == pytest.approx(expected)
+
+
+def ring_points(radius, n=4000, y0=0.5, y1=2.5, seed=0):
+    rng = np.random.default_rng(seed)
+    a = rng.uniform(0, 2 * np.pi, n)
+    y = rng.uniform(y0, y1, n)
+    return np.column_stack([radius * np.cos(a), y, radius * np.sin(a)])
+
+
+def tube(r_out, h=3.0):
+    m = trimesh.creation.annulus(r_min=r_out - 0.01, r_max=r_out, height=h, sections=256)
+    m.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0]))
+    m.apply_translation([0, h / 2, 0])
+    return m
+
+
+def test_offset_cloud_reports_the_offset():
+    result = compare({"shell": tube(2.0)}, ring_points(2.010))
+    shell = result.parts[0]
+    assert shell.id == "shell"
+    assert shell.median_mm == pytest.approx(10.0, abs=1.0)
+    assert result.inlier_share == pytest.approx(1.0)
+
+
+def test_points_are_attributed_to_the_nearest_part_and_outliers_dropped():
+    inner = tube(1.0)
+    pts = np.vstack([ring_points(2.005, 1000), ring_points(1.003, 1000, seed=1), [[0.0, 50.0, 0.0]]])
+    result = compare({"shell": tube(2.0), "pipe": inner}, pts)
+    by = {p.id: p for p in result.parts}
+    assert by["shell"].n == 1000 and by["pipe"].n == 1000
+    assert by["pipe"].median_mm == pytest.approx(3.0, abs=1.0)
+    assert result.inlier_share == pytest.approx(2000 / 2001)
+
+
+def test_too_many_points_are_subsampled_deterministically():
+    pts = ring_points(2.0, 50_000)
+    a = compare({"shell": tube(2.0)}, pts, max_points=5_000)
+    b = compare({"shell": tube(2.0)}, pts, max_points=5_000)
+    assert a.points_used == 5_000
+    assert a.as_dict() == b.as_dict()
+
+
+def test_part_with_no_points_has_no_stats():
+    result = compare({"shell": tube(2.0), "far": tube(0.2)}, ring_points(2.0, 500))
+    far = next(p for p in result.parts if p.id == "far")
+    assert far.n == 0 and far.median_mm is None
+
+
+def test_degenerate_input_returns_an_empty_comparison():
+    empty = compare({}, np.empty((0, 3)))
+    assert empty.overall.n == 0 and empty.overall.median_mm is None
+    assert empty.parts == [] and empty.inlier_share == 0.0 and empty.points_used == 0
+    no_points = compare({"shell": tube(2.0)}, np.empty((0, 3)))
+    assert [p.id for p in no_points.parts] == ["shell"] and no_points.parts[0].n == 0
+    no_meshes = compare({}, ring_points(2.0, 10))
+    assert no_meshes.overall.n == 0 and no_meshes.points_used == 10
