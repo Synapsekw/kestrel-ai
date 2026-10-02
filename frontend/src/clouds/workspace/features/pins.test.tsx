@@ -256,10 +256,10 @@ describe("usePinsFeature", () => {
     expect(ctx.arm).toHaveBeenLastCalledWith("orbit");
   });
 
-  it("selecting a finding opens the Findings tab; Delete asks, then deletes", async () => {
+  it("selecting a finding leaves the open panel alone (R12); Delete asks, then deletes", async () => {
     const { requests, ctx } = mount({ activeTool: "orbit" });
     await userEvent.click(await findRow());
-    expect(ctx.showTopic).toHaveBeenCalledWith("findings");
+    expect(ctx.showTopic).not.toHaveBeenCalled();
     blur();
     await userEvent.keyboard("{Delete}");
     await userEvent.click(await screen.findByRole("button", { name: "Delete F-0217" }));

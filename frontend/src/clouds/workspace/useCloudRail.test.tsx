@@ -124,8 +124,32 @@ describe("useCloudRail", () => {
       within(rail)
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label")),
-    ).toEqual(["Orbit", "Pan", "Fly", "Layers", "Findings", "Measure", "Photos"]);
-    expect(within(rail).getByRole("button", { name: "Fly" })).toBeDisabled();
+    ).toEqual(["Orbit", "Pan", "Fly — This view cannot fly", "Layers", "Findings", "Measure", "Photos"]);
+    expect(within(rail).getByRole("button", { name: "Fly — This view cannot fly" })).toBeDisabled();
+  });
+
+  it("names what each unavailable tool is missing", () => {
+    render(<Harness available={(id) => id === "orbit" || id === "pan" || id === "clip"} />);
+    act(() => armTool("distance"));
+    const measure = screen.getByRole("region", { name: "Measure" });
+    expect(
+      within(measure).getByRole("button", { name: "Distance — This view cannot measure" }),
+    ).toBeDisabled();
+    act(() => armTool("pin"));
+    expect(
+      within(screen.getByRole("region", { name: "Findings" })).getByRole("button", {
+        name: "Pin a finding — This view cannot pin findings",
+      }),
+    ).toBeDisabled();
+    act(() => armTool("clip"));
+    expect(screen.getByRole("region", { name: "Clip" })).toBeInTheDocument();
+    act(() => armTool("photo"));
+    expect(
+      within(screen.getByRole("region", { name: "Photos" })).getByRole("button", {
+        name: "Photo link — This view cannot link photos",
+      }),
+    ).toBeDisabled();
+    expect(screen.queryByText(/cannot do this/)).toBeNull();
   });
 
   it("a remembered Clip topic falls back to Findings when the engine cannot clip", () => {

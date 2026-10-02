@@ -149,8 +149,8 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
   const selectedPin: CloudPin | null = pins.pins.find((p) => p.id === selectedId) ?? null;
   const select = useCallback(
     (id: string | null) => {
+      // Ruling R12: selecting does not switch the open panel; arming Pin reveals Findings.
       setSel((s) => (id ? { cloudId: cloud.id, id, n: (s?.n ?? 0) + 1 } : null));
-      if (id) latest.current.showTopic("findings");
     },
     [cloud.id],
   );

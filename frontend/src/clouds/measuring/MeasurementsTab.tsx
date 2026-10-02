@@ -94,7 +94,7 @@ export function MeasurementsList({
       .then(() => toast("ok", `Copied ${n} measurement${n === 1 ? "" : "s"}`))
       .catch(() => toast("danger", "could not copy to the clipboard"));
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <span className={cx("text-xs", list.full ? "text-warn" : "text-muted")}>
           {list.full ? FULL_TEXT : `${n} saved`}
@@ -116,7 +116,7 @@ export function MeasurementsList({
         </Alert>
       )}
       {list.loaded && n === 0 && <p className="text-sm text-muted">{EMPTY_TEXT}</p>}
-      <ul aria-label="Saved measurements" className="flex flex-col gap-1">
+      <ul aria-label="Saved measurements" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         {list.items.map((m) => (
           <Row
             key={m.id}

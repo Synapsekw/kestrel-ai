@@ -16,6 +16,22 @@ import type { TopicContent } from "./types";
 import { PALETTE, type CloudToolId } from "./tools";
 import { CLOUD_TOPICS, TOPIC_OF_TOOL, type CloudTopicId } from "./topics";
 
+/** Spec §4 "Disabled tools": what the view is missing, per tool (shown in the label and tooltip). */
+const CANNOT: Record<CloudToolId, string> = {
+  orbit: "This view cannot orbit",
+  pan: "This view cannot pan",
+  fly: "This view cannot fly",
+  point: "This view cannot measure",
+  distance: "This view cannot measure",
+  height: "This view cannot measure",
+  vertical: "This view cannot measure",
+  area: "This view cannot measure",
+  section: "This view cannot measure",
+  clip: "This view cannot clip",
+  pin: "This view cannot pin findings",
+  photo: "This view cannot link photos",
+};
+
 const toolsOf = (topic: CloudTopicId | "nav") => PALETTE.flat().filter((e) => TOPIC_OF_TOOL[e.id] === topic);
 
 /**
@@ -56,23 +72,24 @@ export function useCloudRail(p: {
       label: e.label,
       shortcut: e.shortcut,
       active: p.active === e.id,
-      disabledReason: p.isAvailable(e.id)
-        ? null
-        : "This view cannot " + (e.id === "clip" ? "clip" : "do this"),
+      disabledReason: p.isAvailable(e.id) ? null : CANNOT[e.id],
       onClick: () => p.arm(e.id),
     }));
 
-  const nav = toolsOf("nav").map((e) => (
-    <ToolButton
-      key={e.id}
-      icon={e.icon}
-      label={e.label}
-      shortcut={e.shortcut}
-      active={p.active === e.id}
-      disabled={!p.isAvailable(e.id)}
-      onClick={() => p.arm(e.id)}
-    />
-  ));
+  const nav = toolsOf("nav").map((e) => {
+    const can = p.isAvailable(e.id);
+    return (
+      <ToolButton
+        key={e.id}
+        icon={e.icon}
+        label={can ? e.label : `${e.label} — ${CANNOT[e.id]}`}
+        shortcut={e.shortcut}
+        active={p.active === e.id}
+        disabled={!can}
+        onClick={() => p.arm(e.id)}
+      />
+    );
+  });
 
   const { findings, measure } = p.features;
   const { detail, shows } = useLatestDetail(findings, measure);

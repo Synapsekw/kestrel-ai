@@ -139,6 +139,13 @@ describe("Measurements tab", () => {
     expect(screen.queryByRole("region", { name: "Details of Area 1" })).toBeNull();
   });
 
+  it("the list scrolls inside the rail panel: it may shrink and its rows overflow (C1)", async () => {
+    mount([area], [], { only: "list" });
+    const ul = await screen.findByRole("list", { name: "Saved measurements" });
+    expect(ul).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
+    expect(ul.parentElement).toHaveClass("min-h-0", "flex-1");
+  });
+
   it("the detail shows only the selected row's details, and nothing without a selection", async () => {
     const { list } = mount([area], [], { only: "detail" });
     await waitFor(() => expect(list().loaded).toBe(true));
