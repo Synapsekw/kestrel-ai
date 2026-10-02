@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { MAX_VERTICES, createToolStore, groupTools, type DrawSpec, type MapTool } from "./toolStore";
+import { MAX_VERTICES, createToolStore, toolsOfTopic, type DrawSpec, type MapTool } from "./toolStore";
 
 const tool = (id: string, draw: DrawSpec, extra: Partial<MapTool> = {}): MapTool => ({
   id,
-  group: "measure",
   topic: "measure",
   order: 0,
   icon: "measure",
@@ -16,8 +15,8 @@ const tool = (id: string, draw: DrawSpec, extra: Partial<MapTool> = {}): MapTool
 
 const TOOLS = new Map<string, MapTool>(
   [
-    tool("select", { shape: "none" }, { group: "navigate" }),
-    tool("pan", { shape: "none" }, { group: "navigate", order: 1 }),
+    tool("select", { shape: "none" }, { topic: "nav" }),
+    tool("pan", { shape: "none" }, { topic: "nav", order: 1 }),
     tool("pin", { shape: "point" }),
     tool("line", { shape: "line", min: 2 }),
     tool("two", { shape: "line", min: 2, max: 2 }),
@@ -176,11 +175,9 @@ describe("the tool state machine (spec §5.1, §15)", () => {
     expect(s.getState().panHold).toBe(false);
   });
 
-  it("groups tools in palette order and drops empty groups", () => {
-    const groups = groupTools([...TOOLS.values()]);
-    expect(groups.map((g) => g.map((t) => t.id))).toEqual([
-      ["select", "pan"],
-      ["box", "line", "pin", "poly", "two"],
-    ]);
+  it("lists a topic's tools by order, then id", () => {
+    const tools = [...TOOLS.values()];
+    expect(toolsOfTopic(tools, "nav").map((t) => t.id)).toEqual(["select", "pan"]);
+    expect(toolsOfTopic(tools, "measure").map((t) => t.id)).toEqual(["box", "line", "pin", "poly", "two"]);
   });
 });

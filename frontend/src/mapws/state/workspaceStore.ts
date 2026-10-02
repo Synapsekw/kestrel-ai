@@ -73,9 +73,6 @@ export interface WorkspaceState {
   blend: number;
   /** Swipe divider position, 2…98 % of the stage width. */
   swipe: number;
-  layersCollapsed: boolean;
-  /** The collapse state before Side-by-side, restored on leaving it. */
-  collapsedBeforeSide: boolean | null;
   layerState: Record<string, LayerUserState>;
   /** Row keys per group, top first (the layers panel order). */
   order: Partial<Record<LayerGroup, string[]>>;
@@ -112,7 +109,6 @@ export interface WorkspaceState {
   setPlaying: (on: boolean) => void;
   setBlend: (v: number) => void;
   setSwipe: (v: number) => void;
-  toggleLayersCollapsed: () => void;
   setLayerState: (key: string, patch: Partial<LayerUserState>) => void;
   setOrder: (group: LayerGroup, keys: string[]) => void;
   select: (sel: Selection | null) => void;
@@ -150,18 +146,6 @@ function fixDates(
     }
   }
   return { l: nl, r: nr };
-}
-
-/** The collapse fields when the mode changes (Side-by-side collapses and later restores). */
-function collapseFor(
-  s: Pick<WorkspaceState, "mode" | "layersCollapsed" | "collapsedBeforeSide">,
-  next: CompareMode,
-): Pick<WorkspaceState, "layersCollapsed" | "collapsedBeforeSide"> {
-  if (next === "side" && s.mode !== "side")
-    return { layersCollapsed: true, collapsedBeforeSide: s.layersCollapsed };
-  if (s.mode === "side" && next !== "side")
-    return { layersCollapsed: s.collapsedBeforeSide ?? s.layersCollapsed, collapsedBeforeSide: null };
-  return { layersCollapsed: s.layersCollapsed, collapsedBeforeSide: s.collapsedBeforeSide };
 }
 
 export function snapshot(s: WorkspaceState): PersistedState {
@@ -233,8 +217,6 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
     r: null,
     blend: 50,
     swipe: 50,
-    layersCollapsed: false,
-    collapsedBeforeSide: null,
     layerState: {},
     order: {},
     selection: null,
@@ -262,7 +244,6 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
           surveys,
           mode,
           ...fixDates(flownDates(surveys), mode, s.l, s.r),
-          ...collapseFor(s, mode),
         };
       }),
     setMode: (mode) =>
@@ -272,7 +253,6 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
         return {
           mode,
           ...fixDates(flownDates(s.surveys), mode, s.l, s.r),
-          ...collapseFor(s, mode),
         };
       }),
     cycleMode: () => {
@@ -311,7 +291,6 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
     setPlaying: (on) => set({ playing: on }),
     setBlend: (v) => set({ blend: clamp(v, 0, 100) }),
     setSwipe: (v) => set({ swipe: clamp(v, 2, 98) }),
-    toggleLayersCollapsed: () => set((s) => ({ layersCollapsed: !s.layersCollapsed })),
     setLayerState: (key, patch) =>
       set((s) => ({
         layerState: {
@@ -342,7 +321,6 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
             p.l !== undefined ? p.l : s.l,
             p.r !== undefined ? p.r : s.r,
           ),
-          ...collapseFor(s, mode),
           blend: p.blend !== undefined ? clamp(p.blend, 0, 100) : s.blend,
           swipe: p.swipe !== undefined ? clamp(p.swipe, 2, 98) : s.swipe,
           layerState: p.layers ?? s.layerState,

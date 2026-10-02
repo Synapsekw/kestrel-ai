@@ -4,7 +4,6 @@ import type { MapTool } from "../w4host";
 /** D: drag a box over the orthomosaic; the region inspector runs AI detect inside it (spec §9.3). */
 const aiRegionTool: MapTool = {
   id: "ai-region",
-  group: "site",
   topic: "ai",
   order: 1,
   icon: "sparkle",

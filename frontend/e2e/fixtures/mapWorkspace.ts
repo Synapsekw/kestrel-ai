@@ -276,7 +276,7 @@ async function pressUntilPressed(page: Page, key: string, button: Locator): Prom
 }
 
 /**
- * Arms the palette tool `name` with its `key`, pressing until its button reads pressed. A key
+ * Arms the map tool `name` with its `key`, pressing until its button reads pressed. A key
  * pressed in the first moments after the workspace appears is not always bound yet, so a single
  * press can be lost.
  */
@@ -285,7 +285,7 @@ export async function armTool(page: Page, name: string, key: string): Promise<vo
 }
 
 /**
- * Arms the tool bound to `key` (as `armTool`, found by the palette button's `aria-keyshortcuts`),
+ * Arms the tool bound to `key` (as `armTool`, found by its rail or topic button's `aria-keyshortcuts`),
  * clicks each vertex and finishes with Enter (spec §5.1). Vertices are clicked 300 ms apart:
  * OpenLayers turns any second click within 250 ms into a `dblclick`, wherever it lands, and a
  * double-click finishes the draft, so back-to-back clicks (~60 ms) would end a line early. Tool keys
@@ -293,8 +293,9 @@ export async function armTool(page: Page, name: string, key: string): Promise<vo
  * focus (e.g. the Blend slider) must be blurred by the caller.
  */
 export async function drawSite(page: Page, key: string, pts: [number, number][]): Promise<void> {
+  // The rail's nav buttons, or the tool row of the topic panel the armed tool opens (spec §4).
   const button = page
-    .getByRole("toolbar", { name: "Map tools" })
+    .getByTestId("map-workspace")
     .locator(`button[aria-keyshortcuts="${key.toUpperCase()}"]`);
   await pressUntilPressed(page, key, button);
   for (const [i, [e, n]] of pts.entries()) {

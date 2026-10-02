@@ -7,7 +7,7 @@ const GROUPS = ["base", "elevation"] as const;
 
 /** Spec §3.1 Layers: base maps and elevation rows, one "+" import menu (no drawings: they have a topic). */
 export function LayersTopic({ rows, notInCompare, projectId }: MapTopicProps) {
-  const add = useLayerAddItems(projectId, { drawing: false });
+  const add = useLayerAddItems(projectId);
   const count = rows.filter((r) => (r.group === "base" || r.group === "elevation") && !r.unavailable).length;
   return (
     <TopicPanel

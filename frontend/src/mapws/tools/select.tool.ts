@@ -2,7 +2,6 @@ import type { MapTool } from "./toolStore";
 
 const select: MapTool = {
   id: "select",
-  group: "navigate",
   topic: "nav",
   order: 0,
   icon: "cursor",

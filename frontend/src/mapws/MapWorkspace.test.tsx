@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAP_ID, PROJECT_ID, fakeClient } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
@@ -34,19 +34,40 @@ function renderWorkspace(
 const location = () => screen.getByTestId("location");
 
 beforeEach(() => fakeView.fit.mockClear());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  localStorage.clear();
+});
 
 describe("MapWorkspace", () => {
   it("renders the stage and the chrome, and fits the site once", async () => {
     renderWorkspace();
     expect(await screen.findByTestId("site-map")).toBeInTheDocument();
-    expect(screen.getByRole("toolbar", { name: "Map tools" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Layers" })).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "Map" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Findings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /EPSG:32633/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(fakeView.fit).toHaveBeenCalledWith([500000, 4981200, 502400, 4983000]));
     expect(fakeView.fit).toHaveBeenCalledTimes(1);
     expect(location()).toHaveTextContent("r=2026-05-20");
+  });
+
+  it("L arms Distance from any topic and the open panel follows to Measure (spec §4)", async () => {
+    renderWorkspace();
+    await screen.findByTestId("site-map");
+    expect(screen.getByRole("region", { name: "Findings" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "l" });
+    expect(await screen.findByRole("region", { name: "Measure" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Findings" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Measure distance/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("reaches Run on the whole map from the AI topic", async () => {
+    renderWorkspace();
+    await screen.findByTestId("site-map");
+    fireEvent.click(screen.getByRole("button", { name: "AI" }));
+    const ai = await screen.findByRole("region", { name: "AI" });
+    expect(within(ai).getByRole("button", { name: "Run on the whole map" })).toBeInTheDocument();
   });
 
   it("teaches the empty project (spec §14)", async () => {

@@ -12,7 +12,7 @@ describe("detect plugins", () => {
     expect(aiRegionTool).toMatchObject({
       id: "ai-region",
       action: "ai-detect",
-      group: "site",
+      topic: "ai",
       order: 1,
       draw: { shape: "box" },
     });

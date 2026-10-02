@@ -10,12 +10,12 @@ describe("W1's plugins, discovered from their files (R-W1-1)", () => {
   it("registers Select, Pan, the no-coordinates rows and the finding inspector", () => {
     expect(toolRegistry.get("select")).toMatchObject({
       action: "tool-select",
-      group: "navigate",
+      topic: "nav",
       icon: "cursor",
     });
     expect(toolRegistry.get("pan")).toMatchObject({
       action: "tool-pan",
-      group: "navigate",
+      topic: "nav",
       icon: "hand",
     });
     expect(layerRegistry.get("map_nocrs")?.group).toBe("base");

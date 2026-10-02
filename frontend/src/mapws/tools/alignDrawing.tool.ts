@@ -4,7 +4,6 @@ import type { MapTool } from "./toolStore";
 /** W5's tool plugin: Align drawing (K), spec §5.1 and §8.3. */
 const alignDrawing: MapTool = {
   id: ALIGN_TOOL_ID,
-  group: "site",
   topic: "drawings",
   order: 20,
   icon: "align",

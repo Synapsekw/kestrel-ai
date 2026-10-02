@@ -24,13 +24,18 @@ async function openWorkspace(page: Page): Promise<MapWorld> {
   await expect(page.getByTestId("map-workspace")).toBeVisible();
   // R-URL: the settled address, not a transient one.
   await expect(page).toHaveURL(new RegExp(`/p/${P}/maps(\\?|$)`));
+  // Drawings are a topic of their own on the workspace rail (spec §3.1).
+  await page.getByRole("toolbar", { name: "Map" }).getByRole("button", { name: "Drawings" }).click();
+  await expect(drawingsTopic(page)).toBeVisible();
   return world;
 }
 
-/** Layers "+" → "Import drawing" → file → "Read file" → (DXF) EPSG placement → "Start import". */
+// The topic panel; its drawing rows sit in a nested "Drawings" group region of their own.
+const drawingsTopic = (page: Page) => page.locator('[data-testid="rail-panel"][data-topic="drawings"]');
+
+/** Drawings topic "Import drawing" → file → "Read file" → (DXF) EPSG placement → "Start import". */
 async function importDrawing(page: Page, path: string, epsg: string | null) {
-  await page.getByRole("button", { name: "Add a layer" }).click();
-  await page.getByRole("menuitem", { name: "Import drawing" }).click();
+  await drawingsTopic(page).getByRole("button", { name: "Import drawing" }).click();
   const dialog = page.getByRole("dialog", { name: "Import drawing" });
   await dialog.getByLabel("Drawing file").fill(path);
   await dialog.getByRole("button", { name: "Read file" }).click();
@@ -59,7 +64,7 @@ async function alignFromRowMenu(page: Page, row: Locator, id: string) {
   await row.getByRole("button", { name: /actions$/ }).click();
   await page.getByRole("menuitem", { name: "Properties" }).click();
   await expect(page.getByTestId("map-inspector")).toHaveAttribute("data-sel", `drawing:${id}`);
-  const align = page.getByRole("button", { name: "Align drawing", exact: true });
+  const align = drawingsTopic(page).getByRole("button", { name: "Align drawing", exact: true });
   await align.click();
   await expect(align).toHaveAttribute("aria-pressed", "true");
 }
@@ -81,7 +86,9 @@ test("flow 2: a DXF by CRS, a PDF by three control points, RMSE, save, overlay",
 
   // PDF with no placement: "not placed"; K stays off until a drawing is chosen.
   const pdf = await importPdf(page, world);
-  await expect(page.getByRole("button", { name: "Align drawing — Choose a drawing first" })).toBeDisabled();
+  await expect(
+    drawingsTopic(page).getByRole("button", { name: "Align drawing — Choose a drawing first" }),
+  ).toBeDisabled();
   await alignFromRowMenu(page, pdf.row, pdf.id);
   // F1 (task-8-report.md): starting the Align tool starts the session straight away, with no second K.
   // Save placement shows only in a session, and stays disabled until the pairs fit.

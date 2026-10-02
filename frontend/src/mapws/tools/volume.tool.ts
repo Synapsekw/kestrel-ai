@@ -5,7 +5,6 @@ import type { MapTool } from "../w4host";
 /** U: draw a stockpile's polygon on the r date's DSM (spec §10); also the inspector's mask pen (T8-2). */
 const volumeTool: MapTool = {
   id: "volume",
-  group: "measure",
   topic: "measure",
   order: 40,
   icon: "volume",

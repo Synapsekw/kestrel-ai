@@ -4,7 +4,6 @@ import { AreaOverlay } from "@/mapws/measure/MeasureOverlay";
 /** Spec §5.1 `Q`: a polygon, stored as a `map_measurement` area. */
 const area: MapTool = {
   id: "area",
-  group: "measure",
   topic: "measure",
   order: 20,
   icon: "area",

@@ -117,7 +117,7 @@ test("the map viewer is full-bleed: no tabs, and the breadcrumb names the tab", 
 
 test("the Maps tab is the full-bleed map workspace", async ({ page }) => {
   await page.goto(`/p/${P}/maps`);
-  await expect(page.getByRole("toolbar", { name: "Map tools" })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Map" })).toBeVisible();
   await expect(page.getByRole("banner")).toContainText("Maps");
   await expect(page.getByRole("tablist")).toHaveCount(0);
 });

@@ -5,7 +5,6 @@ import { FindingPointOverlay } from "@/mapws/findings/FindingOverlay";
 /** Spec §5.1 `M`: one click → the type picker → a finding with a map anchor. */
 const findingPoint: MapTool = {
   id: "finding-point",
-  group: "annotate",
   topic: "findings",
   order: 10,
   icon: "pin",

@@ -35,7 +35,6 @@ describe("volume plugins", () => {
     expect(volumeTool).toMatchObject({
       id: "volume",
       action: "volume",
-      group: "measure",
       topic: "measure",
       order: 40,
       draw: { shape: "polygon", min: 3 },

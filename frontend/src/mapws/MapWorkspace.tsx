@@ -4,14 +4,12 @@ import { useShallow } from "zustand/react/shallow";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { useCommands } from "@/app/commands";
-import { Alert, Button, Dialog, GlassPanel, Skeleton, cx, toast, type Command } from "@/ui";
+import { Alert, Button, Dialog, GlassPanel, Skeleton, WorkspaceRail, cx, toast, type Command } from "@/ui";
 import { arrivalRequest, asksToCentre } from "./arrival/arrival";
 import { CoordinatesPanel } from "./chrome/CoordinatesPanel";
-import { LayersPanel } from "./chrome/LayersPanel";
 import { NavControls } from "./chrome/NavControls";
 import { StageMenu } from "./chrome/StageMenu";
 import { ToolHint } from "./chrome/ToolHint";
-import { ToolPalette } from "./chrome/ToolPalette";
 import { WorkspaceEmpty } from "./chrome/WorkspaceEmpty";
 import {
   WorkspaceProvider,
@@ -33,7 +31,9 @@ import { useUrlState } from "./state/useUrlState";
 import { useWorkspaceData, type WorkspaceData } from "./state/useWorkspaceData";
 import { createWorkspaceStore, PLAY_STEP_MS } from "./state/workspaceStore";
 import { createToolStore, shortcutFor, toolRegistry } from "./tools/toolStore";
+import { useMapToolKeys } from "./tools/useMapToolKeys";
 import { useWorkspaceKeys, workspaceKeyOf } from "./tools/useWorkspaceKeys";
+import { useMapRail } from "./topics/useMapRail";
 import type { Selection } from "./types";
 import { SiteMap } from "./view/SiteMap";
 import { siteCode } from "./view/siteFrame";
@@ -271,7 +271,19 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
     }
   };
 
+  const toolContext = useMemo(
+    () => ({ frame, selection, surveys: data.surveys, layers: data.layers, r }),
+    [frame, selection, data.surveys, data.layers, r],
+  );
   useWorkspaceKeys({ onDelete, onFit });
+  useMapToolKeys(toolContext);
+  const rail = useMapRail({
+    rows,
+    notInCompare,
+    projectId,
+    context: toolContext,
+    hasBaseData: inFrame.length > 0,
+  });
 
   const activate = useTools((s) => s.activate);
   const commands = useMemo<Command[]>(
@@ -295,10 +307,6 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
   );
   useCommands(commands);
 
-  const toolContext = useMemo(
-    () => ({ frame, selection, surveys: data.surveys, layers: data.layers, r }),
-    [frame, selection, data.surveys, data.layers, r],
-  );
   const Overlay = tools.find((t) => t.id === active)?.Overlay;
   // Deviation 8: the r survey's ortho GSD (cm) is the 100 % zoom.
   const gsdCm = data.surveys.find((s) => s.date === r)?.maps.find((m) => m.gsd_cm !== null)?.gsd_cm ?? null;
@@ -326,8 +334,14 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
       <PanelSlotHost slot="stage" projectId={projectId} frame={frame} />
       {Overlay && <Overlay projectId={projectId} frame={frame} />}
       {inFrame.length === 0 && <WorkspaceEmpty projectId={projectId} />}
-      <ToolPalette context={toolContext} />
-      <LayersPanel rows={rows} notInCompare={notInCompare} projectId={projectId} />
+      <WorkspaceRail
+        label="Map"
+        store={rail.store}
+        nav={rail.nav}
+        topics={rail.topics}
+        inspectorOpen={selection !== null}
+        bottomInset={140}
+      />
       <PanelSlotHost slot="top-center" projectId={projectId} frame={frame} />
       <ToolHint />
       <InspectorHost projectId={projectId} frame={frame} />

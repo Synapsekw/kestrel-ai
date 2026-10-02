@@ -5,7 +5,6 @@ import { FindingPolygonOverlay } from "@/mapws/findings/FindingOverlay";
 /** Spec §5.1 `G`: a polygon → the type picker → a finding with a map anchor. */
 const findingPolygon: MapTool = {
   id: "finding-polygon",
-  group: "annotate",
   topic: "findings",
   order: 20,
   icon: "polygon",

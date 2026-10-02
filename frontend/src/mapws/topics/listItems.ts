@@ -53,18 +53,16 @@ export function findingCoords(pin: MapFindingPin): number[][] {
   return g.type === "Point" ? [g.coordinates] : (g.coordinates[0] ?? []);
 }
 
-/**
- * The AI review queue (spec §3.1): the detections the panes drew, filtered as the stage draws them,
- * pending first. Ids are `detection:<runId>.<detectionId>`, the detection Selection's id.
- */
-export function detectionItems(
+type DetectionsById = ReadonlyMap<string, { runId: string; d: MapDetection }>;
+type TypeOf = (classId: string) => { name: string; kind: string } | undefined;
+
+/** The detections the panes drew that the filters show, as the stage draws them (stale view entries skipped). */
+function* shownDetections(
   inView: Readonly<Record<string, readonly string[]>>,
-  byId: ReadonlyMap<string, { runId: string; d: MapDetection }>,
+  byId: DetectionsById,
   filters: DetectFilters,
-  typeOf: (classId: string) => { name: string; kind: string } | undefined,
-): TopicItem[] {
-  const pending: TopicItem[] = [];
-  const rest: TopicItem[] = [];
+  typeOf: TypeOf,
+): Generator<{ runId: string; d: MapDetection; name: string | undefined }> {
   for (const [runId, ids] of Object.entries(inView)) {
     for (const id of ids) {
       const hit = byId.get(id);
@@ -72,13 +70,44 @@ export function detectionItems(
       const type = typeOf(hit.d.class_id);
       const kind = type?.kind === "defect" || type?.kind === "object" ? type.kind : undefined;
       if (lookOf(hit.d, kind, filters, false) === "hidden") continue;
-      const sel = detectionSelection(runId, hit.d.id);
-      (isPending(hit.d) ? pending : rest).push({
-        id: `${sel.kind}:${sel.id}`,
-        label: type?.name ?? "Detection",
-        meta: `${Math.round(hit.d.confidence * 100)} %`,
-      });
+      yield { runId, d: hit.d, name: type?.name };
     }
   }
+}
+
+/**
+ * The AI review queue (spec §3.1): the detections the panes drew, filtered as the stage draws them,
+ * pending first. Ids are `detection:<runId>.<detectionId>`, the detection Selection's id.
+ */
+export function detectionItems(
+  inView: Readonly<Record<string, readonly string[]>>,
+  byId: DetectionsById,
+  filters: DetectFilters,
+  typeOf: TypeOf,
+): TopicItem[] {
+  const pending: TopicItem[] = [];
+  const rest: TopicItem[] = [];
+  for (const { runId, d, name } of shownDetections(inView, byId, filters, typeOf)) {
+    const sel = detectionSelection(runId, d.id);
+    (isPending(d) ? pending : rest).push({
+      id: `${sel.kind}:${sel.id}`,
+      label: name ?? "Detection",
+      meta: `${Math.round(d.confidence * 100)} %`,
+    });
+  }
   return [...pending, ...rest];
+}
+
+/**
+ * The rail badge (spec §4 "Badges"): the pending rows of `detectionItems`. A type's kind only
+ * decides how an accepted detection is drawn, so pending ones need no project types.
+ */
+export function pendingCount(
+  inView: Readonly<Record<string, readonly string[]>>,
+  byId: DetectionsById,
+  filters: DetectFilters,
+): number {
+  let n = 0;
+  for (const { d } of shownDetections(inView, byId, filters, () => undefined)) if (isPending(d)) n++;
+  return n;
 }

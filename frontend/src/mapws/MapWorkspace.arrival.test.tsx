@@ -60,6 +60,7 @@ beforeEach(() => {
   fakeView.centreOn.mockClear();
   fakeView.fit.mockClear();
   useToastStore.getState().clear();
+  localStorage.clear(); // the rail remembers its topic; each arrival starts from the default
 });
 
 describe("the ?finding= arrival (spec §5, §9.4, §15)", () => {

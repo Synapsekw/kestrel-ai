@@ -6,7 +6,6 @@ import { ProfileOverlay } from "@/mapws/measure/MeasureOverlay";
 /** Spec §5.1 `E`: a two-click (or multi-vertex) line → the profile chart (§9.2). */
 const profile: MapTool = {
   id: "profile",
-  group: "measure",
   topic: "measure",
   order: 30,
   icon: "profile",

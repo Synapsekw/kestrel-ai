@@ -6,10 +6,6 @@ import type { Coord, Selection, SiteFrame, Survey, WorkspaceLayer } from "../typ
 import type { SiteExtent } from "../view/siteGrid";
 import type { MapTopicId } from "../topics/topicIds";
 
-/** The palette's four groups, separated by rules (spec §5 Tool palette). */
-export type ToolGroup = "navigate" | "measure" | "annotate" | "site";
-export const TOOL_GROUPS: readonly ToolGroup[] = ["navigate", "measure", "annotate", "site"];
-
 export type DrawSpec =
   | { shape: "none" }
   | { shape: "point" }
@@ -33,10 +29,9 @@ export interface ToolOverlayProps {
 
 export interface MapTool {
   id: string;
-  group: ToolGroup;
   /** The rail topic whose panel holds this tool (spec §3.1); "nav" sits on the rail itself. */
   topic: MapTopicId | "nav";
-  /** Position inside the group. */
+  /** Position inside the topic. */
   order: number;
   icon: IconName;
   /** "Measure distance": the tooltip and the hint pill's bold name. */
@@ -99,13 +94,6 @@ const TOOL_KEYS = [...WORKSPACE_KEYS.maps, ...GLOBAL_KEYS.filter((e) => e.action
 /** The chord of a tool action; undefined for a review key, a non-tool global key or an unknown action. */
 export function shortcutFor(action: string): string | undefined {
   return TOOL_KEYS.find((e) => e.action === action)?.keys[0];
-}
-
-/** The palette's groups in order, each sorted by `order` then id; empty groups are dropped. */
-export function groupTools(tools: readonly MapTool[]): MapTool[][] {
-  return TOOL_GROUPS.map((g) =>
-    tools.filter((t) => t.group === g).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)),
-  ).filter((g) => g.length > 0);
 }
 
 /** One topic's tools, by `order` then id. */

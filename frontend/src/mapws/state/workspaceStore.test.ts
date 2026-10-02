@@ -38,21 +38,6 @@ describe("workspace store", () => {
     expect(s.getState().mode).toBe("single");
   });
 
-  it("collapses the layers panel in Side-by-side and restores it on leaving (spec §5, §15)", () => {
-    const s = store();
-    expect(s.getState().layersCollapsed).toBe(false);
-    s.getState().setMode("side");
-    expect(s.getState().layersCollapsed).toBe(true);
-    s.getState().setMode("blend");
-    expect(s.getState().layersCollapsed).toBe(false);
-
-    s.getState().toggleLayersCollapsed(); // the operator collapsed it before
-    s.getState().setMode("side");
-    s.getState().toggleLayersCollapsed(); // and opened it inside Side-by-side
-    s.getState().setMode("single");
-    expect(s.getState().layersCollapsed).toBe(true);
-  });
-
   it("keeps L < R: refuses a date pair out of order, and planned or unknown dates", () => {
     const s = store(THREE);
     s.getState().setMode("swipe");

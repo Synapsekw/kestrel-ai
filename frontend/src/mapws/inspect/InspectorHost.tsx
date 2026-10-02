@@ -4,7 +4,7 @@ import { useRegistry } from "../registry";
 import type { SiteFrame } from "../types";
 import { inspectorRegistry } from "./inspectorRegistry";
 
-const PLACE = "absolute right-4 top-4 z-10 flex max-h-[calc(100%-150px)] w-[318px] flex-col";
+const PLACE = "absolute right-3.5 top-3.5 z-10 flex max-h-[calc(100%-150px)] w-[340px] flex-col";
 
 /** Spec §5.3 shell: the registered inspector of the selection kind, or nothing (R-W1-11). */
 export function InspectorHost({ projectId, frame }: { projectId: string; frame: SiteFrame }) {

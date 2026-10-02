@@ -93,11 +93,11 @@ describe("the align-drawing tool (spec §8.3)", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("is the K tool of the site group, discovered as a plugin, usable only with a ready drawing selected", () => {
+  it("is the K tool of the Drawings topic, discovered as a plugin, usable only with a ready drawing selected", () => {
     expect(alignDrawing).toMatchObject({
       id: "align-drawing",
       action: "align-drawing",
-      group: "site",
+      topic: "drawings",
       icon: "align",
       draw: { shape: "point" },
     });

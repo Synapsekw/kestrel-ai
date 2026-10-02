@@ -12,8 +12,8 @@ const API = `/api/v1/projects/${P}`;
 
 test("the workspace opens over the Prism mock with its chrome", async ({ page }) => {
   await page.goto(`/p/${P}/maps`);
-  await expect(page.getByRole("toolbar", { name: "Map tools" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Layers" })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Map" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Findings" })).toBeVisible();
   await expect(page.getByRole("button", { name: /EPSG:32638/ })).toBeVisible();
   await expect(page).toHaveURL(/r=2026-09-14/);
 });

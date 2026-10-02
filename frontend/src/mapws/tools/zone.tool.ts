@@ -5,7 +5,6 @@ import { ZoneOverlay } from "@/mapws/zones/ZoneOverlay";
 /** Spec §5.1 `Z`: a polygon → name and category → a site area (M15). */
 const zone: MapTool = {
   id: "zone",
-  group: "annotate",
   topic: "findings",
   order: 30,
   icon: "zone",

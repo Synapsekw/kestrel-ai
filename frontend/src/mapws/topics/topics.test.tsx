@@ -147,6 +147,22 @@ describe("map topics", () => {
     expect(renderHook(() => usePendingCount()).result.current).toBe(1);
   });
 
+  it("the AI badge counts only the pending detections the list shows", () => {
+    useDetectStore
+      .getState()
+      .remember("run1", [
+        { id: "d1", review_state: "unreviewed", class_id: "shown", confidence: 0.5 } as never,
+        { id: "d2", review_state: "unreviewed", class_id: "hidden", confidence: 0.5 } as never,
+      ]);
+    useDetectStore.getState().setInView("run1", ["d1", "d2"]);
+    // A stale view entry: the detection is now remembered under another run.
+    useDetectStore.getState().setInView("run0", ["d1"]);
+    useDetectStore.setState((s) => ({ filters: { ...s.filters, hiddenTypes: new Set(["hidden"]) } }));
+    expect(renderHook(() => usePendingCount()).result.current).toBe(1);
+    useDetectStore.setState((s) => ({ filters: { ...s.filters, pending: false } }));
+    expect(renderHook(() => usePendingCount()).result.current).toBe(0);
+  });
+
   it("Drawings: one import action, Align disabled without a selected drawing, no duplicate menu entries", () => {
     renderTopic(DrawingsTopic, { drawing: true });
     expect(screen.getAllByRole("button", { name: /Import drawing/ })).toHaveLength(1);
