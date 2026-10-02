@@ -75,7 +75,9 @@ class FlatPlateParams(_Strict):
 
     @model_validator(mode="after")
     def _one_outline(self):
-        if (self.d is None) == (self.w is None or self.l is None):
+        round_plate = self.d is not None and self.w is None and self.l is None
+        rect_plate = self.d is None and self.w is not None and self.l is not None
+        if not (round_plate or rect_plate):
             raise ValueError("give either d, or both w and l")
         if self.slope is not None and (self.d is None or self.slope == 0):
             raise ValueError("slope needs a round plate (d) and a non-zero 1:n")

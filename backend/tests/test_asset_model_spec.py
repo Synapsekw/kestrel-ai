@@ -85,3 +85,24 @@ def test_spec_round_trips_through_json():
     spec = AssetSpec.model_validate({"asset": {"tag": "710-D-130335"}, "parts": [shell()]})
     again = AssetSpec.model_validate_json(spec.model_dump_json())
     assert again == spec
+
+
+@pytest.mark.parametrize(
+    ("outline", "ok"),
+    [
+        ({"d": 1000}, True),
+        ({"w": 500, "l": 800}, True),
+        ({"d": 1000, "w": 500}, False),
+        ({"d": 1000, "l": 800}, False),
+        ({"d": 1000, "w": 500, "l": 800}, False),
+        ({"w": 500}, False),
+        ({}, False),
+    ],
+)
+def test_flat_plate_takes_d_or_w_and_l_never_a_mix(outline, ok):
+    data = shell(shape="flat_plate", group="Head", params={**outline, "thickness": 8})
+    if ok:
+        Part.model_validate(data)
+    else:
+        with pytest.raises(ValidationError, match="either d, or both w and l"):
+            Part.model_validate(data)
