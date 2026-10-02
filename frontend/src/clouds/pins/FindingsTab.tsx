@@ -1,7 +1,8 @@
-import type { RefObject } from "react";
+import { useContext, type RefObject } from "react";
 import type { ClassDef, GeoMap } from "@contract/client";
 import type { PointCloud } from "@/api/clouds";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
+import { InspectorShowsContext } from "@/clouds/workspace/inspectorShows";
 import { FindingInspector } from "@/findings/FindingInspector";
 import { formatFindingNumber } from "@/findings/format";
 import { STATUS_LABEL } from "@/findings/status";
@@ -30,6 +31,8 @@ export interface FindingsTabProps {
 
 /** Spec §9.4 "Findings tab", the list half: compact rows (the rail's Findings panel). */
 export function FindingsList(p: FindingsTabProps) {
+  // A selected finding hidden behind a later measurement is brought forward, not deselected.
+  const shown = useContext(InspectorShowsContext) === "findings";
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="cloud-findings-tab">
       {p.pins.capNote && <p className="px-3 py-1 text-xs text-muted">{p.pins.capNote}</p>}
@@ -49,7 +52,7 @@ export function FindingsList(p: FindingsTabProps) {
                 <button
                   type="button"
                   aria-pressed={on}
-                  onClick={() => p.onSelect(on ? null : pin.id)}
+                  onClick={() => p.onSelect(on && shown ? null : pin.id)}
                   className={cx(
                     "flex w-full items-center gap-2 rounded-control px-3 py-1.5 text-left hover:bg-hover",
                     on && "bg-accent-soft",

@@ -1,9 +1,10 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RAIL_STORAGE_PREFIX, WorkspaceRail } from "@/ui";
 import { composeFeatures } from "./compose";
+import { InspectorShowsContext } from "./inspectorShows";
 import type { CloudToolId } from "./tools";
 import { useCloudRail } from "./useCloudRail";
 
@@ -13,6 +14,11 @@ afterEach(() => {
 });
 
 let armTool: (id: CloudToolId) => void = () => {};
+
+/** Inside the Findings list: what the inspector shows, as the list's rows read it. */
+function Shows() {
+  return <output data-testid="shows">{String(useContext(InspectorShowsContext))}</output>;
+}
 
 function Harness({
   available = () => true,
@@ -38,7 +44,12 @@ function Harness({
     {
       name: "f",
       findings: {
-        list: <p>pin list</p>,
+        list: (
+          <>
+            <p>pin list</p>
+            <Shows />
+          </>
+        ),
         detail: finding ? <p>finding {finding}</p> : null,
         selectionKey: finding,
         count: 2,
@@ -163,5 +174,17 @@ describe("useCloudRail", () => {
     expect(screen.getByTestId("detail")).toHaveTextContent("finding F-0001#1");
     rerender(<Harness measurement="m-1#2" finding="F-0001#1" />);
     expect(screen.getByTestId("detail")).toHaveTextContent("measurement m-1#2");
+  });
+
+  it("tells the Findings list which item the inspector shows", () => {
+    const { rerender } = render(<Harness finding="F-0001#1" />);
+    expect(screen.getByTestId("shows")).toHaveTextContent("findings");
+    rerender(<Harness finding="F-0001#1" measurement="m-1#1" />);
+    expect(screen.getByTestId("shows")).toHaveTextContent("measure");
+    // the finding's row clicked again: a new key brings it forward
+    rerender(<Harness finding="F-0001#2" measurement="m-1#1" />);
+    expect(screen.getByTestId("shows")).toHaveTextContent("findings");
+    rerender(<Harness />);
+    expect(screen.getByTestId("shows")).toHaveTextContent("null");
   });
 });

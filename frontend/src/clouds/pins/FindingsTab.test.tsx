@@ -6,6 +6,7 @@ import type { ComponentType } from "react";
 import type { CloudViewOut, GeoMap } from "@contract/client";
 import type { CloudMeasurement } from "@/api/cloudMeasurements";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
+import { InspectorShowsContext, type InspectorShows } from "@/clouds/workspace/inspectorShows";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "@/clouds/workspace/seams";
 import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { baseRoutes, exampleFindingDetail, projectTypes, TYPE_SPALLING } from "@/test/findingFixtures";
@@ -85,6 +86,8 @@ function mount(
     maps?: GeoMap[];
     /** Which half to render; both by default. */
     only?: "list" | "detail";
+    /** What the workspace inspector shows (no provider when left out). */
+    shows?: InspectorShows;
   } = {},
 ) {
   const { api, requests } = fakeClient(
@@ -124,12 +127,21 @@ function mount(
     onNavigate,
     maps: opts.maps ?? [],
   };
+  const halves = (
+    <>
+      {opts.only !== "detail" && <FindingsList {...props} />}
+      {opts.only !== "list" && <FindingDetail {...props} />}
+    </>
+  );
   const { container } = render(
     <TestApiProvider api={api}>
       <MemoryRouter>
         <WorkspaceSeamsContext.Provider value={seams}>
-          {opts.only !== "detail" && <FindingsList {...props} />}
-          {opts.only !== "list" && <FindingDetail {...props} />}
+          {opts.shows === undefined ? (
+            halves
+          ) : (
+            <InspectorShowsContext.Provider value={opts.shows}>{halves}</InspectorShowsContext.Provider>
+          )}
         </WorkspaceSeamsContext.Provider>
       </MemoryRouter>
     </TestApiProvider>,
@@ -180,6 +192,18 @@ describe("FindingsList and FindingDetail", () => {
     const { onSelect } = mount(state([pinA, pinB]), { selectedId: "f-b" });
     await userEvent.click(screen.getByRole("button", { name: /F-0217/ }));
     expect(onSelect).toHaveBeenLastCalledWith("f-a");
+    await userEvent.click(screen.getByRole("button", { name: /F-0218/ }));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  it("a click on the selected row brings it forward when the inspector shows a measurement", async () => {
+    const { onSelect } = mount(state([pinA, pinB]), { selectedId: "f-b", only: "list", shows: "measure" });
+    await userEvent.click(screen.getByRole("button", { name: /F-0218/ }));
+    expect(onSelect).toHaveBeenLastCalledWith("f-b");
+  });
+
+  it("a click on the selected row deselects it when the inspector shows that finding", async () => {
+    const { onSelect } = mount(state([pinA, pinB]), { selectedId: "f-b", only: "list", shows: "findings" });
     await userEvent.click(screen.getByRole("button", { name: /F-0218/ }));
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });

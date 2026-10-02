@@ -11,6 +11,7 @@ import {
   type TopicTool,
 } from "@/ui";
 import type { ComposedFeatures } from "./compose";
+import { InspectorShowsContext, type InspectorShows } from "./inspectorShows";
 import type { TopicContent } from "./types";
 import { PALETTE, type CloudToolId } from "./tools";
 import { CLOUD_TOPICS, TOPIC_OF_TOOL, type CloudTopicId } from "./topics";
@@ -74,7 +75,7 @@ export function useCloudRail(p: {
   ));
 
   const { findings, measure } = p.features;
-  const detail = useLatestDetail(findings, measure);
+  const { detail, shows } = useLatestDetail(findings, measure);
   const all: RailTopic[] = [
     {
       id: "layers",
@@ -99,7 +100,7 @@ export function useCloudRail(p: {
             ) : undefined
           }
         >
-          {findings?.list}
+          <InspectorShowsContext.Provider value={shows}>{findings?.list}</InspectorShowsContext.Provider>
         </TopicPanel>
       ),
     },
@@ -148,7 +149,10 @@ const keyOf = (t: TopicContent | null): Selection => (t?.detail ? (t.selectionKe
  * Ruling R10: the inspector shows the most recently selected item, a finding or a measurement,
  * whatever the rail shows; when that one is deselected, the other (if any) shows.
  */
-function useLatestDetail(findings: TopicContent | null, measure: TopicContent | null): ReactNode | null {
+function useLatestDetail(
+  findings: TopicContent | null,
+  measure: TopicContent | null,
+): { detail: ReactNode | null; shows: InspectorShows } {
   const f = keyOf(findings);
   const m = keyOf(measure);
   // Derived from the previous render's selections (React's "adjust state on a prop change").
@@ -165,5 +169,7 @@ function useLatestDetail(findings: TopicContent | null, measure: TopicContent | 
   }
   const fd = findings?.detail ?? null;
   const md = measure?.detail ?? null;
-  return last === "measure" ? (md ?? fd) : (fd ?? md);
+  const shows: InspectorShows =
+    last === "measure" ? (md ? "measure" : fd ? "findings" : null) : fd ? "findings" : md ? "measure" : null;
+  return { detail: shows === "measure" ? md : shows === "findings" ? fd : null, shows };
 }
