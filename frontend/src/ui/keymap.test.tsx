@@ -84,6 +84,11 @@ describe("the app keymap (spec §5.6)", () => {
     expect(findCollisions(KEYMAP)).toEqual([]);
   });
 
+  it("toggle-panel also takes Ctrl+Alt+\\ for AltGr layouts", () => {
+    const toggle = GLOBAL_KEYS.find((e) => e.action === "toggle-panel");
+    expect(toggle?.keys).toEqual(["\\", "Ctrl+Alt+\\"]);
+  });
+
   it("catches a workspace key that equals a global or review key", () => {
     const bad: KeyEntry[] = [
       ...GLOBAL_KEYS,

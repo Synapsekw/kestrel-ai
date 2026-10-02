@@ -284,7 +284,9 @@ export async function openMapTopic(page: Page, name: string): Promise<void> {
   const rail = page.getByRole("toolbar", { name: "Map" });
   await expect(rail).toBeVisible();
   const shown = page.locator(`[data-testid="rail-panel"][data-topic="${name.toLowerCase()}"]`);
-  if ((await shown.count()) === 0) await rail.getByRole("button", { name, exact: true }).click();
+  // The name may carry ", 3 waiting" or ", hidden" (spec §4 badges and eye).
+  const button = rail.getByRole("button", { name: new RegExp(`^${name}(,|$)`) });
+  if ((await shown.count()) === 0) await button.click();
   await expect(shown).toBeVisible();
 }
 

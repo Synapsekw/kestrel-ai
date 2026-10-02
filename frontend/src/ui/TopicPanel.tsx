@@ -108,45 +108,53 @@ export function TopicList({ label, items, selectedId, onSelect, empty }: TopicLi
     onScroll(); // sync the window now; jsdom and some engines do not dispatch scroll for programmatic moves
     // eslint-disable-next-line react-hooks/exhaustive-deps -- scroll only when the selection moves
   }, [selectedIndex]);
-  if (items.length === 0) return <>{empty}</>;
+  // The scroll container always renders (the empty state inside it), so the viewport's
+  // ResizeObserver is attached even when the list first renders empty.
+  const isEmpty = items.length === 0;
   return (
     <div
       ref={containerRef}
-      role="listbox"
-      aria-label={label}
+      role={isEmpty ? undefined : "listbox"}
+      aria-label={isEmpty ? undefined : label}
       onScroll={onScroll}
       className="min-h-0 flex-1 overflow-y-auto"
     >
-      <div style={{ height: win.totalHeight, position: "relative" }}>
-        <div style={{ transform: `translateY(${win.offsetTop}px)` }}>
-          {items.slice(win.start, win.end).map((item) => {
-            const on = item.id === selectedId;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="option"
-                aria-selected={on}
-                onClick={() => onSelect(item.id)}
-                style={
-                  { height: TOPIC_ROW_HEIGHT, "--c": item.swatch ?? "var(--surface-2)" } as CSSProperties
-                }
-                className={cx(
-                  "flex w-full items-center gap-2 rounded-control px-2 text-left hover:bg-hover",
-                  on && "bg-accent-soft",
-                  focusRing,
-                )}
-              >
-                {item.swatch && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--c)]" />}
-                <span className="min-w-0 flex-1 truncate text-sm text-ink">{item.label}</span>
-                {item.meta && (
-                  <span className="shrink-0 font-mono text-2xs tabular-nums text-muted">{item.meta}</span>
-                )}
-              </button>
-            );
-          })}
+      {isEmpty ? (
+        empty
+      ) : (
+        <div style={{ height: win.totalHeight, position: "relative" }}>
+          <div style={{ transform: `translateY(${win.offsetTop}px)` }}>
+            {items.slice(win.start, win.end).map((item) => {
+              const on = item.id === selectedId;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => onSelect(item.id)}
+                  style={
+                    { height: TOPIC_ROW_HEIGHT, "--c": item.swatch ?? "var(--surface-2)" } as CSSProperties
+                  }
+                  className={cx(
+                    "flex w-full items-center gap-2 rounded-control px-2 text-left hover:bg-hover",
+                    on && "bg-accent-soft",
+                    focusRing,
+                  )}
+                >
+                  {item.swatch && (
+                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--c)]" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{item.label}</span>
+                  {item.meta && (
+                    <span className="shrink-0 font-mono text-2xs tabular-nums text-muted">{item.meta}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

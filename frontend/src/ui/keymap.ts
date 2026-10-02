@@ -123,7 +123,7 @@ export const GLOBAL_KEYS: KeyEntry[] = [
   g("V", "tool-select", "Select tool (Orbit in point clouds)"),
   g("H", "tool-pan", "Pan tool"),
   g("F", "fit", "Fit the image, the site or the cloud"),
-  g("\\", "toggle-panel", "Show or hide the side panel"),
+  g(["\\", "Ctrl+Alt+\\"], "toggle-panel", "Show or hide the side panel (Ctrl+Alt on AltGr layouts)"),
   g("+", "zoom-in", "Zoom in"),
   g("-", "zoom-out", "Zoom out"),
 ];

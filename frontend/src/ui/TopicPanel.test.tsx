@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TOPIC_ROW_HEIGHT, TopicList, TopicPanel } from "./TopicPanel";
 
 describe("TopicPanel", () => {
@@ -90,5 +90,45 @@ describe("TopicList", () => {
       <TopicList label="Findings" items={[]} selectedId={null} onSelect={() => {}} empty={<p>none yet</p>} />,
     );
     expect(screen.getByText("none yet")).toBeInTheDocument();
+  });
+
+  describe("with a ResizeObserver", () => {
+    const observed: Element[] = [];
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      observed.length = 0;
+    });
+
+    it("observes the list once items arrive after an empty first render", () => {
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe(el: Element) {
+            observed.push(el);
+          }
+          unobserve() {}
+          disconnect() {}
+        },
+      );
+      const { rerender } = render(
+        <TopicList
+          label="Findings"
+          items={[]}
+          selectedId={null}
+          onSelect={() => {}}
+          empty={<p>none yet</p>}
+        />,
+      );
+      rerender(
+        <TopicList
+          label="Findings"
+          items={[{ id: "f1", label: "Crack" }]}
+          selectedId={null}
+          onSelect={() => {}}
+          empty={<p>none yet</p>}
+        />,
+      );
+      expect(observed).toContain(screen.getByRole("listbox", { name: "Findings" }));
+    });
   });
 });

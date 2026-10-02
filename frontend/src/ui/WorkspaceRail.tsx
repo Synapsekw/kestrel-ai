@@ -32,14 +32,49 @@ export interface WorkspaceRailProps {
   bottomInset: number;
 }
 
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /** Spec §2/§4: navigation tools, then topics; one topic panel at a time next to the rail. */
 export function WorkspaceRail({ label, store, nav, topics, inspectorOpen, bottomInset }: WorkspaceRailProps) {
   const open = useStore(store, (s) => s.open);
   const topic = useStore(store, (s) => s.topic);
   const panelId = useId();
   const current = open ? topics.find((t) => t.id === topic) : undefined;
+  const barRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  /** Spec §4: where focus goes after the next render (a keyboard open or a close from the panel). */
+  const focusNext = useRef<"panel" | "rail" | null>(null);
 
-  useToolShortcuts([{ shortcut: "\\", action: "toggle-panel", onTrigger: () => store.getState().toggle() }]);
+  // Runs the store change; a keyboard open moves focus into the panel, a close from inside the
+  // panel moves it back to the topic's rail button.
+  const change = (fn: () => void, keyboard: boolean) => {
+    const wasOpen = store.getState().open;
+    const inPanel = !!panelRef.current?.contains(document.activeElement);
+    fn();
+    const s = store.getState();
+    if (!s.open && wasOpen && inPanel) focusNext.current = "rail";
+    else if (s.open && keyboard) focusNext.current = "panel";
+  };
+
+  useEffect(() => {
+    const target = focusNext.current;
+    if (!target) return;
+    focusNext.current = null;
+    if (target === "panel") {
+      const panel = panelRef.current;
+      if (!panel) return;
+      (panel.querySelector<HTMLElement>(FOCUSABLE) ?? panel).focus();
+    } else {
+      barRef.current?.querySelector<HTMLElement>(`[data-rail-topic="${CSS.escape(topic)}"] button`)?.focus();
+    }
+  });
+
+  const toggle = () => change(() => store.getState().toggle(), true);
+  useToolShortcuts([
+    { shortcut: "\\", action: "toggle-panel", onTrigger: toggle },
+    { shortcut: "Ctrl+Alt+\\", action: "toggle-panel", onTrigger: toggle },
+  ]);
 
   // Narrow windows: the inspector takes the room; closing it does not reopen the panel.
   const wasOpen = useRef(inspectorOpen);
@@ -51,14 +86,19 @@ export function WorkspaceRail({ label, store, nav, topics, inspectorOpen, bottom
   const shared = topics.filter((t) => t.group === "shared");
   const extra = topics.filter((t) => t.group === "workspace");
   const button = (t: RailTopic) => {
-    const name = t.badge ? `${t.label}, ${t.badge} waiting` : t.label;
+    const name = [t.label, t.badge ? `${t.badge} waiting` : null, t.hidden ? "hidden" : null]
+      .filter(Boolean)
+      .join(", ");
+    const on = open && topic === t.id;
     return (
-      <span key={t.id} className="relative">
+      <span key={t.id} className="relative" data-rail-topic={t.id}>
         <ToolButton
           icon={t.icon}
           label={name}
-          active={open && topic === t.id}
-          onClick={() => store.getState().openTopic(t.id)}
+          active={on}
+          controls={on ? panelId : undefined}
+          // A click from Enter or Space has detail 0.
+          onClick={(e) => change(() => store.getState().openTopic(t.id), e.detail === 0)}
         />
         {t.badge ? (
           <span
@@ -81,11 +121,11 @@ export function WorkspaceRail({ label, store, nav, topics, inspectorOpen, bottom
   return (
     <>
       <GlassPanel
+        ref={barRef}
         variant="float"
         role="toolbar"
         aria-label={label}
         aria-orientation="vertical"
-        aria-controls={current ? panelId : undefined}
         className="absolute left-3.5 top-3.5 z-10 inline-flex flex-col gap-0.5 p-[5px] animate-reveal reduce-motion:animate-none"
       >
         {nav}
@@ -96,8 +136,10 @@ export function WorkspaceRail({ label, store, nav, topics, inspectorOpen, bottom
       </GlassPanel>
       {current && (
         <GlassPanel
+          ref={panelRef}
           id={panelId}
           as="section"
+          tabIndex={-1}
           variant="float"
           radius="panel"
           role="region"
@@ -106,7 +148,7 @@ export function WorkspaceRail({ label, store, nav, topics, inspectorOpen, bottom
           data-topic={current.id}
           style={{ bottom: bottomInset }}
           className={cx(
-            "absolute left-[72px] top-3.5 z-10 flex w-[340px] flex-col overflow-hidden",
+            "absolute left-[72px] top-3.5 z-10 flex w-[340px] flex-col overflow-hidden outline-none",
             "animate-rise reduce-motion:animate-none",
           )}
         >

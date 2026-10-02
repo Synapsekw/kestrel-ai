@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { GlassPanel } from "./GlassPanel";
 import { Icon, type IconName } from "./Icon";
 import { useToolShortcuts } from "./keymap";
@@ -24,8 +24,11 @@ export interface ToolButtonProps {
   shortcut?: string;
   active?: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  /** `e.detail === 0` when Enter or Space activated the button. */
+  onClick: (e: MouseEvent<HTMLButtonElement>) => void;
   tooltipSide?: TooltipSide;
+  /** The id of the region this button shows (`aria-controls`). */
+  controls?: string;
 }
 
 /** One tool: the mockup's .tool — muted, the brand gradient with a glow when active. */
@@ -37,6 +40,7 @@ export function ToolButton({
   disabled,
   onClick,
   tooltipSide = "right",
+  controls,
 }: ToolButtonProps) {
   return (
     <Tooltip label={label} shortcut={shortcut} side={tooltipSide} delay={250}>
@@ -45,6 +49,7 @@ export function ToolButton({
         aria-label={label}
         aria-pressed={active ?? undefined}
         aria-keyshortcuts={shortcut}
+        aria-controls={controls}
         disabled={disabled}
         onClick={onClick}
         className={cx(
