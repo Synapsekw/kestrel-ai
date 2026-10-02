@@ -130,3 +130,53 @@ def test_run_operations_are_501_until_u5(client, base):
     m = create(client, base)
     r = client.get(f"{base}/{m['id']}/runs")
     assert r.status_code == 501
+
+
+def _seed_pending(handle, model_id, glb_job_id=None):
+    from app.db.models import AssetModelVersion
+
+    with handle.session() as s:
+        s.add(
+            AssetModelVersion(
+                model_id=model_id,
+                version=1,
+                spec=SPEC,
+                kind="manual",
+                glb_status="pending",
+                source_ids=[],
+                part_count=1,
+                glb_job_id=glb_job_id,
+            )
+        )
+
+
+def test_delete_is_409_while_a_version_is_between_submit_and_job_id(client, base, handle):
+    m = create(client, base)
+    _seed_pending(handle, m["id"])
+    r = client.delete(f"{base}/{m['id']}")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
+    assert client.get(f"{base}/{m['id']}").status_code == 200
+
+
+def test_delete_is_409_while_a_glb_job_is_live(client, base, handle, app, monkeypatch):
+    m = create(client, base)
+    _seed_pending(handle, m["id"], glb_job_id="live-job")
+    monkeypatch.setattr(app.state.jobs, "is_live", lambda j: j == "live-job")
+    r = client.delete(f"{base}/{m['id']}")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
+    assert r.json()["error"]["details"]["job_id"] == "live-job"
+
+
+def test_failed_submit_marks_the_version_failed_and_raises(client, base, handle, app, monkeypatch):
+    from app.asset_models import store
+
+    m = create(client, base)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("pool down")
+
+    monkeypatch.setattr(app.state.jobs, "submit", boom)
+    with pytest.raises(RuntimeError, match="pool down"):
+        client.post(f"{base}/{m['id']}/versions", json={"spec": SPEC})
+    with handle.session() as s:
+        assert store.get_version(s, m["id"], 1).glb_status == "failed"

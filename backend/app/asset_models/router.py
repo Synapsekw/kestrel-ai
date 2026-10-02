@@ -82,14 +82,15 @@ def delete_asset_model(assetModelId: str, request: Request, handle: ProjectHandl
     jobs = request.app.state.jobs
     with handle.session() as s:
         row = store.get_model(s, assetModelId)
-        live = [
-            j
-            for j in s.scalars(
-                select(AssetModelVersion.glb_job_id).where(AssetModelVersion.model_id == assetModelId)
+        pairs = s.execute(
+            select(AssetModelVersion.glb_job_id, AssetModelVersion.glb_status).where(
+                AssetModelVersion.model_id == assetModelId
             )
-            if j and jobs.is_live(j)
-        ]
-        if row.live_run_id or live:
+        ).all()
+        live = [j for j, _ in pairs if j and jobs.is_live(j)]
+        # A pending version with no job id yet is in the window between submit and recording the id.
+        submitting = any(j is None and st == "pending" for j, st in pairs)
+        if row.live_run_id or live or submitting:
             raise AppError(
                 "job_running",
                 "A run or GLB build is in progress for this model.",

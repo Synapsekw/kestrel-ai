@@ -75,7 +75,12 @@ def add_version(
         refresh_status(model)
         s.flush()
         s.expunge(row)
-    job = runner.submit(handle, GLB_JOB, {"model_id": model_id, "version": n})
+    try:
+        job = runner.submit(handle, GLB_JOB, {"model_id": model_id, "version": n})
+    except Exception:
+        with handle.session() as s:
+            store.get_version(s, model_id, n).glb_status = "failed"
+        raise
     with handle.session() as s:
         store.get_version(s, model_id, n).glb_job_id = job.id
     return row, job
