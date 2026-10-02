@@ -97,3 +97,17 @@ def test_source_of_ready_cloud_returns_the_source(handle, las):
     st = las.stat()
     cloud_id = insert_cloud(handle, source_path=str(las), source_size=st.st_size, source_mtime=st.st_mtime)
     assert source_of(handle, cloud_id) == las
+
+
+def test_slice_image_draws_every_slab_point_not_a_file_order_prefix():
+    n = 250_000
+    xyz = np.zeros((n, 3), np.float32)
+    xyz[:200_000, 0] = np.linspace(0, 1, 200_000)  # first 200k: left edge region
+    xyz[200_000:, 0] = 9.0 + np.linspace(0, 1, n - 200_000)  # later points: far right
+    xyz[:, 1] = 0.5
+    s = CloudSample(np.zeros(3), xyz, n)
+    r = cloud_slice(s, "z", 0.0, 1.0)
+    img = np.asarray(Image.open(io.BytesIO(r.png)).convert("RGB"))
+    lit = np.all(img == (120, 200, 255), axis=2)
+    right = lit[:, img.shape[1] // 2 :]
+    assert r.in_slab == n and right.any()
