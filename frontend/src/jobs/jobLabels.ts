@@ -37,6 +37,8 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   drawing_import: "Drawing import",
   report_render: "Report",
   setup_inspect: "Sort dropped files",
+  asset_model_glb: "Build asset model",
+  asset_model_run: "Run asset model agent",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -167,6 +169,12 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "setup_inspect":
       // A library job: its buckets live on the new-project page, whose draft survives navigation.
       return { label: "Open new project", to: "/projects/new" };
+    case "asset_model_glb":
+    case "asset_model_run": {
+      const id = str(job.params, "model_id") ?? str(job.result, "model_id");
+      // The models route arrives with U6.
+      return { label: "Open asset model", to: id ? `${p}/models/${id}` : `${p}/models` };
+    }
   }
 }
 

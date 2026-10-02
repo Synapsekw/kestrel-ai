@@ -47,6 +47,8 @@ const JOB_NAME: Record<Job["type"], string> = {
   drawing_import: "Drawing import",
   report_render: "Report",
   setup_inspect: "Sort dropped files",
+  asset_model_glb: "Build asset model",
+  asset_model_run: "Run asset model agent",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */
