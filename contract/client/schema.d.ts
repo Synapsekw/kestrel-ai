@@ -41,6 +41,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/basemap/{source}/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description satellite (Esri World Imagery) or streets (OpenStreetMap); both keyless */
+                source: "satellite" | "streets";
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One 256 px web-mercator basemap tile (spec 2026-10-02-site-basemap). Fetched from the public
+         *     server once, then served from the app-data cache. Offline, an uncached tile answers 503
+         *     `basemap_unavailable` (through `default`), at once for 60 s after a failed fetch.
+         */
+        get: operations["getBasemapTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -4626,7 +4653,9 @@ export interface components {
                  *     upgrade is queued or running, or waits for the library or the catalogue; details
                  *     `{job_id}`, null while waiting), project_upgrade_failed (409: the upgrade failed and
                  *     the project stays closed; details `{error, backup_path}`), catalogue_unavailable
-                 *     (503: the catalogue could not be opened), unknown_type (422: a type id the
+                 *     (503: the catalogue could not be opened), basemap_unavailable (503: the basemap
+                 *     tile server could not be reached), tile_outside_grid (422: a basemap x or y past
+                 *     its zoom's grid), unknown_type (422: a type id the
                  *     catalogue does not know; details `{type_ids}`), type_exists (409: a catalogue type
                  *     with that normalised name exists; details `{type_id}`), hotkey_conflict (409: the
                  *     hotkey is taken; details `{type_id}` of the type holding it), severity_in_use (409:
@@ -14034,6 +14063,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getBasemapTile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description satellite (Esri World Imagery) or streets (OpenStreetMap); both keyless */
+                source: "satellite" | "streets";
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description x or y lies outside zoom z's grid (`code` is `tile_outside_grid`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

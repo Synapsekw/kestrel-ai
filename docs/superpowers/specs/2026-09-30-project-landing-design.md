@@ -36,7 +36,7 @@ Out:
   MB). The header shows coordinates only. A place name is a possible follow-up.
 - Meshes or 3D models other than point clouds. The app has none.
 - A basemap under the location pane. The app works offline, so the pane is drawn from our own
-  geometry.
+  geometry. (Superseded by `2026-10-02-site-basemap-design.md`.)
 - Changes to the Projects list cards (§9.2).
 
 ## 3. Decisions
@@ -50,7 +50,7 @@ Out:
 | D5 | 3D panes lazy-load the existing `clouds/viewer` engine. The hero has a budget of 1 M points and the tile 300 k. They mount only while visible, never auto-orbit, and fall back to a static card when WebGL fails or effects are reduced. | DESIGN.md: no decorative loops. The Overview must never be the page that runs a laptop GPU out of memory. |
 | D6 | Key figures show only when they are non-zero or meaningful. "0 critical" is not shown. | The operator asked for no empty containers. The same rule applies to numbers. |
 | D7 | The Activity feed and Running jobs, which have their own panes today, fold into one **Status** pane: severity bars, then running jobs, then the last 3 activity lines. | Frees a column for the imagery. Nothing is lost, and the full activity list stays one click away. **Review this: it drops the 8-row activity pane.** |
-| D8 | The location pane is inline SVG with a local equirectangular projection. It draws the site outline, photo points and open-finding pins, with a scale bar. There is no OpenLayers instance. | A second OL map next to the hero adds nothing without a basemap. SVG is cheap and themable. |
+| D8 | The location pane is inline SVG with a local equirectangular projection. It draws the site outline, photo points and open-finding pins, with a scale bar. There is no OpenLayers instance. | A second OL map next to the hero adds nothing without a basemap. SVG is cheap and themable. **Amended 2026-10-02** (`2026-10-02-site-basemap-design.md`): cached keyless basemap tiles now lie inside this SVG; still no OL instance. |
 
 ## 4. Data
 

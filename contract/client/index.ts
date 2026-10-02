@@ -232,6 +232,15 @@ export function mapTileUrl(baseUrl: string, token: string, projectId: string, ma
   return `${base}/api/v1/projects/${projectId}/maps/${mapId}/tiles/{z}/{x}/{y}?${q}`;
 }
 
+export type BasemapSource = "satellite" | "streets";
+
+/** A keyless basemap tile template (`{z}/{x}/{y}` left in), proxied and cached by the backend. */
+export function basemapTileUrl(baseUrl: string, token: string, source: BasemapSource): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/basemap/${source}/{z}/{x}/{y}?${q}`;
+}
+
 export function mapPreviewUrl(baseUrl: string, token: string, projectId: string, mapId: string): string {
   const base = baseUrl.replace(/\/$/, "");
   const q = new URLSearchParams({ token });

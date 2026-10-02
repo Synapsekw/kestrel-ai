@@ -143,6 +143,8 @@ def app(settings, monkeypatch):
         raise JobFailure("Report renders are disabled in tests.")
 
     monkeypatch.setattr("app.reports.render_job.run_pipeline", no_report_render)
+    # The contract test calls every route: a basemap tile must never reach a real tile server.
+    monkeypatch.setattr("app.basemap.service.download", lambda url, user_agent: b"\x89PNG\r\n\x1a\ntest")
     return created
 
 

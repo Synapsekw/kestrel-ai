@@ -96,6 +96,7 @@ tags:
   - name: reports
   - name: setup
   - name: assetmodels
+  - name: basemap
 
 paths:
   /api/v1/agent/chat:
@@ -128,6 +129,39 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ----------------------------------------------------------------- basemap
+  /api/v1/basemap/{source}/{z}/{x}/{y}:
+    parameters:
+      - name: source
+        in: path
+        required: true
+        description: "satellite (Esri World Imagery) or streets (OpenStreetMap); both keyless"
+        schema: { type: string, enum: [satellite, streets] }
+      - { name: z, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 19 } }
+      - { name: x, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: y, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      tags: [basemap]
+      operationId: getBasemapTile
+      summary: |
+        One 256 px web-mercator basemap tile (spec 2026-10-02-site-basemap). Fetched from the public
+        server once, then served from the app-data cache. Offline, an uncached tile answers 503
+        `basemap_unavailable` (through `default`), at once for 60 s after a failed fetch.
+      responses:
+        "200":
+          description: tile image
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        "422":
+          description: "x or y lies outside zoom z's grid (`code` is `tile_outside_grid`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   # ----------------------------------------------------------------- projects
@@ -6869,7 +6903,9 @@ components:
                 upgrade is queued or running, or waits for the library or the catalogue; details
                 `{job_id}`, null while waiting), project_upgrade_failed (409: the upgrade failed and
                 the project stays closed; details `{error, backup_path}`), catalogue_unavailable
-                (503: the catalogue could not be opened), unknown_type (422: a type id the
+                (503: the catalogue could not be opened), basemap_unavailable (503: the basemap
+                tile server could not be reached), tile_outside_grid (422: a basemap x or y past
+                its zoom's grid), unknown_type (422: a type id the
                 catalogue does not know; details `{type_ids}`), type_exists (409: a catalogue type
                 with that normalised name exists; details `{type_id}`), hotkey_conflict (409: the
                 hotkey is taken; details `{type_id}` of the type holding it), severity_in_use (409:

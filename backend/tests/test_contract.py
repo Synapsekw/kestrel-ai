@@ -147,6 +147,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
     "putLibraryModelClassMap": {422},  # unknown_type (bad/archived type id) or validation_error (bad key)
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
+    "getBasemapTile": {422},  # tile_outside_grid: x or y >= 2**z (a schema cannot relate them)
     "startTrainingRun": {422},  # task_mismatch: a base model of another task
     "createSurface": {422},
     # asset models U3: a schema-valid spec with duplicate ids is `invalid_spec`; a GLB not built yet is
