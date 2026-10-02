@@ -40,6 +40,8 @@ const TYPE_NAME: Record<Job["type"], string> = {
   drawing_import: "Drawing import",
   report_render: "Report",
   setup_inspect: "Sort dropped files",
+  asset_model_glb: "Build asset model",
+  asset_model_run: "Run asset model agent",
 };
 
 function num(v: unknown): number | null {
@@ -145,6 +147,10 @@ export function jobToastText(job: Job): string {
       return "Report rendered";
     case "setup_inspect":
       return "Dropped files sorted";
+    case "asset_model_glb":
+      return "Asset model built";
+    case "asset_model_run":
+      return "Asset model run finished";
   }
 }
 

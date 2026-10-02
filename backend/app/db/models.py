@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -855,6 +856,70 @@ class Drawing(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
     __table_args__ = (Index("ix_drawing_status", "status"), Index("ix_drawing_created", "created_at", "id"))
+
+
+class AssetModel(Base):
+    """A part-by-part model of an inspected asset (spec 2026-10-02-asset-model-builder §5)."""
+
+    __tablename__ = "asset_model"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    asset_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    tag: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="empty")  # empty | building | ready
+    current_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    live_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_asset_model_created", "created_at", "id"),)
+
+
+class AssetModelVersion(Base):
+    """One immutable spec of an asset model, and its GLB (spec §5). Never overwritten."""
+
+    __tablename__ = "asset_model_version"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    model_id: Mapped[str] = mapped_column(String(36), ForeignKey("asset_model.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    spec: Mapped[dict] = mapped_column(JSON)
+    kind: Mapped[str] = mapped_column(String)  # agent | manual | draft
+    glb_status: Mapped[str] = mapped_column(String, default="pending")  # pending | ready | failed
+    glb_job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_ids: Mapped[list] = mapped_column(JSON, default=list)
+    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
+    part_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (UniqueConstraint("model_id", "version", name="uq_asset_model_version"),)
+
+
+class AssetModelRun(Base):
+    """One agent run over an asset model (spec §5). Steps hold tool names and app-written summaries
+    only - never prompts, model output or tool payloads."""
+
+    __tablename__ = "asset_model_run"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    model_id: Mapped[str] = mapped_column(String(36), ForeignKey("asset_model.id", ondelete="CASCADE"))
+    job_id: Mapped[str] = mapped_column(String(36))
+    provider: Mapped[str] = mapped_column(String)
+    model_name: Mapped[str] = mapped_column(String)
+    mode: Mapped[str] = mapped_column(String)  # build | refine
+    notes: Mapped[str | None] = mapped_column(String, nullable=True)
+    state: Mapped[str] = mapped_column(String, default="running")  # running | finished | stopped | failed
+    stop_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    phase: Mapped[str] = mapped_column(String, default="sampling")
+    steps: Mapped[list] = mapped_column(JSON, default=list)
+    summary: Mapped[str | None] = mapped_column(String, nullable=True)
+    open_questions: Mapped[list] = mapped_column(JSON, default=list)
+    usage: Mapped[dict] = mapped_column(JSON, default=lambda: {"input_tokens": 0, "output_tokens": 0})
+    sources: Mapped[list] = mapped_column(JSON, default=list)
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    comparison: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # last compare_to_cloud result
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    __table_args__ = (Index("ix_asset_model_run_model", "model_id", "started_at"),)
 
 
 class MapMeasurement(Base):

@@ -150,6 +150,17 @@ export type SiteTileKind = Schemas["SiteTileKind"];
 export type MapFindingPin = Schemas["MapFindingPin"];
 export type ElevationRole = Schemas["ElevationRole"];
 export type Drawing = Schemas["Drawing"];
+export type KeyedProviderName = Schemas["KeyedProviderName"];
+export type AssetModel = Schemas["AssetModel"];
+export type AssetModelVersion = Schemas["AssetModelVersion"];
+export type AssetModelVersionDetail = Schemas["AssetModelVersionDetail"];
+export type AssetSpec = Schemas["AssetSpec"];
+export type AssetPart = Schemas["AssetPart"];
+export type SpecIssue = Schemas["SpecIssue"];
+export type AssetSourceRef = Schemas["AssetSourceRef"];
+export type AssetModelRun = Schemas["AssetModelRun"];
+export type AssetModelRunStep = Schemas["AssetModelRunStep"];
+export type AssetModelRunStart = Schemas["AssetModelRunStart"];
 export type DrawingInspection = Schemas["DrawingInspection"];
 export type DrawingGeoref = Schemas["DrawingGeoref"];
 export type DrawingVectorTile = Schemas["DrawingVectorTile"];
@@ -193,6 +204,20 @@ export function imageFileUrl(baseUrl: string, token: string, projectId: string, 
   const q = new URLSearchParams({ token });
   if (maxSide) q.set("max_side", String(maxSide));
   return `${base}/api/v1/projects/${projectId}/images/${imageId}/file?${q}`;
+}
+
+export function assetModelGlbUrl(baseUrl: string, token: string, projectId: string, assetModelId: string, version: number): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/asset-models/${assetModelId}/versions/${version}/glb?${q}`;
+}
+
+export function assetModelOverlayUrl(
+  baseUrl: string, token: string, projectId: string, assetModelId: string, runId: string, cloudId: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/asset-models/${assetModelId}/runs/${runId}/overlay/${cloudId}?${q}`;
 }
 
 export function thumbnailUrl(baseUrl: string, token: string, projectId: string, imageId: string): string {

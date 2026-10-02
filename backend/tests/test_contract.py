@@ -18,6 +18,7 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.asset_models.stubs import stub_operation_ids as asset_models_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -105,6 +106,9 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
+# Asset model builder (spec 2026-10-02): the run operations of app/asset_models/stubs.py; U5 removes them.
+EXPECTED_STUBS |= asset_models_stub_operation_ids()  # asset models U3; U5 removes
+
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
 # app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
 # here and in app/pointclouds/router.py::STUBS; the block is empty.
@@ -145,6 +149,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
     "startTrainingRun": {422},  # task_mismatch: a base model of another task
     "createSurface": {422},
+    # asset models U3: a schema-valid spec with duplicate ids is `invalid_spec`; a GLB not built yet is
+    # `not_ready`; a model with a live run or GLB build refuses deletion (`job_running`).
+    "createAssetModelVersion": {422},
+    "getAssetModelGlb": {409},
+    "deleteAssetModel": {409},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
     # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
     # `grid_too_large`, `insufficient_disk`).

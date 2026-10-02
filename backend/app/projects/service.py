@@ -56,6 +56,7 @@ class ProjectHandle:
     surfaces_dir = property(lambda s: s.folder / "surfaces")
     volumes_dir = property(lambda s: s.folder / "volumes")
     drawings_dir = property(lambda s: s.folder / "drawings")  # map workspace; made by the first import
+    asset_models_dir = property(lambda s: s.folder / "asset_models")  # asset model builder; made on first use
 
     @contextmanager
     def session(self) -> Iterator[Session]:

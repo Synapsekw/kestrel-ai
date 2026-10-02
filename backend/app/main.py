@@ -79,6 +79,7 @@ def project_opened(handle, runner) -> None:
         ("interrupted volume calculation sweep", sweep("app.volumes.startup")),
         ("stale design inspection sweep", sweep("app.surfaces.design.startup")),
         ("interrupted drawing import sweep", sweep("app.drawings.startup")),
+        ("interrupted asset model sweep", sweep("app.asset_models.startup")),
         ("interrupted report render sweep", sweep("app.reports.startup")),
         (
             "project type snapshot refresh",
