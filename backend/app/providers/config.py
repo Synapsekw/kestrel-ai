@@ -23,7 +23,9 @@ class ProviderConfig:
 
 DEFAULTS: dict[str, ProviderConfig] = {
     "openai": ProviderConfig("openai", "gpt-5"),
-    "anthropic": ProviderConfig("anthropic", "claude-opus-5"),
+    "anthropic": ProviderConfig("anthropic", "claude-opus-5-5"),
+    # Gemini serves asset model runs only (spec 2026-10-02 section 7.1); detection does not offer it.
+    "gemini": ProviderConfig("gemini", "gemini-2.5-pro"),
 }
 EDITABLE = ("model_name", "requests_per_minute", "cost_per_request")
 

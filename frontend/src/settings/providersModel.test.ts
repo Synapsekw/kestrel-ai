@@ -8,7 +8,7 @@ describe("provider form model", () => {
   it("maps a provider to strings and back to a patch of changed fields only", () => {
     const form = formOf(anthropic);
     expect(form).toEqual({
-      model_name: "claude-opus-5",
+      model_name: "claude-opus-5-5",
       requests_per_minute: "30",
       cost_per_request: "0.02",
     });

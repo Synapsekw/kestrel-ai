@@ -6519,7 +6519,7 @@ components:
       name: provider
       in: path
       required: true
-      schema: { $ref: "#/components/schemas/ProviderName" }
+      schema: { $ref: "#/components/schemas/KeyedProviderName" }
     limit:
       name: limit
       in: query
@@ -8530,12 +8530,12 @@ components:
       type: object
       required: [name, has_key, model_name, requests_per_minute, cost_per_request]
       properties:
-        name: { $ref: "#/components/schemas/ProviderName" }
+        name: { $ref: "#/components/schemas/KeyedProviderName" }
         has_key: { type: boolean, description: whether a key is stored in Credential Manager }
         model_name: { type: string }
         requests_per_minute: { type: integer }
         cost_per_request: { type: number, description: USD per request, user-editable estimate }
-      example: { name: anthropic, has_key: true, model_name: claude-opus-5, requests_per_minute: 30, cost_per_request: 0.02 }
+      example: { name: anthropic, has_key: true, model_name: claude-opus-5-5, requests_per_minute: 30, cost_per_request: 0.02 }
     ProviderList:
       type: object
       required: [items]

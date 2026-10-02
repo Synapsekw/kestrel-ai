@@ -13,11 +13,12 @@ describe("useProviders", () => {
     );
     const { result } = renderHook(() => useProviders(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.providers.map((p) => p.name)).toEqual(["openai", "anthropic"]);
+    expect(result.current.providers.map((p) => p.name)).toEqual(["openai", "anthropic", "gemini"]);
     act(() => result.current.replace({ ...exampleProviders[0], has_key: true }));
     expect(result.current.providers[0].has_key).toBe(true);
     expect(providerLabel("openai")).toBe("OpenAI");
     expect(providerLabel("anthropic")).toBe("Anthropic");
+    expect(providerLabel("gemini")).toBe("Google Gemini");
     expect(providerLabel(null)).toBe("–");
   });
 
