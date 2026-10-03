@@ -366,6 +366,29 @@ CASES: dict[str, Case] = {
         parts=frozenset({"plinths", "tanks", "radiator_fins", "bushings", "conservators", "firewalls"}),
     ),
     # --- process (Tasks 9, 10)
+    "heater": Case(  # Cowork 50-F-0002A NG trim heater, water bath: 16 x 8.5 (E-W), 5 m
+        "heater",
+        rect(16.0, 8.5, 90.0),
+        5.0,
+        tris=(36, 2000),
+        parts=frozenset({"pad", "skid", "bath_shell", "bath_heads", "burner", "stack"}),
+    ),
+    "vaporizer_orv": Case(  # Cowork 50-E-0001A open rack vaporizer: 16.1 x 10.2 (E-W), 8 m
+        "vaporizer_orv",
+        rect(16.1, 10.2, 90.0),
+        8.0,
+        tris=(252, 4000),
+        parts=frozenset(
+            {"pad", "trough", "panels", "distribution_troughs", "headers", "top_walkway", "stair_treads"}
+        ),
+    ),
+    "vaporizer_scv": Case(  # Cowork 50-F-0001A submerged combustion vaporizer: 28.4 x 9.2 (E-W), 6 m
+        "vaporizer_scv",
+        rect(28.4, 9.2, 90.0),
+        6.0,
+        tris=(36, 2000),
+        parts=frozenset({"pad", "water_bath", "blower", "air_duct", "bath_top_posts"}),
+    ),
     # --- jetty (Task 11)
 }
 FIRST: dict[str, str] = {}
@@ -753,3 +776,76 @@ def test_transformer_conservators_are_supported_from_the_tank():
     cons = expanded(nodes["conservators"].geometry).bounds
     assert sup[0][1] == pytest.approx(tank_top, abs=1e-6) and sup[1][1] >= cons[0][1]
     assert len(nodes["conservator_supports"].geometry.transforms) == 4
+
+
+# ------------------------------------------------------------------ process
+def test_orv_panels_are_instanced_across_the_rack():
+    panels = next(n for n in built("vaporizer_orv") if n.name == "panels").geometry
+    assert isinstance(panels, Instanced) and len(panels.transforms) == 23  # round(0.85 * 16.1 / 0.6)
+
+
+def test_scv_stack_is_off_by_default_and_on_by_param():
+    assert "stack" not in {n.name for n in built("vaporizer_scv")}
+    it = make_item("vaporizer_scv", rect(28.4, 9.2, 90.0), h=15.0, params={"stack": True})
+    assert "stack" in {n.name for n in REGISTRY["vaporizer_scv"].fn(it, CTX)}
+
+
+def test_fired_heater_builds():
+    it = make_item("heater", rect(10.0, 6.0), h=12.0, params={"kind": "fired_box"})
+    names = {n.name for n in REGISTRY["heater"].fn(it, CTX)}
+    assert {"pad", "radiant_box", "convection", "stack", "ladder_rungs"} <= names
+
+
+def _parts(type_: str, fp: dict, h: float, params: dict | None = None) -> dict:
+    return {
+        n.name: expanded(n.geometry)
+        for n in REGISTRY[type_].fn(make_item(type_, fp, h=h, params=params), CTX)
+    }
+
+
+def test_heater_burner_meets_the_bath_head():
+    for fp, h in ((rect(16.0, 8.5), 5.0), (rect(6.0, 6.0), 10.0)):
+        p = _parts("heater", fp, h)
+        assert p["burner"].bounds[1][0] > p["bath_heads"].bounds[0][0] + 0.01
+
+
+@pytest.mark.parametrize("params", [{}, {"stack": False}])
+def test_heater_stack_and_nozzles_rise_from_the_shell_not_the_heads(params):
+    p = _parts("heater", rect(6.0, 6.0), 10.0, params)  # a short fat bath: d > 0.32 along
+    shell = p["bath_shell"].bounds
+    riser = p["stack" if not params else "nozzles"].bounds
+    assert riser[0][0] >= shell[0][0] - 1e-6 and riser[1][0] <= shell[1][0] + 1e-6
+
+
+@pytest.mark.parametrize(
+    ("fp", "h", "params"), [(rect(16.1, 10.2), 8.0, {}), (rect(30.0, 14.0), 12.0, {"stairs": False})]
+)
+def test_orv_walkway_is_carried_and_the_side_lane_is_clear(fp, h, params):
+    p = _parts("vaporizer_orv", fp, h, params)
+    deck, cols, basin = p["top_walkway"].bounds, p["top_walkway_columns"].bounds, p["trough"].bounds
+    assert cols[0][1] == pytest.approx(0.3) and cols[1][1] == pytest.approx(deck[0][1])
+    assert cols[0][0] <= deck[0][0] + 0.1 and cols[1][0] >= deck[1][0] - 0.1
+    for name in ("stair_stringers", "stair_treads", "top_walkway_columns"):
+        if name in p:
+            assert p[name].bounds[1][2] <= basin[0][2] + 1e-6, name  # the lane sits beside the basin
+    for side in (0, 1):  # the distribution troughs stay inside the basin
+        assert abs(p["distribution_troughs"].bounds[side][2]) <= abs(basin[side][2]) + 1e-6
+
+
+def test_orv_too_narrow_for_the_side_lane_is_refused():
+    with pytest.raises(ValueError, match="too narrow"):
+        REGISTRY["vaporizer_orv"].fn(make_item("vaporizer_orv", rect(16.0, 7.0), h=8.0), CTX)
+
+
+def test_orv_lower_header_sits_on_the_basin():
+    p = _parts("vaporizer_orv", rect(16.1, 10.2), 8.0)
+    assert p["headers"].bounds[0][1] == pytest.approx(p["trough"].bounds[1][1], abs=0.01)  # faceted rod
+
+
+@pytest.mark.parametrize(("fp", "h", "end"), [(rect(8.0, 4.0), 2.5, "start"), (rect(6.0, 3.0), 3.0, "end")])
+def test_scv_ladder_on_the_pad_and_duct_below_the_bath_top(fp, h, end):
+    p = _parts("vaporizer_scv", fp, h, {"blower_end": end})
+    half = fp["size"][0] / 2
+    lad = p["ladder_stiles"].bounds
+    assert lad[0][0] >= -half - 1e-6 and lad[1][0] <= half + 1e-6
+    assert p["air_duct"].bounds[1][1] <= p["water_bath"].bounds[1][1] + 1e-6

@@ -2,6 +2,7 @@
 
 from app.asset_models.builders.equipment import (  # noqa: F401  (registers on import)
     power,
+    process,
     rotating,
     tanks,
     vessels,
