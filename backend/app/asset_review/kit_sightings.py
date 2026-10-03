@@ -11,9 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 from sqlalchemy import delete
 
 from app.asset_review.kit_format import UNCLASSIFIED, Kit
+from app.asset_review.kit_masks import MIN_REGION_PX, load_mask, vectorise
 from app.asset_review.kit_match import Match
 from app.db.models import Box, FindingSighting, ImagePose
 from app.errors import AppError
@@ -23,6 +25,8 @@ from app.imagery import summary
 CHUNK = 200
 DELETE_CHUNK = 500
 PART_MAX = 200
+REGION_MIN_SHARE = 0.0002  # a mask region counts from 0.02% of the photo (coordinator ruling on N7)
+MAX_REGIONS = 50  # per photo, largest first
 
 
 @dataclass(frozen=True)
@@ -135,8 +139,62 @@ def plan_region(
     return planned
 
 
+def plan_photo(
+    ctx, kit: Kit, matches: dict[str, Match], class_map: dict[str, str], skipped: list
+) -> list[Planned]:
+    """One sighting per mask region of each matched finding photo (spec §6.5 step 5, photo unit,
+    with the coordinator's ruling on N7). The largest region is the photo's primary sighting: it
+    takes the replayed patch and the mask attachment, and its note is the finding's."""
+    graded = kit.finding_class_ids()
+    grade_of = {c.id: c.severity for c in kit.classes if not c.uncertain and c.severity}
+    todo = [k for k in matches if kit.status_of(k)["status"] == "finding"]
+    planned: list[Planned] = []
+    for i, kit_id in enumerate(todo):
+        ctx.check_cancelled()
+        ctx.progress(0.15 + 0.01 * i / max(1, len(todo)), f"Reading masks {i:,} / {len(todo):,}")
+        path = kit.mask_path(kit_id)
+        if path is None:
+            skipped.append({"kit_key": kit_id, "reason": "no_mask"})
+            continue
+        m, st = matches[kit_id], kit.status_of(kit_id)
+        mask = load_mask(path)
+        ph, pw = mask.shape
+        sx, sy = m.width / pw, m.height / ph
+        min_area = max(MIN_REGION_PX, REGION_MIN_SHARE * pw * ph)
+        rings = vectorise(mask, graded, min_area=min_area, max_regions=MAX_REGIONS)
+        if not rings:
+            skipped.append({"kit_key": kit_id, "reason": "empty_mask"})
+            continue
+        present = {int(v) for v in np.unique(mask)}
+        mask_grade = max((grade_of[c] for c in present if c in grade_of), default=None)
+        severity = int(st["severity"] or mask_grade or 1)
+        type_id = class_map[kit.photo_unit_key(st["severity"])]
+        for n, ring in enumerate(rings):
+            xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+            planned.append(
+                Planned(
+                    kit_key=kit_id if n == 0 else f"{kit_id}#{n}",
+                    kit_photo=kit_id,
+                    image_id=m.image_id,
+                    type_id=type_id,
+                    severity=severity,
+                    group_tag=None,
+                    part=None,
+                    note=st["note"],
+                    order=i * 100 + n,
+                    polygon=scale_points(ring, sx, sy),
+                    rect=rect_in_image((min(xs), min(ys), max(xs), max(ys)), sx, sy, m.width, m.height),
+                    coverage=shoelace(ring) / (pw * ph),
+                    mask_path=path if n == 0 else None,
+                    primary=n == 0,
+                )
+            )
+    return planned
+
+
 def plan_sightings(ctx, kit: Kit, matches, previews, class_map, skipped) -> list[Planned]:
-    """Region unit: one sighting per kit finding. (Task 4 adds the photo unit.)"""
+    if kit.unit == "photo":
+        return plan_photo(ctx, kit, matches, class_map, skipped)
     return plan_region(kit, matches, previews, class_map, skipped)
 
 
