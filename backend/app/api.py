@@ -153,7 +153,7 @@ for _module in (
     "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
     "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
     # Plant model (spec 2026-10-03-plant-model-generator §10, plan pm-f0): the live catalogue, then the
-    # 501 stubs until A1, R1 and S1 land. A unit deletes its tuples in app/asset_models/stubs_plant.py.
+    # 501 stubs until A1 and R1 land. A unit deletes its tuples in app/asset_models/stubs_plant.py.
     "app.asset_models.catalogue_router",
     "app.asset_models.stubs_plant",
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
@@ -180,6 +180,7 @@ for _module in (
     "app.drawings.router",
     "app.mapmeasure.router",
     "app.measurements.union",
+    "app.asset_models.site_scene",  # plant model S1: the Site 3D manifest (needs the workspace frame)
     "app.workspace.router",
     "app.workspace.stubs",
 ):
