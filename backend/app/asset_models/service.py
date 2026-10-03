@@ -7,13 +7,23 @@ from pydantic import ValidationError
 from app.asset_models import store
 from app.asset_models.jobs_glb import GLB_JOB
 from app.asset_models.spec import AssetSpec
-from app.asset_models.validate import validate
+from app.asset_models.validate import FALLBACK_CODES, as_dicts, is_large, validate
 from app.db.models import AssetModelVersion
 from app.errors import AppError
 
 
 def issues(report_list) -> list[dict]:
-    return [{"code": i.code, "part_id": i.part_id, "message": i.message} for i in report_list]
+    return as_dicts(report_list)
+
+
+def version_warnings(row, spec: AssetSpec) -> list[dict]:
+    """A version detail's `warnings`: the warnings, plus the item problems the GLB survives
+    (FALLBACK_CODES). A large spec's come from its GLB job (meta["validation"]), [] until it ran."""
+    if is_large(spec):
+        found = (row.meta or {}).get("validation") or {}
+        return list(found.get("errors", [])) + list(found.get("warnings", []))
+    report = validate(spec)
+    return issues([e for e in report.errors if e.code in FALLBACK_CODES] + report.warnings)
 
 
 def parse_spec(raw: dict) -> AssetSpec:
@@ -52,9 +62,13 @@ def add_version(
     source_ids=(),
     run_id: str | None = None,
 ):
-    report = validate(spec)
-    if not report.ok:
-        raise AppError("invalid_spec", "The model spec has errors.", 422, {"errors": issues(report.errors)})
+    # A large spec is validated in its GLB job, not here: the request stays schema-only (spec §5).
+    if not is_large(spec):
+        report = validate(spec)
+        if not report.ok:
+            raise AppError(
+                "invalid_spec", "The model spec has errors.", 422, {"errors": issues(report.errors)}
+            )
     with handle.session() as s:
         model = store.get_model(s, model_id)
         n = store.next_version_number(s, model_id)

@@ -24,7 +24,6 @@ from app.asset_models.schemas import (
 )
 from app.asset_models.spec import AssetSpec
 from app.asset_models.store import INT32_MAX
-from app.asset_models.validate import validate
 from app.db.models import AssetModel, AssetModelVersion, Finding, FindingSighting
 from app.errors import AppError
 from app.events_util import publish_asset_models_changed
@@ -177,7 +176,7 @@ def get_asset_model_version(
     with handle.session() as s:
         row = store.get_version(s, assetModelId, version)
         spec = AssetSpec.model_validate(row.spec)
-        warnings = [SpecIssueOut(**i) for i in service.issues(validate(spec).warnings)]
+        warnings = [SpecIssueOut(**i) for i in service.version_warnings(row, spec)]
         base = AssetModelVersionOut.of(row).model_dump()
         return AssetModelVersionDetailOut(**base, spec=spec, warnings=warnings)
 
