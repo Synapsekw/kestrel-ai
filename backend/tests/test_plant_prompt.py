@@ -3,41 +3,13 @@
 tags; never a key or a file-system path."""
 
 import re
-from types import SimpleNamespace
+
+from plant_fakes import KEY, KIPIC, item, make_rc, seed_plant
 
 from app.asset_models.agent.plant import prompt_plant as P
-from app.asset_models.agent.plant.budget import PlantLimits
 from app.asset_models.agent.plant.packages import PackageWork
-from app.asset_models.agent.plant.state import PlantState
-
-# Stand-ins until Task 5 (PlantRunContext / plant_fakes) and the tools module land.
-KEY = "sk-ant-test-0123456789"
-ORCH_NAMES = (
-    "set_site",
-    "plan_packages",
-    "next_stage",
-    "finish",
-    "render_site",
-    "upsert_environment",
-    "drawing_zoom",
-)
-SUB_NAMES = ("finish_package", "upsert_items", "drawing_zoom", "items_query")
-
-
-def seed_plant():
-    return {"drawings": ["drw-0001"]}
-
-
-def make_rc(ids):
-    return SimpleNamespace(
-        sources=[{"type": "drawing", "id": ids["drawings"][0], "label": "Plot plan", "facts": "A0, 3 pages"}],
-        limits=PlantLimits(),
-        notes="",
-        state=PlantState(),
-        store={},
-        site=lambda: None,
-    )
-
+from app.asset_models.agent.plant.tools_plant import ORCH_NAMES, SUB_NAMES
+from app.asset_models.spec import Item, SiteFrame
 
 PATH = re.compile(r"[A-Za-z]:[\\/]|\\\\|/Users/|/home/")
 
@@ -76,9 +48,9 @@ def test_sub_run_prompt_covers_the_rules_and_the_catalogue():
         assert name in SUB_NAMES
 
 
-def test_messages_carry_no_key_or_path():
-    ids = seed_plant()
-    rc = make_rc(ids)
+def test_messages_carry_no_key_or_path(handle, app):
+    ids = seed_plant(handle, app)
+    rc = make_rc(handle, app, ids)
     rc.notes = "Focus on the jetty."
     w = PackageWork(
         id="p",
@@ -111,3 +83,29 @@ def test_messages_carry_no_key_or_path():
     first = P.first_message(rc)
     assert "Focus on the jetty." in first and "40,000,000 tokens" in first and "list_sources" in first
     assert "2 items fell back" in P.build_message(rc, ["a", "b"])
+
+
+def test_review_message_and_frame_line_with_a_site_flags_and_candidates(handle, app):
+    rc = make_rc(handle, app, seed_plant(handle, app))
+    rc.state.site = SiteFrame.model_validate(
+        {
+            "crs": {"epsg": KIPIC["epsg"]},
+            "origin_crs": KIPIC["origin_crs"],
+            "plant_north_deg": KIPIC["plant_north_deg"],
+            "datum": {"label": "HPFS", "el_m": 100.0},
+            "source": {"kind": "assumed"},
+        }
+    ).model_dump(mode="json")
+    flagged = Item.model_validate(
+        item("t1", flags=[{"code": "straddles_package", "value": 3.0, "note": "x"}])
+    )
+    rc.store[flagged.id] = flagged
+    rc.state.candidates = [
+        {"id": "cand-1", "e": 10.0, "n": 20.0, "size_m": [4.0, 3.0], "top_el": 108.0},
+        {"id": "cand-2", "e": 50.0, "n": 60.0, "size_m": [2.0, 2.0], "top_el": 104.0},
+    ]
+    msg = P.review_message(rc)
+    assert "cand-1" in msg and "cand-2" in msg and "straddles_package 1" in msg
+    assert "1 items" in msg
+    frame = P._frame_line(rc)
+    assert "The site frame is set" in frame and "datum HPFS = 100 m" in frame and "17.9991" in frame
