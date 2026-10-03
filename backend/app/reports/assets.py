@@ -118,3 +118,16 @@ def asset_path(handle: ProjectHandle, asset_id: str) -> Path | None:
             return None
         path = handle.folder / row.path
     return path if path.is_file() else None
+
+
+def prepare_logo(source: str) -> tuple[bytes, int, int]:
+    """The checks and encoding `import_logo` applies, with no project: a PNG of at most MAX_SIDE a
+    side and its size, or 422 `asset_invalid`. Brand logos (app/brands/store.py) reuse it."""
+    src = Path(source)
+    _check(src)
+    return _encode(src)
+
+
+def write_atomic(dest: Path, data: bytes) -> None:
+    """`_write` for callers outside this module: a temp name, then a rename."""
+    _write(dest, data)

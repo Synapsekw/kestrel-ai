@@ -8,8 +8,11 @@ brand, so that report prints with the Kestrel theme rather than failing.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -17,12 +20,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.brands.builtins import DEFAULT_COLORS
 from app.brands.fonts import FAMILIES
-from app.brands.schemas import BrandColors, BrandCreate, BrandOut, BrandPatch
+from app.brands.schemas import BrandColors, BrandCreate, BrandOut, BrandPatch, LogoSlot
 from app.catalogue.db import Brand
 from app.catalogue.handle import CatalogueHandle
 from app.catalogue.names import normalise_name
 from app.db.base import new_id
 from app.errors import AppError, not_found
+from app.reports import assets
 
 LIST_CAP = 200  # BrandList has no cursor; an operator keeps a handful of brands
 TEXT_FIELDS = ("website", "owner", "confidentiality", "pdf_author")
@@ -228,3 +232,41 @@ def confidentiality_line(brand: BrandRow, year: int, customer: str | None) -> st
     """The footer line with `{year}` and `{customer}` filled in; no customer reads "the client"."""
     who = (customer or "").strip() or "the client"
     return brand.confidentiality.replace("{year}", str(year)).replace("{customer}", who)
+
+
+LOGO_DIR = "brand-assets"
+LOGO_ID = re.compile(r"^logo-[0-9a-f]{16}$")
+
+
+def set_logo(cat: CatalogueHandle, brand_id: str, slot: LogoSlot, source: str) -> BrandOut:
+    """Import a PNG, JPEG or WebP as one of the brand's logos (spec §5.8). Bounded like a report logo:
+    at most 20 MB, decoded draft-reduced, at most 1200 px a side. Same bytes, same file."""
+    with cat.session() as s:
+        _row(s, brand_id)  # 404 before any file is read
+    data, _width, _height = assets.prepare_logo(source)
+    logo_id = f"logo-{hashlib.sha256(data).hexdigest()[:16]}"
+    dest = cat.folder / LOGO_DIR / f"{logo_id}.png"
+    if not dest.is_file():  # an existing file is never rewritten (a reader may hold it open)
+        assets.write_atomic(dest, data)
+    with cat.session() as s:
+        row = _row(s, brand_id)
+        setattr(row, f"logo_{slot}", logo_id)
+        s.flush()
+        return to_out(row)
+
+
+def clear_logo(cat: CatalogueHandle, brand_id: str, slot: LogoSlot) -> BrandOut:
+    """The file stays: another brand, or this brand's other slot, may use the same image."""
+    with cat.session() as s:
+        row = _row(s, brand_id)
+        setattr(row, f"logo_{slot}", None)
+        s.flush()
+        return to_out(row)
+
+
+def logo_path(cat: CatalogueHandle | None, logo_id: str | None) -> Path | None:
+    """The PNG for a logo id, or None (no catalogue, no id, a malformed id, a vanished file)."""
+    if cat is None or not logo_id or not LOGO_ID.match(logo_id):
+        return None
+    path = cat.folder / LOGO_DIR / f"{logo_id}.png"
+    return path if path.is_file() else None

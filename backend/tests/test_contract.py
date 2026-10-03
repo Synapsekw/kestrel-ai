@@ -19,7 +19,6 @@ from schemathesis.specs.openapi.checks import (
 )
 
 from app.asset_review.stubs import stub_operation_ids as asset_review_stub_operation_ids
-from app.brands.stubs import stub_operation_ids as brands_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -108,10 +107,9 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
 # Asset findings (plan 2026-10-03-asset-findings-c0): the unit lists of app/asset_review/stubs.py
-# (D1, J1 to J5) and app/brands/stubs.py (D2). An owner deletes its tuples; nothing here changes.
-# The last owner of each module deletes the module, its line in app/api.py and its line here.
+# (D1, J1 to J5); D2's module is gone. An owner deletes its tuples; nothing here changes. The last
+# owner of a module deletes the module, its line in app/api.py and its line here.
 EXPECTED_STUBS |= asset_review_stub_operation_ids()
-EXPECTED_STUBS |= brands_stub_operation_ids()
 
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
@@ -153,6 +151,8 @@ RETIRING: dict[str, str] = {}
 # S1, S2 and S3 add entries here and never loosen the test another way; each status must be
 # declared for its operation in openapi.yaml (guarded below).
 REFUSES_VALID_DATA: dict[str, set[int]] = {
+    # D2: a generated path is never a readable logo (`asset_invalid`, details {reason}).
+    "setBrandLogo": {422},
     "startAssetModelRun": {409, 422},  # provider_key_missing / job_running; no_sources / nothing_to_refine
     # S2 (plan deviation 14): a schema-valid build whose ids resolve can still be refused - a full
     # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
