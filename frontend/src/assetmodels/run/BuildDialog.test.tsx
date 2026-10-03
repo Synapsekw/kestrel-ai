@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/render";
 import { exampleImage, fakeClient, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
 import { MODEL, VERSION_2 } from "@/test/assetModelFixtures";
+import { pdfDrawing } from "@/mapws/drawings/testFixtures";
 import { BuildDialog } from "./BuildDialog";
 
 const provider = (name: string, model_name: string, has_key: boolean) => ({
@@ -28,9 +29,19 @@ const item = (id: string, type: string, label: string, status: string) => ({
   created_at: "2026-10-01T09:00:00Z",
   summary: {},
 });
-const drawings = {
-  items: [item("d1", "drawing", "GA drawing", "ready"), item("d2", "drawing", "Importing", "importing")],
-  next_cursor: null,
+const drawing = (id: string, name: string, source_path: string, page: number | null, status: string) => ({
+  ...pdfDrawing,
+  id,
+  name,
+  source_path,
+  page,
+  status,
+});
+const drawingRows = {
+  items: [
+    drawing("d1", "GA drawing", "D:\\plans\\ga.pdf", 1, "ready"),
+    drawing("d2", "Importing", "D:\\plans\\other.pdf", 1, "importing"),
+  ],
 };
 const clouds = { items: [item("c1", "point_cloud", "May survey cloud", "ready")], next_cursor: null };
 
@@ -38,15 +49,13 @@ function setup(extra: unknown[] = []) {
   return fakeClient([
     ...extra,
     { method: "GET", path: /\/providers$/, body: providers },
+    { method: "GET", path: /\/drawings$/, body: drawingRows },
+    { method: "GET", path: /\/drawings\/unimported$/, body: { files: [] } },
     {
       method: "GET",
       path: /\/data$/,
       body: (req: RecordedRequest) =>
-        req.url.includes("type=drawing")
-          ? drawings
-          : req.url.includes("type=point_cloud")
-            ? clouds
-            : { items: [], next_cursor: null },
+        req.url.includes("type=point_cloud") ? clouds : { items: [], next_cursor: null },
     },
     { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
   ] as never);
@@ -238,6 +247,43 @@ describe("BuildDialog", () => {
       job: { id: "j1", type: "asset_model_run", state: "queued" },
     },
   };
+
+  it("shows a PDF's pages as one file and sends every page", async () => {
+    const pages = {
+      items: [
+        drawing("p2", "T0005 · p2", "E:\\LNG\\T0005.pdf", 2, "ready"),
+        drawing("p1", "T0005 · p1", "E:\\LNG\\T0005.pdf", 1, "ready"),
+      ],
+    };
+    const { api, requests } = setup([{ method: "GET", path: /\/drawings$/, body: pages }, POSTED]);
+    open(api);
+    const file = await screen.findByRole("checkbox", { name: /T0005\.pdf/ });
+    expect(screen.getByText("2 pages")).toBeInTheDocument();
+    fireEvent.click(file);
+    await waitFor(() => expect(screen.getByRole("button", { name: /start build/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start build/i }));
+    await waitFor(() => expect(requests.some((r) => r.method === "POST")).toBe(true));
+    expect((requests.find((r) => r.method === "POST")!.body as { sources: unknown }).sources).toEqual([
+      { type: "drawing", id: "p1" },
+      { type: "drawing", id: "p2" },
+    ]);
+  });
+
+  it("a refine that used one page shows the file partly chosen; unticking drops every page", async () => {
+    const pages = {
+      items: [
+        drawing("p1", "T0005 · p1", "E:\\LNG\\T0005.pdf", 1, "ready"),
+        drawing("p2", "T0005 · p2", "E:\\LNG\\T0005.pdf", 2, "ready"),
+      ],
+    };
+    const { api } = setup([{ method: "GET", path: /\/drawings$/, body: pages }]);
+    open(api, { initial: { sources: [{ type: "drawing", id: "p2" }] } });
+    const file = await screen.findByRole("checkbox", { name: /T0005\.pdf/ });
+    expect(file).toBeChecked();
+    expect(screen.getByText("1 of 2 pages")).toBeInTheDocument();
+    fireEvent.click(file);
+    expect(file).not.toBeChecked();
+  });
 
   it("drops a seeded source that is no longer in the project", async () => {
     const { api, requests } = setup([POSTED]);

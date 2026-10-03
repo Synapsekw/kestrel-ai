@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   AssetModel,
@@ -13,8 +13,11 @@ import type { DataItem } from "@/api/dataItems";
 import { ApiFailure, codeOf, messageOf } from "@/api/errors";
 import { providerLabel, useProviders } from "@/api/providers";
 import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, Checkbox, Dialog, Field, Input, Pill, Segmented, Skeleton, Textarea } from "@/ui";
-import { MAX_SOURCES, sourceKey, useDataSources, usePhotoSources } from "./sources";
+import { Alert, Button, Dialog, Field, Input, Segmented, Skeleton, Textarea } from "@/ui";
+import { DrawingSources } from "./DrawingSources";
+import { groupDrawingFiles, type DrawingFile } from "./drawingFiles";
+import { GroupHead, SourceRow } from "./SourceRows";
+import { MAX_SOURCES, sourceKey, useDataSources, usePhotoSources, useProjectDrawings } from "./sources";
 
 const NOTES_MAX = 4000;
 const MODEL_NAME_MAX = 120;
@@ -64,59 +67,6 @@ function startError(e: unknown): string {
 function defaultProvider(providers: Provider[]): KeyedProviderName | null {
   const keyed = providers.filter((p) => p.has_key);
   return (keyed.find((p) => p.name === "anthropic") ?? keyed[0])?.name ?? null;
-}
-
-const STATUS_TEXT: Record<DataItem["status"], string> = {
-  ready: "Ready",
-  importing: "Importing",
-  failed: "Failed",
-};
-
-function GroupHead({ title, chosen, total }: { title: string; chosen: number; total: number | null }) {
-  return (
-    <legend className="mb-1.5 flex w-full items-baseline gap-2 text-xs font-medium text-muted">
-      <span className="text-ink">{title}</span>
-      <span className="font-mono text-2xs tabular-nums text-dim">
-        {chosen > 0 ? `${chosen} chosen · ` : ""}
-        {total ?? "…"}
-      </span>
-    </legend>
-  );
-}
-
-function SourceRow({
-  label,
-  status,
-  checked,
-  onChange,
-}: {
-  label: ReactNode;
-  status?: DataItem["status"];
-  checked: boolean;
-  onChange(on: boolean): void;
-}) {
-  const ready = !status || status === "ready";
-  return (
-    <li className="flex min-h-7 items-center rounded-sm px-1.5 hover:bg-hover">
-      <Checkbox
-        checked={checked}
-        // A chosen source that is no longer ready stays untickable.
-        disabled={!ready && !checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="min-w-0 flex-1"
-        label={
-          <span className="flex min-w-0 items-center gap-2">
-            <span className={ready ? "truncate text-ink" : "truncate text-dim"}>{label}</span>
-            {!ready && status && (
-              <Pill size="sm" tone={status === "failed" ? "danger" : "warn"}>
-                {STATUS_TEXT[status]}
-              </Pill>
-            )}
-          </span>
-        }
-      />
-    </li>
-  );
 }
 
 function DataGroup({
@@ -234,7 +184,11 @@ function PhotoGroup({
 export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, initial }: BuildDialogProps) {
   const api = useApi();
   const { providers, loading: providersLoading, unavailable, error: providersError } = useProviders();
-  const drawings = useDataSources(projectId, "drawing");
+  const drawingList = useProjectDrawings(projectId);
+  const files = useMemo(
+    () => (drawingList.items ? groupDrawingFiles(drawingList.items) : null),
+    [drawingList.items],
+  );
   const clouds = useDataSources(projectId, "point_cloud");
 
   // Refine starts from the current version's sources unless the caller brought its own.
@@ -264,8 +218,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   // Photos are paged, so a chosen photo off the loaded pages is kept.
   const { chosen, dropped } = useMemo(() => {
     const listed = (type: AssetSourceRef["type"]) => {
-      const list = type === "drawing" ? drawings : type === "point_cloud" ? clouds : null;
-      return !list || !list.items || list.error ? null : new Set(list.items.map((i) => i.id));
+      if (type === "drawing")
+        return !drawingList.items || drawingList.error ? null : new Set(drawingList.items.map((d) => d.id));
+      return type === "point_cloud" && clouds.items && !clouds.error
+        ? new Set(clouds.items.map((i) => i.id))
+        : null;
     };
     const ids = { drawing: listed("drawing"), point_cloud: listed("point_cloud"), image: null };
     const kept = new Map<string, AssetSourceRef>();
@@ -276,7 +233,7 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
       else kept.set(k, r);
     }
     return { chosen: kept, dropped: gone };
-  }, [seeded, drawings, clouds]);
+  }, [seeded, drawingList.items, drawingList.error, clouds]);
   const isChosen = (r: AssetSourceRef) => chosen.has(sourceKey(r));
   const onToggle = (r: AssetSourceRef, on: boolean) => {
     const next = new Map(chosen);
@@ -284,6 +241,15 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
     else next.delete(sourceKey(r));
     setPicked(next);
   };
+  const onToggleFile = (file: DrawingFile, on: boolean) => {
+    const next = new Map(chosen);
+    for (const d of file.drawings) next.delete(sourceKey({ type: "drawing", id: d.id }));
+    if (on) for (const r of file.refs) next.set(sourceKey(r), r);
+    setPicked(next);
+  };
+  const waiting = [...chosen.values()].filter(
+    (r) => r.type === "drawing" && drawingList.items?.find((d) => d.id === r.id)?.status === "importing",
+  ).length;
   const photosChosen = [...chosen.values()].filter((r) => r.type === "image").length;
 
   const [providerPick, setProviderPick] = useState<KeyedProviderName | null>(initial?.provider ?? null);
@@ -300,8 +266,12 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const keyless = providers.filter((p) => !p.has_key);
 
   const sourceName = (r: AssetSourceRef) => {
-    const list = r.type === "drawing" ? drawings.items : r.type === "point_cloud" ? clouds.items : null;
-    const label = list?.find((i) => i.id === r.id)?.label;
+    const label =
+      r.type === "drawing"
+        ? drawingList.items?.find((d) => d.id === r.id)?.name
+        : r.type === "point_cloud"
+          ? clouds.items?.find((i) => i.id === r.id)?.label
+          : undefined;
     return (
       label ??
       (r.type === "image"
@@ -315,7 +285,7 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tooMany = chosen.size > MAX_SOURCES;
-  const canStart = chosen.size > 0 && !tooMany && provider !== null && !busy;
+  const canStart = chosen.size > 0 && !tooMany && waiting === 0 && provider !== null && !busy;
 
   const submit = async () => {
     if (!canStart || !provider) return;
@@ -382,13 +352,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
               </span>
             )}
           </h3>
-          <DataGroup
-            title="Drawings"
-            empty="No drawings in this project."
-            items={drawings.items}
-            error={drawings.error}
+          <DrawingSources
+            files={files}
+            error={drawingList.error}
             isChosen={isChosen}
-            onToggle={onToggle}
+            onToggleFile={onToggleFile}
           />
           <DataGroup
             title="Point clouds"
@@ -409,6 +377,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
               {dropped === 1
                 ? "1 source is no longer in the project and was left out."
                 : `${dropped} sources are no longer in the project and were left out.`}
+            </p>
+          )}
+          {waiting > 0 && (
+            <p className="text-xs text-muted">
+              {`Waiting for ${waiting} ${waiting === 1 ? "drawing" : "drawings"} to finish importing.`}
             </p>
           )}
         </section>

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssetSourceRef, Image as ImageRow } from "@contract/client";
 import { useApi } from "@/api/client";
 import { listDataItems, type DataItem } from "@/api/dataItems";
+import { listDrawings, type Drawing } from "@/api/drawings";
 import { messageOf } from "@/api/errors";
 import { IMAGE_PAGE_SIZE, fetchImagePage } from "@/api/images";
+import { useChangesStore } from "@/store/changes";
 
 /** A run takes at most this many sources (`AssetModelRunStart.sources`, 1..50). */
 export const MAX_SOURCES = 50;
@@ -114,4 +116,39 @@ export function usePhotoSources(projectId: string, search: string) {
     error: current?.error ?? null,
     more,
   };
+}
+
+/**
+ * Every drawing of the project (a PDF page each; a project has tens to a few hundred), re-read on
+ * `drawings.changed` and on `reload()`. `add` shows drawings just created before the next read.
+ */
+export function useProjectDrawings(projectId: string) {
+  const api = useApi();
+  const revision = useChangesStore((s) => s.mapWorkspaceRevision);
+  const [tick, setTick] = useState(0);
+  const [state, setState] = useState<{ items: Drawing[] | null; error: string | null }>({
+    items: null,
+    error: null,
+  });
+  useEffect(() => {
+    let live = true;
+    listDrawings(api, projectId).then(
+      (items) => live && setState({ items, error: null }),
+      (e: unknown) =>
+        live && setState((s) => ({ items: s.items ?? [], error: messageOf(e, "could not load the list") })),
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, projectId, revision, tick]);
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+  const add = useCallback(
+    (more: Drawing[]) =>
+      setState((s) => ({
+        ...s,
+        items: [...(s.items ?? []).filter((d) => !more.some((m) => m.id === d.id)), ...more],
+      })),
+    [],
+  );
+  return { ...state, reload, add };
 }
