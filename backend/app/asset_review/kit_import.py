@@ -15,8 +15,11 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from app.asset_models import store as asset_store
+from app.asset_review import glb_import
+from app.asset_review.kit_children import InlineRunner
 from app.asset_review.kit_format import STATUSES, UNCLASSIFIED, Kit, KitError, preview_size, read_kit
 from app.asset_review.kit_match import Match, load_candidates, match_photos
+from app.asset_review.kit_records import write_frame, write_poses, write_statuses
 from app.db.models import AssetModel, AssetModelVersion, FindingSighting, Job, ProjectType, Source
 from app.errors import AppError, not_found
 from app.jobs.cancellation import JobFailure
@@ -217,4 +220,104 @@ def run_kit_import(ctx) -> dict:
     if ctx.params.get("dry_run"):
         ctx.progress(1, f"Matched {len(prep.matches):,} of {len(kit.photos):,} kit photos")
         return build_preview(ctx.project, kit, prep, ctx.params)
-    raise JobFailure("This build can only preview a kit import.")
+    return _import(ctx, kit, prep)
+
+
+def _validate(handle, kit: Kit, prep: Prepared, params: dict) -> dict[str, str]:
+    """Everything that can refuse the import, before any write. Returns the class map for the
+    keys this kit uses."""
+    if not prep.matches:
+        raise JobFailure("No kit photo matches an image in this image set. Run a dry run to see why.")
+    keys = sighting_keys(kit, prep.matches)
+    class_map = params.get("class_map") or {}
+    missing = sorted(k for k in keys if k not in class_map)
+    if missing:
+        raise JobFailure("Map every kit class to a defect type first: " + ", ".join(missing) + ".")
+    mid = params.get("asset_model_id")
+    with handle.session() as s:
+        defect = {tid for tid, _ in defect_types(s)}
+        if {class_map[k] for k in keys} - defect:
+            raise JobFailure("The class mapping names a type that is not a defect type in this project.")
+        ready = None
+        if mid:
+            if s.get(AssetModel, mid) is None:
+                raise JobFailure("The asset model was deleted before the import started.")
+            n = existing_sightings(s, mid)
+            if n:
+                raise JobFailure(
+                    f"This asset model already holds {n:,} sightings from an earlier import. "
+                    "Import into a new asset model."
+                )
+            ready = ready_version(s, mid)
+    if ready is None and kit.glb_path is None:
+        raise JobFailure(
+            "The asset model has no 3D model yet and the kit folder has no model.glb. "
+            "Import the GLB into the asset model first."
+        )
+    return {k: class_map[k] for k in keys}
+
+
+def _target_model(handle, params: dict, kit: Kit) -> str:
+    if params.get("asset_model_id"):
+        return params["asset_model_id"]
+    with handle.session() as s:
+        row = AssetModel(name=params["new_model_name"], asset_type=kit.kit_profile, status="empty")
+        s.add(row)
+        s.flush()
+        return row.id
+
+
+def _ensure_version(ctx, asset_model_id: str, kit: Kit) -> int:
+    """The model's ready version; without one, the kit's model.glb is imported here, in this job,
+    through J1's `start_import` (spec §6.1). The kit's frame is the canonical one (X north, Y up,
+    Z east), so the conversion is `none`."""
+    with ctx.project.session() as s:
+        v = ready_version(s, asset_model_id)
+    if v is not None:
+        return v
+    try:
+        glb_import.check_source(kit.glb_path)
+    except AppError as e:
+        raise JobFailure(f"The kit's model.glb cannot be imported: {e.message}") from None
+    ctx.progress(0.05, "Importing the kit's 3D model")
+    glb_import.start_import(
+        ctx.project,
+        InlineRunner(ctx, 0.05, 0.11),
+        asset_model_id,
+        path=kit.glb_path,
+        conversion="none",
+        origin=None,
+        note="Imported with a review kit",
+        source_name=kit.glb_path.name,
+    )
+    with ctx.project.session() as s:
+        v = ready_version(s, asset_model_id)
+    if v is None:
+        raise JobFailure("The kit's model.glb could not be imported as the asset model's 3D model.")
+    return v
+
+
+def _result(kit: Kit, prep: Prepared, asset_model_id: str, version: int, **parts) -> dict:
+    return {
+        "dry_run": False,
+        "asset_model_id": asset_model_id,
+        "version": version,
+        **photo_fields(kit, prep),
+        **parts,
+    }
+
+
+def _import(ctx, kit: Kit, prep: Prepared) -> dict:
+    handle, params = ctx.project, ctx.params
+    _validate(handle, kit, prep, params)
+    mid = _target_model(handle, params, kit)
+    version = _ensure_version(ctx, mid, kit)
+    ctx.progress(0.12, "Writing the asset frame and review profile")
+    write_frame(handle, mid, kit)
+    ctx.publish("asset_models.changed", {"asset_model_ids": [mid]})
+    pose_ids: list[str] = []
+    poses = write_poses(handle, ctx, mid, kit, prep.matches, pose_ids)
+    skipped: list[dict] = []
+    statuses = write_statuses(handle, ctx, kit, prep.matches, skipped)
+    ctx.progress(1, f"Imported {len(prep.matches):,} photos")
+    return _result(kit, prep, mid, version, poses=poses, statuses=statuses, skipped=skipped[:MAX_LISTED])
