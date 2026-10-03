@@ -45,6 +45,32 @@ export const specWith = (projection: number) => ({
   ],
 });
 
+export const drawingJson = (id: string, name: string, source_path: string, page: number | null, status = "ready") => ({
+  id,
+  name,
+  format: "pdf",
+  kind: "raster",
+  status,
+  error: null,
+  job_id: null,
+  source_path,
+  source_size: 2048,
+  page,
+  units: null,
+  width: 100,
+  height: 100,
+  dpi: 150,
+  extent_src: [0, -100, 100, 0],
+  layers: [],
+  georef: null,
+  georef_version: 0,
+  bounds_site: null,
+  layer_state: { hidden_layers: [], knockout_white: false },
+  captured_on: null,
+  created_at: T,
+  updated_at: T,
+});
+
 export const modelJson = (currentVersion: number) => ({
   id: MODEL,
   name: "Vessel V-101",
@@ -275,6 +301,21 @@ export async function routeRuns(
     },
   );
   await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawings`,
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      if (route.request().method() !== "GET") return route.fallback();
+      return json(route, { items: [drawingJson("d1", "GA drawing", "D:\\plans\\ga.pdf", 1)] });
+    },
+  );
+  await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawings/unimported`,
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      return json(route, { files: [] });
+    },
+  );
+  await page.route(
     (u) => u.pathname === `${api}/projects/${P}/images`,
     (route) => {
       if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
@@ -318,4 +359,111 @@ export async function routeRuns(
       return sim.stopped;
     },
   };
+}
+
+/**
+ * A project folder with one PDF never imported (T0006.pdf, 2 pages) and the import it starts: the
+ * inspection reads at once, POST /drawings/pages answers a finished job, and /drawings then lists
+ * both pages ready. Call after `routeRuns`.
+ */
+export async function routeDrawingIntake(page: Page): Promise<{ pagesPosted: unknown[] }> {
+  const pagesPosted: unknown[] = [];
+  const api = "/api/v1";
+  const path = "E:\\LNG\\Drawings\\T0006.pdf";
+  const INSP = "e0000000-2222-4000-8000-0000000000a6";
+  const JOB = "j0000000-9999-4000-8000-0000000000a6";
+  const json = (route: Route, body: unknown, status = 200) =>
+    route.fulfill({ status, contentType: "application/json", headers: CORS, body: JSON.stringify(body) });
+  const preflight = (route: Route) => route.request().method() === "OPTIONS";
+  const job = (id: string, state: string) => ({
+    id,
+    project_id: P,
+    type: "drawing_import",
+    state,
+    progress: state === "succeeded" ? 1 : 0,
+    message: "",
+    log_path: "",
+    params: {},
+    result: null,
+    error: null,
+    created_at: T,
+    started_at: null,
+    finished_at: null,
+  });
+  const inspection = {
+    id: INSP,
+    state: "ready",
+    error: null,
+    job_id: "j-inspect",
+    path,
+    format: "pdf",
+    file_size: 2048,
+    sha256: "abc",
+    units: null,
+    units_source: null,
+    crs_hint: null,
+    extent_src: null,
+    layers: [],
+    page_count: 2,
+    pages: [
+      { page: 1, width_pt: 2384, height_pt: 1684 },
+      { page: 2, width_pt: 2384, height_pt: 1684 },
+    ],
+    width: null,
+    height: null,
+    embedded: null,
+    warnings: [],
+    created_at: T,
+  };
+  const made = (status: string) => [
+    drawingJson("n1", "T0006 · p1", path, 1, status),
+    drawingJson("n2", "T0006 · p2", path, 2, status),
+  ];
+  await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawings/unimported`,
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      return json(route, {
+        files: pagesPosted.length ? [] : [{ path, name: "T0006.pdf", format: "pdf", size: 2048, pages: 2 }],
+      });
+    },
+  );
+  await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawings`,
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      if (route.request().method() !== "GET") return route.fallback();
+      return json(route, {
+        items: [drawingJson("d1", "GA drawing", "D:\\plans\\ga.pdf", 1), ...(pagesPosted.length ? made("ready") : [])],
+      });
+    },
+  );
+  await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawing-inspections`,
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      return json(route, { inspection: { ...inspection, state: "inspecting" }, job: job("j-inspect", "running") }, 202);
+    },
+  );
+  await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawing-inspections/${INSP}`,
+    (route) => (preflight(route) ? route.fulfill({ status: 204, headers: CORS }) : json(route, inspection)),
+  );
+  await page.route(
+    (u) => u.pathname === `${api}/projects/${P}/drawings/pages`,
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      pagesPosted.push(route.request().postDataJSON());
+      return json(route, { drawings: made("importing"), job: job(JOB, "succeeded") }, 202);
+    },
+  );
+  await page.route(
+    (u) => u.pathname.startsWith(`${api}/projects/${P}/jobs/`),
+    (route) => {
+      if (preflight(route)) return route.fulfill({ status: 204, headers: CORS });
+      const id = new URL(route.request().url()).pathname.split("/").pop() ?? "";
+      return json(route, job(id, "succeeded"));
+    },
+  );
+  return { pagesPosted };
 }
