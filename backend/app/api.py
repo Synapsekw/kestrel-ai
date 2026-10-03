@@ -155,6 +155,7 @@ for _module in (
     # Plant model (spec 2026-10-03-plant-model-generator §10, plan pm-f0): the live catalogue, then the
     # 501 stubs until A1, R1 and S1 land. A unit deletes its tuples in app/asset_models/stubs_plant.py.
     "app.asset_models.catalogue_router",
+    "app.asset_models.items",  # plant model A1: items list, item, register CSV
     "app.asset_models.stubs_plant",
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
     # A unit inserts its own router module above its stubs module and deletes its tuples there.

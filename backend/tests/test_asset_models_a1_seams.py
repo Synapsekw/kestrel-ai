@@ -86,8 +86,8 @@ def test_asset_item_table():
     }  # fmt: skip
 
 
-def test_a1_stubs_exist_until_a1_lands():
+def test_a1_stubs_are_gone():
     from app.asset_models import stubs_plant
 
     ids = {op for _m, _p, op in stubs_plant.A1_STUBS}
-    assert ids == {"listAssetModelItems", "getAssetModelItem", "getAssetModelCsv"}
+    assert not ids & {"listAssetModelItems", "getAssetModelItem", "getAssetModelCsv"}
