@@ -1,12 +1,12 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { PointCloud } from "@/api/clouds";
 import type { ColourAvailability } from "@/clouds/viewer/types";
-import { exampleCloud } from "@/test/cloudFixtures";
+import { exampleCloud, CLOUD_ID } from "@/test/cloudFixtures";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { LocationProbe, renderWithProviders } from "@/test/render";
 import { CloudPanel, RenderControls } from "./CloudPanel";
 import { Readout } from "./Readout";
 import type { RenderSettings } from "./types";
@@ -36,6 +36,7 @@ function Panel({
       clouds={[cloud, { ...cloud, id: "c2", name: "Tower", status: "importing" }]}
       onImport={vi.fn()}
       onDetails={vi.fn()}
+      onDeleted={vi.fn()}
     >
       <RenderControls
         cloud={cloud}
@@ -64,6 +65,7 @@ describe("the cloud panel (spec §6)", () => {
         clouds={[exampleCloud]}
         onImport={onImport}
         onDetails={vi.fn()}
+        onDeleted={vi.fn()}
       />,
     );
     const picker = screen.getByRole("button", { name: /^Point cloud: Chimney stack 3D/ });
@@ -82,6 +84,7 @@ describe("the cloud panel (spec §6)", () => {
         clouds={[exampleCloud]}
         onImport={vi.fn()}
         onDetails={vi.fn()}
+        onDeleted={vi.fn()}
       />,
     );
     expect(screen.getByRole("region", { name: "Point cloud" })).toBeInTheDocument();
@@ -94,6 +97,7 @@ describe("the cloud panel (spec §6)", () => {
         clouds={[exampleCloud]}
         onImport={vi.fn()}
         onDetails={vi.fn()}
+        onDeleted={vi.fn()}
       >
         <p>render rows</p>
       </CloudPanel>,
@@ -158,5 +162,39 @@ describe("the cloud panel (spec §6)", () => {
     // rerender drops the providers, so the tree remounts: query the readout again.
     expect(screen.getByTestId("cloud-readout")).toHaveTextContent("E243500.13");
     expect(screen.getByText("25.0 cm")).toHaveClass("text-warn");
+  });
+
+  it("asks before deleting a listed cloud, and the trash does not open that cloud", async () => {
+    const onDeleted = vi.fn();
+    const { api, requests } = fakeClient([
+      { method: "DELETE", path: new RegExp(`/pointclouds/c2$`), status: 204 },
+    ]);
+    renderWithProviders(
+      <>
+        <CloudPanel
+          projectId={PROJECT_ID}
+          cloud={exampleCloud}
+          clouds={[exampleCloud, { ...exampleCloud, id: "c2", name: "Tower", status: "importing" }]}
+          onImport={vi.fn()}
+          onDetails={vi.fn()}
+          onDeleted={onDeleted}
+        />
+        <LocationProbe />
+      </>,
+      { api, route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}` },
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^Point cloud:/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete Tower" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/${CLOUD_ID}`);
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    const dialog = screen.getByRole("dialog", { name: "Are you sure?" });
+    expect(dialog).toHaveTextContent("The 3D view copy and the measurements go");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+    expect(onDeleted).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /^Point cloud:/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete Tower" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("c2"));
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/${CLOUD_ID}`);
   });
 });
