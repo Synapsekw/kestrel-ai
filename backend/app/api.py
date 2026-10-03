@@ -173,9 +173,6 @@ for _module in (
 # (tests/test_api_maps_guard.py). Each M unit inserts one line, its router module, before
 # "app.workspace.stubs" and deletes its tuples from app/workspace/stubs.py.
 for _module in (
-    # Plant model I1's 501 stubs, before app.drawings.router so that GET /drawings/unimported never
-    # reaches /drawings/{drawingId}. I1 deletes this line when it routes the real operations.
-    "app.asset_models.stubs_plant:drawings_router",
     # each M unit inserts its router module on its own line above this one
     "app.drawings.router",
     "app.mapmeasure.router",

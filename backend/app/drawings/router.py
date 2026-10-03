@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.db.base import utcnow
 from app.db.models import Drawing
-from app.drawings import detect, footprint, pages, service, site, store, vtiles
+from app.drawings import detect, footprint, pages, service, site, store, unimported, vtiles
 from app.drawings import georef as fitting
 from app.drawings import jobs as _jobs  # noqa: F401 - registers `drawing_import`
 from app.drawings import placement as placing
@@ -37,6 +37,8 @@ from app.drawings.schemas import (
     DrawingWithJob,
     GeorefFitOut,
     GeorefFitRequest,
+    UnimportedDrawingList,
+    UnimportedDrawingOut,
 )
 from app.errors import AppError, not_found
 from app.events_util import publish_drawings_changed
@@ -241,6 +243,16 @@ def create_drawing_pages(
             outs.append(service.to_out(row, None))
     publish_drawings_changed(request, handle, ids)
     return DrawingPagesWithJob(drawings=outs, job=JobOut.from_row(job, handle.id))
+
+
+@router.get("/drawings/unimported", response_model=UnimportedDrawingList)
+def list_unimported_drawings(handle: ProjectHandle = Depends(get_project)) -> UnimportedDrawingList:
+    """Drawing files in the project folder (depth 3) not matched by sha256 to an imported drawing
+    (plant-model spec 8.1). Bounded: <= 20 000 entries read, <= 500 files, hashing only on a size
+    match, cached in cache/unimported.json."""
+    return UnimportedDrawingList(
+        files=[UnimportedDrawingOut(**f) for f in unimported.scan_unimported(handle)]
+    )
 
 
 @router.get("/drawings/{drawingId}", response_model=DrawingOut)

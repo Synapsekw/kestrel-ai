@@ -176,3 +176,14 @@ def test_a_broken_cache_file_is_ignored_and_rewritten(handle):
     unimported.cache_path(handle).write_text("{not json", "utf-8")
     assert _names(handle) == ["a.pdf"]
     assert store.read_json(unimported.cache_path(handle))["version"] == 1
+
+
+def test_the_route_answers_and_is_not_read_as_a_drawing_id(client, project_id, handle):
+    src = write_pdf(_root(handle) / "Drawings" / "T0006.pdf", [(200.0, 200.0)] * 2)
+    r = client.get(f"/api/v1/projects/{project_id}/drawings/unimported")
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "files": [
+            {"path": str(src), "name": "T0006.pdf", "format": "pdf", "size": src.stat().st_size, "pages": 2}
+        ]
+    }
