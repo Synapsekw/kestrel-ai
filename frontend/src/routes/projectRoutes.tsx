@@ -1,5 +1,5 @@
 import type { RouteObject } from "react-router-dom";
-import { AssetModelsScreen, CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
+import { AssetInspectScreen, AssetModelsScreen, CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { DrawingsScreen } from "@/drawings/DrawingsScreen";
 import { FindingsScreen } from "@/findings/FindingsScreen";
 import { ImagesWorkspace } from "@/images/workspace/ImagesWorkspace";
@@ -72,6 +72,16 @@ export const projectRoutes: RouteObject[] = [
     element: (
       <Later>
         <AssetModelsScreen />
+      </Later>
+    ),
+  },
+  // Split inspection (asset findings spec §9): /p/:projectId/models/:modelId/inspect?finding=<id>[&sighting=<id>].
+  // The register's findingHref sends asset findings here.
+  {
+    path: "models/:modelId/inspect",
+    element: (
+      <Later>
+        <AssetInspectScreen />
       </Later>
     ),
   },

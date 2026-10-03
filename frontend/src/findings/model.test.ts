@@ -94,9 +94,9 @@ describe("finding links (F §8.7)", () => {
     expect(findingsTabPath(PROJECT_ID, new URLSearchParams())).toBe(`/p/${PROJECT_ID}/findings`);
   });
 
-  it("links an asset finding to its asset model workspace", () => {
+  it("links an asset finding to its split inspection", () => {
     expect(findingHref(PROJECT_ID, exampleAssetFinding)).toBe(
-      `/p/${PROJECT_ID}/models/${ASSET_MODEL_ID}?finding=${exampleAssetFinding.id}`,
+      `/p/${PROJECT_ID}/models/${ASSET_MODEL_ID}/inspect?finding=${exampleAssetFinding.id}`,
     );
   });
 });

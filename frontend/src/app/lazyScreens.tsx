@@ -9,6 +9,9 @@ export const CloudsScreen = lazy(() =>
 export const AssetModelsScreen = lazy(() =>
   import("@/screens/AssetModelsScreen").then((m) => ({ default: m.AssetModelsScreen })),
 );
+export const AssetInspectScreen = lazy(() =>
+  import("@/screens/AssetInspectScreen").then((m) => ({ default: m.AssetInspectScreen })),
+);
 export const VolumesScreen = lazy(() =>
   import("@/screens/VolumesScreen").then((m) => ({ default: m.VolumesScreen })),
 );
