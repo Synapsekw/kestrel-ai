@@ -99,7 +99,8 @@ export function useAssetItems(
 ) {
   const api = useApi();
   const key = JSON.stringify([projectId, modelId, version, filters]);
-  const busy = useRef(false);
+  const inFlight = useRef<string | null>(null);
+  const latest = useRef(key);
   const [state, setState] = useState<{
     key: string;
     items: AssetItemRow[];
@@ -109,40 +110,48 @@ export function useAssetItems(
   const fetchPage = useCallback(
     (cursor: string | null) => {
       const [pid, mid, ver, f] = JSON.parse(key) as [string, string | null, number | null, ItemFilters];
-      if (!mid || ver == null || busy.current) return;
-      busy.current = true;
+      if (!mid || ver == null || inFlight.current === key) return;
+      inFlight.current = key;
+      latest.current = key;
       void listAssetItems(api, pid, mid, ver, f, cursor)
         .then(
-          (page) =>
+          (page) => {
+            if (latest.current !== key) return;
             setState((prev) => ({
               key,
               items: cursor && prev?.key === key ? [...prev.items, ...page.items] : page.items,
               next: page.next_cursor ?? null,
               error: null,
-            })),
-          (e: unknown) =>
+            }));
+          },
+          (e: unknown) => {
+            if (latest.current !== key) return;
             setState((prev) => ({
               key,
               items: prev?.key === key ? prev.items : [],
               next: prev?.key === key ? prev.next : null,
               error: message(e),
-            })),
+            }));
+          },
         )
         .finally(() => {
-          busy.current = false;
+          if (inFlight.current === key) inFlight.current = null;
         });
     },
     [api, key],
   );
   useEffect(() => fetchPage(null), [fetchPage]);
   const current = state?.key === key ? state : null;
+  const next = current?.next ?? null;
+  const loadMore = useCallback(() => {
+    if (next) fetchPage(next);
+  }, [fetchPage, next]);
+  const reload = useCallback(() => fetchPage(null), [fetchPage]);
   return {
     items: current ? current.items : null,
     error: current?.error ?? null,
     hasMore: Boolean(current?.next),
-    loadMore: () => {
-      if (current?.next) fetchPage(current.next);
-    },
-    reload: () => fetchPage(null),
+    loadMore,
+    reload,
   };
 }

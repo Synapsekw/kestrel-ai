@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { fakeClient } from "@/test/fixtures";
+import { createApiClient } from "@contract/client";
+import { fakeClient, fakeFetch } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { EMPTY_SCENE, MODEL_SCENE, TEST_FRAME } from "@/test/siteSceneFixtures";
 import { absUrl, getSiteScene, listAssetItems, toFrameT, useAssetItems, useSiteScene } from "./siteScene";
@@ -78,6 +79,38 @@ describe("siteScene api", () => {
     await waitFor(() => expect(result.current.items?.map((i) => i.node)).toEqual(["a", "b"]));
     expect(result.current.hasMore).toBe(false);
     expect(requests[0].url).toBe("/api/v1/projects/p1/asset-models/m1/versions/2/items?q=tank");
+  });
+
+  it("useAssetItems fetches the new filters when they change while a request is pending", async () => {
+    const { fetch: inner } = fakeFetch([
+      {
+        method: "GET",
+        path: /\/items/,
+        body: (req) => ({ items: [row(req.url.includes("q=old") ? "old" : "new")], next_cursor: null }),
+      },
+    ]);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const gated = (async (input: Request | string | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("q=old")) await gate;
+      return inner(input, init);
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: gated });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={api}>{children}</TestApiProvider>
+    );
+    const { result, rerender } = renderHook(({ q }) => useAssetItems("p1", "m1", 1, { q }), {
+      wrapper,
+      initialProps: { q: "old" },
+    });
+    rerender({ q: "new" });
+    await waitFor(() => expect(result.current.items?.map((i) => i.node)).toEqual(["new"]));
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    expect(result.current.items?.map((i) => i.node)).toEqual(["new"]);
   });
 
   it("listAssetItems sends the filters", async () => {
