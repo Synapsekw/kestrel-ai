@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { BlockOf } from "@/api/reports";
 import { PRINT, mm, textStyle } from "../../printTheme";
+import { usePreviewEnv } from "../PreviewContext";
 import { Dot } from "./marks";
 
 const alignOf = (a: unknown): CSSProperties["textAlign"] =>
@@ -25,6 +26,7 @@ function cellContent(cell: unknown) {
 
 /** Ruling 13: `repeat_header` only matters when a table crosses a printed page. */
 export function TableBlock({ block }: { block: BlockOf<"table"> }) {
+  const headFill = usePreviewEnv().brand?.headFill ?? PRINT.head;
   const pad = `${mm(1.2)} ${mm(1.5)}`;
   return (
     <table
@@ -37,7 +39,7 @@ export function TableBlock({ block }: { block: BlockOf<"table"> }) {
         ))}
       </colgroup>
       <thead>
-        <tr style={{ background: PRINT.head }}>
+        <tr style={{ background: headFill }}>
           {block.columns.map((c) => (
             <th
               key={c.key}
