@@ -6,15 +6,20 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from plant_b3_helpers import (
+    CTX,
     assert_golden,
     bounds,
     build_ok,
     by_name,
     make_item,
     materials,
+    same_geometry,
+    tri_count,
 )
+from shapely.geometry import Point
 
-from app.asset_models.builders.base import REGISTRY, BuildCtx
+from app.asset_models.builders.base import REGISTRY, BuildCtx, Instanced, build_item
+from app.asset_models.builders.civil import MAX_INSTANCES, outline
 
 E0, N0 = 500.0, 300.0
 RECT = {"kind": "rect", "center": [E0, N0], "size": [30.0, 20.0], "rot_deg": 0}  # 30 along north, 20 east
@@ -131,3 +136,112 @@ def test_house_types_are_registered():
     for t in ("building", "substation", "analyzer_house"):
         assert REGISTRY[t].family == "building"
     assert REGISTRY["substation"].default_height_m == 9.0
+
+
+# ------------------------------------------------------------------ shelter
+def test_shelter_column_grid_is_instanced():
+    nodes = by_name(build_ok(sample("shelter")))
+    cols = nodes["columns"].geometry
+    assert isinstance(cols, Instanced) and len(cols.transforms) == 4 * 3
+    assert materials(list(nodes.values())) == {"Concrete", "Steel_Structure", "Shelter_Roof"}
+    assert bounds(list(nodes.values()))[:, 1].tolist() == pytest.approx([0.0, 5.0])
+    assert nodes["roof"].geometry.bounds[0, 1] == pytest.approx(5.0 - 0.35)
+
+
+def test_shelter_on_a_concave_footprint_keeps_columns_inside():
+    nodes = by_name(build_ok(make_item("shelter", L_POLY, top_el=106.0)))
+    xf = nodes["columns"].geometry.transforms
+    poly = outline(make_item("shelter", L_POLY), CTX).buffer(1e-6)
+    assert len(xf) > 0
+    assert all(poly.contains(Point(t[0, 3], t[2, 3])) for t in xf)
+
+
+def test_too_low_shelter_falls_back():
+    _, flags = build_item(make_item("shelter", RECT, top_el=100.8), BuildCtx(grid=None))
+    assert [f.code for f in flags] == ["builder_fallback"]
+
+
+def test_shelter_narrower_than_its_columns_falls_back():
+    fp = {"kind": "rect", "center": [E0, N0], "size": [6.0, 0.4], "rot_deg": 0}
+    _, flags = build_item(make_item("shelter", fp, top_el=105.0), BuildCtx(grid=None))
+    assert [f.code for f in flags] == ["builder_fallback"]
+
+
+def test_a_huge_shelter_caps_its_columns():
+    fp = {"kind": "rect", "center": [E0, N0], "size": [2000.0, 2000.0], "rot_deg": 0}
+    nodes = by_name(build_ok(make_item("shelter", fp, top_el=106.0, params={"bay": 2.0})))
+    assert 0 < len(nodes["columns"].geometry.transforms) <= MAX_INSTANCES
+
+
+# ------------------------------------------------------------------ gate
+def test_gate_has_posts_two_leaves_and_pickets():
+    nodes = by_name(build_ok(sample("gate")))
+    assert len(nodes["posts"].geometry.transforms) == 2
+    assert len(nodes["pickets"].geometry.transforms) == 2 * 13
+    assert materials(list(nodes.values())) == {"Steel_Dark"}
+    assert bounds(list(nodes.values()))[1, 1] == pytest.approx(2.6)  # posts stand 0.1 m proud
+
+
+def test_a_gate_shorter_than_its_posts_falls_back():
+    item = make_item("gate", {"kind": "line", "pts": [[E0, N0], [E0 + 0.3, N0]], "width": 0.3})
+    _, flags = build_item(item, BuildCtx(grid=None))
+    assert [f.code for f in flags] == ["builder_fallback"]
+
+
+def test_a_very_long_gate_caps_its_pickets():
+    item = make_item(
+        "gate",
+        {"kind": "line", "pts": [[E0, N0], [E0 + 10000.0, N0]], "width": 0.3},
+        top_el=102.5,
+        params={"picket_spacing": 0.1},
+    )
+    nodes = by_name(build_ok(item))
+    assert 0 < len(nodes["pickets"].geometry.transforms) <= MAX_INSTANCES
+
+
+def test_a_corner_of_a_gate_line_gets_one_post():
+    zig = [[E0, N0], [E0 + 5.0, N0 + 5.0], [E0 + 10.0, N0]]
+    nodes = by_name(build_ok(make_item("gate", {"kind": "line", "pts": zig, "width": 0.3}, top_el=102.5)))
+    assert len(nodes["posts"].geometry.transforms) == 3
+
+
+def test_a_rect_gate_spans_its_footprint():
+    fp = {"kind": "rect", "center": [E0, N0], "size": [0.3, 6.0], "rot_deg": 0}
+    nodes = by_name(build_ok(make_item("gate", fp, top_el=102.5)))
+    xf = nodes["posts"].geometry.transforms
+    assert len(xf) == 2
+    span = np.hypot(*(xf[0, [0, 2], 3] - xf[1, [0, 2], 3]))
+    assert span == pytest.approx(6.0)
+    mid = (xf[0, [0, 2], 3] + xf[1, [0, 2], 3]) / 2
+    poly = outline(make_item("gate", fp), CTX)
+    assert poly.contains(Point(*mid))
+
+
+# ------------------------------------------------------------------ all building-family types
+def test_types_are_registered_in_the_building_family():
+    for t in TYPES:
+        assert REGISTRY[t].family == "building"
+
+
+@pytest.mark.parametrize("type_", TYPES)
+def test_builds_are_deterministic(type_):
+    assert same_geometry(build_ok(sample(type_)), build_ok(sample(type_)))
+
+
+@pytest.mark.parametrize(
+    ("type_", "lo", "hi"),
+    [
+        ("building", 150, 600),
+        ("substation", 60, 300),
+        ("analyzer_house", 40, 200),
+        ("shelter", 150, 800),
+        ("gate", 200, 800),
+    ],
+)
+def test_triangle_ranges(type_, lo, hi):
+    assert lo <= tri_count(build_ok(sample(type_))) <= hi
+
+
+@pytest.mark.parametrize("type_", ["shelter", "gate"])
+def test_shelter_gate_goldens(type_):
+    assert_golden(build_ok(sample(type_)), type_)
