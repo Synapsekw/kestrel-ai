@@ -2,8 +2,12 @@
 umbrella section 3: an annotation on a defect type IS a finding's geometry).
 
 The box service (app/datasets/boxes.py) calls these hooks inside its own transaction, after it has
-changed the box row. Each hook that deletes findings returns their ids, so the caller moves their
+changed the box row. Each hook that deletes findings returns their ids, so the caller can move their
 photos to the trash after the commit.
+
+A box that is a sighting of an asset finding (asset findings spec §5.6) is never an image finding.
+Its hooks change or remove the sighting. An asset finding left with no sighting is closed, never
+deleted.
 """
 
 from __future__ import annotations
@@ -13,9 +17,9 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Box, Finding, ProjectType
+from app.db.models import Box, Finding, FindingSighting, ProjectType
 from app.errors import AppError
-from app.findings import activity, numbers, service
+from app.findings import activity, events, numbers, service, sightings
 from app.findings.anchors import AnchorIn
 
 GROUND_TRUTH = ("accepted", "edited")
@@ -59,6 +63,52 @@ def on_box_created(s: Session, project_id: str, catalogue, box: Box) -> None:
         _create(s, project_id, catalogue, box)
 
 
+def _sighting_box_changed(
+    s: Session, project_id: str, catalogue, box: Box, sighting: FindingSighting, previous_class_id: str | None
+) -> None:
+    """A sighting's box changed:
+
+    - no longer ground truth, or now an object type: the sighting goes (the finding is closed when
+      it was the last one);
+    - reclassed to another defect type: it splits out into a finding of that type, or, when it is
+      the only sighting, the finding's type follows;
+    - otherwise (a geometry edit): the sighting is `pending` until `asset_place` places it again."""
+    if box.review_state not in GROUND_TRUTH or not _is_defect(s, box.class_id):
+        sightings.remove(
+            s, project_id=project_id, catalogue=catalogue, rows=[sighting], reason=sightings.NOT_A_SIGHTING
+        )
+        return
+    f = s.get(Finding, sighting.finding_id) if sighting.finding_id else None
+    reclassed = previous_class_id is not None and previous_class_id != box.class_id
+    if reclassed and f is not None and f.type_id != box.class_id:
+        if len(sightings.of_finding(s, f.id)) > 1:
+            from app.asset_review import group  # group imports this package
+
+            group.split_in_session(
+                s,
+                project_id=project_id,
+                catalogue=catalogue,
+                finding_id=f.id,
+                sighting_ids=[sighting.id],
+                type_id=box.class_id,
+            )
+        else:
+            service.patch_in_session(
+                s,
+                project_id=project_id,
+                catalogue=catalogue,
+                finding_id=f.id,
+                fields={"type_id": box.class_id},
+            )
+        return
+    sighting.placement = "pending"
+    sighting.placed_version = None
+    if f is not None:
+        s.flush()
+        sightings.refresh(s, f)
+        events.mark_changed(s, project_id, [f.id])
+
+
 def on_box_changed(
     s: Session,
     project_id: str,
@@ -78,9 +128,14 @@ def on_box_changed(
     - reclassed to another defect type -> the finding's type follows
     - class unchanged (a geometry edit) on a type the catalogue turned into an object type -> the
       finding is kept (spec section 7.2: defect -> object keeps existing findings)
+    - a sighting's box -> its sighting changes or goes (asset findings spec §5.6); never an image finding
 
     `previous_class_id` is the box's class before the change; None means it did not change.
     `accepted` collects a review batch's new findings for one `detections.accepted` row."""
+    sighting = sightings.of_box(s, box.id)
+    if sighting is not None:
+        _sighting_box_changed(s, project_id, catalogue, box, sighting, previous_class_id)
+        return []
     f = finding_of(s, box.id)
     ground_truth = box.review_state in GROUND_TRUTH
     defect = _is_defect(s, box.class_id)
@@ -108,6 +163,10 @@ def on_box_changed(
 
 
 def on_box_deleting(s: Session, project_id: str, box: Box) -> list[str]:
+    sighting = sightings.of_box(s, box.id)
+    if sighting is not None:
+        sightings.remove(s, project_id=project_id, catalogue=None, rows=[sighting], reason=sightings.BOX_GONE)
+        return []
     f = finding_of(s, box.id)
     if f is None:
         return []
@@ -115,10 +174,18 @@ def on_box_deleting(s: Session, project_id: str, box: Box) -> list[str]:
 
 
 def on_images_deleting(s: Session, project_id: str, image_ids: Iterable[str]) -> list[str]:
-    """Before `images.bulk_delete` removes boxes with one SQL DELETE."""
+    """Before `images.bulk_delete` removes boxes with one SQL DELETE.
+
+    Asset sightings on these images go first; an asset finding left with none is closed, never
+    deleted. Image findings on them are deleted, since their box is their geometry. Returns the
+    deleted findings' ids for the trash."""
+    image_ids = list(image_ids)
+    gone = list(s.execute(select(FindingSighting).where(FindingSighting.image_id.in_(image_ids))).scalars())
+    if gone:
+        sightings.remove(s, project_id=project_id, catalogue=None, rows=gone, reason=sightings.PHOTOS_GONE)
     ids = list(
         s.execute(
-            select(Finding.id).where(Finding.anchor_kind == "image", Finding.image_id.in_(list(image_ids)))
+            select(Finding.id).where(Finding.anchor_kind == "image", Finding.image_id.in_(image_ids))
         ).scalars()
     )
     for fid in ids:

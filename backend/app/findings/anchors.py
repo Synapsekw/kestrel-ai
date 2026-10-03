@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AssetModel, Box, Finding, GeoMap, Image, PointCloud
+from app.db.models import AssetModel, Box, Finding, FindingSighting, GeoMap, Image, PointCloud
 from app.errors import AppError, not_found
 from app.findings.numbers import format_number
 
@@ -121,6 +121,16 @@ def _image(s: Session, a: AnchorIn) -> dict:
             f"That annotation is already {format_number(taken.number)}.",
             409,
             {"finding_id": taken.id},
+        )
+    owner = s.execute(
+        select(FindingSighting.finding_id).where(FindingSighting.annotation_id == box.id)
+    ).first()
+    if owner is not None:
+        raise AppError(
+            "conflict",
+            "That annotation is a sighting of an asset finding.",
+            409,
+            {"finding_id": owner.finding_id},
         )
     return {
         **_EMPTY,
