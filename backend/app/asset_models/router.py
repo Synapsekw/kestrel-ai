@@ -213,6 +213,7 @@ def restore_asset_model_version(
             origin=None,
             note=f"Restored from version {version}",
             source_name=meta.get("source_name"),
+            provenance={k: meta[k] for k in ("frame_conversion", "source_sha256") if meta.get(k)},
         )
     else:
         row, job = service.add_version(

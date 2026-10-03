@@ -59,6 +59,7 @@ def start_import(
     origin: dict | None,
     note: str | None = None,
     source_name: str | None = None,
+    provenance: dict | None = None,
 ):
     """Insert a pending `imported` version, point the model at it, and queue the job."""
     with handle.session() as s:
@@ -73,7 +74,10 @@ def start_import(
             source_ids=[],
             note=note,
             part_count=0,
-            meta={"source_name": source_name or path.name, "frame_conversion": conversion},
+            meta={
+                "source_name": source_name or path.name,
+                "frame_conversion": (provenance or {}).get("frame_conversion") or conversion,
+            },
         )
         s.add(row)
         model.current_version = n
@@ -87,6 +91,8 @@ def start_import(
         "frame_conversion": conversion,
         "origin": origin,
     }
+    if provenance:
+        params["provenance"] = provenance  # recorded in meta only; the file is not converted again
     try:
         job = runner.submit(handle, GLB_IMPORT_JOB, params)
     except Exception:
@@ -137,6 +143,20 @@ def run_glb_import(ctx) -> dict:
         out.unlink(missing_ok=True)
         _mark_failed(ctx, "Cancelled.")
         raise
+    except JobFailure:
+        raise
+    except Exception as e:  # noqa: BLE001 - anything unexpected must not leave the version pending
+        tmp.unlink(missing_ok=True)
+        out.unlink(missing_ok=True)
+        raise _fail(ctx, f"The import failed: {type(e).__name__}.") from None
+
+
+def _scrub(text: str, *paths: Path) -> str:
+    """Drop local paths from an error message that is shown to the operator."""
+    for p in paths:
+        for form in (str(p), p.as_posix(), str(p.parent), p.parent.as_posix()):
+            text = text.replace(form, "<file>")
+    return text
 
 
 def _fail(ctx, message: str, *paths: Path) -> JobFailure:
@@ -181,7 +201,7 @@ def _run(ctx, out: Path, tmp: Path) -> dict:
     try:
         mesh, _face_node = meshes.load_glb_mesh(out)
     except Exception as e:  # noqa: BLE001 - trimesh raises many types; the message is the point
-        detail = (str(e).strip() or type(e).__name__)[:MAX_ERROR_DETAIL]
+        detail = _scrub(str(e).strip() or type(e).__name__, out, tmp, src)[:MAX_ERROR_DETAIL]
         raise _fail(ctx, f"The GLB could not be loaded: {detail}", out) from None
     ctx.check_cancelled()
     ctx.progress(0.85, "Measuring the height and silhouette")
@@ -200,11 +220,11 @@ def _run(ctx, out: Path, tmp: Path) -> dict:
     ]
     meta = {
         "source_name": (p.get("source_name") or src.name),
-        "source_sha256": src_sha,
+        "source_sha256": (p.get("provenance") or {}).get("source_sha256") or src_sha,
         "sha256": sha,
         "bytes": size,
         "node_count": len(info.doc.get("nodes", [])),
-        "frame_conversion": conversion,
+        "frame_conversion": (p.get("provenance") or {}).get("frame_conversion") or conversion,
         "parts": parts,
         "source_bounds_m": list(info.bounds) if info.bounds else None,
         "bounds_m": [[round(float(v), 4) for v in lo], [round(float(v), 4) for v in hi]],

@@ -331,3 +331,104 @@ class _SubmitRunner:
             s.flush()
             s.expunge(job)
         return job
+
+
+def _ctx_for(handle, job, check=None):
+    class Ctx:
+        project, params, job_id = handle, job.params, job.id
+
+        def publish(self, *_a):
+            pass
+
+        def progress(self, *_a):
+            pass
+
+        def check_cancelled(self):
+            if check:
+                check()
+
+    return Ctx()
+
+
+def _started(handle, tmp_path, **kw):
+    with handle.session() as s:
+        m = AssetModel(name="m", status="empty")
+        s.add(m)
+        s.flush()
+        mid = m.id
+    src = make_tower(tmp_path, photos=False).glb_path
+    _row, job = start_import(handle, _SubmitRunner(), mid, path=src, conversion="none", origin=None, **kw)
+    return mid, job
+
+
+def test_an_unexpected_error_fails_the_version_and_cleans_up(handle, tmp_path, monkeypatch):
+    from app.asset_review.glb_import import run_glb_import
+    from app.jobs.cancellation import JobFailure
+
+    mid, job = _started(handle, tmp_path)
+
+    def boom(_mesh):
+        raise RuntimeError(f"secret {tmp_path}")
+
+    monkeypatch.setattr(frame_io, "silhouette_from_mesh", boom)
+    with pytest.raises(JobFailure):
+        run_glb_import(_ctx_for(handle, job))
+    with handle.session() as s:
+        v = store.get_version(s, mid, 1)
+        assert v.glb_status == "failed" and v.meta["error"] == "The import failed: RuntimeError."
+    out = store.version_glb_path(handle, mid, 1)
+    assert not out.exists() and not out.with_name(out.name + ".tmp").exists()
+
+
+def test_cancel_mid_copy_fails_the_version_and_cleans_up(handle, tmp_path):
+    from app.asset_review.glb_import import run_glb_import
+    from app.jobs.cancellation import JobCancelled
+
+    mid, job = _started(handle, tmp_path)
+
+    def cancel():
+        raise JobCancelled()
+
+    with pytest.raises(JobCancelled):
+        run_glb_import(_ctx_for(handle, job, cancel))
+    with handle.session() as s:
+        v = store.get_version(s, mid, 1)
+        assert v.glb_status == "failed" and v.meta["error"] == "Cancelled."
+    out = store.version_glb_path(handle, mid, 1)
+    assert not out.exists() and not out.with_name(out.name + ".tmp").exists()
+
+
+def test_load_error_detail_never_names_a_local_path(handle, tmp_path, monkeypatch):
+    from app.asset_review.glb_import import run_glb_import
+    from app.jobs.cancellation import JobFailure
+
+    mid, job = _started(handle, tmp_path)
+    stored = store.version_glb_path(handle, mid, 1)
+
+    def bad(path):
+        raise ValueError(f"cannot read {path} in {stored.parent}")
+
+    monkeypatch.setattr(meshes, "load_glb_mesh", bad)
+    with pytest.raises(JobFailure):
+        run_glb_import(_ctx_for(handle, job))
+    with handle.session() as s:
+        err = store.get_version(s, mid, 1).meta["error"]
+    assert err.startswith("The GLB could not be loaded") and str(stored.parent) not in err
+
+
+def test_restore_keeps_the_original_conversion_and_source_hash(
+    client, base, model, project_id, wait_job, tmp_path
+):
+    tower = make_tower(tmp_path, photos=False)
+    kipic = trimesh.load(str(tower.glb_path), force="scene")
+    kipic.apply_transform(np.linalg.inv(frame_io.CONVERSIONS["x_east_minus_z_north"]))
+    src = tmp_path / "kipic.glb"
+    src.write_bytes(kipic.export(file_type="glb"))
+    body = _import(client, base, model, path=str(src), frame_conversion="x_east_minus_z_north")
+    wait_job(project_id, body["job"]["id"])
+    r = client.post(f"{base}/{model['id']}/versions/1/restore")
+    assert wait_job(project_id, r.json()["job"]["id"])["state"] == "succeeded"
+    v1 = client.get(f"{base}/{model['id']}/versions/1").json()["meta"]
+    v2 = client.get(f"{base}/{model['id']}/versions/2").json()["meta"]
+    assert v2["frame_conversion"] == "x_east_minus_z_north" and v2["source_sha256"] == v1["source_sha256"]
+    assert v2["sha256"] == v1["sha256"] and v2["bounds_m"] == v1["bounds_m"]
