@@ -201,8 +201,6 @@ class AssetModelRunStart(BaseModel):
 
     @model_validator(mode="after")
     def _plant_fields(self):
-        if self.mode in ("build", "refine") and (self.package_ids or self.limits is not None):
-            raise ValueError("package_ids and limits are for plant runs.")
         if len(set(self.package_ids)) != len(self.package_ids):
             raise ValueError("package_ids must be unique.")
         return self

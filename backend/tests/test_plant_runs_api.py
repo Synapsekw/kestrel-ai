@@ -93,7 +93,7 @@ def test_refusals(client, app, model_url, drawing_id):
             "limits": {"parallel": 2},
         },
     )
-    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+    assert r.status_code == 422 and r.json()["error"]["code"] == "plant_fields_not_allowed"
     r = start(client, model_url, drawing_id, mode="plant_package", package_ids=["x"])
     assert r.status_code == 422 and r.json()["error"]["code"] == "nothing_to_refine"
 
@@ -106,7 +106,7 @@ def test_plant_package_reruns_a_package(client, app, project_id, model_url, draw
     run_id = first.json()["run"]["id"]
     pid = client.get(f"{model_url}/runs/{run_id}/packages").json()["items"][0]["id"]
     bad = start(client, model_url, drawing_id, mode="plant_package", package_ids=["nope"])
-    assert bad.status_code == 422 and bad.json()["error"]["code"] == "validation_error"
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "unknown_package"
     app.state.jobs.agent_llm = FakePlantLlm(
         packages={
             "P1": [
@@ -161,7 +161,7 @@ def test_package_fields_on_m1_modes_and_duplicates_are_422(client, app, model_ur
                     **body,
                 },
             )
-            assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error", (
+            assert r.status_code == 422 and r.json()["error"]["code"] == "plant_fields_not_allowed", (
                 mode,
                 body,
                 r.text,

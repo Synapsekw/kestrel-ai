@@ -95,6 +95,8 @@ def start_asset_model_run(
                     422,
                     {"source": src.model_dump()},
                 )
+        if body.mode not in PLANT_MODES and (body.package_ids or body.limits is not None):
+            raise AppError("plant_fields_not_allowed", "package_ids and limits are for plant runs.", 422)
         if body.mode == "refine" and not model.current_version:
             raise AppError("nothing_to_refine", "This model has no version to refine yet.", 422)
         if body.mode == "plant" and not any(x.type == "drawing" for x in body.sources):
@@ -106,10 +108,10 @@ def start_asset_model_run(
                     "nothing_to_refine", "This model has no version to re-run packages on yet.", 422
                 )
             if not body.package_ids:
-                raise AppError("validation_error", "Choose the packages to re-run.", 422)
+                raise AppError("no_packages_chosen", "Choose the packages to re-run.", 422)
             old_packages = plant_packages.find_for_model(s, assetModelId, body.package_ids)
             if len(old_packages) != len(set(body.package_ids)):
-                raise AppError("validation_error", "A chosen package is not part of this model's runs.", 422)
+                raise AppError("unknown_package", "A chosen package is not part of this model's runs.", 422)
         model_name = body.model_name or request.app.state.provider_config.get(body.provider).model_name
         run = AssetModelRun(
             model_id=assetModelId,
