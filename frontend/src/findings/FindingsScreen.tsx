@@ -22,6 +22,9 @@ import { useFindingSummary } from "./useFindingSummary";
 import { useProjectTypes } from "./useProjectTypes";
 
 /** The project's one Findings list (F §8.6): filters in the URL, a virtualised table, the inspector route. */
+/** Task 6 replaces this with the real zone labels of the asset models. */
+const NO_ZONE_LABELS: ReadonlyMap<string, string> = new Map();
+
 export function FindingsScreen() {
   const { projectId = "", findingId } = useParams();
   const [search, setSearch] = useSearchParams();
@@ -110,7 +113,7 @@ export function FindingsScreen() {
   });
 
   const columns = useMemo(
-    () => findingColumns({ projectId, types, labels, nowMs }),
+    () => findingColumns({ projectId, types, labels, nowMs, asset: false, zoneLabels: NO_ZONE_LABELS }),
     [projectId, types, labels, nowMs],
   );
   const empty = list.status === "ready" && list.items.length === 0;
