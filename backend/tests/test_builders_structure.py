@@ -259,6 +259,24 @@ def test_lower_lod_never_adds_triangles(type_):
     assert k.triangles(build(it, BuildCtx(grid=None, lod=0.5))) <= k.triangles(build(it))
 
 
+def _low_heights():
+    for t in TYPES:
+        for h in (1.5, 3.0) if REGISTRY[t].default_height_m >= 1.5 else (0.6, 1.0):
+            yield t, h
+
+
+@pytest.mark.parametrize(("type_", "h"), list(_low_heights()))
+def test_low_builds_stay_above_the_base_and_reach_the_top(type_, h):
+    s = SPECS[type_]
+    nodes = REGISTRY[type_].fn(item(type_, s.footprint, s.base, s.base + h), CTX)
+    for n in nodes:
+        g = n.geometry
+        assert len((g.mesh if isinstance(g, Instanced) else g).faces) > 0, n.name
+    v = all_vertices(nodes)
+    assert v[:, 1].min() >= -1e-6, [(n, float(m.vertices[:, 1].min())) for n, m in expand(nodes).items()]
+    assert v[:, 1].max() >= h - 1e-6
+
+
 # ---------------------------------------------------------------- piled decks (task 3)
 def test_given_params_are_not_listed_as_defaults():
     defaults = build(case("trestle", params={"bay_spacing_m": 10.0}))[0].extras["defaults"]

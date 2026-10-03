@@ -108,8 +108,9 @@ def _piled_deck(item: Item, ctx: BuildCtx, p, base: float, h: float, *, rail: Li
     ring = k.outline(item, ctx)
     rs = k.runs(item, ctx)
     top = _deck_top(item, base, h)
-    deck_bot = top - p.deck_thickness_m
-    hs_d = 1.0 if p.headstock else 0.0
+    deck_bot = max(top - p.deck_thickness_m, 0.0)  # a low deck is solid down to the model base
+    headstock = p.headstock and deck_bot - 1.0 > FOOT  # no room under a low deck: piles meet the slab
+    hs_d = 1.0 if headstock else 0.0
     pile_top = max(deck_bot - hs_d, 0.1)
     nodes = [MeshNode("deck", "Concrete", k.slab(ring, deck_bot, top))]
     bents: list[np.ndarray] = []
@@ -120,7 +121,7 @@ def _piled_deck(item: Item, ctx: BuildCtx, p, base: float, h: float, *, rail: Li
     pile = k.pile_mesh(p.pile_d_m / 2, pile_top, ctx)
     xf = k.translate(np.c_[piles[:, 0], np.zeros(len(piles)), piles[:, 1]])
     nodes.append(MeshNode("piles", "Steel_Dark", Instanced(pile, xf)))
-    if p.headstock:
+    if headstock:
         heads = [
             k.member(
                 k.xz(row[0], pile_top + hs_d / 2), k.xz(row[-1], pile_top + hs_d / 2), p.pile_d_m + 0.3, hs_d
@@ -130,12 +131,13 @@ def _piled_deck(item: Item, ctx: BuildCtx, p, base: float, h: float, *, rail: Li
         ]
         if heads:
             nodes.append(MeshNode("headstocks", "Concrete_Dark", k.merge(heads)))
-    if p.bracing:
+    lo_y, hi_y = pile_top * 0.35, pile_top - 0.3
+    if p.bracing and hi_y > lo_y + FOOT:  # short piles: no room for a brace
         braces = []
         for row in bents:
             for i, (a, b) in enumerate(zip(row[:-1], row[1:], strict=True)):
                 lo, hi = (a, b) if i % 2 == 0 else (b, a)
-                braces.append(k.member(k.xz(lo, pile_top * 0.35), k.xz(hi, pile_top - 0.3), 0.3))
+                braces.append(k.member(k.xz(lo, lo_y), k.xz(hi, hi_y), 0.3))
         if braces:
             nodes.append(MeshNode("bracing", "Steel_Dark", k.merge(braces)))
     if p.handrail:
@@ -195,6 +197,7 @@ def build_trestle(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     if p.rack_side != "none" and p.rack_pipes > 0:
         sign = 1.0 if p.rack_side == "right" else -1.0
         sleepers, lines = [], []
+        sl_len = min(p.rack_width_m, *(run.width for run in rs))  # the clamped band, never past the deck
         for run in rs:
             band = min(p.rack_width_m, run.width)
             s0 = sign * (run.width / 2 - band / 2 - 0.2)
@@ -203,7 +206,7 @@ def build_trestle(item: Item, ctx: BuildCtx) -> list[MeshNode]:
             for d, ins, _y, s in _fill_lines(band - 0.6, [0.0], [], True)[: p.rack_pipes]:
                 y = top + 0.5 + d / 2
                 lines.append((d, ins, k.xz(run.at(0, s0 + s), y), k.xz(run.at(run.length, s0 + s), y)))
-        sl = k.block((0.5, 0.5, max(p.rack_width_m - 0.4, 0.5)))
+        sl = k.block((0.5, 0.5, max(sl_len - 0.4, 0.5)))
         sl.apply_translation((0, 0.25, 0))
         pts = np.array([k.xz(c, top) for c, _ in sleepers])
         xf = np.concatenate([k.posed(pt[None], u) for pt, (_, u) in zip(pts, sleepers, strict=True)])
@@ -264,7 +267,7 @@ def build_dolphin(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     h = top_el - base
     ring = k.outline(item, ctx)
     run = k.runs(item, ctx)[0]
-    cap_bot = max(h - p.cap_thickness_m, 0.1)
+    cap_bot = max(h - p.cap_thickness_m, min(0.1, h / 2))
     nodes = [MeshNode("cap", "Concrete", k.slab(ring, cap_bot, h))]
     ins = min(p.pile_inset_m, run.length / 3, run.width / 3)
     ts = (
@@ -294,7 +297,7 @@ def build_dolphin(item: Item, ctx: BuildCtx) -> list[MeshNode]:
             "back": (-0.7, 0.0, run.v, 0.7 * run.width),
         }[p.fender_side]
         t, s, u, span = side
-        hgt = p.cap_thickness_m + 2.5
+        hgt = min(p.cap_thickness_m + 2.5, h + 0.5)  # a low cap: the panel stops at the model base
         c = k.xz(run.at(t, s), h + 0.5 - hgt / 2)
         nodes.append(MeshNode("fender", "Steel_Dark", k.placed_block(c, (span, hgt, 0.6), u)))
     if p.bollards:
@@ -330,7 +333,7 @@ def _tiers(item: Item, base: float, h: float, n: int, gap: float) -> list[float]
 
 def _rack(item, ctx, p, base, h, bent_spacing, bracing, knee=False):
     tiers = _tiers(item, base, h, p.n_tiers, p.tier_gap_m)
-    c, bd = p.column_section_m, p.beam_depth_m
+    c, bd = p.column_section_m, min(p.beam_depth_m, tiers[0])  # a low tier: the beam stops at the base
     cols, cross, longs, braces, lines = [], [], [], [], []
     for run in k.runs(item, ctx):
         ss = (
@@ -366,11 +369,13 @@ def _rack(item, ctx, p, base, h, bent_spacing, bracing, knee=False):
             if bracing == "all"
             else (sorted({bays[0], bays[-1]}) if bracing == "end_bays" and bays else [])
         )
+        if tiers[0] - bd <= 2 * FOOT:  # a low tier: no room for a brace
+            pick = []
         for t0, t1 in pick:
             for s in ss:
                 braces.append(k.member(k.xz(run.at(t0, s), FOOT), k.xz(run.at(t1, s), tiers[0] - bd), 0.15))
                 braces.append(k.member(k.xz(run.at(t1, s), FOOT), k.xz(run.at(t0, s), tiers[0] - bd), 0.15))
-        if knee:
+        if knee and tiers[-1] - 1.2 > FOOT:  # knee braces start 1.2 m under the top tier
             for t, dt in ((ts[0], 1.0), (ts[-1], -1.0)):
                 for s in ss:
                     braces.append(
@@ -695,16 +700,17 @@ def build_platform(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         decks = sorted(set(decks) | {h})
     inner = np.asarray(Polygon(ring).buffer(-p.column_section_m / 2, join_style=2).exterior.coords)[:-1]
     grat, beams, rails = [], [], []
+    bd = max(min(p.beam_depth_m, decks[0] - p.grating_m), 0.01)  # a low deck: the beam stops at the base
     for y in decks:
         grat.append(k.slab(ring, y - p.grating_m, y))
         ring_c = np.vstack([inner, inner[:1]])
         for a, b in zip(ring_c[:-1], ring_c[1:], strict=True):
             beams.append(
                 k.member(
-                    k.xz(a, y - p.grating_m - p.beam_depth_m / 2),
-                    k.xz(b, y - p.grating_m - p.beam_depth_m / 2),
+                    k.xz(a, y - p.grating_m - bd / 2),
+                    k.xz(b, y - p.grating_m - bd / 2),
                     0.2,
-                    p.beam_depth_m,
+                    bd,
                 )
             )
         if p.handrail:
@@ -732,11 +738,11 @@ def build_platform(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         ),
         MeshNode("beams", "Steel_Structure", k.merge(beams)),
     ]
-    if p.bracing:
+    if p.bracing and decks[0] - p.grating_m - bd > 2 * FOOT:  # a low deck: no bracing
         br = []
         for row in {0: rows[0], 1: rows[-1]}.values():
             for a, b in zip(row[:-1], row[1:], strict=True):
-                br.append(k.member(k.xz(a, FOOT), k.xz(b, decks[0] - p.grating_m - p.beam_depth_m), 0.12))
+                br.append(k.member(k.xz(a, FOOT), k.xz(b, decks[0] - p.grating_m - bd), 0.12))
         if br:
             nodes.append(MeshNode("bracing", "Steel_Structure", k.merge(br)))
     if p.stair and h >= 1.0:
