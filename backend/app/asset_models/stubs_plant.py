@@ -21,11 +21,7 @@ Stub = tuple[str, str, str]  # (method, path under /projects/{projectId}, operat
 M = "/asset-models/{assetModelId}"
 
 # A1: the register (spec §7, §9).
-A1_STUBS: list[Stub] = [
-    ("GET", M + "/versions/{version}/items", "listAssetModelItems"),
-    ("GET", M + "/versions/{version}/items/{itemId}", "getAssetModelItem"),
-    ("GET", M + "/versions/{version}/csv", "getAssetModelCsv"),
-]
+A1_STUBS: list[Stub] = []
 
 # R1: plant run packages (spec §8.2).
 R1_STUBS: list[Stub] = [

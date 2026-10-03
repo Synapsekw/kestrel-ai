@@ -6199,7 +6199,7 @@ paths:
         - name: q
           in: query
           required: false
-          description: matches the tag or the name, case-insensitive
+          description: matches the tag, the name or the item id (node), case-insensitive
           schema: { type: string, maxLength: 120 }
         - name: type
           in: query
