@@ -1,5 +1,6 @@
 import type { AssetDrawing } from "@/api/reports";
 import { PRINT, mm } from "../../printTheme";
+import { usePreviewEnv } from "../PreviewContext";
 
 /**
  * Spec 2026-10-02-asset-findings §10: the findings map and the height locator, drawn from the
@@ -17,6 +18,7 @@ export function AssetDrawingSvg({
   const d = drawing;
   const p = d.plot;
   const fs = d.font_size;
+  const headFill = usePreviewEnv().brand?.headFill ?? PRINT.head; // the PDF's branded band fill
   return (
     <svg
       role="img"
@@ -32,7 +34,7 @@ export function AssetDrawingSvg({
             y={b.y0}
             width={p.x1 - p.x0}
             height={b.y1 - b.y0}
-            fill={b.shaded ? PRINT.head : PRINT.paper}
+            fill={b.shaded ? headFill : PRINT.paper}
           />
           <text x={p.x1 + fs * 0.8} y={(b.y0 + b.y1) / 2 + fs * 0.35} fontSize={fs * 0.9} fill={PRINT.ink}>
             {b.label}

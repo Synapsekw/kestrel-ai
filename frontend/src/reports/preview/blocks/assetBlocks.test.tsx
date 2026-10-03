@@ -76,7 +76,7 @@ describe("brand head fill", () => {
     expect(brand.headFill).toBe("#FFE5E5");
   });
 
-  it("fills the table head and the finding band", () => {
+  it("fills the table head, the finding band and the map's shaded bands", () => {
     const table = FIXTURE_BLOCKS.findings_table.find((b) => b.kind === "table") as BlockOf<"table">;
     const { container } = render(
       <PreviewEnvContext.Provider
@@ -90,8 +90,11 @@ describe("brand head fill", () => {
       >
         <TableBlock block={table} />
         <FindingBlock block={ASSET_FINDING} />
+        <AssetMapBlock block={MAP_BLOCK} />
       </PreviewEnvContext.Provider>,
     );
+    const shaded = container.querySelector("[data-band] rect") as SVGRectElement;
+    expect(shaded.getAttribute("fill")).toBe("#FFE5E5"); // the map's shaded band, as the PDF draws it
     expect((container.querySelector("thead tr") as HTMLElement).style.background).toBe("rgb(255, 229, 229)");
     expect((container.querySelector("article header") as HTMLElement).style.background).toBe(
       "rgb(255, 229, 229)",
