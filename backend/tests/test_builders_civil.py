@@ -3,9 +3,11 @@ channel, basin, wall, fence, revetment, and the B3 footprint helpers in `builder
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
-from plant_b3_helpers import CTX, make_item
+from plant_b3_helpers import CTX, cowork, cowork_item, make_item
 
 from app.asset_models.builders.palette import PALETTE
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
@@ -104,3 +106,12 @@ def test_f0_interfaces_b3_relies_on():
     base, top, defaulted = CTX.height(make_item("wall", RECT, top_el=None), 3.0)
     assert (base, top, defaulted) == (100.0, 103.0, True)
     assert B3_MATERIALS <= set(PALETTE)
+
+
+def test_cowork_fixture_footprints_are_valid():
+    nodes = cowork()["nodes"]
+    assert len(nodes) == 266
+    for node in nodes:
+        poly = footprint_polygon(cowork_item(node).footprint)
+        assert np.isfinite(np.asarray(poly)).all()
+        assert not math.isnan(node["base_el"])
