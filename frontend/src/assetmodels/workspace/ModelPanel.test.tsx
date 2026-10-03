@@ -32,6 +32,11 @@ function show(onDeleted = vi.fn(), routes: Parameters<typeof fakeClient>[0] = []
         overlay={null}
         overlayAvailable={false}
         onOverlay={vi.fn()}
+        view={{ ghost: false, rotate: false, ground: false }}
+        onViewSwitch={vi.fn()}
+        groundAvailable={false}
+        onImportGlb={vi.fn()}
+        onImportReview={vi.fn()}
       />
       <LocationProbe />
     </>,
@@ -74,6 +79,29 @@ describe("ModelPanel delete", () => {
     await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     expect(await screen.findByText("A run is still going.")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Are you sure?" })).toBeInTheDocument();
+    expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it("says why when findings still sit on the model", async () => {
+    const onDeleted = vi.fn();
+    show(onDeleted, [
+      {
+        method: "DELETE",
+        path: /\/asset-models\/m2$/,
+        status: 409,
+        body: {
+          error: {
+            code: "has_findings",
+            message: "3 findings are placed on this model. Delete them or move them to another model first.",
+            details: { count: 3 },
+          },
+        },
+      },
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: /asset model: feed tank/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete Stack" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
+    expect(await screen.findByText(/3 findings are placed on this model/)).toBeInTheDocument();
     expect(onDeleted).not.toHaveBeenCalled();
   });
 });

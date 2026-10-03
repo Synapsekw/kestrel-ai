@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- the palette, its cut slider and the key lookup they share */
 import { useRef, useState } from "react";
 import type { ModelView } from "@/assetmodels/viewer/engine";
-import { FloatingToolbar, GLOBAL_KEYS, Menu, Slider, ToolButton, ToolSeparator, WORKSPACE_KEYS } from "@/ui";
+import { GLOBAL_KEYS, Menu, Slider, ToolButton, ToolSeparator, WORKSPACE_KEYS } from "@/ui";
 
 /** The chord the keymap gives an action in the models workspace (F, fit, is a global key). */
 export function modelKey(action: string): string {
@@ -24,11 +24,11 @@ export interface ViewToolState {
 }
 
 /**
- * The view palette (left 14, top 14, 38 px buttons, like the clouds workspace): orbit is the only
- * navigation tool, then the three view aids, then fit and the view presets. Keys are bound once by
- * the workspace, so the toolbar's own binding is off.
+ * The view tools, the navigation of the asset workspace rail (the rail's toolbar holds them): orbit
+ * is the only navigation tool, then the three view aids, then fit and the view presets. Keys are
+ * bound once by the workspace.
  */
-export function ViewTools({
+export function ViewToolButtons({
   state,
   disabled,
   onToggle,
@@ -42,7 +42,7 @@ export function ViewTools({
   const [viewsOpen, setViewsOpen] = useState(false);
   const viewsAnchor = useRef<HTMLSpanElement>(null);
   return (
-    <FloatingToolbar label="Model view tools" shortcuts={false} className="absolute left-3.5 top-3.5 z-10">
+    <>
       <ToolButton icon="orbit" label="Orbit" active disabled={disabled} onClick={() => {}} />
       <ToolSeparator />
       <ToolButton
@@ -94,7 +94,7 @@ export function ViewTools({
           onSelect: () => onView(v.view),
         }))}
       />
-    </FloatingToolbar>
+    </>
   );
 }
 

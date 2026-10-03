@@ -11,7 +11,8 @@ import { useJobToasts, useToastStore } from "@/ui";
 vi.mock("@/assetmodels/viewer/ModelViewer", async () => ({
   ModelViewer: (await import("@/test/fakeModelViewer")).FakeModelViewer,
 }));
-import { callsTo, emitParts, emitState, fake, resetFake } from "@/test/fakeModelViewer";
+import { callsTo, emitParts, emitPick, emitState, fake, resetFake } from "@/test/fakeModelViewer";
+import { ASSET_FINDINGS, MODEL_REVIEWED, PLACEMENTS } from "@/test/assetFindingFixtures";
 import { RUN_POLL_MAX_FAILURES, RUN_POLL_MS } from "@/assetmodels/run/useLiveRun";
 import { AssetModelWorkspace } from "./AssetModelWorkspace";
 
@@ -25,6 +26,8 @@ const routes = (extra: unknown[] = []) => [
   { method: "GET", path: /\/versions\/1$/, body: { ...VERSION_1, spec: SPEC_V1, warnings: [] } },
   { method: "GET", path: /\/asset-models\/m1\/runs$/, body: { items: [] } },
 ];
+
+afterEach(() => localStorage.clear());
 
 const open = (extra: unknown[] = []) => {
   const client = fakeClient(routes(extra) as never);
@@ -439,6 +442,147 @@ describe("AssetModelWorkspace", () => {
     expect(callsTo("setLevels")).toEqual([[false]]);
     expect(callsTo("setHeadOff")).toEqual([[false]]);
     expect(callsTo("select")).toEqual([["N7"]]);
+  });
+  describe("findings on the asset", () => {
+    const review = [
+      { method: "GET", path: /\/asset-models$/, body: { items: [MODEL_REVIEWED] } },
+      { method: "GET", path: /\/asset-models\/m1$/, body: MODEL_REVIEWED },
+      { method: "GET", path: /\/findings$/, body: { items: ASSET_FINDINGS, next_cursor: null } },
+      { method: "GET", path: /\/placements$/, body: PLACEMENTS },
+      { method: "GET", path: /\/poses$/, body: { items: [], next: null } },
+    ];
+    const POSE = {
+      image_id: "img-1",
+      position: [1, 2, 3],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      hfov_deg: 70,
+      vfov_deg: 52,
+      source: "exif_gimbal",
+      accuracy_m: 3,
+      sequence: "Flight 1",
+      outcome: "finding",
+      updated_at: "2026-10-03T00:00:00Z",
+    };
+
+    it("puts the view tools and the Model, Findings and Photos topics on one rail", async () => {
+      open(review);
+      const rail = await screen.findByRole("toolbar", { name: /model view tools/i });
+      for (const name of [/^cut/i, /^levels/i, /^model/i, /^findings/i, /^photos/i]) {
+        expect(within(rail).getByRole("button", { name })).toBeInTheDocument();
+      }
+      expect(await screen.findByRole("switch", { name: /see through/i })).toBeInTheDocument();
+    });
+
+    it("sends the placements to the view and opens the Findings topic on a picked finding", async () => {
+      open(review);
+      await screen.findByTestId("model-workspace");
+      await waitFor(() => expect(callsTo("setPlacements").at(-1)?.[0]).toHaveLength(2));
+      act(() => emitPick({ kind: "finding", id: "f1" }));
+      const panel = await screen.findByTestId("rail-panel");
+      expect(panel).toHaveAttribute("data-topic", "findings");
+      expect(within(panel).getByRole("option", { name: /F-0042/ })).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("the view switches reach the engine", async () => {
+      open(review);
+      await screen.findByTestId("model-workspace");
+      fireEvent.click(await screen.findByRole("switch", { name: /see through/i }));
+      fireEvent.click(screen.getByRole("switch", { name: /turn slowly/i }));
+      fireEvent.click(screen.getByRole("switch", { name: /street map/i }));
+      expect(callsTo("setGhost").at(-1)).toEqual([true]);
+      expect(callsTo("setAutoRotate").at(-1)?.[0]).toBe(true);
+      expect((callsTo("setGround").at(-1)?.[0] as unknown[]).length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("switch", { name: /street map/i }));
+      expect(callsTo("setGround").at(-1)).toEqual([null]);
+    });
+
+    it("the street map is off without the asset's location", async () => {
+      open([
+        { method: "GET", path: /\/asset-models$/, body: { items: [{ ...MODEL_REVIEWED, frame: null }] } },
+        ...review,
+      ]);
+      expect(await screen.findByRole("switch", { name: /street map/i })).toBeDisabled();
+      expect(screen.getByText(/the street map needs the asset's location/i)).toBeInTheDocument();
+    });
+
+    // R-P6: the viewer replays its own wanted state on each engine load, so the workspace sends the
+    // layers and the view switches once per new viewer element, never on a plain engine reload.
+    it("a remounted view gets the layers and the view switches once; an engine reload gets neither", async () => {
+      const failedV1 = { ...VERSION_1, glb_status: "failed" };
+      open([
+        ...review,
+        { method: "GET", path: /\/asset-models\/m1\/versions$/, body: { items: [VERSION_2, failedV1] } },
+        { method: "GET", path: /\/versions\/1$/, body: { ...failedV1, spec: SPEC_V1, warnings: [] } },
+      ]);
+      await waitFor(() => expect(callsTo("setPlacements").at(-1)?.[0]).toHaveLength(2));
+      fireEvent.click(await screen.findByRole("switch", { name: /see through/i }));
+      resetCalls();
+      act(() => emitState("running"));
+      expect(callsTo("setPlacements")).toEqual([]);
+      expect(callsTo("setCameras")).toEqual([]);
+      expect(callsTo("setGhost")).toEqual([]);
+
+      fireEvent.click(screen.getByRole("tab", { name: /versions/i }));
+      const list = await screen.findByRole("list", { name: "Versions" });
+      fireEvent.click(within(list).getByRole("button", { name: /^v1/i }));
+      await waitFor(() => expect(screen.queryByTestId("fake-model-viewer")).not.toBeInTheDocument());
+      resetCalls();
+      fireEvent.click(within(list).getByRole("button", { name: /^v2/i }));
+      await screen.findByTestId("fake-model-viewer");
+      await waitFor(() => expect(callsTo("setPlacements")).toHaveLength(1));
+      expect(callsTo("setPlacements")[0]?.[0]).toHaveLength(2);
+      expect(callsTo("setCameras")).toHaveLength(1);
+      expect(callsTo("setGhost")).toEqual([[true]]);
+    });
+
+    // R-P7: focusing a finding or viewing from a photo stops the slow turn, in the engine and the switch.
+    it("Focus and View from here stop the slow turn", async () => {
+      open([{ method: "GET", path: /\/poses$/, body: { items: [POSE], next: null } }, ...review]);
+      await screen.findByTestId("model-workspace");
+      fireEvent.click(await screen.findByRole("switch", { name: /turn slowly/i }));
+      await waitFor(() => expect(callsTo("setPlacements").at(-1)?.[0]).toHaveLength(2));
+      act(() => emitPick({ kind: "finding", id: "f1" }));
+      const panel = await screen.findByTestId("rail-panel");
+      fireEvent.click(within(panel).getByRole("button", { name: /^focus$/i }));
+      expect(callsTo("focusFinding").at(-1)?.[0]).toBe("f1");
+      expect(callsTo("setAutoRotate").at(-1)).toEqual([false]);
+      const rail = screen.getByRole("toolbar", { name: /model view tools/i });
+      fireEvent.click(within(rail).getByRole("button", { name: /^model/i }));
+      const turn = await screen.findByRole("switch", { name: /turn slowly/i });
+      expect(turn).not.toBeChecked();
+
+      fireEvent.click(turn);
+      await waitFor(() => expect(callsTo("setCameras").at(-1)?.[0]).toHaveLength(1));
+      act(() => emitPick({ kind: "camera", id: "img-1" }));
+      fireEvent.click(await screen.findByRole("button", { name: /view from here/i }));
+      expect(callsTo("viewFromPose").at(-1)?.[0]).toMatchObject({ imageId: "img-1" });
+      expect(callsTo("setAutoRotate").at(-1)).toEqual([false]);
+      fireEvent.click(within(rail).getByRole("button", { name: /^model/i }));
+      expect(await screen.findByRole("switch", { name: /turn slowly/i })).not.toBeChecked();
+    });
+
+    it("imports a GLB from the model picker", async () => {
+      const client = open([
+        ...review,
+        {
+          method: "POST",
+          path: /\/versions\/import-glb$/,
+          status: 202,
+          body: {
+            version: { ...VERSION_2, version: 3, kind: "imported", glb_status: "pending" },
+            job: { id: "jg", type: "asset_glb_import", state: "queued" },
+          },
+        },
+      ]);
+      fireEvent.click(await screen.findByRole("button", { name: /asset model: /i }));
+      fireEvent.click(await screen.findByRole("button", { name: /import a glb/i }));
+      fireEvent.change(await screen.findByLabelText(/glb file/i), { target: { value: "D:\\t.glb" } });
+      fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+      await waitFor(() =>
+        expect(client.requests.some((r) => r.url.endsWith("/versions/import-glb"))).toBe(true),
+      );
+    });
   });
   describe("runs", () => {
     const LIVE = {

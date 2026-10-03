@@ -333,3 +333,23 @@ export function fetchPatchBuffers(
     return { mesh, texture, labels };
   };
 }
+
+export type UnmatchedReason = "not_found" | "ambiguous" | "duplicate" | "size_mismatch";
+export type ReviewImportRequest = S["ReviewImportRequest"];
+/** C0's preview plus the fields J5 adds (J5 Task 1, note N5); the schema leaves extra properties open. */
+export type ReviewImportPreview = S["ReviewImportPreview"] & {
+  dry_run?: boolean;
+  matched_by?: Partial<Record<"path" | "suffix" | "name" | "time_size", number>>;
+  unmatched_reasons?: { kit_id: string; source_name: string; reason: UnmatchedReason }[];
+  sightings?: number;
+  model?: { ready_version: number | null; existing_sightings: number } | null;
+};
+
+export async function startReviewImport(
+  api: ApiClient,
+  projectId: string,
+  body: ReviewImportRequest,
+): Promise<Job> {
+  const r = await unwrap(api.POST(`${P}/review-imports`, { params: { path: { projectId } }, body }));
+  return r.job;
+}

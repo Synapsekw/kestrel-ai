@@ -9,6 +9,9 @@ export const CloudsScreen = lazy(() =>
 export const AssetModelsScreen = lazy(() =>
   import("@/screens/AssetModelsScreen").then((m) => ({ default: m.AssetModelsScreen })),
 );
+export const AssetInspectScreen = lazy(() =>
+  import("@/screens/AssetInspectScreen").then((m) => ({ default: m.AssetInspectScreen })),
+);
 // The Site 3D view (spec 2026-10-03 §11): three, GLTFLoader and the drape; lazy like the other 3D screens.
 export const SiteScreen = lazy(() => import("@/site3d/SiteScreen").then((m) => ({ default: m.SiteScreen })));
 export const VolumesScreen = lazy(() =>

@@ -4,19 +4,7 @@ import type { AssetModel } from "@contract/client";
 import { deleteAssetModel } from "@/api/assetModels";
 import { useApi } from "@/api/client";
 import { ConfirmDeleteDialog } from "@/mapws/layers/ConfirmDeleteDialog";
-import {
-  Button,
-  GlassPanel,
-  Icon,
-  IconButton,
-  Pill,
-  Popover,
-  Switch,
-  cx,
-  focusRing,
-  stagger,
-  transition,
-} from "@/ui";
+import { Button, Icon, IconButton, Pill, Popover, Switch, cx, focusRing, transition } from "@/ui";
 
 const TONE = { empty: "neutral", building: "accent", ready: "ok" } as const;
 
@@ -33,6 +21,8 @@ function ModelPicker({
   models,
   onNew,
   onDetails,
+  onImportGlb,
+  onImportReview,
   onDeleted,
 }: {
   projectId: string;
@@ -40,6 +30,8 @@ function ModelPicker({
   models: readonly AssetModel[];
   onNew(): void;
   onDetails(): void;
+  onImportGlb(): void;
+  onImportReview(): void;
   onDeleted(model: AssetModel): void;
 }) {
   const api = useApi();
@@ -139,6 +131,28 @@ function ModelPicker({
           <Button
             size="sm"
             variant="ghost"
+            icon="import"
+            onClick={() => {
+              setOpen(false);
+              onImportGlb();
+            }}
+          >
+            Import a GLB…
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="findings"
+            onClick={() => {
+              setOpen(false);
+              onImportReview();
+            }}
+          >
+            Import inspection review…
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             icon="settings"
             onClick={() => {
               setOpen(false);
@@ -165,8 +179,8 @@ function ModelPicker({
 }
 
 /**
- * The model panel (left 72, top 14, width 282, like the cloud panel): the picker, a switch per part
- * group present, and the scan overlay, which needs a run of this version that compared it with a cloud.
+ * The Model topic's body on the rail: the picker, a switch per part group present, the scan overlay
+ * (it needs a run of this version that compared it with a cloud) and the view switches.
  */
 export function ModelPanel({
   projectId,
@@ -181,6 +195,11 @@ export function ModelPanel({
   overlay,
   overlayAvailable,
   onOverlay,
+  view,
+  onViewSwitch,
+  groundAvailable,
+  onImportGlb,
+  onImportReview,
   children,
 }: {
   projectId: string;
@@ -197,17 +216,19 @@ export function ModelPanel({
   overlay: boolean | null;
   overlayAvailable: boolean;
   onOverlay(on: boolean): void;
+  view: { ghost: boolean; rotate: boolean; ground: boolean };
+  onViewSwitch(k: "ghost" | "rotate" | "ground", on: boolean): void;
+  /** False when the asset has no geographic origin, so there is no street map to show. */
+  groundAvailable: boolean;
+  onImportGlb(): void;
+  onImportReview(): void;
   children?: ReactNode;
 }) {
   return (
-    <GlassPanel
-      variant="float"
-      radius="panel"
-      as="section"
-      aria-label="Asset model"
+    <div
       data-testid="model-panel"
-      style={stagger(1)}
-      className="stagger absolute left-[72px] top-3.5 z-10 flex max-h-[calc(100%-28px)] w-[282px] flex-col gap-[11px] overflow-y-auto p-3 animate-reveal reduce-motion:animate-none"
+      aria-label="Asset model"
+      className="flex min-h-0 flex-1 flex-col gap-[11px] overflow-y-auto px-1"
     >
       <ModelPicker
         projectId={projectId}
@@ -215,6 +236,8 @@ export function ModelPanel({
         models={models}
         onNew={onNew}
         onDetails={onDetails}
+        onImportGlb={onImportGlb}
+        onImportReview={onImportReview}
         onDeleted={onDeleted}
       />
       {groups.length > 0 && (
@@ -249,7 +272,23 @@ export function ModelPanel({
           )}
         </div>
       )}
+      <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
+        <span className="text-xs text-muted">View</span>
+        <Switch label="See through" checked={view.ghost} onChange={(on) => onViewSwitch("ghost", on)} />
+        <Switch label="Turn slowly" checked={view.rotate} onChange={(on) => onViewSwitch("rotate", on)} />
+        <Switch
+          label="Street map"
+          checked={view.ground && groundAvailable}
+          disabled={!groundAvailable}
+          onChange={(on) => onViewSwitch("ground", on)}
+        />
+        {!groundAvailable && (
+          <p className="text-xs leading-relaxed text-muted">
+            The street map needs the asset&apos;s location.
+          </p>
+        )}
+      </div>
       {children}
-    </GlassPanel>
+    </div>
   );
 }

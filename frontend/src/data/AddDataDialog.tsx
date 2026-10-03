@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { Project } from "@contract/client";
 import type { AddDataTile } from "@/app/addDataStore";
+import { ReviewImportDialog } from "@/assetmodels/review/ReviewImportDialog";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
 import { bumpWorkspaceData } from "@/mapws/data/bump";
@@ -17,9 +18,10 @@ const TILE_NAME: Record<AddDataTile, string> = {
   elevation: "Elevation",
   point_cloud: "Point cloud",
   drawing: "Drawing",
+  review: "Inspection review",
 };
 
-/** F §6.4: five tiles, each opening today's importer; closes once the import job is queued. */
+/** F §6.4: six tiles, each opening today's importer; closes once the import job is queued. */
 export function AddDataDialog({
   project,
   initialTile = null,
@@ -51,6 +53,8 @@ export function AddDataDialog({
     return <ImportCloudDialog projectId={pid} onClose={onClose} onStarted={() => started("point_cloud")} />;
   if (tile === "drawing")
     return <ImportDrawingDialog projectId={pid} onClose={onClose} onStarted={() => started("drawing")} />;
+  if (tile === "review")
+    return <ReviewImportDialog projectId={pid} onClose={onClose} onStarted={() => started("review")} />;
 
   return (
     <Dialog
