@@ -22,6 +22,7 @@ from operator import attrgetter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.base import utcnow
 from app.db.models import AssetModel, Box, Finding, FindingSighting
 from app.errors import AppError, not_found
 from app.findings import activity, events, service, sightings
@@ -261,16 +262,20 @@ def apply_groups(s: Session, handle, asset_model_id: str, groups: Sequence[Seque
     result = GroupResult()
     touched: set[str] = set()
     merges: list[tuple[Finding, Finding]] = []
+    kept: list[Finding] = []
     fresh: list[tuple[list[str], set[str]]] = []
     for gi, g in enumerate(live):
         candidates = sorted(homes.get(gi, []), key=attrgetter("number"))
         if not candidates:
             fresh.append((g, {rows[sid].finding_id for sid in g if rows[sid].finding_id}))
             continue
-        survivor, *losers = candidates
+        # The lowest number that is not closed survives; a closed one only when all are (ruling R15).
+        survivor = next((f for f in candidates if f.status != "closed"), candidates[0])
+        losers = [f for f in candidates if f is not survivor]
         result.kept += 1
+        kept.append(survivor)
         if not losers and current[survivor.id] == set(g):
-            continue  # the same sightings: nothing is written, not even updated_at
+            continue  # the same sightings: refreshed below, written only when placement moved it
         for sid in g:
             if rows[sid].finding_id:
                 touched.add(rows[sid].finding_id)
@@ -309,8 +314,14 @@ def apply_groups(s: Session, handle, asset_model_id: str, groups: Sequence[Seque
         else:
             result.created += 1
     s.flush()
-    for fid in sorted(touched):
-        sightings.refresh(s, findings[fid])
+    # A survivor whose sightings did not change is still refreshed: `asset_place` only writes
+    # sighting columns and leaves the finding to grouping (ruling R14, plan note N3).
+    moved = set(touched)
+    for fid in sorted(moved | {f.id for f in kept}):
+        if sightings.refresh(s, findings[fid]):
+            touched.add(fid)
+        elif fid in moved:
+            findings[fid].updated_at = utcnow()  # its sightings changed, if not its columns
     for loser, survivor in merges:
         _close_merged(
             s,

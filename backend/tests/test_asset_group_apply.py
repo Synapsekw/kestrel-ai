@@ -14,8 +14,8 @@ from asset_findings_helpers import (
 from sqlalchemy import select
 
 from app.asset_review import group
-from app.db.models import Activity, AssetModel, FindingAttachment, FindingComment
-from app.findings import attachments, comments, service
+from app.db.models import Activity, AssetModel, Box, FindingAttachment, FindingComment, FindingSighting
+from app.findings import annotations, attachments, comments, service
 
 
 def _regroup(handle, model_id: str) -> group.GroupResult:
@@ -29,7 +29,9 @@ def _regroup(handle, model_id: str) -> group.GroupResult:
 def test_photo_unit_two_photos_close_together_stay_two_findings(handle, crack):
     mid = make_model(handle, profile_id="stack")
     img = seed_images(handle, 2)
-    a = seed_sighting(handle, model_id=mid, image_id=img[0], type_id=crack["id"], center=(0.0, 10.0, 0.0))
+    a = seed_sighting(
+        handle, model_id=mid, image_id=img[0], type_id=crack["id"], center=(0.0, 10.0, 0.0), tag="D1"
+    )
     b = seed_sighting(
         handle, model_id=mid, image_id=img[1], type_id=crack["id"], center=(0.1, 10.0, 0.0), tag="D1"
     )
@@ -190,3 +192,88 @@ def test_a_sighting_deleted_since_grouping_is_skipped(handle, crack):
     with handle.session() as s:
         result = group.apply_groups(s, handle, mid, [["missing-id"], [a]])
     assert _tally(result) == (1, 0, 0, 0)
+
+
+def test_regroup_refreshes_a_kept_finding_whose_sighting_was_placed_again(handle, crack):
+    """Ruling R14: `asset_place` only writes sighting columns and relies on grouping to refresh the
+    finding, so a kept finding with unchanged sightings is still refreshed."""
+    mid = make_model(handle, review=False)
+    [photo] = seed_images(handle, 1)
+    a = seed_sighting(handle, model_id=mid, image_id=photo, type_id=crack["id"], center=(0.0, 10.0, 0.0))
+    assert _tally(_regroup(handle, mid)) == (1, 0, 0, 0)
+    f = finding_of_sighting(handle, a)
+    assert (f.height_m, f.ay, f.asset_version) == (10.0, 10.0, 1)
+
+    place(handle, a, (0.0, 20.0, 0.0), placed_version=2)
+    assert _tally(_regroup(handle, mid)) == (0, 1, 0, 0)
+    after = finding_row(handle, f.id)
+    assert (after.height_m, after.ay, after.asset_version) == (20.0, 20.0, 2)
+    assert after.updated_at > f.updated_at
+    unchanged = after.updated_at
+    assert _tally(_regroup(handle, mid)) == (0, 1, 0, 0)
+    assert finding_row(handle, f.id).updated_at == unchanged  # nothing changed: not written
+    assert_counts_true(handle)
+
+
+def test_regroup_brings_the_placement_back_after_a_box_edit(handle, crack):
+    mid = make_model(handle, review=False)
+    [photo] = seed_images(handle, 1)
+    a = seed_sighting(handle, model_id=mid, image_id=photo, type_id=crack["id"], center=(0.0, 10.0, 0.0))
+    assert _tally(_regroup(handle, mid)) == (1, 0, 0, 0)
+    f = finding_of_sighting(handle, a)
+    assert f.placement == "point"
+
+    with handle.session() as s:  # a geometry edit of the sighting's box: the box hook
+        box = s.get(Box, s.get(FindingSighting, a).annotation_id)
+        box.x += 5.0
+        assert annotations.on_box_changed(s, handle.id, handle.catalogue, box) == []
+    edited = finding_row(handle, f.id)
+    assert (edited.placement, edited.height_m) == (None, None)
+
+    place(handle, a, (0.0, 12.0, 0.0), placed_version=2)
+    assert _tally(_regroup(handle, mid)) == (0, 1, 0, 0)
+    back = finding_row(handle, f.id)
+    assert (back.placement, back.height_m, back.ay, back.asset_version) == ("point", 12.0, 12.0, 2)
+    assert_counts_true(handle)
+
+
+def test_regroup_keeps_the_open_finding_when_a_closed_one_joins_it(handle, crack):
+    """Ruling R15: the survivor is the lowest-numbered finding that is not closed."""
+    mid = make_model(handle, review=False)
+    img = seed_images(handle, 2)
+    t = crack["id"]
+    a = seed_sighting(handle, model_id=mid, image_id=img[0], type_id=t, center=(0.0, 10.0, 0.0))
+    b = seed_sighting(handle, model_id=mid, image_id=img[1], type_id=t, center=(5.0, 9.0, 0.0))
+    assert _tally(_regroup(handle, mid)) == (2, 0, 0, 0)
+    first, second = finding_of_sighting(handle, a), finding_of_sighting(handle, b)
+    assert (first.number, second.number) == (1, 2)
+    service.patch_finding(handle, first.id, {"status": "closed"})
+
+    place(handle, b, (0.4, 10.0, 0.0))
+    assert _tally(_regroup(handle, mid)) == (0, 1, 1, 0)
+    survivor = finding_row(handle, second.id)
+    assert (survivor.status, survivor.sighting_count) == ("open", 2)
+    assert finding_of_sighting(handle, a).id == second.id
+    gone = finding_row(handle, first.id)
+    assert (gone.status, gone.sighting_count) == ("closed", 0)
+    assert _comment_texts(handle, first.id) == ["Merged into F-0002 by Regroup."]
+    assert "finding.merged" in _kinds(handle, first.id)
+    assert_counts_true(handle)
+
+
+def test_regroup_of_closed_findings_only_keeps_the_lowest_number(handle, crack):
+    mid = make_model(handle, review=False)
+    img = seed_images(handle, 2)
+    t = crack["id"]
+    a = seed_sighting(handle, model_id=mid, image_id=img[0], type_id=t, center=(0.0, 10.0, 0.0))
+    b = seed_sighting(handle, model_id=mid, image_id=img[1], type_id=t, center=(5.0, 9.0, 0.0))
+    assert _tally(_regroup(handle, mid)) == (2, 0, 0, 0)
+    first, second = finding_of_sighting(handle, a), finding_of_sighting(handle, b)
+    for f in (first, second):
+        service.patch_finding(handle, f.id, {"status": "closed"})
+
+    place(handle, b, (0.4, 10.0, 0.0))
+    assert _tally(_regroup(handle, mid)) == (0, 1, 1, 0)
+    assert finding_of_sighting(handle, b).id == first.id
+    assert _comment_texts(handle, second.id) == ["Merged into F-0001 by Regroup."]
+    assert_counts_true(handle)

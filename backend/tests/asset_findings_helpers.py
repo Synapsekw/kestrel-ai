@@ -91,7 +91,9 @@ def update_sighting(handle, sighting_id: str, **fields) -> None:
             setattr(row, k, v)
 
 
-def place(handle, sighting_id: str, center, normal=(1.0, 0.0, 0.0), **fields) -> None:
+def place(
+    handle, sighting_id: str, center, normal=(1.0, 0.0, 0.0), *, placed_version: int = 1, **fields
+) -> None:
     """What J3's `asset_place` writes for a point placement."""
     (cx, cy, cz), (nx, ny, nz) = center, normal
     update_sighting(
@@ -104,7 +106,7 @@ def place(handle, sighting_id: str, center, normal=(1.0, 0.0, 0.0), **fields) ->
         nx=nx,
         ny=ny,
         nz=nz,
-        placed_version=1,
+        placed_version=placed_version,
         **fields,
     )
 

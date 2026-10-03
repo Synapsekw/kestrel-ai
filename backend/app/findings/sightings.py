@@ -140,10 +140,31 @@ def _derived(model: AssetModel | None, center, normal) -> dict:
     return {"height_m": d.height_m, "bearing_deg": d.bearing_deg, "side": d.side, "zone": d.zone}
 
 
-def refresh(s: Session, finding: Finding) -> FindingSighting | None:
+# The finding columns `refresh` writes; it compares them to tell whether the finding changed.
+DERIVED = (
+    "sighting_count",
+    "ax",
+    "ay",
+    "az",
+    "an_x",
+    "an_y",
+    "an_z",
+    "placement",
+    "component",
+    "asset_version",
+    "height_m",
+    "bearing_deg",
+    "side",
+    "zone",
+)
+
+
+def refresh(s: Session, finding: Finding) -> bool:
     """Recompute `sighting_count` and the anchor point, normal, placement, component and derived
     fields from the representative sighting. Severity, status and note are the operator's and are
-    never touched here. Returns the representative."""
+    never touched here. `updated_at` moves only when one of these columns changed (ruling R14).
+    Returns whether anything changed."""
+    before = tuple(getattr(finding, key) for key in DERIVED)
     rows = of_finding(s, finding.id)
     rep = pick_representative(rows)
     placed = rep is not None and is_placed(rep)
@@ -161,8 +182,10 @@ def refresh(s: Session, finding: Finding) -> FindingSighting | None:
         finding.asset_version = rep.placed_version
     for key, value in _derived(model, center, normal).items():
         setattr(finding, key, value)
-    finding.updated_at = utcnow()
-    return rep
+    changed = tuple(getattr(finding, key) for key in DERIVED) != before
+    if changed:
+        finding.updated_at = utcnow()
+    return changed
 
 
 def _file_name(image: Image | None) -> str:
