@@ -286,3 +286,47 @@ def test_one_sightings_failure_marks_it_none_and_the_job_succeeds(handle, tower,
     result = jobs_place.run_place(Ctx(handle, {"asset_model_id": mid}))
     assert result["none"] == 1 and result["point"] == 1
     assert sorted(row(handle, sid).placement for sid in sids) == ["none", "point"]
+
+
+def test_a_box_edited_mid_run_stays_pending_for_the_next_dirty_run(handle, tower, truth, crack, monkeypatch):
+    """The hook (J4) sets pending and placed_version None on a geometry edit; the job must not
+    overwrite that with the placement of the old geometry."""
+    from app.db.models import Box
+
+    mid, sids = seed(handle, tower, truth[:3], crack["id"])
+    real, calls = place.place_sighting, []
+
+    def edit_then_place(*a, **k):
+        if not calls:
+            with handle.session() as s:
+                sg = s.get(FindingSighting, sids[0])
+                s.get(Box, sg.annotation_id).x += 25
+                sg.placement, sg.placed_version = "pending", None
+        calls.append(1)
+        return real(*a, **k)
+
+    monkeypatch.setattr(place, "place_sighting", edit_then_place)
+    jobs_place.run_place(Ctx(handle, {"asset_model_id": mid}))
+    r = row(handle, sids[0])
+    assert r.placement == "pending" and r.placed_version is None and r.cx is None
+    assert sorted(row(handle, sid).placement for sid in sids[1:]) == ["point", "point"]
+    monkeypatch.setattr(place, "place_sighting", real)
+    assert jobs_place.run_place(Ctx(handle, {"asset_model_id": mid, "only_dirty": True}))["point"] == 1
+    assert row(handle, sids[0]).placement == "point"
+
+
+def test_a_patch_write_failure_marks_that_sighting_none_and_the_job_succeeds(
+    handle, tower, truth, crack, monkeypatch
+):
+    mid, sids = seed(handle, tower, truth[:2], crack["id"], profile="building_facade", polygons={0})
+
+    def broken(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(place, "write_patch", broken)
+    result = jobs_place.run_place(Ctx(handle, {"asset_model_id": mid}))
+    assert result["none"] == 1 and result["point"] == 1 and result["patch"] == 0
+    r = row(handle, sids[0])
+    assert r.placement == "none" and r.patch_path is None
+    folder = handle.folder / f"asset_models/{mid}/placements/v1"
+    assert sids[0] not in json.loads((folder / "index.json").read_text("utf-8"))["items"]

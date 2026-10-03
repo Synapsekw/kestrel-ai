@@ -107,6 +107,12 @@ def _sighting_ids(s, asset_model_id: str, version: int, only_dirty: bool) -> lis
     return list(s.scalars(q.order_by(FindingSighting.image_id, FindingSighting.id)))
 
 
+def _geometry(box: Box) -> tuple:
+    """What J4's hook reacts to: a change here makes the placement we are computing stale."""
+    pts = None if box.points is None else [list(p) for p in box.points]
+    return (box.class_id, box.shape, box.x, box.y, box.w, box.h, box.angle, pts)
+
+
 def _load_chunk(s, ids: list[str], asset_model_id: str) -> list[dict]:
     """Plain values for one chunk, in the given order: the session closes before any ray is cast."""
     rows = s.execute(
@@ -124,6 +130,7 @@ def _load_chunk(s, ids: list[str], asset_model_id: str) -> list[dict]:
     for sg, box, image, pose, finding_severity in rows:
         by_id[sg.id] = {
             "id": sg.id,
+            "geometry": _geometry(box),
             "image_id": image.id,
             "size": (int(image.width), int(image.height)),
             "shape": place.SightingShape.from_box(box),
@@ -162,17 +169,24 @@ class _Photo:
         return self.image
 
 
-def _write(handle, results: list[tuple[str, dict]]) -> None:
+def _write(handle, results: list[tuple[str, dict, tuple]]) -> list[str]:
+    """Write one batch. A sighting whose box was deleted or edited since it was read is skipped: the
+    edit left it `pending` (J4's hook), and writing now would overwrite that with the old geometry's
+    placement. Returns the skipped ids."""
+    skipped: list[str] = []
     if not results:
-        return
+        return skipped
     with handle.session() as s:
-        for sid, fields in results:
+        for sid, fields, geometry in results:
             r = s.get(FindingSighting, sid)
-            if r is None:  # its box was deleted while the job ran
+            box = None if r is None else s.get(Box, r.annotation_id)
+            if r is None or box is None or _geometry(box) != geometry:
+                skipped.append(sid)
                 continue
             for k, v in fields.items():
                 setattr(r, k, v)
     results.clear()
+    return skipped
 
 
 def _cleared(placement: str, version: int | None) -> dict:
@@ -254,7 +268,13 @@ def _place_all(ctx, handle, mid, version, ids, frame, review, folder, index, see
         raise JobFailure("The model's 3D file is not ready. Import or build it, then try again.") from e
     colours = severity_colours(getattr(ctx.runner, "catalogue", None))
     photo = _Photo(handle, ctx.log)
-    pending: list[tuple[str, dict]] = []
+    pending: list[tuple[str, dict, tuple]] = []
+
+    def flush() -> None:
+        for sid in _write(handle, pending):  # edited mid-run: stays pending; drop its derived files
+            index.pop(sid, None)
+            _remove_files(folder, sid)
+
     last = 0.0
     done = 0
     try:
@@ -271,6 +291,7 @@ def _place_all(ctx, handle, mid, version, ids, frame, review, folder, index, see
                 else:
                     shape = r["shape"]
                     needs_photo = place.wants_patch(shape, review.placement) and shape.outline() is not None
+                    patch_path = None
                     try:
                         result = place.place_sighting(
                             mesh,
@@ -283,9 +304,13 @@ def _place_all(ctx, handle, mid, version, ids, frame, review, folder, index, see
                             colours.get(r["severity"], UNGRADED_COLOUR),
                             frame=frame,
                         )
+                        if result.patch is not None:
+                            path = Path(place.write_patch(folder, sid, result.patch))
+                            patch_path = path.relative_to(handle.folder).as_posix()
                     except Exception:  # one sighting never fails the run: it stays unplaced as `none`
                         ctx.log.exception("sighting %s could not be placed", sid)
                         result = place.Placement(kind="none", coverage=None)
+                        patch_path = None
                     counts[result.kind] += 1
                     fields = _cleared(result.kind, version)
                     fields["coverage"] = result.coverage
@@ -293,23 +318,22 @@ def _place_all(ctx, handle, mid, version, ids, frame, review, folder, index, see
                         fields.update(zip(("cx", "cy", "cz"), result.center, strict=True))
                         fields.update(zip(("nx", "ny", "nz"), result.normal, strict=True))
                         fields["part"] = result.part
-                    if result.patch is not None:
-                        path = Path(place.write_patch(folder, sid, result.patch))
-                        fields["patch_path"] = path.relative_to(handle.folder).as_posix()
+                    if patch_path is not None:
+                        fields["patch_path"] = patch_path
                         index[sid] = place.index_entry(result.patch)
                 if fields["patch_path"] is None:
                     index.pop(sid, None)
                     _remove_files(folder, sid)
-                pending.append((sid, fields))
+                pending.append((sid, fields, r["geometry"]))
                 done += 1
                 if len(pending) >= CHUNK:
-                    _write(handle, pending)
+                    flush()
                 now = time.monotonic()
                 if now - last >= PROGRESS_EVERY_S:
                     last = now
                     ctx.progress(done / len(ids), f"Placed {done:,} of {len(ids):,} sightings")
     finally:
-        _write(handle, pending)  # a cancel or a failure keeps every sighting already placed
+        flush()  # a cancel or a failure keeps every sighting already placed
 
 
 def _prune(folder: Path, index: dict) -> None:
