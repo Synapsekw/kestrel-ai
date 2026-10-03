@@ -1,10 +1,9 @@
 """The asset blocks in the PDF (spec 2026-10-02-asset-findings §10) and the kit's text rules: no em or
 en dash in the page text, every font an embedded subset."""
 
-import re
-
 from report_docs import Snapshots, document, section, standard_doc
 from report_pdf_helpers import pdf_pages_text
+from report_pdf_rules import dash_chars, font_names, unembedded_fonts
 from reports_asset_docs import MAP_BLOCK, asset_finding
 
 from app.reports.pdf import active
@@ -66,14 +65,13 @@ def test_no_em_or_en_dash_reaches_the_page_text(tmp_path):
     )
     [part] = _render(tmp_path, doc)
     joined = "".join(pdf_pages_text(part.path))
-    assert not re.search("[\u2013\u2014]", joined)
+    assert not dash_chars(part.path)
     assert "1 Sep 2026 to 3 Sep 2026" in joined and "Crack, wide to long" in joined
 
 
 def test_every_font_is_an_embedded_subset(tmp_path):
     [part] = _render(tmp_path, standard_doc())  # tables, a chart, KPIs, findings
-    names = re.findall(rb"/BaseFont /([\w+-]+)", part.path.read_bytes())
-    assert names and all(b"+" in n for n in names), names
+    assert font_names(part.path) and not unembedded_fonts(part.path), unembedded_fonts(part.path)
 
 
 def test_the_theme_is_restored_after_a_render(tmp_path):

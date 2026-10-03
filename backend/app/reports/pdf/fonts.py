@@ -83,3 +83,20 @@ def verify_fonts(font_dir: Path | None = None) -> int:
         except OSError:
             continue
     return ok
+
+
+THEME_SANS = "Space Grotesk"  # the theme's own family: KestrelSans, never a brand registration
+
+
+def brand_fonts(text_family: str | None, numerals_family: str | None, base: FontSet) -> FontSet:
+    """The brand's text family for body text and its numerals family (bold) for headings and figures,
+    registered by D2 (`app.brands.fonts.register_family`). Falls back face by face to `base`."""
+    if not base.embedded:
+        return base
+    from app.brands.fonts import register_family
+
+    text = register_family(text_family) if text_family and text_family != THEME_SANS else None
+    nums = register_family(numerals_family) if numerals_family and numerals_family != THEME_SANS else None
+    sans = text[0] if text else base.sans
+    bold = nums[1] if nums else (text[1] if text else base.sans_bold)
+    return FontSet(sans, bold, base.mono, True)

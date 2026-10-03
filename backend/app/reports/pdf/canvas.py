@@ -10,12 +10,15 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.units import mm
+from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas as rl_canvas
 
+from app.reports.pdf import active
 from app.reports.pdf.flowables_text import undash
 from app.reports.pdf.styles import Styles, colour
 from app.reports.theme import THEME
@@ -31,6 +34,19 @@ def pdf_date(dt: datetime) -> str:
 
 
 HEADER_GAP_MM = 4  # between the header title and the version label
+HEADER_LOGO_MM = 5
+FOOTER_LINES = 3
+COVER_LOGO_MM = (60, 10)  # max width, height: U6's preview draws the same box
+
+
+@dataclass(frozen=True)
+class Furniture:
+    """A brand's page furniture (spec 2026-10-02-asset-findings §10); the default prints Kestrel's."""
+
+    footer_left: str = ""
+    footer_right: str = ""
+    header_logo: Any = None  # a flattened ImageReader
+    cover_logo: Any = None  # a flattened ImageReader, flattened on the band's first stop
 
 
 def fit_width(s: str, font: str, size: float, width: float) -> str:
@@ -58,6 +74,7 @@ class PageMeta:
     cover_pages: frozenset[int] = frozenset()
     header_overrides: dict[int, str] = field(default_factory=dict)
     page_count: int = 0
+    furniture: Furniture = field(default_factory=Furniture)
 
 
 def _furniture(canv: rl_canvas.Canvas, meta: PageMeta, styles: Styles, local: int, total: int) -> None:
@@ -65,21 +82,43 @@ def _furniture(canv: rl_canvas.Canvas, meta: PageMeta, styles: Styles, local: in
     m = THEME["page"]["margin_mm"] * mm
     off = THEME["page"]["furniture_offset_mm"] * mm
     size = THEME["type"]["furniture_pt"]
+    fur = meta.furniture
     override = meta.header_overrides.get(local)
     head_font = styles.fonts.sans_bold if override else styles.fonts.sans
-    room = w - 2 * m - stringWidth(meta.version_label, styles.fonts.sans, size) - HEADER_GAP_MM * mm
+    x0 = m
     canv.saveState()
+    if fur.header_logo is not None:
+        iw, ih = fur.header_logo.getSize()
+        lh = HEADER_LOGO_MM * mm
+        lw = lh * iw / ih
+        canv.drawImage(fur.header_logo, m, h - off - 0.8 * mm, lw, lh)
+        x0 = m + lw + HEADER_GAP_MM * mm
+    room = w - m - x0 - stringWidth(meta.version_label, styles.fonts.sans, size) - HEADER_GAP_MM * mm
     canv.setFont(head_font, size)
     canv.setFillColor(colour("ink") if override else colour("muted"))
-    canv.drawString(m, h - off, fit_width(undash(override or meta.title), head_font, size, room))
+    canv.drawString(x0, h - off, fit_width(undash(override or meta.title), head_font, size, room))
     canv.setFont(styles.fonts.sans, size)
     canv.setFillColor(colour("muted"))
     canv.drawRightString(w - m, h - off, meta.version_label)
     canv.setStrokeColor(colour("rule"))
     canv.setLineWidth(0.5)
     canv.line(m, h - off - 2 * mm, w - m, h - off - 2 * mm)
-    who = f"Kestrel AI · {meta.project}" if meta.project else "Kestrel AI"
-    canv.drawRightString(w - m, off, undash(f"{who} · page {local + meta.page_offset} / {total}"))
+    page = f"page {local + meta.page_offset} / {total}"
+    if fur.footer_left or fur.footer_right:
+        right = undash(f"{fur.footer_right} · {page}" if fur.footer_right else page)
+        canv.drawRightString(w - m, off, right)
+        if fur.footer_left:
+            small = size - 1
+            room_left = max(w - 2 * m - stringWidth(right, styles.fonts.sans, size) - 6 * mm, 20 * mm)
+            lines = simpleSplit(undash(fur.footer_left), styles.fonts.sans, small, room_left)[:FOOTER_LINES]
+            canv.setFont(styles.fonts.sans, small)
+            y = off + (len(lines) - 1) * (small + 1.5)
+            for line in lines:
+                canv.drawString(m, y, line)
+                y -= small + 1.5
+    else:
+        who = f"Kestrel AI · {meta.project}" if meta.project else "Kestrel AI"
+        canv.drawRightString(w - m, off, undash(f"{who} · {page}"))
     canv.restoreState()
 
 
@@ -111,21 +150,30 @@ def band_height(page_h: float) -> float:
     return page_h * THEME["cover"]["band_fraction"]
 
 
-def draw_cover_band(canv: rl_canvas.Canvas, logo_path: Path | None) -> None:
-    """The cover's full-bleed band: a linear gradient through the three stops of THEME["cover"],
-    clipped to the top 38 % of the page, and the logo top right on a white rounded chip."""
+def draw_cover_band(canv: rl_canvas.Canvas, logo_path: Path | None, brand_logo: Any = None) -> None:
+    """The cover's full-bleed band: a linear gradient through the active theme's three cover stops,
+    clipped to the top 38 % of the page; the report's logo top right on a white chip; the brand's
+    on-dark logo bottom left on the band (spec 2026-10-02-asset-findings §10, U6's preview)."""
+    from app.reports.pdf.logos import flat_logo
+
     w, h = canv._pagesize
     y0 = h - band_height(h)
-    stops = [colors.HexColor(c) for c in THEME["cover"]["gradient"]]
+    m = THEME["page"]["margin_mm"] * mm
+    stops = [colors.HexColor(c) for c in active.theme()["cover"]["gradient"]]
     canv.saveState()
     clip = canv.beginPath()
     clip.rect(0, y0, w, h - y0)
     canv.clipPath(clip, stroke=0, fill=0)
     canv.linearGradient(0, h, w, y0, stops, (0, 0.5, 1), extend=False)
     canv.restoreState()
-    if logo_path is None:
+    if brand_logo is not None:
+        iw, ih = brand_logo.getSize()
+        max_w, lh = (v * mm for v in COVER_LOGO_MM)
+        lw = min(max_w, lh * iw / ih)
+        canv.drawImage(brand_logo, m, y0 + m, lw, lw * ih / iw)
+    logo = flat_logo(logo_path) if logo_path is not None else None
+    if logo is None:
         return
-    m = THEME["page"]["margin_mm"] * mm
     cw, ch = (v * mm for v in THEME["cover"]["logo_chip_mm"])
     x, y, pad = w - m - cw, h - m - ch, 2 * mm
     canv.saveState()
@@ -133,14 +181,7 @@ def draw_cover_band(canv: rl_canvas.Canvas, logo_path: Path | None) -> None:
         canv.setFillColor(colors.white)
         canv.roundRect(x, y, cw, ch, THEME["page"]["radius_mm"] * mm, stroke=0, fill=1)
         canv.drawImage(
-            str(logo_path),
-            x + pad,
-            y + pad,
-            cw - 2 * pad,
-            ch - 2 * pad,
-            preserveAspectRatio=True,
-            anchor="c",
-            mask="auto",
+            logo, x + pad, y + pad, cw - 2 * pad, ch - 2 * pad, preserveAspectRatio=True, anchor="c"
         )
     except Exception as exc:  # a bad logo costs the logo, never the report
         log.warning("cover logo %s could not be drawn: %s", logo_path, exc)

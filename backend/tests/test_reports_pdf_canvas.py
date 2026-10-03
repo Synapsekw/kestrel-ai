@@ -99,7 +99,7 @@ def test_cover_band_is_a_three_stop_linear_gradient_over_the_top_38_percent(tmp_
 def test_logo_sits_on_a_white_chip_top_right(tmp_path):
     logo = jpeg(tmp_path / "logo.jpg", 200, 100, (200, 30, 30))
     data = _cover(tmp_path / "logo.pdf", logo)
-    assert b"/DCTDecode" in data
+    assert b"/Subtype /Image" in data  # flattened to RGB (R1 Task 10), so no longer a JPEG passthrough
     r, g, b = pixel(tmp_path / "logo.pdf", 0, 1 - (18 + 22) / 210, 18 / 297 + 11 / 297)
     assert r > 150 and g < 90 and b < 90  # the logo's red, inside the chip
 

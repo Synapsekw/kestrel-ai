@@ -171,7 +171,7 @@ def _render_snapshots(
 
 
 def _render_pdf(
-    handle, doc, partial: Path, base_name: str, paths: dict[str, Path], ctx, progress
+    handle, doc, partial: Path, base_name: str, paths: dict[str, Path], ctx, progress, brand=None
 ) -> list[dict]:
     from app.reports.pdf import document as pdf_document  # reportlab loads here (index rule)
     from app.reports.volume_hook import volume_flowables_for
@@ -187,6 +187,7 @@ def _render_pdf(
         volume_flowables=volume_flowables_for(handle, snapshot_path),
         progress=lambda f: progress.phase("pdf", f, "writing the PDF"),
         check_cancelled=ctx.check_cancelled,
+        brand=brand,
     )
     return [
         {"name": p.name, "kind": "pdf", "bytes": p.bytes, "sha256": p.sha256, "pages": p.pages} for p in parts
@@ -295,6 +296,11 @@ def _run_pipeline(ctx: JobContext) -> dict:
     doc = compose_in(cctx, theme_version=str(THEME_VERSION))
     ids = finding_ids(cctx)
     warnings: list[dict] = [w.model_dump() for w in cctx.warnings]
+    from app.reports.brand import BRAND_MISSING, resolve_brand
+
+    brand = resolve_brand(handle, config, generated_at)
+    if config.brand_id and brand is None:
+        warnings.append({"code": "brand_missing", "message": BRAND_MISSING, "count": 1, "link": None})
     scale = {lv.level: lv for lv in cctx.scale}  # read_scale(handle), read once by the ctx
     progress.phase("compose", 1.0, f"composed: {len(ids)} findings")
     base_name = (
@@ -327,7 +333,7 @@ def _run_pipeline(ctx: JobContext) -> dict:
             )
         pdf_files: list[dict] = []
         if "pdf" in formats:
-            pdf_files = _render_pdf(handle, doc, partial, base_name, paths, ctx, progress)
+            pdf_files = _render_pdf(handle, doc, partial, base_name, paths, ctx, progress, brand=brand)
         progress.phase("pdf", 1.0, "PDF written" if pdf_files else "no PDF requested")
         table_files = _write_tables(
             handle,
