@@ -1,5 +1,5 @@
 // The Photo mode: the existing ImageCanvas, loaded through the images store (useImageData), with the
-// finding's polygons as its overlay. Annotations of other findings are hidden while it is mounted,
+// finding's polygons as its overlay. The annotations stay on (the overlay is drawn in their layer),
 // and the pan tool is on, so a drag pans and nothing is edited by accident; both are restored after.
 import { useEffect, useMemo } from "react";
 import type { FindingSighting } from "@/api/assetReview";
@@ -36,7 +36,8 @@ export function PhotoPane({
     const s = useImagesWorkspace.getState();
     const before = { tool: s.tool, annotations: s.showAnnotations };
     s.setTool("pan");
-    if (s.showAnnotations) s.toggleAnnotations();
+    // The overlay lives in the canvas's interaction layer, which is hidden with the annotations.
+    if (!s.showAnnotations) s.toggleAnnotations();
     return () => {
       const now = useImagesWorkspace.getState();
       now.setTool(before.tool);

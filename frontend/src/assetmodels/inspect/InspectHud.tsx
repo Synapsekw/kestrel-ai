@@ -30,7 +30,7 @@ export function InspectHud({
       variant="float"
       radius="control"
       data-testid="inspect-hud"
-      className="pointer-events-none absolute bottom-3.5 left-3.5 z-10 flex max-w-[calc(100%-28px)] flex-col gap-1 px-3 py-2"
+      className="pointer-events-none flex max-w-full flex-col gap-1 px-3 py-2"
     >
       <div className="flex items-center gap-2">
         <span className="font-mono text-sm text-ink">{formatFindingNumber(finding.number)}</span>

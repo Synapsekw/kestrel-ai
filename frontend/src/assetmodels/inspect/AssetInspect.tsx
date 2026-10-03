@@ -237,11 +237,11 @@ export function AssetInspect() {
         <GlassPanel
           variant="float"
           radius="control"
-          className="absolute left-3.5 top-3.5 z-10 flex items-center gap-1.5 p-1.5"
+          className="absolute left-3.5 top-3.5 z-10 flex max-w-[calc(100%-28px)] flex-wrap items-center gap-1.5 p-1.5"
         >
           <Link
             to={`/p/${projectId}/models/${modelId}`}
-            className="rounded-control px-2 text-sm text-accent-ink hover:underline"
+            className="whitespace-nowrap rounded-control px-2 text-sm text-accent-ink hover:underline"
           >
             Back to the model
           </Link>
@@ -307,7 +307,7 @@ export function AssetInspect() {
         <GlassPanel
           variant="float"
           radius="control"
-          className="absolute right-3.5 top-3.5 z-10 flex flex-wrap items-center gap-3 p-1.5"
+          className="absolute right-3.5 top-3.5 z-10 flex max-w-[calc(100%-28px)] flex-wrap items-center gap-3 p-1.5"
         >
           <Segmented size="sm" label="Right pane" options={MODES} value={mode} onChange={setMode} />
           {mode === "photo" && (
@@ -352,49 +352,49 @@ export function AssetInspect() {
             ))}
         </GlassPanel>
         {finding && (
-          <InspectHud
-            finding={finding}
-            typeName={typeName(finding.type_id)}
-            zone={model?.review?.zones?.find((z) => z.id === finding.zone)?.label ?? finding.zone ?? null}
-            captureTime={captureTime}
-            index={index}
-            count={sightings?.length ?? 0}
-          />
-        )}
-        {finding && (
-          <GlassPanel
-            variant="float"
-            radius="control"
-            className="absolute bottom-3.5 right-3.5 z-10 flex flex-wrap items-center gap-1.5 p-1.5"
-          >
-            <Button
-              size="sm"
-              variant="ghost"
-              icon="arrow-left"
-              disabled={!stepId(sightingIds, current?.id ?? null, -1)}
-              onClick={() => stepSighting(-1)}
-            >
-              Previous sighting
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon="arrow-right"
-              disabled={!stepId(sightingIds, current?.id ?? null, 1)}
-              onClick={() => stepSighting(1)}
-            >
-              Next sighting
-            </Button>
-            <FindingActions
-              projectId={projectId}
+          <div className="pointer-events-none absolute inset-x-3.5 bottom-3.5 z-10 flex flex-wrap items-end justify-between gap-2">
+            <InspectHud
               finding={finding}
-              sightings={sightings ?? []}
-              current={current}
-              others={list.items}
-              typeName={typeName}
-              onGo={(id) => go({ finding: id })}
+              typeName={typeName(finding.type_id)}
+              zone={model?.review?.zones?.find((z) => z.id === finding.zone)?.label ?? finding.zone ?? null}
+              captureTime={captureTime}
+              index={index}
+              count={sightings?.length ?? 0}
             />
-          </GlassPanel>
+            <GlassPanel
+              variant="float"
+              radius="control"
+              className="pointer-events-auto ml-auto flex flex-wrap items-center gap-1.5 p-1.5"
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="arrow-left"
+                disabled={!stepId(sightingIds, current?.id ?? null, -1)}
+                onClick={() => stepSighting(-1)}
+              >
+                Previous sighting
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="arrow-right"
+                disabled={!stepId(sightingIds, current?.id ?? null, 1)}
+                onClick={() => stepSighting(1)}
+              >
+                Next sighting
+              </Button>
+              <FindingActions
+                projectId={projectId}
+                finding={finding}
+                sightings={sightings ?? []}
+                current={current}
+                others={list.items}
+                typeName={typeName}
+                onGo={(id) => go({ finding: id })}
+              />
+            </GlassPanel>
+          </div>
         )}
       </section>
     </div>
