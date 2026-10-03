@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { pdfDrawing } from "@/mapws/drawings/testFixtures";
 import { MODEL, RUN, RUN_FINISHED, SPEC_V1, SPEC_V2, VERSION_1, VERSION_2 } from "@/test/assetModelFixtures";
 import type { Job } from "@contract/client";
 import { useJobsStore } from "@/store/jobs";
@@ -704,6 +705,23 @@ describe("AssetModelWorkspace", () => {
           { method: "GET", path: /\/providers$/, body: providers },
           {
             method: "GET",
+            path: /\/drawings$/,
+            body: {
+              items: [
+                {
+                  ...pdfDrawing,
+                  id: "d1",
+                  name: "GA drawing",
+                  source_path: "D:\\plans\\ga.pdf",
+                  page: 1,
+                  status: "ready",
+                },
+              ],
+            },
+          },
+          { method: "GET", path: /\/drawings\/unimported$/, body: { files: [] } },
+          {
+            method: "GET",
             path: /\/data$/,
             body: {
               items: [
@@ -782,6 +800,23 @@ describe("AssetModelWorkspace", () => {
       };
       const { requests } = open([
         { method: "GET", path: /\/providers$/, body: providers },
+        {
+          method: "GET",
+          path: /\/drawings$/,
+          body: {
+            items: [
+              {
+                ...pdfDrawing,
+                id: "d1",
+                name: "GA drawing",
+                source_path: "D:\\plans\\ga.pdf",
+                page: 1,
+                status: "ready",
+              },
+            ],
+          },
+        },
+        { method: "GET", path: /\/drawings\/unimported$/, body: { files: [] } },
         {
           method: "GET",
           path: /\/data$/,
@@ -918,6 +953,23 @@ describe("AssetModelWorkspace", () => {
         { method: "GET", path: /\/asset-models\/m1\/versions$/, body: { items: [] } },
         { method: "GET", path: /\/asset-models\/m1\/runs$/, body: { items: [stopped] } },
         { method: "GET", path: /\/providers$/, body: { items: [] } },
+        {
+          method: "GET",
+          path: /\/drawings$/,
+          body: {
+            items: [
+              {
+                ...pdfDrawing,
+                id: "d1",
+                name: "GA drawing",
+                source_path: "D:\\plans\\ga.pdf",
+                page: 1,
+                status: "ready",
+              },
+            ],
+          },
+        },
+        { method: "GET", path: /\/drawings\/unimported$/, body: { files: [] } },
         {
           method: "GET",
           path: /\/data$/,

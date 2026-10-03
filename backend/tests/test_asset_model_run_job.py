@@ -289,6 +289,25 @@ def test_sources_get_labels_and_facts(handle, app, seeded):
     assert out[2]["label"] == "gone" and out[2]["facts"] == "missing"
 
 
+def test_drawing_sources_carry_file_name_sha_and_page(handle, app, seeded):
+    from app.db.models import Drawing
+
+    with handle.session() as s:
+        d = Drawing(
+            name="T5 · p3",
+            format="pdf",
+            source_path="E:\\LNG\\Drawings\\T5.pdf",
+            source_size=1,
+            source_sha256="abc",
+            page=3,
+        )
+        s.add(d)
+        s.flush()
+        did = d.id
+    out = R._describe_sources(Ctx(handle, app.state.jobs, {}), [{"type": "drawing", "id": did}])
+    assert (out[0]["file"], out[0]["sha256"], out[0]["page"]) == ("T5.pdf", "abc", 3)
+
+
 def _set_sources(handle, run_id, sources):
     with handle.session() as s:
         s.get(AssetModelRun, run_id).sources = sources

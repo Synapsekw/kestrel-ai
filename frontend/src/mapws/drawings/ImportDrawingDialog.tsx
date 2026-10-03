@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { useApi, useBackend } from "@/api/client";
 import {
   createDrawing,
+  createDrawingPages,
   createDrawingInspection,
   getDrawingInspection,
   pageThumbUrl,
@@ -15,11 +16,11 @@ import { Alert, Button, Dialog, Field, Input, Progress } from "@/ui";
 import { DrawingLayerPicker } from "./DrawingLayerPicker";
 import { DrawingPlacementFields } from "./DrawingPlacementFields";
 import {
-  allPdfPages,
   drawingNameField,
   familyOf,
   initialDrawingForm,
-  toDrawingRequests,
+  toDrawingPagesRequest,
+  toDrawingRequest,
   type DrawingForm,
 } from "./drawingImport";
 import { takeImportPrefill } from "./importPrefill";
@@ -53,10 +54,8 @@ export function ImportDrawingDialog({
   const [fileError, setFileError] = useState<string | null>(null);
   const [inspection, setInspection] = useState<DrawingInspection | null>(null);
   const [form, setForm] = useState<DrawingForm | null>(null);
-  const [busy, setBusy] = useState<"read" | "import" | "all" | null>(null);
+  const [busy, setBusy] = useState<"read" | "import" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const importedPages = useRef(new Set<number>());
-  const lastStarted = useRef<Drawing | null>(null);
   const inFlight = useRef(false);
 
   const inspectJob = useTrackedJob(projectId, inspection?.state === "inspecting" ? inspection.job_id : null);
@@ -98,8 +97,6 @@ export function ImportDrawingDialog({
     setError(null);
     setInspection(null);
     setForm(null);
-    importedPages.current.clear();
-    lastStarted.current = null;
     try {
       const r = await createDrawingInspection(api, projectId, path.trim());
       useJobsStore.getState().upsert(r.job);
@@ -112,36 +109,29 @@ export function ImportDrawingDialog({
     }
   }
 
-  async function startImport(all: boolean) {
+  async function startImport() {
     if (inFlight.current || !inspection || inspection.state !== "ready" || !form) return;
-    const draft = all ? { ...form, pages: allPdfPages(inspection), page: 1 } : form;
-    const built = toDrawingRequests(inspection, draft);
-    if (!built.ok) return setError(built.error);
-    const pending = built.bodies.filter((body) => body.page == null || !importedPages.current.has(body.page));
-    if (pending.length === 0) {
-      if (lastStarted.current) onStarted(lastStarted.current);
-      return;
-    }
+    const pages = [...new Set(form.pages)].sort((a, b) => a - b);
+    const pdf = familyOf(inspection.format) === "pdf";
     inFlight.current = true;
-    setBusy(all ? "all" : "import");
+    setBusy("import");
     setError(null);
-    let started = 0;
-    let last: Drawing | null = null;
     try {
-      for (const body of pending) {
-        const res = await createDrawing(api, projectId, body);
+      if (pdf && pages.length > 1) {
+        const built = toDrawingPagesRequest(inspection, form);
+        if (!built.ok) return setError(built.error);
+        const res = await createDrawingPages(api, projectId, built.body);
         useJobsStore.getState().upsert(res.job);
-        if (body.page != null) importedPages.current.add(body.page);
-        started += 1;
-        last = res.drawing;
-        lastStarted.current = res.drawing;
+        onStarted(res.drawings[0]);
+      } else {
+        const built = toDrawingRequest(inspection, pdf ? { ...form, page: pages[0] ?? form.page } : form);
+        if (!built.ok) return setError(built.error);
+        const res = await createDrawing(api, projectId, built.body);
+        useJobsStore.getState().upsert(res.job);
+        onStarted(res.drawing);
       }
-      if (last) onStarted(last);
     } catch (err) {
-      const detail = messageOf(err, "could not start the import");
-      setError(
-        started > 0 ? `Started ${started} of ${pending.length} pages, then stopped. ${detail}` : detail,
-      );
+      setError(messageOf(err, "could not start the import"));
     } finally {
       inFlight.current = false;
       setBusy(null);
@@ -150,10 +140,10 @@ export function ImportDrawingDialog({
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    void startImport(false);
+    void startImport();
   }
 
-  const importing = busy === "import" || busy === "all";
+  const importing = busy === "import";
 
   const ready = inspection?.state === "ready" && form ? inspection : null;
   const family = ready ? familyOf(ready.format) : null;
@@ -174,16 +164,6 @@ export function ImportDrawingDialog({
           <Button onClick={onClose} disabled={importing}>
             Cancel
           </Button>
-          {multiPdf && ready && (
-            <Button
-              icon="import"
-              loading={busy === "all"}
-              disabled={importing}
-              onClick={() => void startImport(true)}
-            >
-              Import all pages
-            </Button>
-          )}
           <Button
             type="submit"
             variant="primary"

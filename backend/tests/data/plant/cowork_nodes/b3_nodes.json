@@ -1,0 +1,12722 @@
+{
+ "source": "Cowork KIPIC_AlZour_LNG_Plant.glb (B3 types) + landmask.json",
+ "nodes": [
+  {
+   "id": "80-B-06",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      783.5,
+      411.8
+     ],
+     [
+      879.7,
+      411.8
+     ],
+     [
+      879.7,
+      433.0
+     ],
+     [
+      885.6,
+      433.0
+     ],
+     [
+      885.6,
+      442.1
+     ],
+     [
+      788.0,
+      442.1
+     ],
+     [
+      788.0,
+      436.1
+     ],
+     [
+      783.5,
+      436.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 109.0,
+   "tris": 184,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Glass"
+   ],
+   "extent": [
+    102.4,
+    9.0,
+    30.6
+   ]
+  },
+  {
+   "id": "80-B-10",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      788.9,
+      477.8
+     ],
+     [
+      831.2,
+      477.8
+     ],
+     [
+      831.2,
+      489.9
+     ],
+     [
+      837.2,
+      489.9
+     ],
+     [
+      837.2,
+      496.0
+     ],
+     [
+      788.9,
+      496.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 105.5,
+   "tris": 88,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Glass"
+   ],
+   "extent": [
+    48.6,
+    5.5,
+    18.5
+   ]
+  },
+  {
+   "id": "80-B-07",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      789.4,
+      510.1
+     ],
+     [
+      797.0,
+      510.1
+     ],
+     [
+      797.0,
+      503.9
+     ],
+     [
+      829.3,
+      503.9
+     ],
+     [
+      829.3,
+      585.0
+     ],
+     [
+      789.4,
+      585.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 109.0,
+   "tris": 136,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Glass"
+   ],
+   "extent": [
+    40.2,
+    9.0,
+    81.4
+   ]
+  },
+  {
+   "id": "80-B-01",
+   "type": "building",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     823.3,
+     610.5
+    ],
+    "size": [
+     30.4,
+     20.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "tris": 88,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Glass"
+   ],
+   "extent": [
+    20.3,
+    8.0,
+    30.7
+   ]
+  },
+  {
+   "id": "80-B-02",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      675.9,
+      486.8
+     ],
+     [
+      732.3,
+      486.8
+     ],
+     [
+      732.3,
+      497.6
+     ],
+     [
+      747.2,
+      497.6
+     ],
+     [
+      747.2,
+      516.2
+     ],
+     [
+      675.9,
+      516.2
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 110.0,
+   "tris": 136,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Glass"
+   ],
+   "extent": [
+    71.6,
+    10.0,
+    29.7
+   ]
+  },
+  {
+   "id": "80-B-03",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      730.56,
+      545.19
+     ],
+     [
+      736.81,
+      545.15
+     ],
+     [
+      756.1,
+      555.41
+     ],
+     [
+      738.27,
+      588.95
+     ],
+     [
+      719.06,
+      578.74
+     ],
+     [
+      715.26,
+      573.75
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 104.0,
+   "tris": 40,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    41.22,
+    4.0,
+    44.15
+   ]
+  },
+  {
+   "id": "80-B-05",
+   "type": "building",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     756.75,
+     377.0
+    ],
+    "size": [
+     4.4,
+     7.9
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 104.0,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    8.2,
+    4.0,
+    4.7
+   ]
+  },
+  {
+   "id": "70-MIS-01",
+   "type": "substation",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      694.7,
+      409.4
+     ],
+     [
+      728.7,
+      409.4
+     ],
+     [
+      728.7,
+      455.1
+     ],
+     [
+      692.6,
+      455.1
+     ],
+     [
+      692.6,
+      434.1
+     ],
+     [
+      694.7,
+      434.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 109.0,
+   "tris": 60,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Concrete"
+   ],
+   "extent": [
+    36.4,
+    9.0,
+    46.0
+   ]
+  },
+  {
+   "id": "70-TC-0002",
+   "type": "basin",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      884.0,
+      404.4
+     ],
+     [
+      889.4,
+      404.4
+     ],
+     [
+      889.4,
+      421.3
+     ],
+     [
+      885.0,
+      421.3
+     ],
+     [
+      885.0,
+      409.6
+     ],
+     [
+      884.0,
+      409.6
+     ]
+    ]
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 196,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    5.4,
+    3.4,
+    16.9
+   ]
+  },
+  {
+   "id": "bldg-construction-office-note1",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      577.5,
+      401.2
+     ],
+     [
+      645.7,
+      401.2
+     ],
+     [
+      645.7,
+      513.3
+     ],
+     [
+      577.5,
+      513.3
+     ],
+     [
+      577.5,
+      495.2
+     ],
+     [
+      627.6,
+      495.2
+     ],
+     [
+      627.6,
+      419.3
+     ],
+     [
+      577.5,
+      419.3
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": 103.0,
+   "tris": 120,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Glass"
+   ],
+   "extent": [
+    68.5,
+    5.5,
+    112.4
+   ]
+  },
+  {
+   "id": "shelter-fire-station-west",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     801.4,
+     615.7
+    ],
+    "size": [
+     6.0,
+     12.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 105.0,
+   "tris": 132,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    13.4,
+    5.0,
+    6.6
+   ]
+  },
+  {
+   "id": "80-B-08",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     714.0,
+     522.65
+    ],
+    "size": [
+     5.5,
+     60.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    60.0,
+    0.46,
+    5.5
+   ]
+  },
+  {
+   "id": "parking-admin-south",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     705.95,
+     479.35
+    ],
+    "size": [
+     5.5,
+     55.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    55.3,
+    0.46,
+    5.5
+   ]
+  },
+  {
+   "id": "80-B-09",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     654.9,
+     514.75
+    ],
+    "size": [
+     53.9,
+     13.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    13.0,
+    0.46,
+    53.9
+   ]
+  },
+  {
+   "id": "80-B-15",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     814.2,
+     470.45
+    ],
+    "size": [
+     5.5,
+     37.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    37.0,
+    0.46,
+    5.5
+   ]
+  },
+  {
+   "id": "80-B-16",
+   "type": "parking",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      789.5,
+      397.1
+     ],
+     [
+      866.6,
+      397.1
+     ],
+     [
+      866.6,
+      404.4
+     ],
+     [
+      884.2,
+      404.4
+     ],
+     [
+      884.2,
+      409.4
+     ],
+     [
+      814.2,
+      409.4
+     ],
+     [
+      814.2,
+      402.6
+     ],
+     [
+      789.5,
+      402.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    94.7,
+    0.46,
+    12.3
+   ]
+  },
+  {
+   "id": "parking-control-north",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     849.6,
+     447.3
+    ],
+    "size": [
+     5.0,
+     69.6
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    69.6,
+    0.46,
+    5.0
+   ]
+  },
+  {
+   "id": "80-B-17",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     779.0,
+     521.7
+    ],
+    "size": [
+     27.0,
+     13.2
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    13.2,
+    0.46,
+    27.0
+   ]
+  },
+  {
+   "id": "80-B-18",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     748.65,
+     534.2
+    ],
+    "size": [
+     15.0,
+     5.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    5.5,
+    0.46,
+    15.0
+   ]
+  },
+  {
+   "id": "80-B-19",
+   "type": "parking",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      520.8,
+      477.3
+     ],
+     [
+      538.92,
+      442.8
+     ],
+     [
+      557.3,
+      440.6
+     ],
+     [
+      568.7,
+      457.6
+     ],
+     [
+      573.05,
+      460.95
+     ],
+     [
+      554.59,
+      495.31
+     ],
+     [
+      549.5,
+      492.6
+     ],
+     [
+      527.7,
+      480.6
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": null,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    52.25,
+    0.46,
+    54.71
+   ]
+  },
+  {
+   "id": "road-main-diagonal",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      27.0,
+      240.44
+     ],
+     [
+      79.998,
+      240.444
+     ],
+     [
+      87.0,
+      243.4
+     ],
+     [
+      91.0,
+      247.9
+     ],
+     [
+      91.998,
+      252.444
+     ],
+     [
+      91.998,
+      263.121
+     ],
+     [
+      94.0,
+      269.2
+     ],
+     [
+      98.392,
+      273.733
+     ],
+     [
+      173.75,
+      313.69
+     ],
+     [
+      262.21,
+      360.33
+     ],
+     [
+      350.67,
+      406.97
+     ],
+     [
+      439.13,
+      453.61
+     ],
+     [
+      527.59,
+      500.25
+     ],
+     [
+      585.08,
+      530.56
+     ],
+     [
+      602.2,
+      534.55
+     ],
+     [
+      620.43,
+      538.57
+     ],
+     [
+      708.89,
+      585.21
+     ],
+     [
+      797.34,
+      631.85
+     ],
+     [
+      819.46,
+      643.51
+     ],
+     [
+      829.0,
+      648.8
+     ],
+     [
+      834.0,
+      651.6
+     ],
+     [
+      840.0,
+      653.0
+     ],
+     [
+      855.0,
+      653.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 180,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    828.0,
+    0.5,
+    420.56
+   ]
+  },
+  {
+   "id": "road-pad-a-south-n389",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      193.253,
+      323.827
+     ],
+     [
+      205.5,
+      300.8
+     ],
+     [
+      209.5,
+      290.0
+     ],
+     [
+      216.0,
+      281.0
+     ],
+     [
+      226.0,
+      275.0
+     ],
+     [
+      235.0,
+      273.45
+     ],
+     [
+      372.0,
+      273.45
+     ],
+     [
+      384.0,
+      274.3
+     ],
+     [
+      395.0,
+      277.9
+     ],
+     [
+      400.0,
+      279.85
+     ],
+     [
+      424.468,
+      292.953
+     ],
+     [
+      557.175,
+      363.009
+     ],
+     [
+      585.0,
+      377.4
+     ],
+     [
+      598.0,
+      383.5
+     ],
+     [
+      610.0,
+      387.5
+     ],
+     [
+      625.0,
+      389.0
+     ],
+     [
+      856.0,
+      389.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 132,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    664.47,
+    0.5,
+    123.55
+   ]
+  },
+  {
+   "id": "road-pad-a-east",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      361.212,
+      412.475
+     ],
+     [
+      424.468,
+      292.953
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 16,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    66.61,
+    0.5,
+    116.25
+   ]
+  },
+  {
+   "id": "road-pad-b-east",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      493.919,
+      482.531
+     ],
+     [
+      557.175,
+      363.009
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 16,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    66.59,
+    0.5,
+    116.16
+   ]
+  },
+  {
+   "id": "road-e660",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      660.51,
+      389.0
+     ],
+     [
+      660.51,
+      462.0
+     ],
+     [
+      661.8,
+      466.9
+     ],
+     [
+      664.6,
+      469.9
+     ],
+     [
+      668.5,
+      471.35
+     ],
+     [
+      767.21,
+      471.35
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 44,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    109.7,
+    0.5,
+    81.35
+   ]
+  },
+  {
+   "id": "road-e767",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      767.21,
+      389.0
+     ],
+     [
+      767.21,
+      590.0
+     ],
+     [
+      766.0,
+      597.0
+     ],
+     [
+      762.0,
+      602.5
+     ],
+     [
+      756.0,
+      606.0
+     ],
+     [
+      750.5,
+      607.3
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 56,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    17.63,
+    0.5,
+    214.4
+   ]
+  },
+  {
+   "id": "road-n461",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      767.21,
+      461.2
+     ],
+     [
+      856.0,
+      461.2
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    85.79,
+    0.5,
+    6.0
+   ]
+  },
+  {
+   "id": "paved-yard-b07-b10",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     810.5,
+     529.3
+    ],
+    "size": [
+     130.2,
+     77.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    77.0,
+    0.42,
+    130.2
+   ]
+  },
+  {
+   "id": "paved-fire-station-apron",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     819.5,
+     621.2
+    ],
+    "size": [
+     53.6,
+     63.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 16,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    63.0,
+    0.42,
+    53.6
+   ]
+  },
+  {
+   "id": "pad-a-laydown",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      202.03,
+      321.25
+     ],
+     [
+      358.34,
+      403.66
+     ],
+     [
+      424.12,
+      279.95
+     ],
+     [
+      223.99,
+      279.95
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    222.09,
+    0.38,
+    123.71
+   ]
+  },
+  {
+   "id": "pad-b-laydown",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      369.84,
+      409.73
+     ],
+     [
+      491.11,
+      473.67
+     ],
+     [
+      548.6,
+      365.55
+     ],
+     [
+      427.32,
+      301.61
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    178.76,
+    0.38,
+    172.06
+   ]
+  },
+  {
+   "id": "pad-c-laydown",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      502.61,
+      479.73
+     ],
+     [
+      560.1,
+      371.61
+     ],
+     [
+      585.0,
+      381.7
+     ],
+     [
+      600.0,
+      388.0
+     ],
+     [
+      612.0,
+      391.7
+     ],
+     [
+      625.0,
+      393.0
+     ],
+     [
+      657.5,
+      393.0
+     ],
+     [
+      657.5,
+      462.0
+     ],
+     [
+      648.4,
+      476.0
+     ],
+     [
+      648.4,
+      541.7
+     ],
+     [
+      648.4,
+      556.6
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": null,
+   "tris": 40,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    154.89,
+    0.38,
+    184.99
+   ]
+  },
+  {
+   "id": "wall-nw-corridor",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      110.49,
+      339.35
+     ],
+     [
+      727.92,
+      664.88
+     ]
+    ],
+    "width": 0.7
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    617.76,
+    3.02,
+    326.15
+   ]
+  },
+  {
+   "id": "fence-70-mis-01",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      670.3,
+      400.1
+     ],
+     [
+      748.7,
+      400.1
+     ],
+     [
+      748.7,
+      463.1
+     ],
+     [
+      670.3,
+      463.1
+     ],
+     [
+      670.3,
+      400.1
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 1248,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    78.48,
+    2.5,
+    63.07
+   ]
+  },
+  {
+   "id": "fence-note1-admin",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      645.7,
+      485.77
+     ],
+     [
+      675.9,
+      485.77
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 156,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    30.28,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-note1-ne",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      633.93,
+      513.31
+     ],
+     [
+      633.93,
+      525.6
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 84,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    0.08,
+    2.5,
+    12.36
+   ]
+  },
+  {
+   "id": "wall-retaining-junction",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      625.0,
+      532.6
+     ],
+     [
+      659.6,
+      545.6
+     ],
+     [
+      665.2,
+      537.5
+     ],
+     [
+      665.2,
+      479.0
+     ]
+    ],
+    "width": 0.5
+   },
+   "base_el": 97.5,
+   "top_el": 100.0,
+   "tris": 36,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    40.54,
+    2.81,
+    66.83
+   ]
+  },
+  {
+   "id": "revetment-south",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      390.56,
+      225.79
+     ],
+     [
+      472.27,
+      225.89
+     ],
+     [
+      529.64,
+      243.98
+     ],
+     [
+      576.9,
+      277.15
+     ],
+     [
+      767.72,
+      255.79
+     ],
+     [
+      767.55,
+      263.69
+     ],
+     [
+      573.8,
+      281.49
+     ],
+     [
+      526.59,
+      248.31
+     ],
+     [
+      472.27,
+      231.18
+     ],
+     [
+      390.56,
+      231.1
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": null,
+   "tris": 36,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    377.16,
+    0.56,
+    55.7
+   ]
+  },
+  {
+   "id": "road-shore-trestle",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1923.0,
+      477.62
+     ],
+     [
+      2361.93,
+      523.75
+     ],
+     [
+      2392.14,
+      526.92
+     ]
+    ],
+    "width": 5.4
+   },
+   "base_el": 104.5,
+   "top_el": 104.7,
+   "tris": 20,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    469.7,
+    0.5,
+    54.67
+   ]
+  },
+  {
+   "id": "road-marine-trestle",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2417.04,
+      290.0
+     ],
+     [
+      2361.86,
+      815.0
+     ]
+    ],
+    "width": 5.4
+   },
+   "base_el": 104.5,
+   "top_el": 104.7,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    60.55,
+    0.5,
+    525.56
+   ]
+  },
+  {
+   "id": "road-jetty1-corridor",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2361.86,
+      815.0
+     ],
+     [
+      2364.0,
+      821.5
+     ],
+     [
+      2370.0,
+      824.6
+     ],
+     [
+      2380.0,
+      825.4
+     ],
+     [
+      2390.3,
+      824.9
+     ],
+     [
+      2398.8,
+      823.2
+     ],
+     [
+      2406.5,
+      823.9
+     ],
+     [
+      2410.5,
+      826.3
+     ],
+     [
+      2411.3,
+      829.2
+     ],
+     [
+      2409.05,
+      851.85
+     ],
+     [
+      2408.3,
+      855.1
+     ],
+     [
+      2403.5,
+      857.0
+     ],
+     [
+      2388.2,
+      855.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 104.5,
+   "top_el": 104.7,
+   "tris": 104,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    53.37,
+    0.5,
+    44.04
+   ]
+  },
+  {
+   "id": "road-jetty2-corridor",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2417.04,
+      290.0
+     ],
+     [
+      2419.0,
+      287.4
+     ],
+     [
+      2425.0,
+      286.6
+     ],
+     [
+      2440.0,
+      288.3
+     ],
+     [
+      2462.9,
+      291.7
+     ],
+     [
+      2466.6,
+      290.4
+     ],
+     [
+      2468.3,
+      287.4
+     ],
+     [
+      2470.7,
+      264.7
+     ],
+     [
+      2470.0,
+      261.2
+     ],
+     [
+      2466.4,
+      258.5
+     ],
+     [
+      2451.0,
+      256.8
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 104.5,
+   "top_el": 104.7,
+   "tris": 88,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    57.28,
+    0.5,
+    38.94
+   ]
+  },
+  {
+   "id": "trestle-gate-north",
+   "type": "gate",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2379.39,
+      549.1
+     ],
+     [
+      2392.83,
+      550.5
+     ]
+    ],
+    "width": 0.3
+   },
+   "base_el": 104.5,
+   "top_el": 107.0,
+   "tris": 84,
+   "materials": [
+    "Steel_Dark"
+   ],
+   "extent": [
+    13.52,
+    2.5,
+    1.47
+   ]
+  },
+  {
+   "id": "trestle-gate-south",
+   "type": "gate",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2383.9,
+      504.4
+     ],
+     [
+      2397.4,
+      505.9
+     ]
+    ],
+    "width": 0.3
+   },
+   "base_el": 104.5,
+   "top_el": 107.0,
+   "tris": 84,
+   "materials": [
+    "Steel_Dark"
+   ],
+   "extent": [
+    13.58,
+    2.5,
+    1.57
+   ]
+  },
+  {
+   "id": "10-SS-03",
+   "type": "substation",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2233.879,
+      520.647
+     ],
+     [
+      2264.531,
+      523.858
+     ],
+     [
+      2263.301,
+      535.593
+     ],
+     [
+      2232.649,
+      532.382
+     ]
+    ]
+   },
+   "base_el": 104.5,
+   "top_el": 113.5,
+   "tris": 36,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Concrete"
+   ],
+   "extent": [
+    32.21,
+    9.0,
+    15.28
+   ]
+  },
+  {
+   "id": "10-B-11",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2357.255,
+      839.86
+     ],
+     [
+      2367.209,
+      840.92
+     ],
+     [
+      2366.465,
+      847.9
+     ],
+     [
+      2356.511,
+      846.84
+     ]
+    ]
+   },
+   "base_el": 104.5,
+   "top_el": 109.0,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    11.03,
+    4.5,
+    8.37
+   ]
+  },
+  {
+   "id": "10-B-12",
+   "type": "building",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2418.325,
+      258.67
+     ],
+     [
+      2428.279,
+      259.73
+     ],
+     [
+      2427.535,
+      266.71
+     ],
+     [
+      2417.581,
+      265.65
+     ]
+    ]
+   },
+   "base_el": 104.5,
+   "top_el": 109.0,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    11.03,
+    4.5,
+    8.37
+   ]
+  },
+  {
+   "id": "10-AH-0001",
+   "type": "analyzer_house",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2377.66,
+      848.53
+     ],
+     [
+      2373.28,
+      848.05
+     ],
+     [
+      2373.73,
+      843.7
+     ],
+     [
+      2372.96,
+      843.63
+     ],
+     [
+      2372.99,
+      843.02
+     ],
+     [
+      2374.4,
+      843.18
+     ],
+     [
+      2374.5,
+      842.16
+     ],
+     [
+      2376.61,
+      842.38
+     ],
+     [
+      2376.42,
+      843.95
+     ],
+     [
+      2378.11,
+      844.14
+     ]
+    ]
+   },
+   "base_el": 104.5,
+   "top_el": 108.0,
+   "tris": 72,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    5.47,
+    3.5,
+    6.7
+   ]
+  },
+  {
+   "id": "10-AH-0002",
+   "type": "analyzer_house",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2439.34,
+      261.45
+     ],
+     [
+      2434.99,
+      261.0
+     ],
+     [
+      2434.51,
+      265.35
+     ],
+     [
+      2433.71,
+      265.26
+     ],
+     [
+      2433.65,
+      265.86
+     ],
+     [
+      2435.05,
+      265.99
+     ],
+     [
+      2434.96,
+      267.02
+     ],
+     [
+      2437.04,
+      267.24
+     ],
+     [
+      2437.2,
+      265.64
+     ],
+     [
+      2438.89,
+      265.83
+     ]
+    ]
+   },
+   "base_el": 104.5,
+   "top_el": 108.0,
+   "tris": 72,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    6.02,
+    3.5,
+    6.57
+   ]
+  },
+  {
+   "id": "10-TC-01",
+   "type": "basin",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2373.28,
+      885.0
+     ],
+     [
+      2371.2,
+      883.4
+     ],
+     [
+      2368.03,
+      880.9
+     ],
+     [
+      2364.42,
+      885.51
+     ],
+     [
+      2366.43,
+      887.08
+     ],
+     [
+      2364.87,
+      889.09
+     ],
+     [
+      2369.47,
+      892.71
+     ],
+     [
+      2374.66,
+      886.08
+     ]
+    ]
+   },
+   "base_el": 105.0,
+   "top_el": 108.0,
+   "tris": 96,
+   "materials": [
+    "Water_Pit"
+   ],
+   "extent": [
+    9.26,
+    0.85,
+    10.83
+   ]
+  },
+  {
+   "id": "10-TC-02",
+   "type": "basin",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      2442.64,
+      224.85
+     ],
+     [
+      2440.3,
+      225.97
+     ],
+     [
+      2436.66,
+      227.76
+     ],
+     [
+      2434.1,
+      222.52
+     ],
+     [
+      2436.4,
+      221.4
+     ],
+     [
+      2435.28,
+      219.09
+     ],
+     [
+      2440.53,
+      216.53
+     ],
+     [
+      2444.2,
+      224.08
+     ]
+    ]
+   },
+   "base_el": 105.0,
+   "top_el": 108.0,
+   "tris": 96,
+   "materials": [
+    "Water_Pit"
+   ],
+   "extent": [
+    9.16,
+    0.85,
+    10.29
+   ]
+  },
+  {
+   "id": "jetty1-ditch",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2388.2,
+      863.79
+     ],
+     [
+      2372.07,
+      884.42
+     ]
+    ],
+    "width": 2.6
+   },
+   "base_el": 103.5,
+   "top_el": 104.5,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    18.18,
+    0.54,
+    22.23
+   ]
+  },
+  {
+   "id": "jetty2-ditch",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2452.85,
+      248.75
+     ],
+     [
+      2441.35,
+      225.15
+     ]
+    ],
+    "width": 2.55
+   },
+   "base_el": 103.5,
+   "top_el": 104.5,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    13.79,
+    0.54,
+    24.72
+   ]
+  },
+  {
+   "id": "revetment-jetty-root",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1923.5,
+      711.0
+     ],
+     [
+      1926.0,
+      708.0
+     ],
+     [
+      1928.4,
+      704.0
+     ],
+     [
+      1932.6,
+      700.0
+     ],
+     [
+      1939.0,
+      694.0
+     ],
+     [
+      1943.5,
+      688.0
+     ],
+     [
+      1948.5,
+      682.0
+     ],
+     [
+      1952.4,
+      674.0
+     ],
+     [
+      1955.8,
+      666.0
+     ],
+     [
+      1958.6,
+      660.0
+     ],
+     [
+      1961.0,
+      652.0
+     ],
+     [
+      1962.8,
+      644.0
+     ],
+     [
+      1964.0,
+      636.0
+     ],
+     [
+      1964.27,
+      629.0
+     ],
+     [
+      1964.27,
+      513.0
+     ],
+     [
+      1963.3,
+      503.0
+     ],
+     [
+      1962.3,
+      494.0
+     ],
+     [
+      1961.26,
+      488.0
+     ],
+     [
+      1961.26,
+      436.0
+     ],
+     [
+      1960.4,
+      429.0
+     ],
+     [
+      1958.0,
+      423.5
+     ],
+     [
+      1954.5,
+      418.5
+     ],
+     [
+      1950.0,
+      414.5
+     ],
+     [
+      1944.0,
+      411.0
+     ],
+     [
+      1937.0,
+      408.5
+     ],
+     [
+      1930.0,
+      406.8
+     ],
+     [
+      1923.5,
+      406.0
+     ],
+     [
+      1923.5,
+      662.0
+     ],
+     [
+      1927.0,
+      655.0
+     ],
+     [
+      1931.5,
+      645.0
+     ],
+     [
+      1934.0,
+      629.0
+     ],
+     [
+      1934.0,
+      440.0
+     ],
+     [
+      1923.5,
+      440.0
+     ]
+    ]
+   },
+   "base_el": 91.56,
+   "top_el": 104.5,
+   "tris": 112,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    40.77,
+    0.56,
+    305.0
+   ]
+  },
+  {
+   "id": "fence-jetty-root",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1923.0,
+      660.0
+     ],
+     [
+      1925.5,
+      652.0
+     ],
+     [
+      1927.0,
+      645.0
+     ],
+     [
+      1927.0,
+      488.5
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 104.5,
+   "top_el": 107.0,
+   "tris": 780,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    4.08,
+    2.5,
+    171.57
+   ]
+  },
+  {
+   "id": "fence-jetty-root-s",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1927.0,
+      467.5
+     ],
+     [
+      1927.0,
+      441.5
+     ],
+     [
+      1923.0,
+      441.5
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 104.5,
+   "top_el": 107.0,
+   "tris": 192,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    4.08,
+    2.5,
+    26.07
+   ]
+  },
+  {
+   "id": "wall-jetty-root",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1929.7,
+      441.0
+     ],
+     [
+      1929.7,
+      629.0
+     ]
+    ],
+    "width": 1.0
+   },
+   "base_el": 104.5,
+   "top_el": 105.5,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    1.0,
+    1.01,
+    188.0
+   ]
+  },
+  {
+   "id": "orv-pad-AB",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1044.55,
+     344.41
+    ],
+    "size": [
+     32.6,
+     18.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.3,
+    0.42,
+    32.6
+   ]
+  },
+  {
+   "id": "orv-pad-CD",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1044.55,
+     386.4
+    ],
+    "size": [
+     32.6,
+     18.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.3,
+    0.42,
+    32.6
+   ]
+  },
+  {
+   "id": "orv-pad-EF",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1044.55,
+     428.4
+    ],
+    "size": [
+     32.6,
+     18.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.3,
+    0.42,
+    32.6
+   ]
+  },
+  {
+   "id": "orv-pad-GH",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1044.55,
+     488.4
+    ],
+    "size": [
+     32.6,
+     18.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.3,
+    0.42,
+    32.6
+   ]
+  },
+  {
+   "id": "orv-pad-IJ",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1044.55,
+     530.42
+    ],
+    "size": [
+     32.6,
+     18.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.3,
+    0.42,
+    32.6
+   ]
+  },
+  {
+   "id": "orv-pad-KL",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1044.55,
+     572.41
+    ],
+    "size": [
+     32.6,
+     18.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.3,
+    0.42,
+    32.6
+   ]
+  },
+  {
+   "id": "protection-wall-1",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      335.5
+     ],
+     [
+      1056.5,
+      396.6
+     ]
+    ],
+    "width": 0.9
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    0.9,
+    2.5,
+    61.1
+   ]
+  },
+  {
+   "id": "protection-wall-2",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      417.4
+     ],
+     [
+      1056.5,
+      438.5
+     ]
+    ],
+    "width": 0.9
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    0.9,
+    2.52,
+    21.1
+   ]
+  },
+  {
+   "id": "protection-wall-3",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      478.3
+     ],
+     [
+      1056.5,
+      499.4
+     ]
+    ],
+    "width": 0.9
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    0.9,
+    2.5,
+    21.1
+   ]
+  },
+  {
+   "id": "protection-wall-4",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      520.3
+     ],
+     [
+      1056.5,
+      540.6
+     ]
+    ],
+    "width": 0.9
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    0.9,
+    2.53,
+    20.3
+   ]
+  },
+  {
+   "id": "protection-wall-5",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      561.5
+     ],
+     [
+      1056.5,
+      582.6
+     ]
+    ],
+    "width": 0.9
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    0.9,
+    2.51,
+    21.1
+   ]
+  },
+  {
+   "id": "maint-area-hp-1",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1105.35,
+     418.5
+    ],
+    "size": [
+     12.4,
+     9.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.3,
+    0.38,
+    12.4
+   ]
+  },
+  {
+   "id": "maint-area-hp-2",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1149.8,
+     428.75
+    ],
+    "size": [
+     8.1,
+     9.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.0,
+    0.38,
+    8.1
+   ]
+  },
+  {
+   "id": "maint-area-hp-3",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1149.8,
+     408.3
+    ],
+    "size": [
+     7.8,
+     9.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.0,
+    0.38,
+    7.8
+   ]
+  },
+  {
+   "id": "50-F-0001A-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1117.05,
+     320.7
+    ],
+    "size": [
+     16.4,
+     33.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    33.5,
+    0.42,
+    16.4
+   ]
+  },
+  {
+   "id": "50-F-0001B-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1117.05,
+     344.7
+    ],
+    "size": [
+     16.4,
+     33.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    33.5,
+    0.42,
+    16.4
+   ]
+  },
+  {
+   "id": "50-F-0001C-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1117.05,
+     368.7
+    ],
+    "size": [
+     16.4,
+     33.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    33.5,
+    0.42,
+    16.4
+   ]
+  },
+  {
+   "id": "trim-heater-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1138.65,
+     564.35
+    ],
+    "size": [
+     50.3,
+     18.7
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    18.7,
+    0.42,
+    50.3
+   ]
+  },
+  {
+   "id": "50-MS-01",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1124.0,
+     617.25
+    ],
+    "size": [
+     29.1,
+     62.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 110.0,
+   "tris": 420,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    63.4,
+    10.0,
+    29.7
+   ]
+  },
+  {
+   "id": "50-AH-0001",
+   "type": "analyzer_house",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1085.375,
+     617.825
+    ],
+    "size": [
+     8.85,
+     6.75
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 103.5,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    7.05,
+    3.5,
+    9.15
+   ]
+  },
+  {
+   "id": "50-B-13",
+   "type": "building",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1094.7,
+     637.5
+    ],
+    "size": [
+     3.2,
+     7.9
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 104.5,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    8.2,
+    4.5,
+    3.5
+   ]
+  },
+  {
+   "id": "pig-pad-1",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1039.65,
+     626.2
+    ],
+    "size": [
+     16.8,
+     36.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    36.5,
+    0.42,
+    16.8
+   ]
+  },
+  {
+   "id": "pig-pad-2",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1039.65,
+     609.5
+    ],
+    "size": [
+     8.6,
+     36.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    36.5,
+    0.42,
+    8.6
+   ]
+  },
+  {
+   "id": "40-BC-01",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1120.5,
+     507.0
+    ],
+    "size": [
+     20.0,
+     67.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 120.6,
+   "tris": 456,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    67.6,
+    20.6,
+    20.6
+   ]
+  },
+  {
+   "id": "40-V-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1112.9,
+     480.8
+    ],
+    "size": [
+     6.6,
+     21.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    21.8,
+    0.42,
+    6.6
+   ]
+  },
+  {
+   "id": "30-TC-03",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1166.5,
+     364.45
+    ],
+    "size": [
+     12.7,
+     14.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    14.0,
+    3.4,
+    12.7
+   ]
+  },
+  {
+   "id": "30-TC-04",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1167.45,
+     549.4
+    ],
+    "size": [
+     8.4,
+     9.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    9.5,
+    3.4,
+    8.4
+   ]
+  },
+  {
+   "id": "50-TC-10",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1027.4,
+     289.5
+    ],
+    "size": [
+     20.6,
+     24.6
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    24.6,
+    3.4,
+    20.6
+   ]
+  },
+  {
+   "id": "sw-outfall-channel",
+   "type": "channel",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1039.7,
+      296.2
+     ],
+     [
+      1049.7,
+      296.2
+     ],
+     [
+      1049.7,
+      278.4
+     ]
+    ],
+    "width": 1.9
+   },
+   "base_el": 98.0,
+   "top_el": 100.0,
+   "tris": 20,
+   "materials": [
+    "Water_Pit"
+   ],
+   "extent": [
+    10.95,
+    0.54,
+    18.75
+   ]
+  },
+  {
+   "id": "laydown-1",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1113.775,
+     564.45
+    ],
+    "size": [
+     51.1,
+     31.05
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    31.05,
+    0.38,
+    51.1
+   ]
+  },
+  {
+   "id": "laydown-2",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1175.75,
+     439.75
+    ],
+    "size": [
+     29.5,
+     42.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    42.5,
+    0.38,
+    29.5
+   ]
+  },
+  {
+   "id": "laydown-3",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1152.85,
+     418.55
+    ],
+    "size": [
+     11.3,
+     88.3
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    87.0,
+    0.38,
+    11.3
+   ]
+  },
+  {
+   "id": "laydown-4",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1181.25,
+     381.5
+    ],
+    "size": [
+     11.0,
+     31.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    31.5,
+    0.38,
+    11.0
+   ]
+  },
+  {
+   "id": "road-north",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000,
+      649.0
+     ],
+     [
+      1203,
+      649.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    203.0,
+    0.5,
+    8.0
+   ]
+  },
+  {
+   "id": "road-south",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000,
+      270.0
+     ],
+     [
+      1203,
+      270.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    203.0,
+    0.5,
+    8.0
+   ]
+  },
+  {
+   "id": "road-internal-ew",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1086.5,
+      537.0
+     ],
+     [
+      1086.5,
+      533.0
+     ],
+     [
+      1092.0,
+      527.0
+     ],
+     [
+      1200.0,
+      527.0
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    116.5,
+    0.5,
+    13.0
+   ]
+  },
+  {
+   "id": "access-orv-1",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      323.4
+     ],
+     [
+      1056.0,
+      323.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-orv-2",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      365.4
+     ],
+     [
+      1056.0,
+      365.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-orv-3",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      407.4
+     ],
+     [
+      1056.0,
+      407.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-orv-4",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      449.4
+     ],
+     [
+      1056.0,
+      449.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-orv-5",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      467.4
+     ],
+     [
+      1056.0,
+      467.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-orv-6",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      509.4
+     ],
+     [
+      1056.0,
+      509.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-orv-7",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      551.4
+     ],
+     [
+      1056.0,
+      551.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    56.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-n594",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      594.0
+     ],
+     [
+      1080.0,
+      594.0
+     ],
+     [
+      1095.0,
+      595.0
+     ],
+     [
+      1196.0,
+      595.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    196.0,
+    0.5,
+    5.0
+   ]
+  },
+  {
+   "id": "access-pig-ns",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1060.0,
+      596.0
+     ],
+     [
+      1060.0,
+      645.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    49.0
+   ]
+  },
+  {
+   "id": "access-e1086",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1086.5,
+      595.0
+     ],
+     [
+      1086.5,
+      537.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    55.56
+   ]
+  },
+  {
+   "id": "access-e1154",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1153.75,
+      595.0
+     ],
+     [
+      1153.75,
+      530.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    63.0
+   ]
+  },
+  {
+   "id": "access-scv-1",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1083.0,
+      332.05
+     ],
+     [
+      1143.0,
+      332.05
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    60.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-scv-2",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1083.0,
+      356.05
+     ],
+     [
+      1197.0,
+      356.05
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    114.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-scv-3",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1083.0,
+      380.05
+     ],
+     [
+      1143.0,
+      380.05
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    60.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-e1143",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1143.1,
+      313.3
+     ],
+     [
+      1143.1,
+      382.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 48,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    68.7
+   ]
+  },
+  {
+   "id": "access-n468",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1085.0,
+      468.1
+     ],
+     [
+      1192.0,
+      468.1
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    107.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "access-dcp",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1174.9,
+      495.8
+     ],
+     [
+      1174.9,
+      524.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 52,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    28.2
+   ]
+  },
+  {
+   "id": "access-tc04",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1167.0,
+      530.0
+     ],
+     [
+      1167.0,
+      545.2
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    15.2
+   ]
+  },
+  {
+   "id": "drive-analyzer",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1088.1,
+      645.0
+     ],
+     [
+      1088.1,
+      634.75
+     ]
+    ],
+    "width": 5.25
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    5.25,
+    0.5,
+    10.25
+   ]
+  },
+  {
+   "id": "drive-metering",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1152.0,
+      645.0
+     ],
+     [
+      1152.0,
+      631.0
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    6.0,
+    0.5,
+    13.2
+   ]
+  },
+  {
+   "id": "entry-laydown-east",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1186.0,
+      418.5
+     ],
+     [
+      1200.0,
+      418.5
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    14.0,
+    0.5,
+    6.0
+   ]
+  },
+  {
+   "id": "fence-n-inner",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      657.7
+     ],
+     [
+      1203.0,
+      657.7
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 828,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    203.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-n-outer",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      663.7
+     ],
+     [
+      1203.0,
+      663.7
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 828,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    203.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-s-inner",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      260.8
+     ],
+     [
+      1203.0,
+      260.8
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 828,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    203.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-s-outer",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      254.8
+     ],
+     [
+      1203.0,
+      254.8
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 828,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    203.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "gate-fence-s",
+   "type": "gate",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1025.6,
+      260.8
+     ],
+     [
+      1030.5,
+      260.8
+     ]
+    ],
+    "width": 0.2
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 60,
+   "materials": [
+    "Steel_Dark"
+   ],
+   "extent": [
+    4.98,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-low-security-pig",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.4,
+      640.3
+     ],
+     [
+      1013.4,
+      640.3
+     ],
+     [
+      1005.5,
+      632.6
+     ],
+     [
+      1005.5,
+      604.5
+     ],
+     [
+      1010.4,
+      598.8
+     ],
+     [
+      1055.0,
+      598.8
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 660,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    50.98,
+    2.5,
+    41.57
+   ]
+  },
+  {
+   "id": "fence-low-security-pig-e",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1063.6,
+      640.3
+     ],
+     [
+      1065.0,
+      640.3
+     ],
+     [
+      1065.0,
+      599.0
+     ],
+     [
+      1058.6,
+      599.0
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 300,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    6.48,
+    2.5,
+    41.37
+   ]
+  },
+  {
+   "id": "gate-pig-n",
+   "type": "gate",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.4,
+      640.3
+     ],
+     [
+      1063.6,
+      640.3
+     ]
+    ],
+    "width": 0.2
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 60,
+   "materials": [
+    "Steel_Dark"
+   ],
+   "extent": [
+    7.28,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "gate-pig-s",
+   "type": "gate",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1055.0,
+      598.8
+     ],
+     [
+      1058.6,
+      599.0
+     ]
+    ],
+    "width": 0.2
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 60,
+   "materials": [
+    "Steel_Dark"
+   ],
+   "extent": [
+    3.68,
+    2.5,
+    0.27
+   ]
+  },
+  {
+   "id": "trench-perim-n",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      530.2
+     ],
+     [
+      1082.0,
+      530.2
+     ],
+     [
+      1082.0,
+      532.6
+     ],
+     [
+      1190.0,
+      532.6
+     ],
+     [
+      1191.97,
+      532.66
+     ],
+     [
+      1193.8,
+      533.42
+     ],
+     [
+      1195.37,
+      534.63
+     ],
+     [
+      1196.58,
+      536.2
+     ],
+     [
+      1197.34,
+      538.03
+     ],
+     [
+      1197.6,
+      540.0
+     ],
+     [
+      1197.6,
+      635.0
+     ],
+     [
+      1197.34,
+      636.97
+     ],
+     [
+      1196.58,
+      638.8
+     ],
+     [
+      1195.37,
+      640.37
+     ],
+     [
+      1193.8,
+      641.58
+     ],
+     [
+      1191.97,
+      642.34
+     ],
+     [
+      1190.0,
+      642.6
+     ],
+     [
+      1012.0,
+      642.6
+     ],
+     [
+      1009.52,
+      642.27
+     ],
+     [
+      1007.2,
+      641.31
+     ],
+     [
+      1005.21,
+      639.79
+     ],
+     [
+      1003.69,
+      637.8
+     ],
+     [
+      1002.73,
+      635.48
+     ],
+     [
+      1002.4,
+      633.0
+     ],
+     [
+      1002.4,
+      286.0
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 196,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    196.05,
+    0.54,
+    357.02
+   ]
+  },
+  {
+   "id": "trench-perim-s",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1002.4,
+      286.6
+     ],
+     [
+      1002.73,
+      284.12
+     ],
+     [
+      1003.69,
+      281.8
+     ],
+     [
+      1005.21,
+      279.81
+     ],
+     [
+      1007.2,
+      278.29
+     ],
+     [
+      1009.52,
+      277.33
+     ],
+     [
+      1012.0,
+      277.0
+     ],
+     [
+      1190.0,
+      277.0
+     ],
+     [
+      1191.97,
+      277.26
+     ],
+     [
+      1193.8,
+      278.02
+     ],
+     [
+      1195.37,
+      279.23
+     ],
+     [
+      1196.58,
+      280.8
+     ],
+     [
+      1197.34,
+      282.63
+     ],
+     [
+      1197.6,
+      284.6
+     ],
+     [
+      1197.6,
+      405.5
+     ],
+     [
+      1197.15,
+      407.42
+     ],
+     [
+      1196.41,
+      409.2
+     ],
+     [
+      1195.23,
+      410.73
+     ],
+     [
+      1193.7,
+      411.91
+     ],
+     [
+      1191.92,
+      412.65
+     ],
+     [
+      1190.0,
+      412.9
+     ],
+     [
+      1108.7,
+      412.9
+     ],
+     [
+      1108.7,
+      424.2
+     ],
+     [
+      1190.0,
+      424.2
+     ],
+     [
+      1191.89,
+      424.45
+     ],
+     [
+      1193.65,
+      425.18
+     ],
+     [
+      1195.16,
+      426.34
+     ],
+     [
+      1196.32,
+      427.85
+     ],
+     [
+      1197.05,
+      429.61
+     ],
+     [
+      1197.3,
+      431.5
+     ],
+     [
+      1197.6,
+      514.0
+     ],
+     [
+      1197.34,
+      515.97
+     ],
+     [
+      1196.58,
+      517.8
+     ],
+     [
+      1195.37,
+      519.37
+     ],
+     [
+      1193.8,
+      520.58
+     ],
+     [
+      1191.97,
+      521.34
+     ],
+     [
+      1190.0,
+      521.6
+     ],
+     [
+      1104.1,
+      521.6
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 304,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    195.97,
+    0.54,
+    245.45
+   ]
+  },
+  {
+   "id": "trench-w-1",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      562.0
+     ],
+     [
+      1068.8,
+      562.0
+     ],
+     [
+      1068.8,
+      499.9
+     ],
+     [
+      1071.7,
+      499.9
+     ],
+     [
+      1071.7,
+      495.9
+     ],
+     [
+      1079.8,
+      495.9
+     ],
+     [
+      1079.8,
+      493.5
+     ],
+     [
+      1089.9,
+      493.5
+     ],
+     [
+      1089.9,
+      483.6
+     ],
+     [
+      1124.0,
+      483.6
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 88,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    67.5,
+    0.54,
+    79.25
+   ]
+  },
+  {
+   "id": "trench-w-2",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      499.1
+     ],
+     [
+      1068.8,
+      499.1
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 20,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    12.3,
+    0.54,
+    0.85
+   ]
+  },
+  {
+   "id": "trench-w-3",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      417.8
+     ],
+     [
+      1068.8,
+      417.8
+     ],
+     [
+      1068.8,
+      409.8
+     ],
+     [
+      1099.45,
+      409.8
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 28,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    42.95,
+    0.54,
+    8.85
+   ]
+  },
+  {
+   "id": "trench-w-4",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1056.5,
+      335.4
+     ],
+     [
+      1099.3,
+      335.4
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    42.8,
+    0.54,
+    0.85
+   ]
+  },
+  {
+   "id": "trench-hp",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1099.45,
+      316.6
+     ],
+     [
+      1099.45,
+      437.2
+     ],
+     [
+      1150.8,
+      437.2
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 52,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    51.78,
+    0.54,
+    121.02
+   ]
+  },
+  {
+   "id": "trench-hp-2",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1087.1,
+      428.8
+     ],
+     [
+      1099.45,
+      428.8
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    11.92,
+    0.54,
+    0.85
+   ]
+  },
+  {
+   "id": "trench-tc03",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1099.3,
+      386.0
+     ],
+     [
+      1162.8,
+      386.0
+     ],
+     [
+      1162.8,
+      369.1
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 20,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    63.35,
+    0.54,
+    17.33
+   ]
+  },
+  {
+   "id": "trench-tc04",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1159.2,
+      532.6
+     ],
+     [
+      1159.2,
+      547.1
+     ],
+     [
+      1164.3,
+      547.1
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 20,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    5.53,
+    0.54,
+    14.5
+   ]
+  },
+  {
+   "id": "trench-n354",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1154.7,
+      353.6
+     ],
+     [
+      1193.2,
+      353.6
+     ],
+     [
+      1197.0,
+      357.0
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 24,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    42.48,
+    0.54,
+    4.14
+   ]
+  },
+  {
+   "id": "trench-n466",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1084.8,
+      465.6
+     ],
+     [
+      1193.3,
+      465.6
+     ],
+     [
+      1197.0,
+      461.2
+     ]
+    ],
+    "width": 0.85
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 24,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    112.19,
+    0.54,
+    5.1
+   ]
+  },
+  {
+   "id": "trench-outer-n",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      655.5
+     ],
+     [
+      1203.0,
+      655.5
+     ]
+    ],
+    "width": 1.0
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    203.0,
+    0.54,
+    1.0
+   ]
+  },
+  {
+   "id": "trench-outer-s",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1000.0,
+      263.5
+     ],
+     [
+      1203.0,
+      263.5
+     ]
+    ],
+    "width": 1.0
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    203.0,
+    0.54,
+    1.0
+   ]
+  },
+  {
+   "id": "20-t-0001-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1307.6,
+      602.9
+     ],
+     [
+      1308.4,
+      605.7
+     ],
+     [
+      1317.5,
+      603.1
+     ],
+     [
+      1316.7,
+      600.2
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0001-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1333.9,
+      510.9
+     ],
+     [
+      1341.2,
+      516.9
+     ],
+     [
+      1343.1,
+      514.6
+     ],
+     [
+      1335.9,
+      508.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0001-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1348.2,
+      548.4
+     ],
+     [
+      1355.3,
+      547.6
+     ],
+     [
+      1356.0,
+      538.3
+     ],
+     [
+      1349.0,
+      537.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0001-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1358.2,
+      555.4
+     ],
+     [
+      1357.98,
+      560.38
+     ],
+     [
+      1357.33,
+      565.32
+     ],
+     [
+      1356.25,
+      570.18
+     ],
+     [
+      1354.76,
+      574.93
+     ],
+     [
+      1352.85,
+      579.53
+     ],
+     [
+      1350.55,
+      583.95
+     ],
+     [
+      1347.87,
+      588.15
+     ],
+     [
+      1344.84,
+      592.1
+     ],
+     [
+      1341.48,
+      595.78
+     ],
+     [
+      1337.8,
+      599.14
+     ],
+     [
+      1333.85,
+      602.17
+     ],
+     [
+      1329.65,
+      604.85
+     ],
+     [
+      1325.23,
+      607.15
+     ],
+     [
+      1320.63,
+      609.06
+     ],
+     [
+      1315.88,
+      610.55
+     ],
+     [
+      1311.02,
+      611.63
+     ],
+     [
+      1306.08,
+      612.28
+     ],
+     [
+      1301.1,
+      612.5
+     ],
+     [
+      1296.12,
+      612.28
+     ],
+     [
+      1291.18,
+      611.63
+     ],
+     [
+      1286.32,
+      610.55
+     ],
+     [
+      1281.57,
+      609.06
+     ],
+     [
+      1276.97,
+      607.15
+     ],
+     [
+      1272.55,
+      604.85
+     ],
+     [
+      1268.35,
+      602.17
+     ],
+     [
+      1264.4,
+      599.14
+     ],
+     [
+      1260.72,
+      595.78
+     ],
+     [
+      1257.36,
+      592.1
+     ],
+     [
+      1254.33,
+      588.15
+     ],
+     [
+      1251.65,
+      583.95
+     ],
+     [
+      1249.35,
+      579.53
+     ],
+     [
+      1247.44,
+      574.93
+     ],
+     [
+      1245.95,
+      570.18
+     ],
+     [
+      1244.87,
+      565.32
+     ],
+     [
+      1244.22,
+      560.38
+     ],
+     [
+      1244.0,
+      555.4
+     ],
+     [
+      1244.22,
+      550.42
+     ],
+     [
+      1244.87,
+      545.48
+     ],
+     [
+      1245.95,
+      540.62
+     ],
+     [
+      1247.44,
+      535.87
+     ],
+     [
+      1249.35,
+      531.27
+     ],
+     [
+      1251.65,
+      526.85
+     ],
+     [
+      1254.33,
+      522.65
+     ],
+     [
+      1257.36,
+      518.7
+     ],
+     [
+      1260.72,
+      515.02
+     ],
+     [
+      1264.4,
+      511.66
+     ],
+     [
+      1268.35,
+      508.63
+     ],
+     [
+      1272.55,
+      505.95
+     ],
+     [
+      1276.97,
+      503.65
+     ],
+     [
+      1281.57,
+      501.74
+     ],
+     [
+      1286.32,
+      500.25
+     ],
+     [
+      1291.18,
+      499.17
+     ],
+     [
+      1296.12,
+      498.52
+     ],
+     [
+      1301.1,
+      498.3
+     ],
+     [
+      1306.08,
+      498.52
+     ],
+     [
+      1311.02,
+      499.17
+     ],
+     [
+      1315.88,
+      500.25
+     ],
+     [
+      1320.63,
+      501.74
+     ],
+     [
+      1325.23,
+      503.65
+     ],
+     [
+      1329.65,
+      505.95
+     ],
+     [
+      1333.85,
+      508.63
+     ],
+     [
+      1337.8,
+      511.66
+     ],
+     [
+      1341.48,
+      515.02
+     ],
+     [
+      1344.84,
+      518.7
+     ],
+     [
+      1347.87,
+      522.65
+     ],
+     [
+      1350.55,
+      526.85
+     ],
+     [
+      1352.85,
+      531.27
+     ],
+     [
+      1354.76,
+      535.87
+     ],
+     [
+      1356.25,
+      540.62
+     ],
+     [
+      1357.33,
+      545.48
+     ],
+     [
+      1357.98,
+      550.42
+     ],
+     [
+      1358.2,
+      555.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0002-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1453.5,
+      602.9
+     ],
+     [
+      1454.3,
+      605.7
+     ],
+     [
+      1463.4,
+      603.1
+     ],
+     [
+      1462.6,
+      600.2
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0002-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1479.8,
+      510.9
+     ],
+     [
+      1487.1,
+      516.9
+     ],
+     [
+      1489.0,
+      514.6
+     ],
+     [
+      1481.8,
+      508.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0002-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1494.1,
+      548.4
+     ],
+     [
+      1501.2,
+      547.6
+     ],
+     [
+      1501.9,
+      538.3
+     ],
+     [
+      1494.9,
+      537.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0002-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1503.1,
+      555.4
+     ],
+     [
+      1502.88,
+      560.38
+     ],
+     [
+      1502.23,
+      565.32
+     ],
+     [
+      1501.15,
+      570.18
+     ],
+     [
+      1499.66,
+      574.93
+     ],
+     [
+      1497.75,
+      579.53
+     ],
+     [
+      1495.45,
+      583.95
+     ],
+     [
+      1492.77,
+      588.15
+     ],
+     [
+      1489.74,
+      592.1
+     ],
+     [
+      1486.38,
+      595.78
+     ],
+     [
+      1482.7,
+      599.14
+     ],
+     [
+      1478.75,
+      602.17
+     ],
+     [
+      1474.55,
+      604.85
+     ],
+     [
+      1470.13,
+      607.15
+     ],
+     [
+      1465.53,
+      609.06
+     ],
+     [
+      1460.78,
+      610.55
+     ],
+     [
+      1455.92,
+      611.63
+     ],
+     [
+      1450.98,
+      612.28
+     ],
+     [
+      1446.0,
+      612.5
+     ],
+     [
+      1441.02,
+      612.28
+     ],
+     [
+      1436.08,
+      611.63
+     ],
+     [
+      1431.22,
+      610.55
+     ],
+     [
+      1426.47,
+      609.06
+     ],
+     [
+      1421.87,
+      607.15
+     ],
+     [
+      1417.45,
+      604.85
+     ],
+     [
+      1413.25,
+      602.17
+     ],
+     [
+      1409.3,
+      599.14
+     ],
+     [
+      1405.62,
+      595.78
+     ],
+     [
+      1402.26,
+      592.1
+     ],
+     [
+      1399.23,
+      588.15
+     ],
+     [
+      1396.55,
+      583.95
+     ],
+     [
+      1394.25,
+      579.53
+     ],
+     [
+      1392.34,
+      574.93
+     ],
+     [
+      1390.85,
+      570.18
+     ],
+     [
+      1389.77,
+      565.32
+     ],
+     [
+      1389.12,
+      560.38
+     ],
+     [
+      1388.9,
+      555.4
+     ],
+     [
+      1389.12,
+      550.42
+     ],
+     [
+      1389.77,
+      545.48
+     ],
+     [
+      1390.85,
+      540.62
+     ],
+     [
+      1392.34,
+      535.87
+     ],
+     [
+      1394.25,
+      531.27
+     ],
+     [
+      1396.55,
+      526.85
+     ],
+     [
+      1399.23,
+      522.65
+     ],
+     [
+      1402.26,
+      518.7
+     ],
+     [
+      1405.62,
+      515.02
+     ],
+     [
+      1409.3,
+      511.66
+     ],
+     [
+      1413.25,
+      508.63
+     ],
+     [
+      1417.45,
+      505.95
+     ],
+     [
+      1421.87,
+      503.65
+     ],
+     [
+      1426.47,
+      501.74
+     ],
+     [
+      1431.22,
+      500.25
+     ],
+     [
+      1436.08,
+      499.17
+     ],
+     [
+      1441.02,
+      498.52
+     ],
+     [
+      1446.0,
+      498.3
+     ],
+     [
+      1450.98,
+      498.52
+     ],
+     [
+      1455.92,
+      499.17
+     ],
+     [
+      1460.78,
+      500.25
+     ],
+     [
+      1465.53,
+      501.74
+     ],
+     [
+      1470.13,
+      503.65
+     ],
+     [
+      1474.55,
+      505.95
+     ],
+     [
+      1478.75,
+      508.63
+     ],
+     [
+      1482.7,
+      511.66
+     ],
+     [
+      1486.38,
+      515.02
+     ],
+     [
+      1489.74,
+      518.7
+     ],
+     [
+      1492.77,
+      522.65
+     ],
+     [
+      1495.45,
+      526.85
+     ],
+     [
+      1497.75,
+      531.27
+     ],
+     [
+      1499.66,
+      535.87
+     ],
+     [
+      1501.15,
+      540.62
+     ],
+     [
+      1502.23,
+      545.48
+     ],
+     [
+      1502.88,
+      550.42
+     ],
+     [
+      1503.1,
+      555.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0003-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1599.5,
+      602.9
+     ],
+     [
+      1600.3,
+      605.7
+     ],
+     [
+      1609.4,
+      603.1
+     ],
+     [
+      1608.6,
+      600.2
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0003-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1625.8,
+      510.9
+     ],
+     [
+      1633.1,
+      516.9
+     ],
+     [
+      1635.0,
+      514.6
+     ],
+     [
+      1627.8,
+      508.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0003-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1640.1,
+      548.4
+     ],
+     [
+      1647.2,
+      547.6
+     ],
+     [
+      1647.9,
+      538.3
+     ],
+     [
+      1640.9,
+      537.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0003-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1647.8,
+      555.4
+     ],
+     [
+      1647.58,
+      560.38
+     ],
+     [
+      1646.93,
+      565.32
+     ],
+     [
+      1645.85,
+      570.18
+     ],
+     [
+      1644.36,
+      574.93
+     ],
+     [
+      1642.45,
+      579.53
+     ],
+     [
+      1640.15,
+      583.95
+     ],
+     [
+      1637.47,
+      588.15
+     ],
+     [
+      1634.44,
+      592.1
+     ],
+     [
+      1631.08,
+      595.78
+     ],
+     [
+      1627.4,
+      599.14
+     ],
+     [
+      1623.45,
+      602.17
+     ],
+     [
+      1619.25,
+      604.85
+     ],
+     [
+      1614.83,
+      607.15
+     ],
+     [
+      1610.23,
+      609.06
+     ],
+     [
+      1605.48,
+      610.55
+     ],
+     [
+      1600.62,
+      611.63
+     ],
+     [
+      1595.68,
+      612.28
+     ],
+     [
+      1590.7,
+      612.5
+     ],
+     [
+      1585.72,
+      612.28
+     ],
+     [
+      1580.78,
+      611.63
+     ],
+     [
+      1575.92,
+      610.55
+     ],
+     [
+      1571.17,
+      609.06
+     ],
+     [
+      1566.57,
+      607.15
+     ],
+     [
+      1562.15,
+      604.85
+     ],
+     [
+      1557.95,
+      602.17
+     ],
+     [
+      1554.0,
+      599.14
+     ],
+     [
+      1550.32,
+      595.78
+     ],
+     [
+      1546.96,
+      592.1
+     ],
+     [
+      1543.93,
+      588.15
+     ],
+     [
+      1541.25,
+      583.95
+     ],
+     [
+      1538.95,
+      579.53
+     ],
+     [
+      1537.04,
+      574.93
+     ],
+     [
+      1535.55,
+      570.18
+     ],
+     [
+      1534.47,
+      565.32
+     ],
+     [
+      1533.82,
+      560.38
+     ],
+     [
+      1533.6,
+      555.4
+     ],
+     [
+      1533.82,
+      550.42
+     ],
+     [
+      1534.47,
+      545.48
+     ],
+     [
+      1535.55,
+      540.62
+     ],
+     [
+      1537.04,
+      535.87
+     ],
+     [
+      1538.95,
+      531.27
+     ],
+     [
+      1541.25,
+      526.85
+     ],
+     [
+      1543.93,
+      522.65
+     ],
+     [
+      1546.96,
+      518.7
+     ],
+     [
+      1550.32,
+      515.02
+     ],
+     [
+      1554.0,
+      511.66
+     ],
+     [
+      1557.95,
+      508.63
+     ],
+     [
+      1562.15,
+      505.95
+     ],
+     [
+      1566.57,
+      503.65
+     ],
+     [
+      1571.17,
+      501.74
+     ],
+     [
+      1575.92,
+      500.25
+     ],
+     [
+      1580.78,
+      499.17
+     ],
+     [
+      1585.72,
+      498.52
+     ],
+     [
+      1590.7,
+      498.3
+     ],
+     [
+      1595.68,
+      498.52
+     ],
+     [
+      1600.62,
+      499.17
+     ],
+     [
+      1605.48,
+      500.25
+     ],
+     [
+      1610.23,
+      501.74
+     ],
+     [
+      1614.83,
+      503.65
+     ],
+     [
+      1619.25,
+      505.95
+     ],
+     [
+      1623.45,
+      508.63
+     ],
+     [
+      1627.4,
+      511.66
+     ],
+     [
+      1631.08,
+      515.02
+     ],
+     [
+      1634.44,
+      518.7
+     ],
+     [
+      1637.47,
+      522.65
+     ],
+     [
+      1640.15,
+      526.85
+     ],
+     [
+      1642.45,
+      531.27
+     ],
+     [
+      1644.36,
+      535.87
+     ],
+     [
+      1645.85,
+      540.62
+     ],
+     [
+      1646.93,
+      545.48
+     ],
+     [
+      1647.58,
+      550.42
+     ],
+     [
+      1647.8,
+      555.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0004-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1745.4,
+      602.9
+     ],
+     [
+      1746.2,
+      605.7
+     ],
+     [
+      1755.3,
+      603.1
+     ],
+     [
+      1754.5,
+      600.2
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0004-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1771.7,
+      510.9
+     ],
+     [
+      1779.0,
+      516.9
+     ],
+     [
+      1780.9,
+      514.6
+     ],
+     [
+      1773.7,
+      508.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0004-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1786.0,
+      548.4
+     ],
+     [
+      1793.1,
+      547.6
+     ],
+     [
+      1793.8,
+      538.3
+     ],
+     [
+      1786.8,
+      537.6
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0004-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1792.6,
+      555.4
+     ],
+     [
+      1792.38,
+      560.38
+     ],
+     [
+      1791.73,
+      565.32
+     ],
+     [
+      1790.65,
+      570.18
+     ],
+     [
+      1789.16,
+      574.93
+     ],
+     [
+      1787.25,
+      579.53
+     ],
+     [
+      1784.95,
+      583.95
+     ],
+     [
+      1782.27,
+      588.15
+     ],
+     [
+      1779.24,
+      592.1
+     ],
+     [
+      1775.88,
+      595.78
+     ],
+     [
+      1772.2,
+      599.14
+     ],
+     [
+      1768.25,
+      602.17
+     ],
+     [
+      1764.05,
+      604.85
+     ],
+     [
+      1759.63,
+      607.15
+     ],
+     [
+      1755.03,
+      609.06
+     ],
+     [
+      1750.28,
+      610.55
+     ],
+     [
+      1745.42,
+      611.63
+     ],
+     [
+      1740.48,
+      612.28
+     ],
+     [
+      1735.5,
+      612.5
+     ],
+     [
+      1730.52,
+      612.28
+     ],
+     [
+      1725.58,
+      611.63
+     ],
+     [
+      1720.72,
+      610.55
+     ],
+     [
+      1715.97,
+      609.06
+     ],
+     [
+      1711.37,
+      607.15
+     ],
+     [
+      1706.95,
+      604.85
+     ],
+     [
+      1702.75,
+      602.17
+     ],
+     [
+      1698.8,
+      599.14
+     ],
+     [
+      1695.12,
+      595.78
+     ],
+     [
+      1691.76,
+      592.1
+     ],
+     [
+      1688.73,
+      588.15
+     ],
+     [
+      1686.05,
+      583.95
+     ],
+     [
+      1683.75,
+      579.53
+     ],
+     [
+      1681.84,
+      574.93
+     ],
+     [
+      1680.35,
+      570.18
+     ],
+     [
+      1679.27,
+      565.32
+     ],
+     [
+      1678.62,
+      560.38
+     ],
+     [
+      1678.4,
+      555.4
+     ],
+     [
+      1678.62,
+      550.42
+     ],
+     [
+      1679.27,
+      545.48
+     ],
+     [
+      1680.35,
+      540.62
+     ],
+     [
+      1681.84,
+      535.87
+     ],
+     [
+      1683.75,
+      531.27
+     ],
+     [
+      1686.05,
+      526.85
+     ],
+     [
+      1688.73,
+      522.65
+     ],
+     [
+      1691.76,
+      518.7
+     ],
+     [
+      1695.12,
+      515.02
+     ],
+     [
+      1698.8,
+      511.66
+     ],
+     [
+      1702.75,
+      508.63
+     ],
+     [
+      1706.95,
+      505.95
+     ],
+     [
+      1711.37,
+      503.65
+     ],
+     [
+      1715.97,
+      501.74
+     ],
+     [
+      1720.72,
+      500.25
+     ],
+     [
+      1725.58,
+      499.17
+     ],
+     [
+      1730.52,
+      498.52
+     ],
+     [
+      1735.5,
+      498.3
+     ],
+     [
+      1740.48,
+      498.52
+     ],
+     [
+      1745.42,
+      499.17
+     ],
+     [
+      1750.28,
+      500.25
+     ],
+     [
+      1755.03,
+      501.74
+     ],
+     [
+      1759.63,
+      503.65
+     ],
+     [
+      1764.05,
+      505.95
+     ],
+     [
+      1768.25,
+      508.63
+     ],
+     [
+      1772.2,
+      511.66
+     ],
+     [
+      1775.88,
+      515.02
+     ],
+     [
+      1779.24,
+      518.7
+     ],
+     [
+      1782.27,
+      522.65
+     ],
+     [
+      1784.95,
+      526.85
+     ],
+     [
+      1787.25,
+      531.27
+     ],
+     [
+      1789.16,
+      535.87
+     ],
+     [
+      1790.65,
+      540.62
+     ],
+     [
+      1791.73,
+      545.48
+     ],
+     [
+      1792.38,
+      550.42
+     ],
+     [
+      1792.6,
+      555.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0005-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1293.4,
+      315.7
+     ],
+     [
+      1292.6,
+      312.9
+     ],
+     [
+      1283.5,
+      315.5
+     ],
+     [
+      1284.3,
+      318.4
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0005-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1267.1,
+      407.7
+     ],
+     [
+      1259.8,
+      401.7
+     ],
+     [
+      1257.9,
+      404.0
+     ],
+     [
+      1265.1,
+      410.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0005-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1252.8,
+      370.2
+     ],
+     [
+      1245.7,
+      371.0
+     ],
+     [
+      1245.0,
+      380.3
+     ],
+     [
+      1252.0,
+      381.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0005-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1358.3,
+      366.4
+     ],
+     [
+      1358.08,
+      371.38
+     ],
+     [
+      1357.43,
+      376.32
+     ],
+     [
+      1356.35,
+      381.18
+     ],
+     [
+      1354.86,
+      385.93
+     ],
+     [
+      1352.95,
+      390.53
+     ],
+     [
+      1350.65,
+      394.95
+     ],
+     [
+      1347.97,
+      399.15
+     ],
+     [
+      1344.94,
+      403.1
+     ],
+     [
+      1341.58,
+      406.78
+     ],
+     [
+      1337.9,
+      410.14
+     ],
+     [
+      1333.95,
+      413.17
+     ],
+     [
+      1329.75,
+      415.85
+     ],
+     [
+      1325.33,
+      418.15
+     ],
+     [
+      1320.73,
+      420.06
+     ],
+     [
+      1315.98,
+      421.55
+     ],
+     [
+      1311.12,
+      422.63
+     ],
+     [
+      1306.18,
+      423.28
+     ],
+     [
+      1301.2,
+      423.5
+     ],
+     [
+      1296.22,
+      423.28
+     ],
+     [
+      1291.28,
+      422.63
+     ],
+     [
+      1286.42,
+      421.55
+     ],
+     [
+      1281.67,
+      420.06
+     ],
+     [
+      1277.07,
+      418.15
+     ],
+     [
+      1272.65,
+      415.85
+     ],
+     [
+      1268.45,
+      413.17
+     ],
+     [
+      1264.5,
+      410.14
+     ],
+     [
+      1260.82,
+      406.78
+     ],
+     [
+      1257.46,
+      403.1
+     ],
+     [
+      1254.43,
+      399.15
+     ],
+     [
+      1251.75,
+      394.95
+     ],
+     [
+      1249.45,
+      390.53
+     ],
+     [
+      1247.54,
+      385.93
+     ],
+     [
+      1246.05,
+      381.18
+     ],
+     [
+      1244.97,
+      376.32
+     ],
+     [
+      1244.32,
+      371.38
+     ],
+     [
+      1244.1,
+      366.4
+     ],
+     [
+      1244.32,
+      361.42
+     ],
+     [
+      1244.97,
+      356.48
+     ],
+     [
+      1246.05,
+      351.62
+     ],
+     [
+      1247.54,
+      346.87
+     ],
+     [
+      1249.45,
+      342.27
+     ],
+     [
+      1251.75,
+      337.85
+     ],
+     [
+      1254.43,
+      333.65
+     ],
+     [
+      1257.46,
+      329.7
+     ],
+     [
+      1260.82,
+      326.02
+     ],
+     [
+      1264.5,
+      322.66
+     ],
+     [
+      1268.45,
+      319.63
+     ],
+     [
+      1272.65,
+      316.95
+     ],
+     [
+      1277.07,
+      314.65
+     ],
+     [
+      1281.67,
+      312.74
+     ],
+     [
+      1286.42,
+      311.25
+     ],
+     [
+      1291.28,
+      310.17
+     ],
+     [
+      1296.22,
+      309.52
+     ],
+     [
+      1301.2,
+      309.3
+     ],
+     [
+      1306.18,
+      309.52
+     ],
+     [
+      1311.12,
+      310.17
+     ],
+     [
+      1315.98,
+      311.25
+     ],
+     [
+      1320.73,
+      312.74
+     ],
+     [
+      1325.33,
+      314.65
+     ],
+     [
+      1329.75,
+      316.95
+     ],
+     [
+      1333.95,
+      319.63
+     ],
+     [
+      1337.9,
+      322.66
+     ],
+     [
+      1341.58,
+      326.02
+     ],
+     [
+      1344.94,
+      329.7
+     ],
+     [
+      1347.97,
+      333.65
+     ],
+     [
+      1350.65,
+      337.85
+     ],
+     [
+      1352.95,
+      342.27
+     ],
+     [
+      1354.86,
+      346.87
+     ],
+     [
+      1356.35,
+      351.62
+     ],
+     [
+      1357.43,
+      356.48
+     ],
+     [
+      1358.08,
+      361.42
+     ],
+     [
+      1358.3,
+      366.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0006-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1439.3,
+      315.8
+     ],
+     [
+      1438.5,
+      313.0
+     ],
+     [
+      1429.4,
+      315.6
+     ],
+     [
+      1430.2,
+      318.5
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0006-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1413.0,
+      407.8
+     ],
+     [
+      1405.7,
+      401.8
+     ],
+     [
+      1403.8,
+      404.1
+     ],
+     [
+      1411.0,
+      410.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0006-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1398.7,
+      370.3
+     ],
+     [
+      1391.6,
+      371.1
+     ],
+     [
+      1390.9,
+      380.4
+     ],
+     [
+      1397.9,
+      381.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0006-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1503.1,
+      366.4
+     ],
+     [
+      1502.88,
+      371.38
+     ],
+     [
+      1502.23,
+      376.32
+     ],
+     [
+      1501.15,
+      381.18
+     ],
+     [
+      1499.66,
+      385.93
+     ],
+     [
+      1497.75,
+      390.53
+     ],
+     [
+      1495.45,
+      394.95
+     ],
+     [
+      1492.77,
+      399.15
+     ],
+     [
+      1489.74,
+      403.1
+     ],
+     [
+      1486.38,
+      406.78
+     ],
+     [
+      1482.7,
+      410.14
+     ],
+     [
+      1478.75,
+      413.17
+     ],
+     [
+      1474.55,
+      415.85
+     ],
+     [
+      1470.13,
+      418.15
+     ],
+     [
+      1465.53,
+      420.06
+     ],
+     [
+      1460.78,
+      421.55
+     ],
+     [
+      1455.92,
+      422.63
+     ],
+     [
+      1450.98,
+      423.28
+     ],
+     [
+      1446.0,
+      423.5
+     ],
+     [
+      1441.02,
+      423.28
+     ],
+     [
+      1436.08,
+      422.63
+     ],
+     [
+      1431.22,
+      421.55
+     ],
+     [
+      1426.47,
+      420.06
+     ],
+     [
+      1421.87,
+      418.15
+     ],
+     [
+      1417.45,
+      415.85
+     ],
+     [
+      1413.25,
+      413.17
+     ],
+     [
+      1409.3,
+      410.14
+     ],
+     [
+      1405.62,
+      406.78
+     ],
+     [
+      1402.26,
+      403.1
+     ],
+     [
+      1399.23,
+      399.15
+     ],
+     [
+      1396.55,
+      394.95
+     ],
+     [
+      1394.25,
+      390.53
+     ],
+     [
+      1392.34,
+      385.93
+     ],
+     [
+      1390.85,
+      381.18
+     ],
+     [
+      1389.77,
+      376.32
+     ],
+     [
+      1389.12,
+      371.38
+     ],
+     [
+      1388.9,
+      366.4
+     ],
+     [
+      1389.12,
+      361.42
+     ],
+     [
+      1389.77,
+      356.48
+     ],
+     [
+      1390.85,
+      351.62
+     ],
+     [
+      1392.34,
+      346.87
+     ],
+     [
+      1394.25,
+      342.27
+     ],
+     [
+      1396.55,
+      337.85
+     ],
+     [
+      1399.23,
+      333.65
+     ],
+     [
+      1402.26,
+      329.7
+     ],
+     [
+      1405.62,
+      326.02
+     ],
+     [
+      1409.3,
+      322.66
+     ],
+     [
+      1413.25,
+      319.63
+     ],
+     [
+      1417.45,
+      316.95
+     ],
+     [
+      1421.87,
+      314.65
+     ],
+     [
+      1426.47,
+      312.74
+     ],
+     [
+      1431.22,
+      311.25
+     ],
+     [
+      1436.08,
+      310.17
+     ],
+     [
+      1441.02,
+      309.52
+     ],
+     [
+      1446.0,
+      309.3
+     ],
+     [
+      1450.98,
+      309.52
+     ],
+     [
+      1455.92,
+      310.17
+     ],
+     [
+      1460.78,
+      311.25
+     ],
+     [
+      1465.53,
+      312.74
+     ],
+     [
+      1470.13,
+      314.65
+     ],
+     [
+      1474.55,
+      316.95
+     ],
+     [
+      1478.75,
+      319.63
+     ],
+     [
+      1482.7,
+      322.66
+     ],
+     [
+      1486.38,
+      326.02
+     ],
+     [
+      1489.74,
+      329.7
+     ],
+     [
+      1492.77,
+      333.65
+     ],
+     [
+      1495.45,
+      337.85
+     ],
+     [
+      1497.75,
+      342.27
+     ],
+     [
+      1499.66,
+      346.87
+     ],
+     [
+      1501.15,
+      351.62
+     ],
+     [
+      1502.23,
+      356.48
+     ],
+     [
+      1502.88,
+      361.42
+     ],
+     [
+      1503.1,
+      366.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0007-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1585.3,
+      315.7
+     ],
+     [
+      1584.5,
+      312.9
+     ],
+     [
+      1575.4,
+      315.5
+     ],
+     [
+      1576.2,
+      318.4
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0007-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1559.0,
+      407.7
+     ],
+     [
+      1551.7,
+      401.7
+     ],
+     [
+      1549.8,
+      404.0
+     ],
+     [
+      1557.0,
+      410.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0007-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1544.7,
+      370.2
+     ],
+     [
+      1537.6,
+      371.0
+     ],
+     [
+      1536.9,
+      380.3
+     ],
+     [
+      1543.9,
+      381.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0007-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1647.9,
+      366.4
+     ],
+     [
+      1647.68,
+      371.38
+     ],
+     [
+      1647.03,
+      376.32
+     ],
+     [
+      1645.95,
+      381.18
+     ],
+     [
+      1644.46,
+      385.93
+     ],
+     [
+      1642.55,
+      390.53
+     ],
+     [
+      1640.25,
+      394.95
+     ],
+     [
+      1637.57,
+      399.15
+     ],
+     [
+      1634.54,
+      403.1
+     ],
+     [
+      1631.18,
+      406.78
+     ],
+     [
+      1627.5,
+      410.14
+     ],
+     [
+      1623.55,
+      413.17
+     ],
+     [
+      1619.35,
+      415.85
+     ],
+     [
+      1614.93,
+      418.15
+     ],
+     [
+      1610.33,
+      420.06
+     ],
+     [
+      1605.58,
+      421.55
+     ],
+     [
+      1600.72,
+      422.63
+     ],
+     [
+      1595.78,
+      423.28
+     ],
+     [
+      1590.8,
+      423.5
+     ],
+     [
+      1585.82,
+      423.28
+     ],
+     [
+      1580.88,
+      422.63
+     ],
+     [
+      1576.02,
+      421.55
+     ],
+     [
+      1571.27,
+      420.06
+     ],
+     [
+      1566.67,
+      418.15
+     ],
+     [
+      1562.25,
+      415.85
+     ],
+     [
+      1558.05,
+      413.17
+     ],
+     [
+      1554.1,
+      410.14
+     ],
+     [
+      1550.42,
+      406.78
+     ],
+     [
+      1547.06,
+      403.1
+     ],
+     [
+      1544.03,
+      399.15
+     ],
+     [
+      1541.35,
+      394.95
+     ],
+     [
+      1539.05,
+      390.53
+     ],
+     [
+      1537.14,
+      385.93
+     ],
+     [
+      1535.65,
+      381.18
+     ],
+     [
+      1534.57,
+      376.32
+     ],
+     [
+      1533.92,
+      371.38
+     ],
+     [
+      1533.7,
+      366.4
+     ],
+     [
+      1533.92,
+      361.42
+     ],
+     [
+      1534.57,
+      356.48
+     ],
+     [
+      1535.65,
+      351.62
+     ],
+     [
+      1537.14,
+      346.87
+     ],
+     [
+      1539.05,
+      342.27
+     ],
+     [
+      1541.35,
+      337.85
+     ],
+     [
+      1544.03,
+      333.65
+     ],
+     [
+      1547.06,
+      329.7
+     ],
+     [
+      1550.42,
+      326.02
+     ],
+     [
+      1554.1,
+      322.66
+     ],
+     [
+      1558.05,
+      319.63
+     ],
+     [
+      1562.25,
+      316.95
+     ],
+     [
+      1566.67,
+      314.65
+     ],
+     [
+      1571.27,
+      312.74
+     ],
+     [
+      1576.02,
+      311.25
+     ],
+     [
+      1580.88,
+      310.17
+     ],
+     [
+      1585.82,
+      309.52
+     ],
+     [
+      1590.8,
+      309.3
+     ],
+     [
+      1595.78,
+      309.52
+     ],
+     [
+      1600.72,
+      310.17
+     ],
+     [
+      1605.58,
+      311.25
+     ],
+     [
+      1610.33,
+      312.74
+     ],
+     [
+      1614.93,
+      314.65
+     ],
+     [
+      1619.35,
+      316.95
+     ],
+     [
+      1623.55,
+      319.63
+     ],
+     [
+      1627.5,
+      322.66
+     ],
+     [
+      1631.18,
+      326.02
+     ],
+     [
+      1634.54,
+      329.7
+     ],
+     [
+      1637.57,
+      333.65
+     ],
+     [
+      1640.25,
+      337.85
+     ],
+     [
+      1642.55,
+      342.27
+     ],
+     [
+      1644.46,
+      346.87
+     ],
+     [
+      1645.95,
+      351.62
+     ],
+     [
+      1647.03,
+      356.48
+     ],
+     [
+      1647.68,
+      361.42
+     ],
+     [
+      1647.9,
+      366.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-t-0008-laydown-crane",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1731.2,
+      315.8
+     ],
+     [
+      1730.4,
+      313.0
+     ],
+     [
+      1721.3,
+      315.6
+     ],
+     [
+      1722.1,
+      318.5
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.9,
+    0.38,
+    5.5
+   ]
+  },
+  {
+   "id": "20-t-0008-pump-container",
+   "type": "laydown",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1704.9,
+      407.8
+     ],
+     [
+      1697.6,
+      401.8
+     ],
+     [
+      1695.7,
+      404.1
+     ],
+     [
+      1702.9,
+      410.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.1,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    9.2,
+    0.38,
+    8.3
+   ]
+  },
+  {
+   "id": "20-t-0008-elevator-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1690.6,
+      370.3
+     ],
+     [
+      1683.5,
+      371.1
+     ],
+     [
+      1682.8,
+      380.4
+     ],
+     [
+      1689.8,
+      381.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    7.8,
+    0.42,
+    10.8
+   ]
+  },
+  {
+   "id": "20-t-0008-ring-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1792.6,
+      366.4
+     ],
+     [
+      1792.38,
+      371.38
+     ],
+     [
+      1791.73,
+      376.32
+     ],
+     [
+      1790.65,
+      381.18
+     ],
+     [
+      1789.16,
+      385.93
+     ],
+     [
+      1787.25,
+      390.53
+     ],
+     [
+      1784.95,
+      394.95
+     ],
+     [
+      1782.27,
+      399.15
+     ],
+     [
+      1779.24,
+      403.1
+     ],
+     [
+      1775.88,
+      406.78
+     ],
+     [
+      1772.2,
+      410.14
+     ],
+     [
+      1768.25,
+      413.17
+     ],
+     [
+      1764.05,
+      415.85
+     ],
+     [
+      1759.63,
+      418.15
+     ],
+     [
+      1755.03,
+      420.06
+     ],
+     [
+      1750.28,
+      421.55
+     ],
+     [
+      1745.42,
+      422.63
+     ],
+     [
+      1740.48,
+      423.28
+     ],
+     [
+      1735.5,
+      423.5
+     ],
+     [
+      1730.52,
+      423.28
+     ],
+     [
+      1725.58,
+      422.63
+     ],
+     [
+      1720.72,
+      421.55
+     ],
+     [
+      1715.97,
+      420.06
+     ],
+     [
+      1711.37,
+      418.15
+     ],
+     [
+      1706.95,
+      415.85
+     ],
+     [
+      1702.75,
+      413.17
+     ],
+     [
+      1698.8,
+      410.14
+     ],
+     [
+      1695.12,
+      406.78
+     ],
+     [
+      1691.76,
+      403.1
+     ],
+     [
+      1688.73,
+      399.15
+     ],
+     [
+      1686.05,
+      394.95
+     ],
+     [
+      1683.75,
+      390.53
+     ],
+     [
+      1681.84,
+      385.93
+     ],
+     [
+      1680.35,
+      381.18
+     ],
+     [
+      1679.27,
+      376.32
+     ],
+     [
+      1678.62,
+      371.38
+     ],
+     [
+      1678.4,
+      366.4
+     ],
+     [
+      1678.62,
+      361.42
+     ],
+     [
+      1679.27,
+      356.48
+     ],
+     [
+      1680.35,
+      351.62
+     ],
+     [
+      1681.84,
+      346.87
+     ],
+     [
+      1683.75,
+      342.27
+     ],
+     [
+      1686.05,
+      337.85
+     ],
+     [
+      1688.73,
+      333.65
+     ],
+     [
+      1691.76,
+      329.7
+     ],
+     [
+      1695.12,
+      326.02
+     ],
+     [
+      1698.8,
+      322.66
+     ],
+     [
+      1702.75,
+      319.63
+     ],
+     [
+      1706.95,
+      316.95
+     ],
+     [
+      1711.37,
+      314.65
+     ],
+     [
+      1715.97,
+      312.74
+     ],
+     [
+      1720.72,
+      311.25
+     ],
+     [
+      1725.58,
+      310.17
+     ],
+     [
+      1730.52,
+      309.52
+     ],
+     [
+      1735.5,
+      309.3
+     ],
+     [
+      1740.48,
+      309.52
+     ],
+     [
+      1745.42,
+      310.17
+     ],
+     [
+      1750.28,
+      311.25
+     ],
+     [
+      1755.03,
+      312.74
+     ],
+     [
+      1759.63,
+      314.65
+     ],
+     [
+      1764.05,
+      316.95
+     ],
+     [
+      1768.25,
+      319.63
+     ],
+     [
+      1772.2,
+      322.66
+     ],
+     [
+      1775.88,
+      326.02
+     ],
+     [
+      1779.24,
+      329.7
+     ],
+     [
+      1782.27,
+      333.65
+     ],
+     [
+      1784.95,
+      337.85
+     ],
+     [
+      1787.25,
+      342.27
+     ],
+     [
+      1789.16,
+      346.87
+     ],
+     [
+      1790.65,
+      351.62
+     ],
+     [
+      1791.73,
+      356.48
+     ],
+     [
+      1792.38,
+      361.42
+     ],
+     [
+      1792.6,
+      366.4
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 576,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    118.2,
+    0.5,
+    118.2
+   ]
+  },
+  {
+   "id": "20-TC-05",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1373.4,
+     504.6
+    ],
+    "size": [
+     9.0,
+     7.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    7.8,
+    3.4,
+    9.0
+   ]
+  },
+  {
+   "id": "20-TC-06",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1665.4,
+     504.55
+    ],
+    "size": [
+     9.1,
+     7.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    7.8,
+    3.4,
+    9.1
+   ]
+  },
+  {
+   "id": "20-TC-07",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1374.6,
+     414.45
+    ],
+    "size": [
+     9.1,
+     7.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    7.8,
+    3.4,
+    9.1
+   ]
+  },
+  {
+   "id": "20-TC-08",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1666.7,
+     414.45
+    ],
+    "size": [
+     9.1,
+     7.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    7.8,
+    3.4,
+    9.1
+   ]
+  },
+  {
+   "id": "overbridge-a-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1307.05,
+     484.5
+    ],
+    "size": [
+     28.0,
+     17.1
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.1,
+    0.42,
+    28.0
+   ]
+  },
+  {
+   "id": "overbridge-b-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1452.7,
+     484.5
+    ],
+    "size": [
+     28.0,
+     16.6
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    16.6,
+    0.42,
+    28.0
+   ]
+  },
+  {
+   "id": "overbridge-c-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1598.8,
+     485.0
+    ],
+    "size": [
+     29.0,
+     17.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.0,
+    0.42,
+    29.0
+   ]
+  },
+  {
+   "id": "overbridge-d-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1744.75,
+     484.75
+    ],
+    "size": [
+     28.5,
+     17.1
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.1,
+    0.42,
+    28.5
+   ]
+  },
+  {
+   "id": "overbridge-e-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1294.5,
+     434.25
+    ],
+    "size": [
+     31.5,
+     17.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.0,
+    0.42,
+    31.5
+   ]
+  },
+  {
+   "id": "overbridge-f-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1439.95,
+     434.25
+    ],
+    "size": [
+     32.5,
+     17.1
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.1,
+    0.42,
+    32.5
+   ]
+  },
+  {
+   "id": "overbridge-g-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1585.8,
+     434.15
+    ],
+    "size": [
+     32.3,
+     17.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.0,
+    0.42,
+    32.3
+   ]
+  },
+  {
+   "id": "overbridge-h-pad",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1731.75,
+     434.15
+    ],
+    "size": [
+     32.3,
+     17.1
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    17.1,
+    0.42,
+    32.3
+   ]
+  },
+  {
+   "id": "pad-west-rack-corridor",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1268.8,
+     476.7
+    ],
+    "size": [
+     11.6,
+     26.4
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    26.4,
+    0.42,
+    11.6
+   ]
+  },
+  {
+   "id": "box-culvert",
+   "type": "trench",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1837.0,
+     481.25
+    ],
+    "size": [
+     18.1,
+     12.4
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    12.4,
+    0.54,
+    18.1
+   ]
+  },
+  {
+   "id": "trench-tc05",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1255.6,
+      470.9
+     ],
+     [
+      1315.3,
+      470.9
+     ],
+     [
+      1315.3,
+      500.0
+     ],
+     [
+      1321.0,
+      505.0
+     ],
+     [
+      1328.0,
+      508.1
+     ],
+     [
+      1420.0,
+      508.1
+     ],
+     [
+      1440.0,
+      502.0
+     ],
+     [
+      1452.0,
+      499.6
+     ],
+     [
+      1461.0,
+      499.6
+     ],
+     [
+      1461.0,
+      470.9
+     ]
+    ],
+    "width": 1.1
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 76,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    205.95,
+    0.54,
+    38.3
+   ]
+  },
+  {
+   "id": "trench-tc06",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1607.1,
+      470.9
+     ],
+     [
+      1607.1,
+      500.0
+     ],
+     [
+      1612.8,
+      505.0
+     ],
+     [
+      1619.8,
+      508.1
+     ],
+     [
+      1711.8,
+      508.1
+     ],
+     [
+      1731.8,
+      502.0
+     ],
+     [
+      1743.8,
+      499.6
+     ],
+     [
+      1752.8,
+      499.6
+     ],
+     [
+      1752.8,
+      470.9
+     ]
+    ],
+    "width": 1.1
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 68,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    146.8,
+    0.54,
+    37.75
+   ]
+  },
+  {
+   "id": "trench-tc07",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1286.4,
+      450.0
+     ],
+     [
+      1286.4,
+      417.0
+     ],
+     [
+      1286.0,
+      416.13
+     ],
+     [
+      1290.94,
+      417.38
+     ],
+     [
+      1295.99,
+      418.14
+     ],
+     [
+      1301.09,
+      418.4
+     ],
+     [
+      1306.18,
+      418.16
+     ],
+     [
+      1311.23,
+      417.42
+     ],
+     [
+      1316.19,
+      416.19
+     ],
+     [
+      1320.99,
+      414.49
+     ],
+     [
+      1325.61,
+      412.31
+     ],
+     [
+      1332.0,
+      410.85
+     ],
+     [
+      1420.0,
+      410.85
+     ],
+     [
+      1431.4,
+      417.3
+     ],
+     [
+      1431.4,
+      450.0
+     ]
+    ],
+    "width": 1.1
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 112,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    146.93,
+    0.54,
+    39.7
+   ]
+  },
+  {
+   "id": "trench-tc08",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1578.2,
+      450.0
+     ],
+     [
+      1578.2,
+      417.0
+     ],
+     [
+      1577.8,
+      416.13
+     ],
+     [
+      1582.74,
+      417.38
+     ],
+     [
+      1587.79,
+      418.14
+     ],
+     [
+      1592.89,
+      418.4
+     ],
+     [
+      1597.98,
+      418.16
+     ],
+     [
+      1603.03,
+      417.42
+     ],
+     [
+      1607.99,
+      416.19
+     ],
+     [
+      1612.79,
+      414.49
+     ],
+     [
+      1617.41,
+      412.31
+     ],
+     [
+      1623.8,
+      410.85
+     ],
+     [
+      1711.8,
+      410.85
+     ],
+     [
+      1723.2,
+      417.3
+     ],
+     [
+      1723.2,
+      450.0
+     ]
+    ],
+    "width": 1.1
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 112,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    146.93,
+    0.54,
+    39.7
+   ]
+  },
+  {
+   "id": "pad-flare-ko-drums",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1893.05,
+     456.05
+    ],
+    "size": [
+     12.9,
+     47.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    47.5,
+    0.42,
+    12.9
+   ]
+  },
+  {
+   "id": "pad-70-V-1002C",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1888.0,
+     503.45
+    ],
+    "size": [
+     10.3,
+     8.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    8.0,
+    0.42,
+    10.3
+   ]
+  },
+  {
+   "id": "20-SS-02",
+   "type": "substation",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1879.5,
+     641.4
+    ],
+    "size": [
+     28.4,
+     13.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 109.0,
+   "tris": 36,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Concrete"
+   ],
+   "extent": [
+    14.1,
+    9.0,
+    28.7
+   ]
+  },
+  {
+   "id": "10-B-15",
+   "type": "building",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1903.0,
+     559.85
+    ],
+    "size": [
+     7.3,
+     3.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 104.0,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    4.1,
+    4.0,
+    7.6
+   ]
+  },
+  {
+   "id": "parking-fire-truck",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1867.8,
+     564.05
+    ],
+    "size": [
+     19.5,
+     14.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    14.0,
+    0.46,
+    19.5
+   ]
+  },
+  {
+   "id": "parking-bays-gate",
+   "type": "parking",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1877.5,
+     550.0
+    ],
+    "size": [
+     5.0,
+     55.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    55.0,
+    0.46,
+    5.0
+   ]
+  },
+  {
+   "id": "gate-trestle",
+   "type": "gate",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1904.5,
+      553.5
+     ],
+     [
+      1918.5,
+      553.5
+     ]
+    ],
+    "width": 0.3
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 84,
+   "materials": [
+    "Steel_Dark"
+   ],
+   "extent": [
+    14.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "road-ring",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1203.0,
+      649.0
+     ],
+     [
+      1745.0,
+      649.0
+     ],
+     [
+      1754.62,
+      648.5
+     ],
+     [
+      1764.13,
+      646.99
+     ],
+     [
+      1773.43,
+      644.5
+     ],
+     [
+      1782.42,
+      641.05
+     ],
+     [
+      1791.0,
+      636.67
+     ],
+     [
+      1799.08,
+      631.43
+     ],
+     [
+      1806.56,
+      625.37
+     ],
+     [
+      1813.37,
+      618.56
+     ],
+     [
+      1819.43,
+      611.08
+     ],
+     [
+      1824.67,
+      603.0
+     ],
+     [
+      1829.05,
+      594.42
+     ],
+     [
+      1832.5,
+      585.43
+     ],
+     [
+      1834.99,
+      576.13
+     ],
+     [
+      1836.5,
+      566.62
+     ],
+     [
+      1837.0,
+      557.0
+     ],
+     [
+      1837.0,
+      362.0
+     ],
+     [
+      1836.5,
+      352.38
+     ],
+     [
+      1834.99,
+      342.87
+     ],
+     [
+      1832.5,
+      333.57
+     ],
+     [
+      1829.05,
+      324.58
+     ],
+     [
+      1824.67,
+      316.0
+     ],
+     [
+      1819.43,
+      307.92
+     ],
+     [
+      1813.37,
+      300.44
+     ],
+     [
+      1806.56,
+      293.63
+     ],
+     [
+      1799.08,
+      287.57
+     ],
+     [
+      1791.0,
+      282.33
+     ],
+     [
+      1782.42,
+      277.95
+     ],
+     [
+      1773.43,
+      274.5
+     ],
+     [
+      1764.13,
+      272.01
+     ],
+     [
+      1754.62,
+      270.5
+     ],
+     [
+      1745.0,
+      270.0
+     ],
+     [
+      1203.0,
+      270.0
+     ]
+    ],
+    "width": 12.4
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 284,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    640.2,
+    0.5,
+    391.4
+   ]
+  },
+  {
+   "id": "road-upper-row-south",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1203.0,
+      489.0
+     ],
+     [
+      1830.8,
+      489.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    627.8,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "road-lower-row-north",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1203.0,
+      430.2
+     ],
+     [
+      1830.8,
+      430.2
+     ]
+    ],
+    "width": 4.2
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    627.8,
+    0.5,
+    4.2
+   ]
+  },
+  {
+   "id": "20-t-0001-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1300.5,
+      642.6
+     ],
+     [
+      1300.5,
+      614.5
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 24,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    28.1
+   ]
+  },
+  {
+   "id": "20-t-0002-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1446.4,
+      642.6
+     ],
+     [
+      1446.4,
+      614.5
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 24,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    28.1
+   ]
+  },
+  {
+   "id": "20-t-0003-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1592.4,
+      642.6
+     ],
+     [
+      1592.4,
+      614.5
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 24,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    28.1
+   ]
+  },
+  {
+   "id": "20-t-0004-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1738.3,
+      642.6
+     ],
+     [
+      1738.3,
+      614.5
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    28.1
+   ]
+  },
+  {
+   "id": "20-t-0005-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1300.5,
+      276.2
+     ],
+     [
+      1300.5,
+      307.3
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 24,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    31.1
+   ]
+  },
+  {
+   "id": "20-t-0006-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1446.4,
+      276.2
+     ],
+     [
+      1446.4,
+      307.3
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 24,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    31.1
+   ]
+  },
+  {
+   "id": "20-t-0007-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1592.4,
+      276.2
+     ],
+     [
+      1592.4,
+      307.3
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 24,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    31.1
+   ]
+  },
+  {
+   "id": "20-t-0008-access-road",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1738.3,
+      276.2
+     ],
+     [
+      1738.3,
+      307.3
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    4.0,
+    0.5,
+    31.1
+   ]
+  },
+  {
+   "id": "road-north-2",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1575.0,
+      679.8
+     ],
+     [
+      1840.0,
+      679.8
+     ],
+     [
+      1847.81,
+      679.29
+     ],
+     [
+      1855.48,
+      677.76
+     ],
+     [
+      1862.88,
+      675.25
+     ],
+     [
+      1869.9,
+      671.79
+     ],
+     [
+      1876.4,
+      667.44
+     ],
+     [
+      1882.28,
+      662.28
+     ],
+     [
+      1887.44,
+      656.4
+     ],
+     [
+      1891.79,
+      649.9
+     ],
+     [
+      1895.25,
+      642.88
+     ],
+     [
+      1897.76,
+      635.48
+     ],
+     [
+      1899.29,
+      627.81
+     ],
+     [
+      1899.8,
+      620.0
+     ],
+     [
+      1911.0,
+      620.0
+     ]
+    ],
+    "width": 9.5
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 148,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    336.0,
+    0.5,
+    69.3
+   ]
+  },
+  {
+   "id": "road-trestle",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1911.0,
+      620.0
+     ],
+     [
+      1911.0,
+      505.0
+     ]
+    ],
+    "width": 12.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 20,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    12.0,
+    0.5,
+    115.0
+   ]
+  },
+  {
+   "id": "road-ss02-west",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1850.5,
+      668.0
+     ],
+     [
+      1850.5,
+      556.0
+     ],
+     [
+      1858.0,
+      546.0
+     ],
+     [
+      1905.0,
+      546.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    58.5,
+    0.5,
+    126.0
+   ]
+  },
+  {
+   "id": "road-flare-area",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1881.0,
+      385.0
+     ],
+     [
+      1881.0,
+      404.0
+     ],
+     [
+      1886.0,
+      412.0
+     ],
+     [
+      1895.0,
+      416.0
+     ],
+     [
+      1923.0,
+      416.0
+     ]
+    ],
+    "width": 9.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "tris": 36,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    46.5,
+    0.5,
+    35.5
+   ]
+  },
+  {
+   "id": "fence-north-inner",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1203.0,
+      657.5
+     ],
+     [
+      1544.5,
+      657.5
+     ],
+     [
+      1577.5,
+      690.5
+     ],
+     [
+      1859.4,
+      690.5
+     ],
+     [
+      1867.49,
+      690.07
+     ],
+     [
+      1875.45,
+      688.49
+     ],
+     [
+      1883.13,
+      685.88
+     ],
+     [
+      1890.4,
+      682.29
+     ],
+     [
+      1897.14,
+      677.79
+     ],
+     [
+      1903.24,
+      672.44
+     ],
+     [
+      1908.59,
+      666.34
+     ],
+     [
+      1913.09,
+      659.6
+     ],
+     [
+      1916.68,
+      652.33
+     ],
+     [
+      1919.29,
+      644.65
+     ],
+     [
+      1920.87,
+      636.69
+     ],
+     [
+      1921.4,
+      628.6
+     ],
+     [
+      1921.4,
+      556.0
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 3768,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    718.48,
+    2.5,
+    134.57
+   ]
+  },
+  {
+   "id": "fence-north-outer",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1203.0,
+      663.5
+     ],
+     [
+      1543.0,
+      663.5
+     ],
+     [
+      1576.0,
+      696.5
+     ],
+     [
+      1861.0,
+      696.5
+     ],
+     [
+      1869.01,
+      695.61
+     ],
+     [
+      1876.9,
+      694.16
+     ],
+     [
+      1884.56,
+      691.76
+     ],
+     [
+      1891.87,
+      688.46
+     ],
+     [
+      1898.73,
+      684.29
+     ],
+     [
+      1905.04,
+      679.33
+     ],
+     [
+      1910.7,
+      673.64
+     ],
+     [
+      1915.62,
+      667.3
+     ],
+     [
+      1919.75,
+      660.42
+     ],
+     [
+      1923.01,
+      653.08
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 3348,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    720.09,
+    2.5,
+    43.49
+   ]
+  },
+  {
+   "id": "fence-gate-west",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1904.5,
+      555.0
+     ],
+     [
+      1903.0,
+      553.0
+     ],
+     [
+      1903.0,
+      490.0
+     ],
+     [
+      1903.24,
+      486.93
+     ],
+     [
+      1903.94,
+      483.93
+     ],
+     [
+      1905.1,
+      481.08
+     ],
+     [
+      1906.68,
+      478.43
+     ],
+     [
+      1908.65,
+      476.07
+     ],
+     [
+      1910.96,
+      474.03
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 696,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    8.04,
+    2.5,
+    81.04
+   ]
+  },
+  {
+   "id": "fence-gate-north",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1918.5,
+      555.0
+     ],
+     [
+      1921.5,
+      555.0
+     ],
+     [
+      1921.5,
+      556.0
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 120,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    3.08,
+    2.5,
+    1.07
+   ]
+  },
+  {
+   "id": "fence-south-inner",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1923.0,
+      449.0
+     ],
+     [
+      1845.5,
+      449.0
+     ],
+     [
+      1845.5,
+      368.0
+     ],
+     [
+      1844.92,
+      356.87
+     ],
+     [
+      1843.17,
+      345.86
+     ],
+     [
+      1840.29,
+      335.09
+     ],
+     [
+      1836.29,
+      324.68
+     ],
+     [
+      1831.23,
+      314.75
+     ],
+     [
+      1825.16,
+      305.4
+     ],
+     [
+      1818.14,
+      296.74
+     ],
+     [
+      1810.26,
+      288.86
+     ],
+     [
+      1801.6,
+      281.84
+     ],
+     [
+      1792.25,
+      275.77
+     ],
+     [
+      1782.32,
+      270.71
+     ],
+     [
+      1771.91,
+      266.71
+     ],
+     [
+      1761.14,
+      263.83
+     ],
+     [
+      1750.13,
+      262.08
+     ],
+     [
+      1739.0,
+      261.5
+     ],
+     [
+      1203.0,
+      261.5
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 3744,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    720.08,
+    2.5,
+    187.57
+   ]
+  },
+  {
+   "id": "fence-south-outer",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1923.0,
+      443.0
+     ],
+     [
+      1851.5,
+      443.0
+     ],
+     [
+      1851.5,
+      368.0
+     ],
+     [
+      1850.88,
+      356.24
+     ],
+     [
+      1849.04,
+      344.61
+     ],
+     [
+      1845.99,
+      333.24
+     ],
+     [
+      1841.77,
+      322.24
+     ],
+     [
+      1836.43,
+      311.75
+     ],
+     [
+      1830.01,
+      301.87
+     ],
+     [
+      1822.6,
+      292.72
+     ],
+     [
+      1814.28,
+      284.4
+     ],
+     [
+      1805.13,
+      276.99
+     ],
+     [
+      1795.25,
+      270.57
+     ],
+     [
+      1784.76,
+      265.23
+     ],
+     [
+      1773.76,
+      261.01
+     ],
+     [
+      1762.39,
+      257.96
+     ],
+     [
+      1750.76,
+      256.12
+     ],
+     [
+      1739.0,
+      255.5
+     ],
+     [
+      1203.0,
+      255.5
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 3696,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    720.08,
+    2.5,
+    187.57
+   ]
+  },
+  {
+   "id": "slope-north",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1203.0,
+      666.5
+     ],
+     [
+      1538.0,
+      666.5
+     ],
+     [
+      1572.0,
+      700.5
+     ],
+     [
+      1860.0,
+      700.5
+     ],
+     [
+      1890.0,
+      690.0
+     ],
+     [
+      1905.0,
+      673.0
+     ],
+     [
+      1915.0,
+      656.0
+     ],
+     [
+      1923.0,
+      640.0
+     ],
+     [
+      1923.0,
+      697.0
+     ],
+     [
+      1912.0,
+      708.0
+     ],
+     [
+      1895.0,
+      721.0
+     ],
+     [
+      1875.0,
+      730.0
+     ],
+     [
+      1850.0,
+      734.5
+     ],
+     [
+      1575.0,
+      734.5
+     ],
+     [
+      1540.0,
+      694.0
+     ],
+     [
+      1203.0,
+      694.0
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": 100.0,
+   "tris": 60,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    720.0,
+    0.56,
+    94.5
+   ]
+  },
+  {
+   "id": "slope-south",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1203.0,
+      249.3
+     ],
+     [
+      1738.0,
+      249.3
+     ],
+     [
+      1750.62,
+      249.96
+     ],
+     [
+      1763.09,
+      251.94
+     ],
+     [
+      1775.3,
+      255.21
+     ],
+     [
+      1787.09,
+      259.74
+     ],
+     [
+      1798.35,
+      265.47
+     ],
+     [
+      1808.95,
+      272.35
+     ],
+     [
+      1818.76,
+      280.3
+     ],
+     [
+      1827.7,
+      289.24
+     ],
+     [
+      1835.65,
+      299.05
+     ],
+     [
+      1842.53,
+      309.65
+     ],
+     [
+      1848.26,
+      320.91
+     ],
+     [
+      1852.79,
+      332.7
+     ],
+     [
+      1856.06,
+      344.91
+     ],
+     [
+      1858.04,
+      357.38
+     ],
+     [
+      1858.7,
+      370.0
+     ],
+     [
+      1882.3,
+      370.0
+     ],
+     [
+      1881.51,
+      354.92
+     ],
+     [
+      1879.15,
+      340.0
+     ],
+     [
+      1875.24,
+      325.41
+     ],
+     [
+      1869.82,
+      311.31
+     ],
+     [
+      1862.97,
+      297.85
+     ],
+     [
+      1854.74,
+      285.18
+     ],
+     [
+      1845.24,
+      273.44
+     ],
+     [
+      1834.56,
+      262.76
+     ],
+     [
+      1822.82,
+      253.26
+     ],
+     [
+      1810.15,
+      245.03
+     ],
+     [
+      1796.69,
+      238.18
+     ],
+     [
+      1782.59,
+      232.76
+     ],
+     [
+      1768.0,
+      228.85
+     ],
+     [
+      1753.08,
+      226.49
+     ],
+     [
+      1738.0,
+      225.7
+     ],
+     [
+      1203.0,
+      225.7
+     ]
+    ]
+   },
+   "base_el": 97.5,
+   "top_el": 100.0,
+   "tris": 132,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    679.3,
+    0.56,
+    144.3
+   ]
+  },
+  {
+   "id": "50-TC-09",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     924.4,
+     594.75
+    ],
+    "size": [
+     71.5,
+     81.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    81.8,
+    3.4,
+    71.5
+   ]
+  },
+  {
+   "id": "70-UB-03",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     892.9,
+     564.85
+    ],
+    "size": [
+     10.9,
+     16.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "tris": 132,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    17.4,
+    8.0,
+    11.5
+   ]
+  },
+  {
+   "id": "70-UB-04",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     879.65,
+     519.5
+    ],
+    "size": [
+     9.0,
+     20.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "tris": 168,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    21.1,
+    8.0,
+    9.6
+   ]
+  },
+  {
+   "id": "trench-util-ns",
+   "type": "trench",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     899.5,
+     512.0
+    ],
+    "size": [
+     30.0,
+     4.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    4.0,
+    0.54,
+    30.0
+   ]
+  },
+  {
+   "id": "70-UB-08",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     930.85,
+     428.75
+    ],
+    "size": [
+     5.9,
+     7.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 105.0,
+   "tris": 96,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    8.1,
+    5.0,
+    6.5
+   ]
+  },
+  {
+   "id": "70-UB-02",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     959.9,
+     483.95
+    ],
+    "size": [
+     34.1,
+     19.8
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "tris": 240,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    20.4,
+    8.0,
+    34.7
+   ]
+  },
+  {
+   "id": "70-UB-02-annex",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     973.4,
+     481.5
+    ],
+    "size": [
+     13.0,
+     7.2
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "tris": 132,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    7.8,
+    6.0,
+    13.6
+   ]
+  },
+  {
+   "id": "70-UB-01",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     957.7,
+     429.6
+    ],
+    "size": [
+     30.0,
+     13.4
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 110.0,
+   "tris": 240,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    14.0,
+    10.0,
+    30.6
+   ]
+  },
+  {
+   "id": "laydown-ub01",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     975.65,
+     431.6
+    ],
+    "size": [
+     6.2,
+     11.5
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    11.5,
+    0.38,
+    6.2
+   ]
+  },
+  {
+   "id": "70-SS-01",
+   "type": "substation",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      841.2,
+      368.1
+     ],
+     [
+      841.2,
+      339.5
+     ],
+     [
+      845.2,
+      339.5
+     ],
+     [
+      845.2,
+      333.5
+     ],
+     [
+      941.9,
+      333.5
+     ],
+     [
+      941.9,
+      323.0
+     ],
+     [
+      971.0,
+      323.0
+     ],
+     [
+      971.0,
+      351.5
+     ],
+     [
+      974.5,
+      351.5
+     ],
+     [
+      974.5,
+      377.5
+     ],
+     [
+      941.9,
+      377.5
+     ],
+     [
+      941.9,
+      361.0
+     ],
+     [
+      906.3,
+      361.0
+     ],
+     [
+      906.3,
+      375.0
+     ],
+     [
+      890.4,
+      375.0
+     ],
+     [
+      890.4,
+      361.0
+     ],
+     [
+      853.8,
+      361.0
+     ],
+     [
+      853.8,
+      368.1
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 109.0,
+   "tris": 204,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall",
+    "Concrete"
+   ],
+   "extent": [
+    133.6,
+    9.0,
+    54.8
+   ]
+  },
+  {
+   "id": "50-B-14",
+   "type": "building",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     976.35,
+     337.8
+    ],
+    "size": [
+     9.4,
+     3.1
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 104.5,
+   "tris": 24,
+   "materials": [
+    "Building_Roof",
+    "Building_Wall"
+   ],
+   "extent": [
+    3.4,
+    4.5,
+    9.7
+   ]
+  },
+  {
+   "id": "70-A-0012",
+   "type": "paved",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      815.4,
+      372.5
+     ],
+     [
+      834.4,
+      372.5
+     ],
+     [
+      834.4,
+      332.5
+     ],
+     [
+      826.0,
+      332.5
+     ],
+     [
+      826.0,
+      331.3
+     ],
+     [
+      819.0,
+      331.3
+     ],
+     [
+      819.0,
+      332.5
+     ],
+     [
+      815.4,
+      332.5
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 100.3,
+   "tris": 28,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    19.0,
+    0.42,
+    41.2
+   ]
+  },
+  {
+   "id": "70-TC-0001",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     796.0,
+     369.65
+    ],
+    "size": [
+     5.7,
+     5.4
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    5.4,
+    3.4,
+    5.7
+   ]
+  },
+  {
+   "id": "wwt-paving",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     911.5,
+     275.25
+    ],
+    "size": [
+     25.5,
+     77.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    77.0,
+    0.42,
+    25.5
+   ]
+  },
+  {
+   "id": "70-UB-05",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     898.5,
+     279.1
+    ],
+    "size": [
+     7.6,
+     37.2
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "tris": 276,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    37.8,
+    6.0,
+    8.2
+   ]
+  },
+  {
+   "id": "70-UB-07",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     939.2,
+     272.7
+    ],
+    "size": [
+     14.2,
+     20.2
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "tris": 168,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    20.8,
+    6.0,
+    14.8
+   ]
+  },
+  {
+   "id": "70-UB-06",
+   "type": "shelter",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     960.5,
+     274.35
+    ],
+    "size": [
+     11.3,
+     13.6
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "tris": 132,
+   "materials": [
+    "Concrete",
+    "Shelter_Roof",
+    "Steel_Structure"
+   ],
+   "extent": [
+    14.2,
+    6.0,
+    11.9
+   ]
+  },
+  {
+   "id": "road-n649",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      855,
+      649.0
+     ],
+     [
+      1000,
+      649.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 16,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    145.0,
+    0.5,
+    8.0
+   ]
+  },
+  {
+   "id": "road-e855",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      855,
+      462.2
+     ],
+     [
+      855,
+      649.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    8.0,
+    0.5,
+    186.8
+   ]
+  },
+  {
+   "id": "road-n536",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      855,
+      535.75
+     ],
+     [
+      996,
+      535.75
+     ]
+    ],
+    "width": 8.5
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    137.0,
+    0.5,
+    8.5
+   ]
+  },
+  {
+   "id": "road-e996",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      996,
+      293.0
+     ],
+     [
+      996,
+      649.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 92,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    8.0,
+    0.5,
+    352.0
+   ]
+  },
+  {
+   "id": "road-n389",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      770,
+      389.0
+     ],
+     [
+      996,
+      389.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    136.0,
+    0.5,
+    8.0
+   ]
+  },
+  {
+   "id": "road-e916",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      916.5,
+      389.0
+     ],
+     [
+      916.5,
+      462.2
+     ]
+    ],
+    "width": 12.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    12.0,
+    0.5,
+    69.2
+   ]
+  },
+  {
+   "id": "road-w-ss01",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      807.5,
+      385.0
+     ],
+     [
+      807.5,
+      331.0
+     ],
+     [
+      832.2,
+      312.0
+     ],
+     [
+      836.6,
+      312.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 28,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    33.1,
+    0.5,
+    77.0
+   ]
+  },
+  {
+   "id": "road-s-ss01",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      836.6,
+      312.0
+     ],
+     [
+      928.0,
+      312.0
+     ],
+     [
+      947.0,
+      293.0
+     ],
+     [
+      996.0,
+      293.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 36,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    159.4,
+    0.5,
+    27.0
+   ]
+  },
+  {
+   "id": "road-n290-wwt",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      882.5,
+      290.0
+     ],
+     [
+      948.0,
+      290.0
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 20,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    65.5,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "road-e876-intake",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      876.0,
+      576.0
+     ],
+     [
+      876.0,
+      645.0
+     ]
+    ],
+    "width": 5.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    5.0,
+    0.5,
+    69.0
+   ]
+  },
+  {
+   "id": "road-e970-intake",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      970.4,
+      580.0
+     ],
+     [
+      970.4,
+      645.0
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    6.0,
+    0.5,
+    65.0
+   ]
+  },
+  {
+   "id": "road-n426-ub01",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      965.0,
+      426.5
+     ],
+     [
+      996.0,
+      426.5
+     ]
+    ],
+    "width": 4.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    27.0,
+    0.5,
+    4.0
+   ]
+  },
+  {
+   "id": "fence-n-outer-utility",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      855,
+      663.7
+     ],
+     [
+      1000,
+      663.7
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 612,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    145.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-n-inner-utility",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      855,
+      657.7
+     ],
+     [
+      1000,
+      657.7
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 612,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    145.08,
+    2.5,
+    0.07
+   ]
+  },
+  {
+   "id": "fence-sw-outer",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      770,
+      342.7
+     ],
+     [
+      883.5,
+      255.3
+     ],
+     [
+      1000,
+      255.3
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 1080,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    230.08,
+    2.5,
+    87.47
+   ]
+  },
+  {
+   "id": "fence-sw-inner",
+   "type": "fence",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      770,
+      350.2
+     ],
+     [
+      885.5,
+      261.3
+     ],
+     [
+      1000,
+      261.3
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.5,
+   "tris": 1104,
+   "materials": [
+    "Fence",
+    "Steel_Dark"
+   ],
+   "extent": [
+    230.08,
+    2.5,
+    88.97
+   ]
+  },
+  {
+   "id": "wall-n",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      874.0,
+      665.2
+     ],
+     [
+      884.0,
+      666.17
+     ],
+     [
+      1000,
+      666.17
+     ]
+    ],
+    "width": 1.0
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "tris": 24,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    126.05,
+    3.0,
+    1.97
+   ]
+  },
+  {
+   "id": "wall-s",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      873.7,
+      252.85
+     ],
+     [
+      1000,
+      252.85
+     ]
+    ],
+    "width": 1.0
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "tris": 12,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    126.3,
+    3.01,
+    1.0
+   ]
+  },
+  {
+   "id": "trench-n655",
+   "type": "trench",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      855,
+      655.5
+     ],
+     [
+      1000,
+      655.5
+     ]
+    ],
+    "width": 1.0
+   },
+   "base_el": 99.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Concrete_Dark"
+   ],
+   "extent": [
+    145.0,
+    0.54,
+    1.0
+   ]
+  },
+  {
+   "id": "revetment-sw-coast",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      770,
+      337.3
+     ],
+     [
+      865.0,
+      264.13
+     ],
+     [
+      845.85,
+      247.44
+     ],
+     [
+      770,
+      305.9
+     ]
+    ]
+   },
+   "base_el": 96.0,
+   "top_el": 100.0,
+   "tris": 12,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    95.0,
+    0.56,
+    89.86
+   ]
+  },
+  {
+   "id": "breakwater-sw",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      845.85,
+      247.44
+     ],
+     [
+      845.8,
+      187.3
+     ],
+     [
+      845.77,
+      187.34
+     ],
+     [
+      840.78,
+      183.72
+     ],
+     [
+      836.49,
+      179.28
+     ],
+     [
+      833.04,
+      174.16
+     ],
+     [
+      830.53,
+      168.53
+     ],
+     [
+      829.04,
+      162.54
+     ],
+     [
+      828.61,
+      156.38
+     ],
+     [
+      829.25,
+      150.25
+     ],
+     [
+      830.95,
+      144.31
+     ],
+     [
+      833.66,
+      138.77
+     ],
+     [
+      837.28,
+      133.78
+     ],
+     [
+      841.72,
+      129.49
+     ],
+     [
+      846.84,
+      126.04
+     ],
+     [
+      852.47,
+      123.53
+     ],
+     [
+      858.46,
+      122.04
+     ],
+     [
+      864.62,
+      121.61
+     ],
+     [
+      870.75,
+      122.25
+     ],
+     [
+      876.69,
+      123.95
+     ],
+     [
+      882.23,
+      126.66
+     ],
+     [
+      887.22,
+      130.28
+     ],
+     [
+      891.51,
+      134.72
+     ],
+     [
+      894.96,
+      139.84
+     ],
+     [
+      897.47,
+      145.47
+     ],
+     [
+      898.96,
+      151.46
+     ],
+     [
+      899.39,
+      157.62
+     ],
+     [
+      898.75,
+      163.75
+     ],
+     [
+      896.39,
+      171.29
+     ],
+     [
+      896.4,
+      205.0
+     ],
+     [
+      890.5,
+      205.0
+     ],
+     [
+      890.5,
+      254.0
+     ],
+     [
+      873.7,
+      253.0
+     ],
+     [
+      865.0,
+      264.13
+     ]
+    ]
+   },
+   "base_el": 96.0,
+   "top_el": 100.0,
+   "tris": 132,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    70.78,
+    0.56,
+    142.52
+   ]
+  },
+  {
+   "id": "breakwater-sw-crest",
+   "type": "road",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      867.0,
+      262.0
+     ],
+     [
+      867.0,
+      163.0
+     ]
+    ],
+    "width": 6.0
+   },
+   "base_el": 99.5,
+   "top_el": 99.8,
+   "tris": 12,
+   "materials": [
+    "Asphalt"
+   ],
+   "extent": [
+    6.0,
+    0.5,
+    99.0
+   ]
+  },
+  {
+   "id": "revetment-sw-outer",
+   "type": "revetment",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      769.98,
+      253.18
+     ],
+     [
+      772.29,
+      250.43
+     ],
+     [
+      800.0,
+      196.72
+     ],
+     [
+      800.92,
+      193.24
+     ],
+     [
+      801.56,
+      190.57
+     ],
+     [
+      811.25,
+      151.31
+     ],
+     [
+      811.93,
+      148.79
+     ],
+     [
+      806.06,
+      194.52
+     ],
+     [
+      805.14,
+      198.04
+     ],
+     [
+      772.44,
+      258.41
+     ],
+     [
+      770.41,
+      256.73
+     ]
+    ]
+   },
+   "base_el": 96.0,
+   "top_el": 98.0,
+   "tris": 40,
+   "materials": [
+    "Rock_Armour"
+   ],
+   "extent": [
+    41.95,
+    0.56,
+    109.62
+   ]
+  },
+  {
+   "id": "intake-pit-e",
+   "type": "basin",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     971.1,
+     574.95
+    ],
+    "size": [
+     8.1,
+     4.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 97.0,
+   "top_el": 100.0,
+   "tris": 44,
+   "materials": [
+    "Concrete",
+    "Water_Pit"
+   ],
+   "extent": [
+    4.0,
+    3.4,
+    8.1
+   ]
+  },
+  {
+   "id": "laydown-intake",
+   "type": "laydown",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     883.9,
+     546.5
+    ],
+    "size": [
+     13.0,
+     19.2
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Laydown"
+   ],
+   "extent": [
+    19.2,
+    0.38,
+    13.0
+   ]
+  },
+  {
+   "id": "paved-intake-s",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     932.0,
+     549.5
+    ],
+    "size": [
+     19.0,
+     116.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    116.0,
+    0.42,
+    19.0
+   ]
+  },
+  {
+   "id": "paved-intake-e",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     976.0,
+     571.25
+    ],
+    "size": [
+     17.5,
+     16.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    16.0,
+    0.42,
+    17.5
+   ]
+  },
+  {
+   "id": "paved-intake-w",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     879.0,
+     582.5
+    ],
+    "size": [
+     15.0,
+     12.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    12.0,
+    0.42,
+    15.0
+   ]
+  },
+  {
+   "id": "70-P-0005-bund",
+   "type": "wall",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      871.3,
+      567.5
+     ],
+     [
+      883.0,
+      567.5
+     ],
+     [
+      883.0,
+      574.0
+     ],
+     [
+      871.3,
+      574.0
+     ],
+     [
+      871.3,
+      567.5
+     ]
+    ],
+    "width": 0.2
+   },
+   "base_el": 100.0,
+   "top_el": 100.6,
+   "tris": 48,
+   "materials": [
+    "Concrete"
+   ],
+   "extent": [
+    11.95,
+    0.63,
+    6.75
+   ]
+  },
+  {
+   "id": "paved-util",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     932.0,
+     451.0
+    ],
+    "size": [
+     82.0,
+     19.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    19.0,
+    0.42,
+    82.0
+   ]
+  },
+  {
+   "id": "paved-receivers",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     958.5,
+     451.25
+    ],
+    "size": [
+     11.5,
+     27.0
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    27.0,
+    0.42,
+    11.5
+   ]
+  },
+  {
+   "id": "pad-util-skids",
+   "type": "paved",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     936.8,
+     525.65
+    ],
+    "size": [
+     11.7,
+     14.2
+    ],
+    "rot_deg": 0
+   },
+   "base_el": 100.0,
+   "top_el": 100.2,
+   "tris": 12,
+   "materials": [
+    "Paving"
+   ],
+   "extent": [
+    14.2,
+    0.42,
+    11.7
+   ]
+  }
+ ],
+ "terrain": {
+  "Sea": {
+   "tris": 12,
+   "materials": [
+    "Sea"
+   ],
+   "y_min": -6.940000057220459,
+   "y_max": -6.440000057220459
+  },
+  "Land_Platform": {
+   "tris": 4102,
+   "materials": [
+    "Ground",
+    "Rock_Armour"
+   ],
+   "y_min": -9.0,
+   "y_max": 0.0
+  },
+  "Mainland": {
+   "tris": 3140,
+   "materials": [
+    "Ground_Mainland",
+    "Rock_Armour"
+   ],
+   "y_min": -9.0,
+   "y_max": -0.800000011920929
+  }
+ },
+ "landmask": {
+  "land": [
+   [
+    [
+     27.0,
+     310.0
+    ],
+    [
+     721.4,
+     677.3
+    ],
+    [
+     770.0,
+     700.0
+    ],
+    [
+     1203.0,
+     700.0
+    ],
+    [
+     1203.0,
+     694.0
+    ],
+    [
+     1540.0,
+     694.0
+    ],
+    [
+     1575.0,
+     734.5
+    ],
+    [
+     1850.0,
+     734.5
+    ],
+    [
+     1875.0,
+     730.0
+    ],
+    [
+     1895.0,
+     721.0
+    ],
+    [
+     1912.0,
+     708.0
+    ],
+    [
+     1923.5,
+     711.0
+    ],
+    [
+     1939.0,
+     694.0
+    ],
+    [
+     1952.4,
+     674.0
+    ],
+    [
+     1961.0,
+     652.0
+    ],
+    [
+     1964.0,
+     629.0
+    ],
+    [
+     1964.3,
+     513.0
+    ],
+    [
+     1961.3,
+     488.0
+    ],
+    [
+     1961.3,
+     436.0
+    ],
+    [
+     1958.0,
+     423.5
+    ],
+    [
+     1950.0,
+     414.5
+    ],
+    [
+     1937.0,
+     408.5
+    ],
+    [
+     1923.5,
+     406.0
+    ],
+    [
+     1882.3,
+     370.0
+    ],
+    [
+     1881.51,
+     354.92
+    ],
+    [
+     1879.15,
+     340.0
+    ],
+    [
+     1875.24,
+     325.41
+    ],
+    [
+     1869.82,
+     311.31
+    ],
+    [
+     1862.97,
+     297.85
+    ],
+    [
+     1854.74,
+     285.18
+    ],
+    [
+     1845.24,
+     273.44
+    ],
+    [
+     1834.56,
+     262.76
+    ],
+    [
+     1822.82,
+     253.26
+    ],
+    [
+     1810.15,
+     245.03
+    ],
+    [
+     1796.69,
+     238.18
+    ],
+    [
+     1782.59,
+     232.76
+    ],
+    [
+     1768.0,
+     228.85
+    ],
+    [
+     1753.08,
+     226.49
+    ],
+    [
+     1738.0,
+     225.7
+    ],
+    [
+     1203.0,
+     225.7
+    ],
+    [
+     1203.0,
+     214.0
+    ],
+    [
+     908.0,
+     214.0
+    ],
+    [
+     896.4,
+     205.0
+    ],
+    [
+     896.39,
+     171.29
+    ],
+    [
+     898.75,
+     163.75
+    ],
+    [
+     899.39,
+     157.62
+    ],
+    [
+     898.96,
+     151.46
+    ],
+    [
+     897.47,
+     145.47
+    ],
+    [
+     894.96,
+     139.84
+    ],
+    [
+     891.51,
+     134.72
+    ],
+    [
+     887.22,
+     130.28
+    ],
+    [
+     882.23,
+     126.66
+    ],
+    [
+     876.69,
+     123.95
+    ],
+    [
+     870.75,
+     122.25
+    ],
+    [
+     864.62,
+     121.61
+    ],
+    [
+     858.46,
+     122.04
+    ],
+    [
+     852.47,
+     123.53
+    ],
+    [
+     846.84,
+     126.04
+    ],
+    [
+     841.72,
+     129.49
+    ],
+    [
+     837.28,
+     133.78
+    ],
+    [
+     833.66,
+     138.77
+    ],
+    [
+     830.95,
+     144.31
+    ],
+    [
+     829.25,
+     150.25
+    ],
+    [
+     828.61,
+     156.38
+    ],
+    [
+     829.04,
+     162.54
+    ],
+    [
+     830.53,
+     168.53
+    ],
+    [
+     833.04,
+     174.16
+    ],
+    [
+     836.49,
+     179.28
+    ],
+    [
+     840.78,
+     183.72
+    ],
+    [
+     845.77,
+     187.34
+    ],
+    [
+     845.9,
+     247.4
+    ],
+    [
+     770.0,
+     305.9
+    ],
+    [
+     767.7,
+     255.8
+    ],
+    [
+     576.9,
+     277.1
+    ],
+    [
+     529.6,
+     244.0
+    ],
+    [
+     472.3,
+     225.9
+    ],
+    [
+     27.0,
+     225.8
+    ],
+    [
+     27.0,
+     310.0
+    ]
+   ]
+  ],
+  "main": [
+   [
+    [
+     -900.0,
+     -420.0
+    ],
+    [
+     -40.0,
+     -420.0
+    ],
+    [
+     0.0,
+     0.0
+    ],
+    [
+     27.0,
+     215.0
+    ],
+    [
+     27.0,
+     330.0
+    ],
+    [
+     -900.0,
+     820.0
+    ],
+    [
+     -900.0,
+     -420.0
+    ]
+   ]
+  ]
+ }
+}

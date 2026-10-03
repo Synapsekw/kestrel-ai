@@ -86,6 +86,9 @@ const MODELS_PAGES: Record<string, string> = {
   training: "Training",
 };
 
+/** Project pages with neither a tab nor a More-menu entry, named for the breadcrumb. */
+const PROJECT_PAGES: Record<string, string> = { site: "Site 3D" };
+
 export interface RouteInfo {
   section: Section | null;
   projectId: string | null;
@@ -105,6 +108,7 @@ export interface RouteInfo {
  * lands: `maps` is full-bleed at its list (the map workspace, M-W1); C makes `clouds` full-bleed.
  */
 export function layoutOf(tab: string, detail: boolean, sub?: string): Layout {
+  if (tab === "site") return "fullbleed"; // plant model S1: the Site 3D view
   if (tab === "maps") return "fullbleed";
   if (tab === "models") return "fullbleed";
   if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
@@ -140,7 +144,7 @@ export function routeInfo(pathname: string): RouteInfo {
       section: "projects",
       projectId: second,
       tab: tab?.id ?? null,
-      page: tab?.label ?? secondary?.label ?? null,
+      page: tab?.label ?? secondary?.label ?? PROJECT_PAGES[seg] ?? null,
       layout: layoutOf(seg, parts.length > 3, parts[3]),
       transitionKey: `p/${second}/${seg}`,
       ...(seg === "models" && parts[4] === "inspect" ? { sheet: "inspect" as const } : {}),
