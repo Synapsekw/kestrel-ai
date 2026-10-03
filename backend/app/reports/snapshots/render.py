@@ -19,6 +19,7 @@ from app.reports.snapshots import (
     DEFAULT_OUT,
     MISSING,
     SnapshotUnavailable,
+    asset_locator,
     attachment,
     cache,
     image_crop,
@@ -62,6 +63,7 @@ RENDERERS: dict[str, Any] = {
     "volume_plan": volume_plan,
     "attachment": attachment,  # R9-I replaces the module's bodies
     "view3d": view3d,  # R9-C replaces the module's bodies; JPEG_QUALITY = 88
+    "asset_locator": asset_locator,
 }
 
 # Spec §9.5: at most two snapshot renders at once in this process (endpoint threads and job threads).
@@ -124,6 +126,10 @@ def check_limits(spec) -> None:
     out = getattr(spec, "out", None)
     if out is not None and (len(out) != 2 or not all(MIN_OUT <= int(v) <= MAX_OUT for v in out)):
         raise ValueError(f"out must be two sides of {MIN_OUT} to {MAX_OUT} px")
+    if kind == "asset_locator":
+        w, h = (int(v) for v in out)
+        if w != h or w > asset_locator.MAX_OUT:
+            raise ValueError(f"an asset locator is square, at most {asset_locator.MAX_OUT} px")
     if kind == "image_crop":
         if not 1 <= len(spec.ring or []) <= MAX_VERTICES:
             raise ValueError(f"the ring must have 1 to {MAX_VERTICES} vertices")
