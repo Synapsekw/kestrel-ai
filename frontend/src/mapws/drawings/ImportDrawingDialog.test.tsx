@@ -77,10 +77,11 @@ describe("ImportDrawingDialog", () => {
     expect(posts(requests)[0]).toMatchObject({
       body: { path: "D:\\plans\\foundation-plan.pdf" },
     });
-    const page2 = screen.getByRole("radio", { name: "Page 2" });
+    const page2 = screen.getByRole("checkbox", { name: "Page 2" });
     expect(page2.querySelector("img")?.getAttribute("src")).toContain(
       `/drawing-inspections/${INSPECTION_ID}/pages/2/thumbnail?token=t`,
     );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Page 1" }));
     fireEvent.click(page2);
     fireEvent.click(screen.getByRole("radio", { name: "300 dpi" }));
     expect(screen.getByLabelText("Name")).toHaveValue("foundation-plan · p2");
@@ -96,6 +97,55 @@ describe("ImportDrawingDialog", () => {
     });
   });
 
+  it("imports every page of a multi-page PDF from one button", async () => {
+    const onStarted = vi.fn();
+    const { api, requests } = fakeClient(routes(pdfInspection));
+    renderWithProviders(
+      <ImportDrawingDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={onStarted} />,
+      { api },
+    );
+    await read("D:\\plans\\foundation-plan.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Import all pages" }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledTimes(1));
+    expect(
+      posts(requests)
+        .slice(1)
+        .map((r) => r.body),
+    ).toEqual([
+      {
+        inspection_id: INSPECTION_ID,
+        name: "foundation-plan · p1",
+        page: 1,
+        dpi: 150,
+        placement: { method: "none" },
+      },
+      {
+        inspection_id: INSPECTION_ID,
+        name: "foundation-plan · p2",
+        page: 2,
+        dpi: 150,
+        placement: { method: "none" },
+      },
+    ]);
+  });
+
+  it("imports every page that was clicked, in one Start import", async () => {
+    const { api, requests } = fakeClient(routes(pdfInspection));
+    renderWithProviders(
+      <ImportDrawingDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await read("D:\\plans\\foundation-plan.pdf");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Page 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(posts(requests)).toHaveLength(3));
+    expect(
+      posts(requests)
+        .slice(1)
+        .map((r) => (r.body as { page: number }).page),
+    ).toEqual([1, 2]);
+  });
+
   it("lowers the DPI of a large page and says so", async () => {
     const { api, requests } = fakeClient(routes(bigPdfInspection));
     renderWithProviders(
@@ -103,6 +153,7 @@ describe("ImportDrawingDialog", () => {
       { api },
     );
     await read("D:\\plans\\site-poster.pdf");
+    expect(screen.queryByRole("button", { name: "Import all pages" })).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: "300 dpi" }));
     expect(screen.getByText(/renders at 200 dpi to stay under 20 000 px/)).toBeInTheDocument();
     expect(screen.getByText("20000 × 12000 px")).toBeInTheDocument();

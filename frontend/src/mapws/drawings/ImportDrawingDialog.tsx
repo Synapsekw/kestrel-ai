@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useApi, useBackend } from "@/api/client";
 import {
   createDrawing,
@@ -15,10 +15,11 @@ import { Alert, Button, Dialog, Field, Input, Progress } from "@/ui";
 import { DrawingLayerPicker } from "./DrawingLayerPicker";
 import { DrawingPlacementFields } from "./DrawingPlacementFields";
 import {
-  defaultDrawingName,
+  allPdfPages,
+  drawingNameField,
   familyOf,
   initialDrawingForm,
-  toDrawingRequest,
+  toDrawingRequests,
   type DrawingForm,
 } from "./drawingImport";
 import { takeImportPrefill } from "./importPrefill";
@@ -52,8 +53,11 @@ export function ImportDrawingDialog({
   const [fileError, setFileError] = useState<string | null>(null);
   const [inspection, setInspection] = useState<DrawingInspection | null>(null);
   const [form, setForm] = useState<DrawingForm | null>(null);
-  const [busy, setBusy] = useState<"read" | "import" | null>(null);
+  const [busy, setBusy] = useState<"read" | "import" | "all" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const importedPages = useRef(new Set<number>());
+  const lastStarted = useRef<Drawing | null>(null);
+  const inFlight = useRef(false);
 
   const inspectJob = useTrackedJob(projectId, inspection?.state === "inspecting" ? inspection.job_id : null);
   const inspectDone = inspectJob.job !== null && !isActiveJob(inspectJob.job);
@@ -94,6 +98,8 @@ export function ImportDrawingDialog({
     setError(null);
     setInspection(null);
     setForm(null);
+    importedPages.current.clear();
+    lastStarted.current = null;
     try {
       const r = await createDrawingInspection(api, projectId, path.trim());
       useJobsStore.getState().upsert(r.job);
@@ -106,27 +112,54 @@ export function ImportDrawingDialog({
     }
   }
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!inspection || inspection.state !== "ready" || !form) return;
-    const r = toDrawingRequest(inspection, form);
-    if (!r.ok) return setError(r.error);
-    setBusy("import");
+  async function startImport(all: boolean) {
+    if (inFlight.current || !inspection || inspection.state !== "ready" || !form) return;
+    const draft = all ? { ...form, pages: allPdfPages(inspection), page: 1 } : form;
+    const built = toDrawingRequests(inspection, draft);
+    if (!built.ok) return setError(built.error);
+    const pending = built.bodies.filter((body) => body.page == null || !importedPages.current.has(body.page));
+    if (pending.length === 0) {
+      if (lastStarted.current) onStarted(lastStarted.current);
+      return;
+    }
+    inFlight.current = true;
+    setBusy(all ? "all" : "import");
     setError(null);
+    let started = 0;
+    let last: Drawing | null = null;
     try {
-      const res = await createDrawing(api, projectId, r.body);
-      useJobsStore.getState().upsert(res.job);
-      onStarted(res.drawing);
+      for (const body of pending) {
+        const res = await createDrawing(api, projectId, body);
+        useJobsStore.getState().upsert(res.job);
+        if (body.page != null) importedPages.current.add(body.page);
+        started += 1;
+        last = res.drawing;
+        lastStarted.current = res.drawing;
+      }
+      if (last) onStarted(last);
     } catch (err) {
-      setError(messageOf(err, "could not start the import"));
+      const detail = messageOf(err, "could not start the import");
+      setError(
+        started > 0 ? `Started ${started} of ${pending.length} pages, then stopped. ${detail}` : detail,
+      );
     } finally {
+      inFlight.current = false;
       setBusy(null);
     }
   }
 
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    void startImport(false);
+  }
+
+  const importing = busy === "import" || busy === "all";
+
   const ready = inspection?.state === "ready" && form ? inspection : null;
   const family = ready ? familyOf(ready.format) : null;
-  const name = ready && form ? (form.name ?? defaultDrawingName(ready, form.page)) : "";
+  const pageCount = ready ? (ready.page_count ?? ready.pages.length) : 0;
+  const multiPdf = family === "pdf" && pageCount > 1;
+  const name = ready && form ? drawingNameField(ready, form) : "";
 
   return (
     <Dialog
@@ -134,14 +167,30 @@ export function ImportDrawingDialog({
       width="lg"
       title="Import drawing"
       description="DXF or LandXML linework, a PDF page, or a PNG, JPG or TIF plan. The file is only read; the import runs in the background."
-      onClose={() => busy !== "import" && onClose()}
+      onClose={() => !importing && onClose()}
       onSubmit={(e) => void submit(e)}
       footer={
         <>
-          <Button onClick={onClose} disabled={busy === "import"}>
+          <Button onClick={onClose} disabled={importing}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" icon="import" loading={busy === "import"} disabled={!ready}>
+          {multiPdf && ready && (
+            <Button
+              icon="import"
+              loading={busy === "all"}
+              disabled={importing}
+              onClick={() => void startImport(true)}
+            >
+              Import all pages
+            </Button>
+          )}
+          <Button
+            type="submit"
+            variant="primary"
+            icon="import"
+            loading={busy === "import"}
+            disabled={!ready || importing || (multiPdf && (form?.pages.length ?? 0) === 0)}
+          >
             Start import
           </Button>
         </>
@@ -197,11 +246,12 @@ export function ImportDrawingDialog({
         </Section>
 
         {ready && form && family === "pdf" && (
-          <Section title="Page">
+          <Section title={multiPdf ? "Pages" : "Page"}>
             <PdfPagePicker
               pages={ready.pages}
-              pageCount={ready.page_count ?? ready.pages.length}
+              pageCount={pageCount}
               page={form.page}
+              selected={form.pages}
               dpi={form.dpi}
               onChange={(patch) => setForm({ ...form, ...patch })}
               thumbUrl={(n) => pageThumbUrl(baseUrl, token, projectId, ready.id, n)}
@@ -233,7 +283,15 @@ export function ImportDrawingDialog({
         {ready && form && (
           <Section title="Placement">
             <DrawingPlacementFields inspection={ready} form={form} onChange={setForm} />
-            <Field label="Name" htmlFor="drawing-name">
+            <Field
+              label="Name"
+              htmlFor="drawing-name"
+              hint={
+                multiPdf && form.pages.length > 1
+                  ? "Each selected page keeps this name, plus its page number."
+                  : undefined
+              }
+            >
               <Input
                 id="drawing-name"
                 value={name}

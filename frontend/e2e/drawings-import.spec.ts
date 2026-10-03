@@ -120,7 +120,8 @@ test("Add data → Drawing imports page 2 of a PDF in the background", async ({ 
   const dialog = page.getByRole("dialog", { name: "Import drawing" });
   await dialog.getByLabel("Drawing file").fill("D:\\plans\\foundation-plan.pdf");
   await dialog.getByRole("button", { name: "Read file" }).click();
-  await dialog.getByRole("radio", { name: "Page 2" }).click();
+  await dialog.getByRole("checkbox", { name: "Page 1" }).click();
+  await dialog.getByRole("checkbox", { name: "Page 2" }).click();
   await dialog.getByRole("radio", { name: "300 dpi" }).click();
   const post = page.waitForRequest(
     (r) => r.url().endsWith(`/projects/${P}/drawings`) && r.method() === "POST",

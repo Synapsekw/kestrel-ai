@@ -74,7 +74,10 @@ export function epsgFromHint(hint: string | null): number | null {
 
 /** What the operator chose; `name: null` follows the default name. */
 export interface DrawingForm {
+  /** Page shown in the DPI preview. */
   page: number;
+  /** PDF pages to import. One entry for any other file. */
+  pages: number[];
   dpi: DpiChoice;
   placement: PlacementKind;
   epsg: string;
@@ -96,6 +99,7 @@ export function initialDrawingForm(insp: DrawingInspection): DrawingForm {
         : "none";
   return {
     page: 1,
+    pages: [1],
     dpi: DEFAULT_DPI,
     placement,
     epsg: epsg ? String(epsg) : "",
@@ -131,6 +135,33 @@ export function defaultDrawingName(insp: DrawingInspection, page: number): strin
   // The stem gives way, so a capped name keeps its " · pN" page suffix.
   const suffix = familyOf(insp.format) === "pdf" && (insp.page_count ?? 0) > 1 ? ` · p${page}` : "";
   return stem(insp.path).slice(0, MAX_NAME_LENGTH - suffix.length) + suffix;
+}
+
+/** The name field. Several selected pages share the file stem; each request adds its own page suffix. */
+export function drawingNameField(insp: DrawingInspection, f: DrawingForm): string {
+  if (f.name != null) return f.name;
+  const pages = chosenPages(f.pages);
+  if (familyOf(insp.format) === "pdf" && pages.length > 1) return stem(insp.path);
+  return defaultDrawingName(insp, pages[0] ?? f.page);
+}
+
+function chosenPages(pages: readonly number[]): number[] {
+  return [...new Set(pages.filter((p) => Number.isInteger(p)))].sort((a, b) => a - b);
+}
+
+/** Every page of a PDF, including pages past the 50 thumbnails. */
+export function allPdfPages(insp: DrawingInspection): number[] {
+  const count = insp.page_count ?? insp.pages.length;
+  return Array.from({ length: Math.max(0, count) }, (_, i) => i + 1);
+}
+
+const PAGE_SUFFIX = / · p\d+$/;
+
+function withPageSuffix(name: string, page: number): string {
+  const suffix = ` · p${page}`;
+  const base = name.trim().replace(PAGE_SUFFIX, "");
+  if (!base) return "";
+  return base.slice(0, MAX_NAME_LENGTH - suffix.length) + suffix;
 }
 
 function parseEpsg(s: string): number | null {
@@ -184,4 +215,31 @@ export function toDrawingRequest(insp: DrawingInspection, f: DrawingForm): Drawi
     } else body.placement = { method: "embedded" };
   }
   return { ok: true, body };
+}
+
+/**
+ * One build request per selected PDF page (each page is its own drawing). Other files stay one
+ * request. A custom name shared by several pages gains a ` · pN` suffix so the drawings stay distinct.
+ */
+export function toDrawingRequests(
+  insp: DrawingInspection,
+  f: DrawingForm,
+): { ok: true; bodies: DrawingCreate[] } | { ok: false; error: string } {
+  if (familyOf(insp.format) !== "pdf") {
+    const one = toDrawingRequest(insp, f);
+    return one.ok ? { ok: true, bodies: [one.body] } : one;
+  }
+  const pages = chosenPages(f.pages);
+  if (pages.length === 0) return { ok: false, error: "Choose at least one page." };
+  const bodies: DrawingCreate[] = [];
+  for (const page of pages) {
+    const named =
+      pages.length > 1 && f.name != null
+        ? { ...f, page, name: withPageSuffix(f.name, page) }
+        : { ...f, page };
+    const one = toDrawingRequest(insp, named);
+    if (!one.ok) return one;
+    bodies.push(one.body);
+  }
+  return { ok: true, bodies };
 }

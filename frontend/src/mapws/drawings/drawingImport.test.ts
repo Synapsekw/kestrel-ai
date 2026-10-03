@@ -8,6 +8,7 @@ import {
   placementChoices,
   renderSize,
   toDrawingRequest,
+  toDrawingRequests,
 } from "./drawingImport";
 import { bigPdfInspection, dxfInspection, pdfInspection, pngWorldFileInspection } from "./testFixtures";
 
@@ -106,6 +107,32 @@ describe("toDrawingRequest", () => {
       },
     });
     expect(defaultDrawingName(pdfInspection, 2)).toBe("foundation-plan · p2");
+  });
+
+  it("builds one request per selected page, and one per page when importing the whole file", () => {
+    const selected = toDrawingRequests(pdfInspection, {
+      ...initialDrawingForm(pdfInspection),
+      pages: [2, 1, 1],
+    });
+    expect(selected).toMatchObject({
+      ok: true,
+      bodies: [
+        { name: "foundation-plan · p1", page: 1, dpi: 150 },
+        { name: "foundation-plan · p2", page: 2, dpi: 150 },
+      ],
+    });
+    const named = toDrawingRequests(pdfInspection, {
+      ...initialDrawingForm(pdfInspection),
+      pages: [1, 2],
+      name: "Foundation",
+    });
+    expect(named).toMatchObject({
+      ok: true,
+      bodies: [
+        { name: "Foundation · p1", page: 1 },
+        { name: "Foundation · p2", page: 2 },
+      ],
+    });
   });
 
   it("requires the EPSG of a world file", () => {
