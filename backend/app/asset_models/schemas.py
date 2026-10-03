@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from app.asset_models.spec import AssetSpec
 from app.jobs.schemas import JobOut
@@ -173,7 +173,8 @@ class AssetModelRunOut(BaseModel):
             by_stage = AssetModelRunUsageByStageOut.model_validate(usage.get("by_stage"))
         except ValidationError:  # absent (build and refine runs) or not R1's shape
             by_stage = None
-        return out.model_copy(update={"usage_by_stage": by_stage, "packages": packages})
+        counts = {k: int(usage.get(k) or 0) for k in ("input_tokens", "output_tokens")}
+        return out.model_copy(update={"usage": counts, "usage_by_stage": by_stage, "packages": packages})
 
 
 class AssetModelRunList(BaseModel):
@@ -197,6 +198,14 @@ class AssetModelRunStart(BaseModel):
     notes: str | None = Field(None, max_length=4000)
     package_ids: list[Annotated[str, Field(max_length=64)]] = Field(default_factory=list, max_length=64)
     limits: AssetModelRunLimits | None = None
+
+    @model_validator(mode="after")
+    def _plant_fields(self):
+        if self.mode in ("build", "refine") and (self.package_ids or self.limits is not None):
+            raise ValueError("package_ids and limits are for plant runs.")
+        if len(set(self.package_ids)) != len(self.package_ids):
+            raise ValueError("package_ids must be unique.")
+        return self
 
 
 class AssetModelRunWithJob(BaseModel):

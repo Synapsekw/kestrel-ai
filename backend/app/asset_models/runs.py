@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, Path, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.asset_models import store
 from app.asset_models.agent import runner as _run  # noqa: F401 - registers `asset_model_run`
+from app.asset_models.agent.plant import PLANT_MODES
+from app.asset_models.agent.plant import packages as plant_packages
+from app.asset_models.agent.plant.budget import resolve_limits
+from app.asset_models.agent.plant.state import PlantState, load_state, save_state
 from app.asset_models.schemas import (
     AssetModelRunList,
     AssetModelRunOut,
+    AssetModelRunPackagesOut,
     AssetModelRunStart,
     AssetModelRunWithJob,
 )
+from app.asset_models.schemas_plant import SiteModelPackageListOut, SiteModelPackageOut
 from app.asset_models.service import refresh_status
 from app.asset_models.store import INT32_MAX
 from app.db.base import utcnow
@@ -40,6 +48,13 @@ def _run_row(s, model_id, run_id) -> AssetModelRun:
     return row
 
 
+def _out(s, row: AssetModelRun) -> AssetModelRunOut:
+    counts = (
+        AssetModelRunPackagesOut(**plant_packages.summary(s, row.id)) if row.mode in PLANT_MODES else None
+    )
+    return AssetModelRunOut.of(row, counts)
+
+
 def _abandon(handle, model_id: str, run_id: str) -> None:
     """The job never started: fail the run and release the model so it is not stuck `building`."""
     with handle.session() as s:
@@ -62,9 +77,6 @@ def start_asset_model_run(
     jobs, keys = request.app.state.jobs, request.app.state.keys
     with handle.session() as s:
         model = store.get_model(s, assetModelId)
-        if body.mode in ("plant", "plant_package"):
-            # Plant model F0: the contract has the plant modes; R1 replaces this refusal with the run.
-            raise AppError("plant_run_unavailable", "Plant runs are not available in this build yet.", 422)
         if model.live_run_id:
             live = s.get(AssetModelRun, model.live_run_id)
             if live is not None and jobs.is_live(live.job_id):
@@ -85,6 +97,19 @@ def start_asset_model_run(
                 )
         if body.mode == "refine" and not model.current_version:
             raise AppError("nothing_to_refine", "This model has no version to refine yet.", 422)
+        if body.mode == "plant" and not any(x.type == "drawing" for x in body.sources):
+            raise AppError("no_sources", "A plant run needs at least one drawing.", 422)
+        old_packages = []
+        if body.mode == "plant_package":
+            if not model.current_version:
+                raise AppError(
+                    "nothing_to_refine", "This model has no version to re-run packages on yet.", 422
+                )
+            if not body.package_ids:
+                raise AppError("validation_error", "Choose the packages to re-run.", 422)
+            old_packages = plant_packages.find_for_model(s, assetModelId, body.package_ids)
+            if len(old_packages) != len(set(body.package_ids)):
+                raise AppError("validation_error", "A chosen package is not part of this model's runs.", 422)
         model_name = body.model_name or request.app.state.provider_config.get(body.provider).model_name
         run = AssetModelRun(
             model_id=assetModelId,
@@ -99,6 +124,9 @@ def start_asset_model_run(
         s.flush()
         run_id = run.id
         model.live_run_id = run_id
+        if body.mode in PLANT_MODES:
+            model.kind = "plant"
+            _plant_setup(request, handle, s, model, run_id, body, old_packages)
         refresh_status(model)
     try:
         job = jobs.submit(handle, "asset_model_run", {"model_id": assetModelId, "run_id": run_id})
@@ -109,7 +137,7 @@ def start_asset_model_run(
     with handle.session() as s:
         run = _run_row(s, assetModelId, run_id)
         run.job_id = job.id
-        out = AssetModelRunOut.of(run)
+        out = _out(s, run)
     publish_asset_models_changed(request, handle, [assetModelId])
     return AssetModelRunWithJob(run=out, job=JobOut.from_row(job, handle.id))
 
@@ -123,13 +151,13 @@ def list_asset_model_runs(assetModelId: str, handle: ProjectHandle = Depends(get
             .where(AssetModelRun.model_id == assetModelId)
             .order_by(AssetModelRun.started_at.desc(), AssetModelRun.id)
         ).all()
-        return AssetModelRunList(items=[AssetModelRunOut.of(r) for r in rows])
+        return AssetModelRunList(items=[_out(s, r) for r in rows])
 
 
 @router.get(R + "/{runId}", response_model=AssetModelRunOut)
 def get_asset_model_run(assetModelId: str, runId: str, handle: ProjectHandle = Depends(get_project)):  # noqa: N803
     with handle.session() as s:
-        return AssetModelRunOut.of(_run_row(s, assetModelId, runId))
+        return _out(s, _run_row(s, assetModelId, runId))
 
 
 @router.post(R + "/{runId}/stop", response_model=AssetModelRunOut, status_code=202)
@@ -143,7 +171,7 @@ def stop_asset_model_run(
         run = _run_row(s, assetModelId, runId)
         if run.state == "running":
             request.app.state.jobs.cancel(handle, run.job_id)
-        return AssetModelRunOut.of(run)
+        return _out(s, run)
 
 
 @router.get(R + "/{runId}/steps/{step}/thumb")
@@ -178,3 +206,40 @@ def get_asset_model_run_overlay(
     if not path.exists():
         return Response(status_code=204)
     return FileResponse(path, media_type="application/octet-stream")
+
+
+def _plant_setup(request, handle, s, model, run_id: str, body, old) -> None:
+    """The run's limits (settings.json defaults, then the body's) and, for a re-run, the copied packages
+    and their briefs, written to the run's state file before the job starts."""
+    appdata = getattr(getattr(request.app.state, "provider_config", None), "appdata", None)
+    limits = resolve_limits(appdata, body.limits.model_dump(exclude_none=True) if body.limits else None)
+    st = PlantState(
+        limits=asdict(limits),
+        package_ids=list(body.package_ids or []),
+        base_version=model.current_version if body.mode == "plant_package" else None,
+    )
+    if old:
+        rows = plant_packages.copy_for_rerun(s, run_id, old)
+        for new, prev in zip(rows, old, strict=True):
+            try:
+                meta = load_state(store.run_dir(handle, model.id, prev.run_id)).packages_meta.get(prev.id, {})
+            except Exception:  # noqa: BLE001 - an unreadable old state file only loses the brief
+                meta = {}
+            st.packages_meta[new.id] = {
+                "brief": meta.get("brief") or prev.label,
+                "expected_tags": list(meta.get("expected_tags") or []),
+            }
+    save_state(store.run_dir(handle, model.id, run_id), st)
+
+
+@router.get(R + "/{runId}/packages", response_model=SiteModelPackageListOut)
+def list_asset_model_run_packages(
+    assetModelId: str,  # noqa: N803
+    runId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+):
+    with handle.session() as s:
+        _run_row(s, assetModelId, runId)
+        return SiteModelPackageListOut(
+            items=[SiteModelPackageOut.of(r) for r in plant_packages.rows(s, runId)]
+        )

@@ -4,7 +4,6 @@ refusal and large specs validated in the GLB job (plan 2026-10-03-plant-model-f0
 import re
 from types import SimpleNamespace
 
-import pytest
 from test_contract import EXPECTED_STUBS
 from test_plant_contract import PLANT_OPERATIONS
 
@@ -14,7 +13,6 @@ from app.asset_models.schemas import AssetModelRunOut, AssetModelRunPackagesOut
 PROJECT = "/api/v1/projects/{projectId}"
 UNIT_LISTS = {
     "A1": stubs_plant.A1_STUBS,
-    "R1": stubs_plant.R1_STUBS,
     "S1": stubs_plant.S1_STUBS,
     "I1": stubs_plant.I1_STUBS,
 }
@@ -79,18 +77,6 @@ def test_a_model_is_an_asset_unless_created_as_a_plant(client, project_id):
     assert (plain["kind"], plant["kind"]) == ("asset", "plant")
     kinds = {m["id"]: m["kind"] for m in client.get(base).json()["items"]}
     assert kinds == {plain["id"]: "asset", plant["id"]: "plant"}
-
-
-@pytest.mark.parametrize("mode", ["plant", "plant_package"])
-def test_a_plant_run_is_refused_until_r1(client, project_id, mode):
-    base = f"/api/v1/projects/{project_id}/asset-models"
-    model = client.post(base, json={"name": "Al-Zour", "kind": "plant"}).json()
-    r = client.post(
-        f"{base}/{model['id']}/runs",
-        json={"mode": mode, "sources": [{"type": "drawing", "id": "d1"}], "provider": "anthropic"},
-    )
-    assert r.status_code == 422, r.text
-    assert r.json()["error"]["code"] == "plant_run_unavailable"
 
 
 def test_a_run_reads_its_stage_usage_from_its_usage():
