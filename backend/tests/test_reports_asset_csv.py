@@ -120,3 +120,28 @@ def test_the_render_job_writes_sightings_csv_for_the_layout(handle, tmp_path):
     assert path.name == "sightings.csv"
     raw = path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbffinding_id,defect_id,") and raw.count(b"\r\n") == 5
+
+
+def test_a_pending_sighting_with_a_stale_centre_prints_as_not_placed(handle):
+    """A box edit sets placement to pending and leaves cx..nz stale: the row is not placed, and the
+    stale centre neither prints nor sorts it above a placed sighting."""
+    crack = add_type(handle, "crack")
+    mid, _, _ = add_asset_model(handle)
+    a = add_asset_image(handle, name="DJI_0001.JPG")
+    b = add_asset_image(handle, name="DJI_0002.JPG")
+    add_pose(handle, a, mid)
+    add_pose(handle, b, mid)
+    add_asset_finding(
+        handle,
+        mid,
+        crack,
+        sightings=[
+            {"image_id": a, "center": (-5.0, 10.0, 0.5), "normal": (-1.0, 0.0, 0.0)},
+            {"image_id": b, "placement": "pending", "center": (-5.0, 90.0, 0.5), "normal": (-1.0, 0.0, 0.0)},
+        ],
+    )
+    ctx = ctx_for(handle, config(sections=("findings_table",)))
+    rows = list(asset_rows.sighting_rows(handle, ctx.where, scale={lv.level: lv for lv in ctx.scale}))
+    assert [r[3] for r in rows] == ["DJI_0001.JPG", "DJI_0002.JPG"]
+    pending = rows[1]
+    assert (pending[8], pending[9], pending[10], pending[11], pending[12]) == ("", "", "Not placed", "", "no")

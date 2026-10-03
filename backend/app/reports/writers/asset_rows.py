@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from datetime import UTC
 from pathlib import PurePosixPath
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 
 from app.db.models import Finding, FindingSighting, Image, ImagePose, ImageReview, ProjectType
 from app.findings.numbers import format_number
@@ -48,8 +48,10 @@ def _sighting_values(sg, f, img, pose, info, types: dict, scale: dict) -> list:
     from app.asset_review.derive import derive  # P1
 
     sev = sg.severity if sg.severity is not None else f.severity
-    center = (sg.cx, sg.cy, sg.cz) if sg.cx is not None and sg.cy is not None and sg.cz is not None else None
-    normal = (sg.nx, sg.ny, sg.nz) if sg.nx is not None and sg.ny is not None and sg.nz is not None else None
+    # A box edit sets placement to pending and leaves cx..nz stale: only a placed sighting has a centre.
+    placed = sg.placement in PLACED
+    center = (sg.cx, sg.cy, sg.cz) if placed and None not in (sg.cx, sg.cy, sg.cz) else None
+    normal = (sg.nx, sg.ny, sg.nz) if placed and None not in (sg.nx, sg.ny, sg.nz) else None
     d = (
         derive(center, normal, info.review, info.frame)
         if center and info and info.review and info.frame
@@ -69,7 +71,7 @@ def _sighting_values(sg, f, img, pose, info, types: dict, scale: dict) -> list:
         f"{height:.2f}" if height is not None else "",
         d.side if d is not None and d.side else NOT_PLACED,
         f"{d.bearing_deg:.0f}" if d is not None and d.bearing_deg is not None else "",
-        "yes" if sg.placement in PLACED else "no",
+        "yes" if placed else "no",
         f"{(sg.coverage or 0.0) * 100:.4f}",
         f.note or None,
         None,
@@ -93,6 +95,7 @@ def sighting_rows(handle, where, *, scale: dict) -> Iterator[list]:
         ).scalar_one()
     width = max(2, len(str(total)))
     sev = func.coalesce(FindingSighting.severity, Finding.severity)
+    placed_y = case((FindingSighting.placement.in_(PLACED), FindingSighting.cy), else_=None)
     q = (
         select(FindingSighting, Finding, Image, ImagePose)
         .join(Finding, Finding.id == FindingSighting.finding_id)
@@ -106,8 +109,8 @@ def sighting_rows(handle, where, *, scale: dict) -> Iterator[list]:
         )
         .where(where, ASSET)
         .order_by(
-            FindingSighting.cy.is_(None),
-            FindingSighting.cy.desc(),
+            placed_y.is_(None),
+            placed_y.desc(),
             sev.is_(None),
             sev.desc(),
             func.coalesce(Image.original_name, Image.path),
