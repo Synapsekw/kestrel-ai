@@ -285,6 +285,32 @@ CASES: dict[str, Case] = {
         tris=(200, 4000),
         parts=frozenset({"bund", "saddles", "shell", "heads"}),
     ),
+    "tank_lng": Case(  # Cowork 20-T-0001: wall OD 93.5, base EL 100, dome top EL 151.5
+        "tank_lng",
+        circle(93.5),
+        51.5,
+        margin=6.0,
+        tris=(19500, 32000),
+        parts=frozenset(
+            {
+                "slab",
+                "wall_dome",
+                "roof_edge_deck",
+                "roof_edge_posts",
+                "roof_edge_rails",
+                "platform_pump_deck",
+                "platform_safety_deck",
+                "platform_instrument_deck",
+                "platform_flare_deck",
+                "platform_unloading_deck",
+                "walkway_deck",
+                "stair_tower_columns",
+                "stair_tower_treads",
+                "risers",
+            }
+        ),
+        golden=("iso", "top"),
+    ),
     # --- rotating (Tasks 7, 8)
     # --- power (Task 8)
     # --- process (Tasks 9, 10)
@@ -519,3 +545,42 @@ def test_storage_tank_small_horizontal_vent_protrudes_above_the_shell():
 
 def test_storage_tank_small_lod_lowers_triangles():
     assert tris(built("storage_tank_small", 0.25)) < tris(built("storage_tank_small"))
+
+
+def test_tank_lng_roof_posts_are_instanced_round_the_edge():
+    posts = next(n for n in built("tank_lng") if n.name == "roof_edge_posts").geometry
+    assert isinstance(posts, Instanced)
+    assert len(posts.transforms) == max(8, math.ceil(2 * math.pi * (93.5 / 2 - 0.1) / k.POST_PITCH))
+
+
+def test_tank_lng_parts_can_be_switched_off():
+    params = {
+        "roof_platforms": [],
+        "walkway": None,
+        "stair_tower_bearing_deg": None,
+        "risers_bearing_deg": None,
+    }
+    nodes = REGISTRY["tank_lng"].fn(make_item("tank_lng", circle(93.5), h=51.5, params=params), CTX)
+    names = {n.name for n in nodes}
+    assert not any(n.startswith(("platform_", "walkway", "stair_tower", "riser")) for n in names)
+    assert {"slab", "wall_dome", "roof_edge_posts"} <= names
+
+
+def test_tank_lng_platform_sits_at_its_bearing():
+    deck = next(n for n in built("tank_lng") if n.name == "platform_pump_deck").geometry
+    x, _, z = deck.centroid
+    assert math.degrees(math.atan2(z, x)) % 360 == pytest.approx(134.0, abs=2.0)
+
+
+def test_tank_lng_scales_to_other_diameters():  # Review Focus 4
+    nodes = REGISTRY["tank_lng"].fn(make_item("tank_lng", circle(60.0), h=35.0), CTX)
+    lo, hi = bounds(nodes)
+    assert max(abs(lo[0]), abs(hi[0]), abs(lo[2]), abs(hi[2])) <= 30.0 + 6.0
+    assert abs(hi[1] - 35.0) <= max(0.05 * 35.0, 0.5)
+    names = {n.name for n in nodes}
+    assert {f"platform_{kd}_deck" for kd in ("pump", "safety", "instrument", "flare", "unloading")} <= names
+    assert nodes[0].extras["derived"]["scale"] == pytest.approx(60.0 / 93.5, abs=1e-3)
+
+
+def test_tank_lng_lod_lowers_triangles():
+    assert tris(built("tank_lng", 0.25)) < tris(built("tank_lng"))
