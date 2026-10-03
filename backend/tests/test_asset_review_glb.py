@@ -150,3 +150,60 @@ def test_write_normalised_refuses_a_short_file(tmp_path):
     cut.write_bytes(full[: 20 + clen + 8])
     with pytest.raises(glb.GlbError, match="ends before"):
         glb.write_normalised(cut, tmp_path / "out.glb", glb.parse(cut), None)
+
+
+def test_normalise_names_stay_unique_when_a_renamed_name_collides():
+    doc = {
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "A"}, {"name": "A_2"}, {"name": "A"}, {"name": "kestrel_frame"}],
+    }
+    names = [n["name"] for n in glb.normalise(doc, None)["nodes"]]
+    assert len(set(names)) == 4 and names[:2] == ["A", "A_2"]
+    out = glb.normalise(doc, frame_io.CONVERSIONS["x_east_minus_z_north"])
+    all_names = [n["name"] for n in out["nodes"]]
+    assert len(set(all_names)) == 5
+
+
+def test_part_names_match_between_source_and_stored_copy(tmp_path):
+    sc = trimesh.Scene()
+    for i, name in enumerate(["Leg", "Leg", "world", "Leg_1"]):
+        box = trimesh.creation.box(extents=[1, 1, 1])
+        sc.add_geometry(box, node_name=name, geom_name=f"g{i}")
+    src = tmp_path / "dup.glb"
+    src.write_bytes(sc.export(file_type="glb"))
+    info = glb.parse(src)
+    dest = tmp_path / "stored.glb"
+    glb.write_normalised(src, dest, info, frame_io.CONVERSIONS["x_east_minus_z_north"])
+    stored = glb.parse(dest)
+    src_names = [p.name for p in info.parts]
+    assert len(set(src_names)) == len(src_names)
+    assert src_names == [p.name for p in stored.parts]
+    assert src_names == [stored.doc["nodes"][p.node]["name"] for p in stored.parts]
+
+
+def test_parse_wraps_malformed_node_data(tmp_path):
+    p = tmp_path / "bad.glb"
+    p.write_bytes(
+        _glb(
+            {
+                "asset": {"version": "2.0"},
+                "scenes": [{"nodes": [0]}],
+                "nodes": [{"mesh": 0, "matrix": [1]}],
+                "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}],
+                "accessors": [{"min": [0], "max": [1]}],
+            }
+        )
+    )
+    with pytest.raises(glb.GlbError, match="malformed"):
+        glb.parse(p)
+
+
+def test_write_normalised_removes_a_partial_dest(tmp_path):
+    full = _scene_glb(tmp_path).read_bytes()
+    clen = struct.unpack_from("<I", full, 12)[0]
+    cut = tmp_path / "cut.glb"
+    cut.write_bytes(full[: 20 + clen + 8])
+    dest = tmp_path / "out.glb"
+    with pytest.raises(glb.GlbError):
+        glb.write_normalised(cut, dest, glb.parse(cut), None)
+    assert not dest.exists()

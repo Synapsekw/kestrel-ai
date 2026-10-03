@@ -130,6 +130,31 @@ def _bounds(doc: dict) -> tuple[list[float], list[float]] | None:
     return [round(float(v), 4) for v in lo], [round(float(v), 4) for v in hi]
 
 
+def _unique(name: str, index: int, taken: set[str]) -> str:
+    """`name` if free and not reserved, else `name_<n>` counting up from `index` until it is free."""
+    if name not in taken and name not in RESERVED_NAMES:
+        return name
+    n = index
+    while f"{name}_{n}" in taken or f"{name}_{n}" in RESERVED_NAMES:
+        n += 1
+    return f"{name}_{n}"
+
+
+def _node_names(nodes: list) -> list[str | None]:
+    """The one naming rule: the name every node has in the stored copy (None for a non-object node).
+    Already unique, non-reserved names come back unchanged, so it is the identity on a stored file."""
+    taken: set[str] = set()
+    out: list[str | None] = []
+    for i, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            out.append(None)
+            continue
+        name = _unique(str(node.get("name") or f"node_{i}"), i, taken)
+        taken.add(name)
+        out.append(name)
+    return out
+
+
 def parse(path: Path) -> GlbInfo:
     """The header and JSON chunk of `path`: nodes, names, extras and bounds. The BIN chunk is not read."""
     with open(path, "rb") as f:
@@ -147,13 +172,19 @@ def parse(path: Path) -> GlbInfo:
         uri = b.get("uri") if isinstance(b, dict) else None
         if isinstance(uri, str) and not uri.startswith("data:"):
             raise GlbError("The GLB points at an external buffer file; export it as a single .glb.")
-    parts = []
-    for i, node in enumerate(doc.get("nodes", [])):
-        if isinstance(node, dict) and isinstance(node.get("mesh"), int):
-            extras = node.get("extras") if isinstance(node.get("extras"), dict) else {}
-            name = str(node.get("name") or f"node_{i}")
-            parts.append(GlbPart(node=i, name=name, group=_group_of(name, extras), extras=extras))
-    return GlbInfo(doc=doc, json_length=clen, total_length=total, parts=parts, bounds=_bounds(doc))
+    try:
+        nodes = doc.get("nodes", [])
+        names = _node_names(nodes)
+        parts = []
+        for i, node in enumerate(nodes):
+            if isinstance(node, dict) and isinstance(node.get("mesh"), int):
+                extras = node.get("extras") if isinstance(node.get("extras"), dict) else {}
+                name = names[i]
+                parts.append(GlbPart(node=i, name=name, group=_group_of(name, extras), extras=extras))
+        bounds = _bounds(doc)
+    except (IndexError, TypeError, AttributeError, ValueError, KeyError):
+        raise GlbError("The GLB's node data is malformed and could not be read.") from None
+    return GlbInfo(doc=doc, json_length=clen, total_length=total, parts=parts, bounds=bounds)
 
 
 def normalise(doc: dict, matrix: np.ndarray | None) -> dict:
@@ -162,22 +193,18 @@ def normalise(doc: dict, matrix: np.ndarray | None) -> dict:
     column-major out). trimesh then names its scene nodes exactly as the glTF does."""
     doc = json.loads(json.dumps(doc))
     nodes = doc.setdefault("nodes", [])
-    taken: set[str] = set()
-    for i, node in enumerate(nodes):
-        if not isinstance(node, dict):
-            continue
-        name = str(node.get("name") or f"node_{i}")
-        if name in taken or name in RESERVED_NAMES:
-            name = f"{name}_{i}"
-        taken.add(name)
-        node["name"] = name
+    names = _node_names(nodes)
+    for node, name in zip(nodes, names, strict=True):
+        if name is not None:
+            node["name"] = name
+    taken = {n for n in names if n is not None}
     if matrix is not None:
         scenes = doc.get("scenes") or [{"nodes": []}]
         doc["scenes"] = scenes
         si = doc.get("scene", 0)
         si = si if isinstance(si, int) and 0 <= si < len(scenes) else 0
         doc["scene"] = si
-        name = FRAME_NODE_NAME if FRAME_NODE_NAME not in taken else f"{FRAME_NODE_NAME}_{len(nodes)}"
+        name = _unique(FRAME_NODE_NAME, len(nodes), taken)
         flat = np.asarray(matrix, dtype=float).T.reshape(-1)
         nodes.append(
             {"name": name, "matrix": [float(v) for v in flat], "children": list(scenes[si].get("nodes", []))}
@@ -204,22 +231,26 @@ def write_normalised(
     head = struct.pack("<4sII", MAGIC, 2, 20 + len(body) + rest) + struct.pack("<I4s", len(body), JSON_TYPE)
     src_hash, out_hash = hashlib.sha256(), hashlib.sha256()
     written = 0
-    with open(src, "rb") as f, open(dest, "wb") as out:
-        src_hash.update(f.read(20 + info.json_length))
-        for piece in (head, body):
-            out.write(piece)
-            out_hash.update(piece)
-            written += len(piece)
-        done = 0
-        while done < rest:
-            chunk = f.read(min(COPY_CHUNK, rest - done))
-            if not chunk:
-                raise GlbError("The GLB ends before the length its header states.")
-            src_hash.update(chunk)
-            out_hash.update(chunk)
-            out.write(chunk)
-            done += len(chunk)
-            written += len(chunk)
-            if on_chunk is not None:
-                on_chunk(done, rest)
+    try:
+        with open(src, "rb") as f, open(dest, "wb") as out:
+            src_hash.update(f.read(20 + info.json_length))
+            for piece in (head, body):
+                out.write(piece)
+                out_hash.update(piece)
+                written += len(piece)
+            done = 0
+            while done < rest:
+                chunk = f.read(min(COPY_CHUNK, rest - done))
+                if not chunk:
+                    raise GlbError("The GLB ends before the length its header states.")
+                src_hash.update(chunk)
+                out_hash.update(chunk)
+                out.write(chunk)
+                done += len(chunk)
+                written += len(chunk)
+                if on_chunk is not None:
+                    on_chunk(done, rest)
+    except BaseException:
+        dest.unlink(missing_ok=True)  # never leave a partial stored copy behind
+        raise
     return src_hash.hexdigest(), out_hash.hexdigest(), written
