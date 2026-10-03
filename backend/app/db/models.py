@@ -678,14 +678,23 @@ class ProjectType(Base):
 ANCHOR_CHECK = (
     "(anchor_kind = 'image' AND image_id IS NOT NULL AND annotation_id IS NOT NULL"
     " AND map_id IS NULL AND geometry IS NULL AND cloud_id IS NULL"
-    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL)"
+    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL"
+    " AND asset_model_id IS NULL AND ax IS NULL AND ay IS NULL AND az IS NULL)"
     " OR (anchor_kind = 'map' AND map_id IS NOT NULL AND geometry IS NOT NULL"
     " AND image_id IS NULL AND annotation_id IS NULL AND cloud_id IS NULL"
-    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL)"
+    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL"
+    " AND asset_model_id IS NULL AND ax IS NULL AND ay IS NULL AND az IS NULL)"
     " OR (anchor_kind = 'cloud' AND cloud_id IS NOT NULL AND x IS NOT NULL AND y IS NOT NULL"
     " AND z IS NOT NULL AND image_id IS NULL AND annotation_id IS NULL AND map_id IS NULL"
-    " AND geometry IS NULL)"
+    " AND geometry IS NULL"
+    " AND asset_model_id IS NULL AND ax IS NULL AND ay IS NULL AND az IS NULL)"
+    " OR (anchor_kind = 'asset' AND asset_model_id IS NOT NULL"
+    " AND image_id IS NULL AND annotation_id IS NULL AND map_id IS NULL AND geometry IS NULL"
+    " AND cloud_id IS NULL AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL"
+    " AND ((ax IS NULL AND ay IS NULL AND az IS NULL)"
+    " OR (ax IS NOT NULL AND ay IS NOT NULL AND az IS NOT NULL)))"
 )
+FINDING_PLACEMENT_CHECK = "placement IS NULL OR placement IN ('point', 'patch', 'none')"
 
 
 class Finding(Base):
@@ -700,7 +709,7 @@ class Finding(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String, default="human")  # human | model:<id>
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    anchor_kind: Mapped[str] = mapped_column(String)  # image | map | cloud
+    anchor_kind: Mapped[str] = mapped_column(String)  # image | map | cloud | asset
     image_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # No ON DELETE: a box delete that skips findings/annotations.py fails loudly instead of leaving
     # a finding without its geometry and the counts wrong (plan BC, Review Focus 1).
@@ -716,15 +725,37 @@ class Finding(Base):
     uncertainty_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
-    data_type: Mapped[str] = mapped_column(String)  # image_set | map | point_cloud
+    data_type: Mapped[str] = mapped_column(String)  # image_set | map | point_cloud | asset_model
     data_id: Mapped[str] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # The asset anchor (spec 2026-10-02-asset-findings-design §5.5, migration 0016). The point and
+    # normal come from the representative sighting; the derived fields are written only by the
+    # placement and grouping jobs. No ON DELETE on the model: deleting a model that findings point
+    # at is refused (409 `has_findings`) before it can reach the foreign key.
+    asset_model_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("asset_model.id", name="fk_finding_asset_model"), nullable=True
+    )
+    asset_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ax: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ay: Mapped[float | None] = mapped_column(Float, nullable=True)
+    az: Mapped[float | None] = mapped_column(Float, nullable=True)
+    an_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    an_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    an_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    placement: Mapped[str | None] = mapped_column(String, nullable=True)  # point | patch | none
+    height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bearing_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    side: Mapped[str | None] = mapped_column(String, nullable=True)
+    zone: Mapped[str | None] = mapped_column(String, nullable=True)
+    component: Mapped[str | None] = mapped_column(String, nullable=True)
+    sighting_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     __table_args__ = (
         CheckConstraint(ANCHOR_CHECK, name="ck_finding_anchor"),
         CheckConstraint("status IN ('open', 'reviewed', 'closed')", name="ck_finding_status"),
+        CheckConstraint(FINDING_PLACEMENT_CHECK, name="ck_finding_placement"),
         Index("ux_finding_number", "number", unique=True),
         Index("ux_finding_annotation", "annotation_id", unique=True),
         Index("ix_finding_status_severity_number", "status", "severity", "number"),
@@ -733,6 +764,8 @@ class Finding(Base):
         Index("ix_finding_updated", "updated_at"),
         Index("ix_finding_image", "anchor_kind", "image_id"),
         Index("ix_finding_location", "lon", "lat"),
+        Index("ix_finding_asset", "anchor_kind", "asset_model_id"),
+        Index("ix_finding_asset_zone", "asset_model_id", "zone"),
     )
 
 
@@ -872,6 +905,10 @@ class AssetModel(Base):
     captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    # Asset findings (spec 2026-10-02-asset-findings-design §5.1, migration 0016). Validated by
+    # app.asset_review.frame.Frame and app.asset_review.profiles.ReviewConfig, stored as their dumps.
+    frame: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    review: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     __table_args__ = (Index("ix_asset_model_created", "created_at", "id"),)
 
 
@@ -883,7 +920,7 @@ class AssetModelVersion(Base):
     model_id: Mapped[str] = mapped_column(String(36), ForeignKey("asset_model.id", ondelete="CASCADE"))
     version: Mapped[int] = mapped_column(Integer)
     spec: Mapped[dict] = mapped_column(JSON)
-    kind: Mapped[str] = mapped_column(String)  # agent | manual | draft
+    kind: Mapped[str] = mapped_column(String)  # agent | manual | draft | imported (no CHECK)
     glb_status: Mapped[str] = mapped_column(String, default="pending")  # pending | ready | failed
     glb_job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -920,6 +957,97 @@ class AssetModelRun(Base):
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     __table_args__ = (Index("ix_asset_model_run_model", "model_id", "started_at"),)
+
+
+class ImagePose(Base):
+    """Where one photo was taken from, in one asset model's frame (asset findings spec §5.3).
+    Metres, Y up, X plant north, Z plant east. `source` is kit | exif_gimbal | exif_axis_aim |
+    manual (later metashape, pix4d, fitted): no CHECK, so a later source needs no rebuild."""
+
+    __tablename__ = "image_pose"
+    asset_model_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("asset_model.id", ondelete="CASCADE"), primary_key=True
+    )
+    image_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("image.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[list] = mapped_column(JSON)  # [x, y, z]
+    target: Mapped[list] = mapped_column(JSON)  # [x, y, z]
+    up: Mapped[list] = mapped_column(JSON)  # [x, y, z]
+    hfov_deg: Mapped[float] = mapped_column(Float)
+    vfov_deg: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String)
+    accuracy_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sequence: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        Index("ix_image_pose_image", "image_id"),
+        Index("ix_image_pose_sequence", "asset_model_id", "sequence", "image_id"),
+    )
+
+
+IMAGE_REVIEW_STATUSES = ("finding", "none", "uncertain", "not_assessed")
+IMAGE_REVIEW_STATUS_CHECK = "status IN ('finding', 'none', 'uncertain', 'not_assessed')"
+
+
+class ImageReview(Base):
+    """A photo's review outcome (asset findings spec §5.4, decision A5). Written only through
+    `app.asset_review.review_status.set_status`, which keeps `image.marked_empty` in step."""
+
+    __tablename__ = "image_review"
+    image_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("image.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String)
+    note: Mapped[str] = mapped_column(Text, default="", server_default="")
+    coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    uncertain_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        CheckConstraint(IMAGE_REVIEW_STATUS_CHECK, name="ck_image_review_status"),
+        Index("ix_image_review_status", "status", "image_id"),
+    )
+
+
+SIGHTING_PLACEMENT_CHECK = "placement IN ('point', 'patch', 'none', 'pending')"
+
+
+class FindingSighting(Base):
+    """One sighting on an asset model: an annotation on one photo (asset findings spec §5.6).
+    The box row stays the geometry. `finding_id` is null while the sighting is ungrouped (between
+    import or creation and the `asset_group` job). No ON DELETE on `image_id` and `annotation_id`: a
+    box or image delete that skips `findings/annotations.py` fails loudly instead of leaving a
+    finding wrong. RESTRICT on `asset_model_id`: a model with sightings is never deleted."""
+
+    __tablename__ = "finding_sighting"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    finding_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("finding.id", ondelete="CASCADE"), nullable=True
+    )
+    asset_model_id: Mapped[str] = mapped_column(String(36), ForeignKey("asset_model.id", ondelete="RESTRICT"))
+    image_id: Mapped[str] = mapped_column(String(36), ForeignKey("image.id"))
+    annotation_id: Mapped[str] = mapped_column(String(36), ForeignKey("box.id"))
+    severity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    group_tag: Mapped[str | None] = mapped_column(String, nullable=True)
+    placement: Mapped[str] = mapped_column(String, default="pending", server_default="pending")
+    cx: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cz: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nx: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ny: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nz: Mapped[float | None] = mapped_column(Float, nullable=True)
+    part: Mapped[str | None] = mapped_column(String, nullable=True)
+    coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    patch_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    placed_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (
+        CheckConstraint(SIGHTING_PLACEMENT_CHECK, name="ck_finding_sighting_placement"),
+        Index("ux_finding_sighting_annotation", "annotation_id", unique=True),
+        Index("ix_finding_sighting_finding", "finding_id", "created_at"),
+        Index("ix_finding_sighting_image", "image_id"),
+        Index("ix_finding_sighting_model", "asset_model_id", "finding_id"),
+    )
 
 
 class MapMeasurement(Base):

@@ -43,8 +43,11 @@ def engine(tmp_path):
     eng.dispose()
 
 
-def test_single_head_is_0015():
-    assert ScriptDirectory.from_config(_cfg()).get_heads() == ["0015"]
+def test_the_chain_has_one_head_and_0015_is_on_it():
+    script = ScriptDirectory.from_config(_cfg())
+    heads = script.get_heads()
+    assert len(heads) == 1, heads
+    assert REVISION in {rev.revision for rev in script.walk_revisions(base="base", head=heads[0])}
 
 
 def test_tables_exist_after_upgrade(engine):
