@@ -36,7 +36,7 @@ const ASSET_FINDING: BlockOf<"finding"> = {
     ["Zone", "Upper floors"],
   ],
   asset: {
-    kicker: "Finding F-0042 � Upper floors � West elevation � seen in 3 photos",
+    kicker: "Finding F-0042 · Upper floors · West elevation · seen in 3 photos",
     height_locator: { ...MAP_BLOCK.drawing, width: 64, height: 200, font_size: 6, bands: [], x_ticks: [] },
   },
 };
