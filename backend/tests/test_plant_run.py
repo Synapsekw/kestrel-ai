@@ -216,3 +216,43 @@ def test_large_spec_drops_the_blocking_item_before_writing(handle, app, caplog):
     got = {i["id"] for i in spec["items"]}
     assert "bad-heights" not in got and len(got) == 210
     assert "SECRET-PAYLOAD-NAME" not in caplog.text and "bad-heights" not in caplog.text
+
+
+def test_cancel_during_the_budget_out_finish_still_ends_the_run(handle, app, monkeypatch):
+    """Review fix 1: the app-only finish after a budget-out is itself protected. A Stop pressed while
+    it build-checks ends the run `stopped` (operator stop: a draft) and clears the live run."""
+    from app.asset_models.agent.plant.state import load_state, save_merged, save_state
+    from app.asset_models.builders import base
+
+    ids = seed_plant(handle, app, limits=PlantLimits(max_tokens=100_000))
+    run_dir = store.run_dir(handle, ids["model"], ids["run"])
+    st = load_state(run_dir)
+    st.stage = "cloud_check"  # resumed after merge, with the budget already spent
+    save_state(run_dir, st)
+    save_merged(run_dir, [Item.model_validate(item(f"box-{k}", e=20.0 * k)) for k in range(3)])
+    with handle.session() as s:
+        s.get(AssetModelRun, ids["run"]).usage = {
+            "by_stage": {"trace": {"input_tokens": 100_000, "output_tokens": 0, "calls": 1, "images": 0}}
+        }
+    app.state.jobs.agent_llm = FakePlantLlm()
+    ctx = make_ctx(handle, app, ids)
+    built = []
+
+    def cancel_while_building(it, bctx):
+        built.append(it.id)
+        ctx.cancelled.set()
+        return [], []
+
+    monkeypatch.setattr(base, "build_item", cancel_while_building)
+    try:
+        R.run_asset_model(ctx)
+        raised = False
+    except JobCancelled:
+        raised = True
+    assert raised and built == ["box-0"]
+    with handle.session() as s:
+        run = s.get(AssetModelRun, ids["run"])
+        model = s.get(AssetModel, ids["model"])
+        assert (run.state, run.stop_reason, run.phase) == ("stopped", "user", "done")
+        assert model.live_run_id is None
+        assert store.get_version(s, ids["model"], run.version).kind == "draft"

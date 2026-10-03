@@ -319,28 +319,54 @@ def _quiet(fn, rc) -> None:
 
 def run_plant(ctx) -> dict:
     rc = build_context(ctx)
+    return _guarded(rc, lambda: _package_rerun(rc) if rc.mode == "plant_package" else _full(rc))
+
+
+def _guarded(rc: PlantRunContext, flow) -> dict:
+    """Run `flow` so the run always ends: a budget-out runs the app-only finish under the same guard
+    (review fix: a Stop or an error during it must not leave the run "running")."""
     try:
-        if rc.mode == "plant_package":
-            return _package_rerun(rc)
-        return _full(rc)
+        return flow()
     except BudgetOut as e:
-        return _app_only_finish(rc, e.why)
+        why = e.why
+        return _guarded(rc, lambda: _app_only_finish(rc, why))
     except _Stop as e:
-        return _end(rc, e.state, e.reason, e.summary, [], kind="draft")
+        return _safe_end(rc, e.state, e.reason, e.summary, kind="draft")
     except JobCancelled:
-        try:
-            _collect_for_stop(rc)
-            _end(rc, "stopped", "user", "Stopped by the operator.", [], kind="draft")
-        except Exception as e:  # noqa: BLE001 - the cancel must still propagate
-            log.error("plant run could not record its stop (%s)", type(e).__name__)
+        _quiet(_collect_for_stop, rc)
+        _safe_end(rc, "stopped", "user", "Stopped by the operator.", kind="draft")
         raise
     except LlmError as e:
         _quiet(_collect_for_stop, rc)
-        return _end(rc, "failed", "provider_error", e.message, [], kind="draft")
+        return _safe_end(rc, "failed", "provider_error", e.message, kind="draft")
     except Exception as e:  # noqa: BLE001 - never leave a run stuck "running"; fixed text, type name only
         log.error("plant run failed (%s)", type(e).__name__)
         _quiet(_collect_for_stop, rc)
-        return _end(rc, "failed", None, e.message if isinstance(e, LookError) else INTERNAL, [], kind="draft")
+        return _safe_end(
+            rc, "failed", None, e.message if isinstance(e, LookError) else INTERNAL, kind="draft"
+        )
+
+
+def _safe_end(rc: PlantRunContext, state: str, reason: str | None, summary: str, *, kind: str) -> dict:
+    """`_end`, and if even that raises, settle the run row without a version."""
+    try:
+        return _end(rc, state, reason, summary, [], kind=kind)
+    except Exception as e:  # noqa: BLE001 - the run must still end; type name only
+        log.error("plant run could not record its end (%s)", type(e).__name__)
+    try:
+        with rc.handle.session() as s:
+            run = s.get(AssetModelRun, rc.run_id)
+            if run.state == "running":
+                run.state, run.stop_reason, run.summary = "failed", None, INTERNAL
+                run.phase, run.ended_at = "done", datetime.now(UTC)
+            model = s.get(AssetModel, rc.model_id)
+            if model.live_run_id == rc.run_id:
+                model.live_run_id = None
+            service.refresh_status(model)
+        rc.job.publish("asset_models.changed", {"asset_model_ids": [rc.model_id], "run_id": rc.run_id})
+    except Exception as e:  # noqa: BLE001 - nothing more can be done; the startup sweep settles it
+        log.error("plant run could not settle its row (%s)", type(e).__name__)
+    return {"run_id": rc.run_id, "version": None}
 
 
 def _package_rerun(rc: PlantRunContext) -> dict:
