@@ -20,8 +20,8 @@ class ReviewImportIn(BaseModel):
     image_source_id: str
     asset_model_id: str | None = None
     new_model_name: str | None = Field(None, min_length=1, max_length=120)
-    class_map: dict[str, str] = Field(default_factory=dict)
-    dry_run: bool = False
+    class_map: dict[str, str] = Field(default_factory=dict, max_length=200)  # openapi maxProperties
+    dry_run: bool
 
 
 @router.post("/review-imports", response_model=JobRef, status_code=202)

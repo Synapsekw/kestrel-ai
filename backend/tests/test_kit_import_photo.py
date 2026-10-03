@@ -80,3 +80,24 @@ def test_a_finding_photo_without_a_mask_is_skipped_and_reported(tmp_path, client
     result = run_kit_import(Ctx(handle, params))
     assert result["sightings"] == 0
     assert result["skipped"] == [{"kit_key": "p001", "reason": "no_mask"}]
+
+
+def test_the_largest_region_is_the_primary_sighting(tmp_path, client, project, handle, monkeypatch):
+    """The largest region keeps the photo id as its key, is primary and carries the mask; the
+    others are `<id>#n`, not primary, with no mask path (replay gives only the primary a patch)."""
+    from app.asset_review import kit_import
+
+    params, _, _ = photo_params(tmp_path, client, project, handle)
+    captured = []
+    real = kit_import.write_sightings
+
+    def spy(handle_, ctx, mid, planned, written, skipped):
+        captured.extend(planned)
+        return real(handle_, ctx, mid, planned, written, skipped)
+
+    monkeypatch.setattr(kit_import, "write_sightings", spy)
+    run_kit_import(Ctx(handle, params))
+    assert [(p.kit_key, p.primary, p.mask_path is not None) for p in captured] == [
+        ("p001", True, True),
+        ("p001#1", False, False),
+    ]

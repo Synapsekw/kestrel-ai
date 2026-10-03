@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import yaml
 from kit_fixtures import TRIANGLE, make_photo_kit, make_region_kit
 
 from app.asset_review.kit_format import KitError, preview_size, read_kit, severity_of
@@ -93,3 +94,40 @@ def test_merged_entries_match_on_photo_class_and_box(tmp_path):
 )
 def test_severity_mapping(value, level):
     assert severity_of(value) == level
+
+
+@pytest.mark.parametrize("size", [(0, 100), (100, 0), (-5, 100)])
+def test_photo_without_a_positive_size_is_refused(tmp_path, size):
+    root = make_region_kit(tmp_path / "kit")
+    cams = json.loads((root / "cameras.json").read_text("utf-8"))
+    cams["photos"][0]["width"], cams["photos"][0]["height"] = size
+    (root / "cameras.json").write_text(json.dumps(cams), "utf-8")
+    with pytest.raises(KitError, match="zero or less"):
+        read_kit(root)
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("inputs", ["cameras.json"]),
+        ("sequences", ["a", "b"]),
+        ("profile", {"classes": ["rust"]}),
+        ("job", "x"),
+    ],
+)
+def test_non_mapping_yaml_sections_are_a_kit_error(tmp_path, key, value):
+    root = make_region_kit(tmp_path / "kit")
+    raw = yaml.safe_load((root / "job.yaml").read_text("utf-8"))
+    raw[key] = value
+    (root / "job.yaml").write_text(yaml.safe_dump(raw), "utf-8")
+    with pytest.raises(KitError):
+        read_kit(root)
+
+
+def test_non_dict_photo_entry_is_a_kit_error(tmp_path):
+    root = make_region_kit(tmp_path / "kit")
+    cams = json.loads((root / "cameras.json").read_text("utf-8"))
+    cams["photos"][0] = "p01"
+    (root / "cameras.json").write_text(json.dumps(cams), "utf-8")
+    with pytest.raises(KitError, match="not an entry"):
+        read_kit(root)

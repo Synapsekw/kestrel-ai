@@ -290,7 +290,26 @@ def _load_json(path: Path, label: str) -> Any:
         raise KitError(f"{label} could not be read: {type(e).__name__}.") from None
 
 
+def _list(value, label: str) -> list:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise KitError(f"{label} is not a list.")
+    return value
+
+
+def _mapping(value, label: str) -> dict:
+    """A YAML or JSON section that must be a mapping; absent or empty reads as {}."""
+    if value is None or value == "":
+        return {}
+    if not isinstance(value, dict):
+        raise KitError(f"{label} is not laid out as a kit expects.")
+    return value
+
+
 def _class_of(c: dict) -> KitClass:
+    if not isinstance(c, dict):
+        raise KitError("job.yaml lists a profile class that is not an entry with an id and key.")
     try:
         return KitClass(
             int(c["id"]),
@@ -305,8 +324,10 @@ def _class_of(c: dict) -> KitClass:
 
 
 def _photo(c: dict) -> KitPhoto:
+    if not isinstance(c, dict):
+        raise KitError("cameras.json lists a photo that is not an entry with an id, width and height.")
     try:
-        return KitPhoto(
+        photo = KitPhoto(
             id=str(c["id"]),
             name=str(c.get("name") or ""),
             source_name=str(c.get("source_name") or c.get("name") or ""),
@@ -325,6 +346,9 @@ def _photo(c: dict) -> KitPhoto:
         raise KitError(
             f"cameras.json has a photo without an id, width or height ({c.get('id')!r})."
         ) from None
+    if photo.width <= 0 or photo.height <= 0:
+        raise KitError(f"cameras.json gives photo {photo.id!r} a width or height of zero or less.")
+    return photo
 
 
 def _status(value) -> dict[str, Any]:
@@ -352,6 +376,8 @@ def _merged_polygons(data) -> dict[tuple, list[list[float]]]:
 
 
 def _finding(f: dict, i: int, polygons: dict, class_keys: dict[int, str]) -> KitFinding:
+    if not isinstance(f, dict):
+        raise KitError("assessment.json lists a finding that is not an entry.")
     photo = str(f.get("photo") or "")
     cls = f.get("class")
     if isinstance(cls, int) and not isinstance(cls, bool):
@@ -379,27 +405,27 @@ def _sequences(folder: Path, raw: dict) -> dict[str, str]:
         data = _load_json(side, "sequences.json")
         if isinstance(data, dict):
             out.update({str(k): str(v) for k, v in data.items()})
-    out.update({str(k): str(v) for k, v in (raw.get("sequences") or {}).items()})
+    out.update({str(k): str(v) for k, v in _mapping(raw.get("sequences"), "job.yaml sequences").items()})
     return out
 
 
 def read_kit(folder: Path) -> Kit:
     folder = Path(folder)
     raw = _load_yaml(folder / "job.yaml")
-    job = raw.get("job") or {}
+    job = _mapping(raw.get("job"), "job.yaml job")
     kit_profile = str(job.get("profile") or job.get("asset_type") or "stack")
     if kit_profile not in PROFILE_IDS:
         raise KitError(f"The kit profile {kit_profile!r} has no built-in review profile in Kestrel.")
     profile_id = PROFILE_IDS[kit_profile]
-    overrides = raw.get("profile") or {}
-    inputs = raw.get("inputs") or {}
+    overrides = _mapping(raw.get("profile"), "job.yaml profile")
+    inputs = _mapping(raw.get("inputs"), "job.yaml inputs")
 
     def resolve(key: str, default: str) -> Path:
         q = Path(str(inputs.get(key) or default))
         return q if q.is_absolute() else folder / q
 
     classes = (
-        tuple(_class_of(c) for c in overrides["classes"])
+        tuple(_class_of(c) for c in _list(overrides["classes"], "job.yaml profile classes"))
         if overrides.get("classes")
         else KIT_CLASSES[kit_profile]
     )
@@ -410,7 +436,7 @@ def read_kit(folder: Path) -> Kit:
     ass = _load_json(resolve("assessment", "assessment.json"), "assessment.json")
     if not isinstance(cams, dict) or not isinstance(ass, dict):
         raise KitError("cameras.json or assessment.json is not a kit file.")
-    photos = [_photo(c) for c in cams.get("photos") or []]
+    photos = [_photo(c) for c in _list(cams.get("photos"), "cameras.json photos")]
     if len({p.id for p in photos}) != len(photos):
         raise KitError("cameras.json lists a photo id twice.")
     findings: list[KitFinding] = []
@@ -418,7 +444,10 @@ def read_kit(folder: Path) -> Kit:
         merged = folder / "merged.json"
         polygons = _merged_polygons(_load_json(merged, "merged.json")) if merged.is_file() else {}
         class_keys = {c.id: c.key for c in classes}
-        findings = [_finding(f, i, polygons, class_keys) for i, f in enumerate(ass.get("findings") or [])]
+        findings = [
+            _finding(f, i, polygons, class_keys)
+            for i, f in enumerate(_list(ass.get("findings"), "assessment.json findings"))
+        ]
     mask_dir = resolve("masks", "masks")
     surface, glb = resolve("surface", "surface.json"), resolve("model", "model.glb")
     return Kit(
@@ -428,11 +457,13 @@ def read_kit(folder: Path) -> Kit:
         unit=unit,
         profile_overrides=dict(overrides),
         classes=classes,
-        asset=dict(raw.get("asset") or {}),
+        asset=dict(_mapping(raw.get("asset"), "job.yaml asset")),
         sequences=_sequences(folder, raw),
-        alignment=dict(cams.get("alignment") or {}),
+        alignment=dict(_mapping(cams.get("alignment"), "cameras.json alignment")),
         photos=photos,
-        statuses={str(k): _status(v) for k, v in (ass.get("photos") or {}).items()},
+        statuses={
+            str(k): _status(v) for k, v in _mapping(ass.get("photos"), "assessment.json photos").items()
+        },
         findings=findings,
         mask_dir=mask_dir if mask_dir.is_dir() else None,
         surface_path=surface if surface.is_file() else None,

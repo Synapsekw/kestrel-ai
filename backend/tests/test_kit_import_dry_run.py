@@ -87,7 +87,35 @@ def test_exactly_one_of_model_and_name(tmp_path, client, project, handle):
         f"{API}/{project['id']}/review-imports",
         json={"folder": str(kit), "image_source_id": source_id, "dry_run": True},
     )
-    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+    err = r.json()["error"]
+    assert r.status_code == 422 and err["code"] == "invalid_import"
+    assert err["details"]["errors"][0]["path"] == "asset_model_id"
+
+
+def test_dry_run_is_required(tmp_path, client, project, handle):
+    kit = make_region_kit(tmp_path / "kit")
+    source_id, _ = seed_images(handle, REGION_PHOTOS, REGION_SIZE)
+    r = client.post(
+        f"{API}/{project['id']}/review-imports",
+        json={"folder": str(kit), "image_source_id": source_id, "new_model_name": "Tower"},
+    )
+    assert r.status_code == 422
+
+
+def test_class_map_is_capped_at_200_entries(tmp_path, client, project, handle):
+    kit = make_region_kit(tmp_path / "kit")
+    source_id, _ = seed_images(handle, REGION_PHOTOS, REGION_SIZE)
+    r = client.post(
+        f"{API}/{project['id']}/review-imports",
+        json={
+            "folder": str(kit),
+            "image_source_id": source_id,
+            "new_model_name": "Tower",
+            "dry_run": True,
+            "class_map": {f"k{i}": "t" for i in range(201)},
+        },
+    )
+    assert r.status_code == 422
 
 
 def test_a_second_real_import_is_409_while_one_is_live(tmp_path, client, project, handle):

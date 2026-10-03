@@ -8,11 +8,11 @@ run stops there and returns the preview as the job result, writing nothing (inde
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import ijson
 from sqlalchemy import func, select
 
 from app.asset_models import store as asset_store
@@ -29,10 +29,13 @@ from app.errors import AppError, not_found
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 
+logger = logging.getLogger(__name__)
+
 JOB = "review_kit_import"
 PLACE_JOB = "asset_place"  # J3
 GROUP_JOB = "asset_group"  # J4: asset_place queues it; the import groups in-process instead
 MAX_LISTED = 2000  # unmatched reasons and skipped lists in a job result; the counts are always whole
+MAX_CLASSES = 200  # C0's `ReviewImportPreview.classes` maxItems
 MAX_NAMES = 500  # C0's `ReviewImportPreview.unmatched` maxItems
 LIVE_STATES = ("queued", "running")
 ASPECT_TOLERANCE = 0.02  # a matched image whose aspect differs more than this is not the kit's photo
@@ -60,7 +63,19 @@ def check_request(handle, body: dict) -> dict:
     model_id = body.get("asset_model_id") or None
     name = (body.get("new_model_name") or "").strip() or None
     if bool(model_id) == bool(name):
-        raise AppError("validation_error", "Give either an asset model to fill or a name for a new one.", 422)
+        raise AppError(
+            "invalid_import",
+            "Give either an asset model to fill or a name for a new one.",
+            422,
+            {
+                "errors": [
+                    {
+                        "path": "asset_model_id",
+                        "message": "Give exactly one of asset_model_id and new_model_name.",
+                    }
+                ]
+            },
+        )
     with handle.session() as s:
         if s.get(Source, body["image_source_id"]) is None:
             raise not_found("image source", body["image_source_id"])
@@ -183,6 +198,7 @@ def build_preview(handle, kit: Kit, prep: Prepared, params: dict) -> dict:
         "dry_run": True,
         **photo_fields(kit, prep),
         "statuses": {st: statuses.get(st, 0) for st in STATUSES},
+        # C0's `ReviewImportPreview.classes` holds at most 200 entries, most used first.
         "classes": [
             {
                 "key": k,
@@ -190,8 +206,9 @@ def build_preview(handle, kit: Kit, prep: Prepared, params: dict) -> dict:
                 "count": n,
                 "type_id": class_map.get(k) or suggest_type(k, labels.get(k, k), types),
             }
-            for k, n in keys.most_common()
+            for k, n in keys.most_common(MAX_CLASSES)
         ],
+        # One per finding photo in the photo unit; a real run gives up to 50 regions per photo.
         "sightings": sum(keys.values()),
         "has_surface": kit.surface_path is not None,
         "has_glb": kit.glb_path is not None,
@@ -330,12 +347,9 @@ def _place(ctx, asset_model_id: str, version: int, kit: Kit, prep: Prepared, wri
     if kit.surface_path is not None:
         ctx.progress(0.5, "Replaying the kit's placements")
         keys = {w.kit_key: w.sighting_id for w in written if w.primary}
-        try:
-            extra = replay(
-                ctx.project, ctx, asset_model_id, version, kit, keys, 0.5, 0.8, scales=_scales(prep, written)
-            )
-        except ijson.JSONError as e:
-            raise JobFailure(f"The kit's surface.json is damaged or incomplete: {e}") from None
+        extra = replay(
+            ctx.project, ctx, asset_model_id, version, kit, keys, 0.5, 0.8, scales=_scales(prep, written)
+        )
         mark_unplaced(ctx.project, [w.sighting_id for w in written if not w.primary], version)
         return {"mode": "replay", **placement_counts(ctx.project, ids), **extra}
     ctx.progress(0.5, "Placing the sightings on the model")
@@ -367,12 +381,16 @@ def _import(ctx, kit: Kit, prep: Prepared) -> dict:
         write_sightings(handle, ctx, mid, planned, written, skipped)
         statuses = write_statuses(handle, ctx, kit, prep.matches, skipped)
         placement = _place(ctx, mid, version, kit, prep, written)
+        ctx.check_cancelled()  # the last point where a cancel still undoes everything
     except Exception:
-        undo_records(handle, mid, written, pose_ids)  # cancel included: JobCancelled is an Exception
+        # cancel included: JobCancelled is an Exception. A failing undo must not hide the cause.
+        try:
+            undo_records(handle, mid, written, pose_ids)
+        except Exception:
+            logger.exception("review_kit_import: undoing the written records failed")
         raise
     # From here the records and placements stand: a later failure leaves sightings ungrouped, and
     # "Regroup" finishes them.
-    ctx.check_cancelled()
     ctx.progress(0.8, "Grouping sightings into findings")
     grouping = group_imported(handle, mid, kit.unit)
     finished = finish_findings(handle, ctx, kit, written)

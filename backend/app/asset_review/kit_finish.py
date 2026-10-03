@@ -10,6 +10,7 @@ photo and defect type, never by distance, and the region unit clusters by distan
 from __future__ import annotations
 
 from dataclasses import asdict
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -69,11 +70,12 @@ def finish_findings(handle, ctx, kit: Kit, written: list[Written]) -> dict[str, 
         if w.mask_path is not None:
             masked.setdefault((fid, w.kit_photo), w)
     for i, ((fid, _), w) in enumerate(masked.items()):
-        ctx.check_cancelled()
+        # No cancel check here: the findings exist, and a cancel would leave partial attachments.
         ctx.progress(0.92 + 0.07 * i / max(1, len(masked)), f"Attaching masks {i:,} / {len(masked):,}")
-        tmp = write_palette_png(load_mask(w.mask_path), kit.classes, tmp_dir / f"{w.kit_photo} mask.png")
+        # The temp file name is ours; the kit's photo id (from cameras.json) only names the attachment.
+        tmp = write_palette_png(load_mask(w.mask_path), kit.classes, tmp_dir / f"{i:05d} mask.png")
         try:
-            attachments.add(handle, fid, str(tmp))
+            attachments.add(handle, fid, str(tmp), name=f"{Path(w.kit_photo).name} mask.png")
             attached += 1
         finally:
             tmp.unlink(missing_ok=True)

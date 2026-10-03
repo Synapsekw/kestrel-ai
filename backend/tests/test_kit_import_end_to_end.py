@@ -256,6 +256,51 @@ def test_cancel_during_the_replay_undoes_the_records(tmp_path, client, project, 
     _nothing_left(handle)
 
 
+def test_cancel_after_the_replay_loop_still_undoes_the_records(
+    tmp_path, client, project, handle, monkeypatch
+):
+    """A cancel arriving after the last in-replay check (here: while counting placements) must
+    undo, not leave the records committed under a cancelled job."""
+    from app.asset_review import kit_import
+
+    types = kit_types(client, project)
+    params = _params(tmp_path, handle, types, make_region_kit(tmp_path / "kit"))
+    ctx = Ctx(handle, params)
+    armed = {"late": False}
+    real = kit_import.placement_counts
+
+    def late(*a, **k):
+        armed["late"] = True
+        return real(*a, **k)
+
+    monkeypatch.setattr(kit_import, "placement_counts", late)
+    original = ctx.check_cancelled
+
+    def check() -> None:
+        if armed["late"]:
+            raise JobCancelled()
+        original()
+
+    ctx.check_cancelled = check
+    with pytest.raises(JobCancelled):
+        run_kit_import(ctx)
+    _nothing_left(handle)
+
+
+def test_a_failing_undo_does_not_hide_the_original_error(tmp_path, client, project, handle, monkeypatch):
+    from app.asset_review import kit_import
+
+    types = kit_types(client, project)
+    params = _params(tmp_path, handle, types, make_region_kit(tmp_path / "kit"))
+
+    def broken(*a, **k):
+        raise RuntimeError("undo broke")
+
+    monkeypatch.setattr(kit_import, "undo_records", broken)
+    with pytest.raises(JobCancelled):
+        run_kit_import(Ctx(handle, params, cancel_on="Replaying the kit"))
+
+
 def test_a_truncated_surface_json_fails_the_job_and_undoes_the_records(tmp_path, client, project, handle):
     types = kit_types(client, project)
     kit = make_region_kit(tmp_path / "kit")
