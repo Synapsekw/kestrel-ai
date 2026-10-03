@@ -37,7 +37,15 @@ function renderShell(route: string, projectStatus = 200) {
         <Route path="jobs" element={<Where />} />
         <Route path="p/:projectId/images" element={<input aria-label="Filter" />} />
         <Route path="p/:projectId/maps/:mapId" element={<p>map surface</p>} />
-        <Route path="p/:projectId/findings" element={<p>findings page</p>} />
+        <Route
+          path="p/:projectId/findings"
+          element={
+            <>
+              <p>findings page</p>
+              <input aria-label="Note" />
+            </>
+          }
+        />
         <Route path="p/:projectId/maps" element={<p>map workspace</p>} />
       </Route>
     </Routes>,
@@ -119,8 +127,8 @@ describe("Shell", () => {
   });
 
   it("toggles with Ctrl+B, but not while typing in a field", async () => {
-    renderShell(`/p/${PROJECT_ID}/images`);
-    const field = await screen.findByLabelText("Filter");
+    renderShell(`/p/${PROJECT_ID}/findings`);
+    const field = await screen.findByLabelText("Note");
     const nav = screen.getByRole("navigation", { name: "Main navigation" });
     field.focus();
     fireEvent.keyDown(field, { key: "b", ctrlKey: true });

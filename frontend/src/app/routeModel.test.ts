@@ -114,7 +114,8 @@ describe("sidebar rules", () => {
     expect(isForcedCollapse("fullbleed", 1600)).toBe(true);
     expect(isForcedCollapse("page", 1099)).toBe(true);
     expect(isForcedCollapse("page", SIDEBAR_NARROW_WIDTH)).toBe(false);
-    expect(isForcedCollapse("workspace", 1280)).toBe(false);
+    expect(isForcedCollapse("workspace", 1280)).toBe(true);
+    expect(routeInfo("/p/p1/images").layout).toBe("workspace");
     expect(routeInfo("/p/p1/maps").layout).toBe("fullbleed");
     expect(routeInfo("/p/p1/models").layout).toBe("fullbleed");
     expect(routeInfo("/p/p1/clouds/c1").layout).toBe("fullbleed");

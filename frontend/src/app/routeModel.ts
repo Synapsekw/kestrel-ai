@@ -165,9 +165,12 @@ export function sheetScope(info: RouteInfo): WorkspaceScope | null {
 /** Below this window width the sidebar collapses on its own (the inspector's breakpoint). */
 export const SIDEBAR_NARROW_WIDTH = 1100;
 
-/** Full-bleed surfaces and narrow windows collapse the sidebar (spec 2026-10-03-sidebar §4). */
+/**
+ * Full-bleed and workspace surfaces (Images, the report builder) and narrow windows collapse the
+ * sidebar, so the canvas keeps its width (spec 2026-10-03-sidebar §4).
+ */
 export function isForcedCollapse(layout: Layout, windowWidth: number): boolean {
-  return layout === "fullbleed" || windowWidth < SIDEBAR_NARROW_WIDTH;
+  return layout === "fullbleed" || layout === "workspace" || windowWidth < SIDEBAR_NARROW_WIDTH;
 }
 
 /**
