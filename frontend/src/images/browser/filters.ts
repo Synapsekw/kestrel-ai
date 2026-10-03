@@ -5,7 +5,7 @@ export type BrowserSort = "capture_time" | "path" | "worst_severity" | "max_pend
 export type FindingStatusFilter = "all" | FindingStatus;
 export type TriState = "all" | "yes" | "no";
 
-/** Spec ง5.4: a photo's review status. `not_assessed` also matches a photo never reviewed. */
+/** Spec ยง5.4: a photo's review status. `not_assessed` also matches a photo never reviewed. */
 export type PhotoReviewStatus = "finding" | "none" | "uncertain" | "not_assessed";
 export type ReviewStatusFilter = "all" | PhotoReviewStatus;
 
