@@ -1,5 +1,6 @@
 """Finding anchors (spec 2026-09-26-foundation section 8.1): exactly one of an image annotation, a
-map geometry in the map's CRS, or a cloud point in the cloud's CRS. `resolve` checks the target
+map geometry in the map's CRS, a cloud point in the cloud's CRS, or an asset model with its sightings
+(spec 2026-10-02-asset-findings §5.5). `resolve` checks the target
 exists and returns the finding's anchor columns, its data item (for filters) and its WGS84 location
 (for the Overview's pins)."""
 
@@ -12,20 +13,32 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Box, Finding, GeoMap, Image, PointCloud
+from app.db.models import AssetModel, Box, Finding, FindingSighting, GeoMap, Image, PointCloud
 from app.errors import AppError, not_found
 from app.findings.numbers import format_number
 
 log = logging.getLogger(__name__)
-KINDS = ("image", "map", "cloud")
+KINDS = ("image", "map", "cloud", "asset")
 _EMPTY = dict.fromkeys(
-    ("image_id", "annotation_id", "map_id", "geometry", "cloud_id", "x", "y", "z", "uncertainty_m")
+    (
+        "image_id",
+        "annotation_id",
+        "map_id",
+        "geometry",
+        "cloud_id",
+        "x",
+        "y",
+        "z",
+        "uncertainty_m",
+        "asset_model_id",
+        "asset_version",
+    )
 )
 
 
 @dataclass
 class AnchorIn:
-    kind: str  # image | map | cloud
+    kind: str  # image | map | cloud | asset
     image_id: str | None = None
     annotation_id: str | None = None
     box: dict | None = None  # {x, y, w, h, angle}: POST /findings draws the box (Task 11)
@@ -36,6 +49,9 @@ class AnchorIn:
     y: float | None = None
     z: float | None = None
     uncertainty_m: float | None = None
+    asset_model_id: str | None = None
+    # [{image_id, box, points, severity, group_tag}]: POST /findings draws them
+    sightings: list[dict] | None = None
 
 
 def _finite(*values) -> bool:
@@ -106,6 +122,16 @@ def _image(s: Session, a: AnchorIn) -> dict:
             409,
             {"finding_id": taken.id},
         )
+    owner = s.execute(
+        select(FindingSighting.finding_id).where(FindingSighting.annotation_id == box.id)
+    ).first()
+    if owner is not None:
+        raise AppError(
+            "conflict",
+            "That annotation is a sighting of an asset finding.",
+            409,
+            {"finding_id": owner.finding_id},
+        )
     return {
         **_EMPTY,
         "anchor_kind": "image",
@@ -162,6 +188,26 @@ def _cloud(s: Session, a: AnchorIn, lon: float | None, lat: float | None) -> dic
     }
 
 
+def _asset(s: Session, a: AnchorIn, lon: float | None, lat: float | None) -> dict:
+    model = s.get(AssetModel, a.asset_model_id) if a.asset_model_id else None
+    if model is None:
+        raise not_found("asset model", str(a.asset_model_id))
+    if not _finite(lon, lat):
+        origin = (model.frame or {}).get("origin") or {}
+        lon, lat = origin.get("lon"), origin.get("lat")
+        lon, lat = (float(lon), float(lat)) if _finite(lon, lat) else (None, None)
+    return {
+        **_EMPTY,
+        "anchor_kind": "asset",
+        "asset_model_id": model.id,
+        "asset_version": model.current_version,
+        "lon": lon,
+        "lat": lat,
+        "data_type": "asset_model",
+        "data_id": model.id,
+    }
+
+
 def resolve(s: Session, anchor: AnchorIn, *, lon: float | None = None, lat: float | None = None) -> dict:
     """The finding columns for `anchor`. A map or cloud caller may pass its own `lon`/`lat` (M's map
     review does, spec section 8.5); otherwise they are projected from the target's CRS."""
@@ -171,14 +217,20 @@ def resolve(s: Session, anchor: AnchorIn, *, lon: float | None = None, lat: floa
         return _map(s, anchor, lon, lat)
     if anchor.kind == "cloud":
         return _cloud(s, anchor, lon, lat)
+    if anchor.kind == "asset":
+        return _asset(s, anchor, lon, lat)
     raise AppError("validation_error", f"unknown anchor kind {anchor.kind!r}", 422)
 
 
 def repatch(s: Session, row: Finding, patch: dict) -> dict:
     """The column changes for PATCH `anchor`: a map finding's geometry or a cloud finding's point.
-    An image finding moves with its box, never through here."""
+    An image finding moves with its box and an asset finding with its sightings, never through here."""
     if row.anchor_kind == "image":
         raise AppError("anchor_immutable", "An image finding moves with its annotation; edit the box.", 422)
+    if row.anchor_kind == "asset":
+        raise AppError(
+            "anchor_immutable", "An asset finding moves with its sightings; edit their boxes.", 422
+        )
     if row.anchor_kind == "map":
         if patch.get("geometry") is None:
             return {}

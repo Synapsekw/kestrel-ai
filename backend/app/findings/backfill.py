@@ -13,7 +13,7 @@ from pathlib import Path
 from sqlalchemy import func, or_, select
 
 from app.catalogue import project_types
-from app.db.models import Box, Finding, Job, ProjectType
+from app.db.models import Box, Finding, FindingSighting, Job, ProjectType
 from app.errors import AppError
 from app.findings import activity, annotations, numbers, service
 from app.findings.anchors import AnchorIn
@@ -27,10 +27,12 @@ LIVE_STATES = ("queued", "running")
 
 def _candidates(type_ids: Sequence[str]):
     has_finding = select(Finding.id).where(Finding.annotation_id == Box.id).exists()
+    is_sighting = select(FindingSighting.id).where(FindingSighting.annotation_id == Box.id).exists()
     return select(Box).where(
         Box.class_id.in_(list(type_ids)),
         or_(Box.review_state.in_(annotations.GROUND_TRUTH), Box.provenance_kind == "person"),
         ~has_finding,
+        ~is_sighting,  # an asset finding's sighting box is that finding's geometry already
     )
 
 

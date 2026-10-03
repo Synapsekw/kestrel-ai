@@ -1,5 +1,6 @@
 """A finding's list thumbnail (spec 2026-09-26-foundation section 8.3): for an image anchor a
-160x120 crop around its annotation, cached under `cache/thumbs/findings/` and keyed by the box
+160x120 crop around its annotation, and for an asset anchor around its representative sighting's box
+(asset findings spec §9), cached under `cache/thumbs/findings/` and keyed by the box
 geometry, so a moved box gets a new crop; otherwise the first attachment's thumbnail; otherwise 404.
 One image read per crop, then the cache (spec section 14)."""
 
@@ -43,8 +44,15 @@ def crop_window(
 def finding_thumbnail(handle, finding_id: str) -> Path:
     with handle.session() as s:
         f = service.get_or_404(s, finding_id)
-        box = s.get(Box, f.annotation_id) if f.annotation_id else None
-        image = s.get(Image, f.image_id) if f.image_id else None
+        box_id, image_id = f.annotation_id, f.image_id
+        if f.anchor_kind == "asset":
+            from app.findings import sightings
+
+            rep = sightings.representatives(s, [f.id]).get(f.id)
+            if rep is not None:
+                box_id, image_id = rep["annotation_id"], rep["image_id"]
+        box = s.get(Box, box_id) if box_id else None
+        image = s.get(Image, image_id) if image_id else None
         first = s.execute(
             select(FindingAttachment.id)
             .where(FindingAttachment.finding_id == finding_id)
@@ -55,7 +63,9 @@ def finding_thumbnail(handle, finding_id: str) -> Path:
         size = (image.width, image.height) if image is not None else None
         image_id = image.id if image is not None else None
     if geometry is not None and size is not None:
-        sig = hashlib.sha1(",".join(f"{v:.2f}" for v in geometry).encode()).hexdigest()[:12]
+        # The box id too: an asset finding's representative may move to another photo's box.
+        key = ",".join([box_id, *(f"{v:.2f}" for v in geometry)])
+        sig = hashlib.sha1(key.encode()).hexdigest()[:12]
         dest = handle.thumbs_dir / "findings" / f"{finding_id}-{sig}.jpg"
         if not dest.is_file():
             _write_padded(images.image_file(handle, image_id, None), dest, crop_window(*geometry, *size))
