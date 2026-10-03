@@ -20,7 +20,6 @@ function fakes() {
     select: vi.fn(),
     itemBox: vi.fn(() => box),
     setColourBy: vi.fn(),
-    setOpacity: vi.fn(),
   };
   return { engine, model, box, emit: (h: PickHit | null) => selectCb?.(h) };
 }
@@ -54,13 +53,11 @@ describe("controlsOf", () => {
     expect(cb.mock.calls).toEqual([[null]]);
   });
 
-  it("passes colour-by and opacity to the model layer", () => {
+  it("passes colour-by to the model layer (opacity goes through the layer's own setOpacity)", () => {
     const { engine, model } = fakes();
     const c = controlsOf(engine, model);
     c.setColourBy("height_source");
-    c.setModelOpacity(0.4);
     expect(model.setColourBy).toHaveBeenCalledWith("height_source");
-    expect(model.setOpacity).toHaveBeenCalledWith(0.4);
   });
 
   it("labels every colour-by mode in sentence case", () => {

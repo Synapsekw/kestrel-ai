@@ -85,7 +85,6 @@ function view(over: Partial<SiteViewProps> = {}) {
     frame,
     modelUrl: URL_V1,
     hidden: new Set(),
-    onSelect: vi.fn(),
     onModel: vi.fn(),
     ...over,
   };

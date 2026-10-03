@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { assetModelGlbUrl, type ApiClient } from "@contract/client";
@@ -98,8 +98,15 @@ function Harness(p: {
   s1Layers: SiteLayer[];
   load: (url: string) => Promise<void>;
   gone: ReadonlySet<string>;
+  initialView?: SiteModelView;
+  /** Lets a test play the view's own reports (a first load finishing). */
+  onViewSetter?: (set: (v: SiteModelView) => void) => void;
 }) {
-  const [view, setView] = useState<SiteModelView>({ version: 3, shown: 3, state: "ready", items: 2 });
+  const [view, setView] = useState<SiteModelView>(
+    p.initialView ?? { version: 3, shown: 3, state: "ready", items: 2 },
+  );
+  const { onViewSetter } = p;
+  useEffect(() => onViewSetter?.(setView), [onViewSetter]);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const show = (v: number) => {
     setView((s) => ({ ...s, version: v, state: "loading" }));
@@ -141,6 +148,7 @@ function mount(
     extra?: ExtraLayers;
     s1Layers?: SiteLayer[];
     gone?: ReadonlySet<string>;
+    initialView?: SiteModelView;
   } = {},
 ) {
   const c = o.controls ?? fakeSiteControls();
@@ -148,6 +156,7 @@ function mount(
   const x = o.extra ?? extra();
   const load = o.load ?? vi.fn(async () => {});
   const modelLayer = layerOf("model", "Plant model", true);
+  let setView: ((v: SiteModelView) => void) | null = null;
   const r = renderWithDataRouter(
     <Harness
       controls={c.controls}
@@ -155,10 +164,12 @@ function mount(
       s1Layers={o.s1Layers ?? [modelLayer]}
       load={load}
       gone={o.gone ?? new Set()}
+      initialView={o.initialView}
+      onViewSetter={(set) => (setView = set)}
     />,
     { api: client.api as ApiClient, route: o.url ?? "/p/p/site/m1", path: "/p/:projectId/site/:modelId" },
   );
-  return { ...client, ...r, c, x, load, modelLayer };
+  return { ...client, ...r, c, x, load, modelLayer, setView: (v: SiteModelView) => setView!(v) };
 }
 const openTank = async () => fireEvent.click(await screen.findByRole("button", { name: /20-T-0001/ }));
 const editTop = async () => {
@@ -232,8 +243,9 @@ describe("SitePanels", () => {
     await screen.findByText(/building version 4/i);
     act(() => useJobsStore.getState().upsert({ ...JOB, state: "failed", error: "mesh failed" } as never));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Version 4's 3D model could not load.");
-    expect(alert).toHaveTextContent("You are seeing version 3.");
+    expect(alert).toHaveTextContent("Version 4 could not be built.");
+    expect(alert).not.toHaveTextContent("could not load");
+    expect(alert).toHaveTextContent("You are seeing version 3. mesh failed");
     expect(load).not.toHaveBeenCalled();
   });
 
@@ -241,10 +253,51 @@ describe("SitePanels", () => {
     const { c } = mount();
     await openTank();
     await editTop();
+    vi.mocked(c.raw.select).mockClear();
     act(() => c.emitSelect("30-P-0001"));
     expect(await screen.findByRole("dialog", { name: /discard your changes/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
     expect(screen.getByLabelText(/^top el/i)).toHaveValue(140);
+    // the 3D pick moved the outline to the pump; keeping the edit puts it back on the tank (fix round 1, minor 5)
+    expect(c.raw.select).toHaveBeenCalledWith("20-T-0001");
+  });
+
+  it("edit item B while A's version builds; when A's swap lands, B's draft survives and saves from its own base", async () => {
+    const { c, requests } = mount();
+    await openTank();
+    await editTop();
+    fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+    await screen.findByText(/building version 4/i);
+    act(() => c.emitSelect("30-P-0001"));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.change(await screen.findByLabelText(/^top el/i), { target: { value: "110" } });
+    act(() => useJobsStore.getState().upsert({ ...JOB, state: "succeeded", progress: 1 } as never));
+    expect(await screen.findByText("Version 4")).toBeInTheDocument();
+    // the editor was not remounted: the draft is there, and it still edits from version 3
+    expect(screen.getByLabelText(/^top el/i)).toHaveValue(110);
+    expect(screen.getByText(/editing from version/i)).toHaveTextContent("Editing from version 3.");
+    const before = requests.length;
+    fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+    await waitFor(() => expect(requests.slice(before).some((q) => q.method === "POST")).toBe(true));
+    const saved = requests.slice(before);
+    expect(saved.some((q) => q.method === "GET" && /\/versions\/3$/.test(q.url))).toBe(true);
+    const post = saved.find((q) => q.method === "POST")!;
+    expect((post.body as { note: string }).note).toMatch(/from v3/);
+  });
+
+  it("an ?at= arrival waits while the model loads and flies once it is ready (fix round 1, minor 2)", async () => {
+    const a = fakeSiteControls();
+    const { setView } = mount({
+      controls: a,
+      url: `/p/p/site/m1?at=${FRAME.origin_crs[0]},${FRAME.origin_crs[1]}&epsg=32639`,
+      initialView: { version: 3, shown: null, state: "loading", items: 0 },
+    });
+    await screen.findByRole("button", { name: /20-T-0001/ });
+    expect(a.raw.flyTo).not.toHaveBeenCalled();
+    act(() => setView({ version: 3, shown: 3, state: "ready", items: 2 }));
+    await waitFor(() => expect(a.raw.flyTo).toHaveBeenCalledTimes(1));
+    act(() => setView({ version: 3, shown: 3, state: "ready", items: 3 }));
+    expect(a.raw.flyTo).toHaveBeenCalledTimes(1);
   });
 
   it("unsaved edits ask before Cancel drops them (S3-9 minor 4)", async () => {

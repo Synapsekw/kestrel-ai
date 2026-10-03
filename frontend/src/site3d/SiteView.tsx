@@ -12,7 +12,7 @@ import type { SiteFrameT } from "./engine/siteTransform";
 import { createDrawingLayer } from "./layers/drawing.layer";
 import { createModelLayer, type ModelLayer, type ModelLoadInfo } from "./layers/model.layer";
 import { createOrthoLayer } from "./layers/ortho.layer";
-import type { PickHit, SiteLayer } from "./layers/types";
+import type { SiteLayer } from "./layers/types";
 import { ViewTools } from "./panels/ViewTools";
 
 export interface ModelStatus {
@@ -46,8 +46,6 @@ export interface SiteViewProps {
   modelUrl: string | null;
   /** Hidden layer ids: the model layer's and each drape's (`ortho:<id>`, `drawing:<id>`). */
   hidden: ReadonlySet<string>;
-  /** Optional: S3's panels hear selection through `controlsOf(engine, model).onSelect`. */
-  onSelect?(hit: PickHit | null): void;
   onModel(s: ModelStatus): void;
   /** The 3D view could not start (null once a reload starts it). */
   onFailure?(kind: "no-webgl" | "failed" | null): void;
@@ -108,13 +106,10 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     }
     cbs.current.onFailure?.(null);
     engine.current = eng;
-    const off = eng.onSelect((hit) => cbs.current.onSelect?.(hit));
     const map = layers.current;
     announce();
     return () => {
-      off();
-      // dispose() drops listeners without emitting, so say the selection is gone.
-      cbs.current.onSelect?.(null);
+      // a new engine starts with nothing selected; S3's panels drop theirs when the controls change
       eng.dispose();
       if (engine.current === eng) engine.current = null;
       map.clear();
@@ -154,7 +149,6 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
       eng.removeLayer(layer.id);
       if (map.get(layer.id) === layer) map.delete(layer.id);
       if (model.current === layer) model.current = null;
-      cbs.current.onSelect?.(null);
       announce();
     };
   }, [modelId, engineKey, announce]);

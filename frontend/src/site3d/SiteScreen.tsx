@@ -35,19 +35,28 @@ export function SiteScreen() {
   const [noModelCard, setNoModelCard] = useState(true);
   const frame = useMemo(() => (scene ? toFrameT(scene.frame) : null), [scene]);
 
-  // The version the view shows: the manifest's, until a saved edit asks for its new one (R-S3-10).
+  // The version the view shows: the manifest's, or a saved edit's newer one (R-S3-10). A newer
+  // manifest version always wins, so a later rebuild is never pinned to an edit's version.
   const sceneModel = scene?.model ?? null;
   const [want, setWant] = useState<ModelVersion | null>(null);
-  const version = sceneModel ? (want?.modelId === sceneModel.id ? want.version : sceneModel.version) : null;
+  const version = sceneModel
+    ? want?.modelId === sceneModel.id && want.version > sceneModel.version
+      ? want.version
+      : sceneModel.version
+    : null;
   const modelUrl =
     sceneModel && version !== null ? siteModelUrl(backend, projectId, sceneModel.id, version) : null;
-  // Which version each asked-for URL is, so a load report says what is on screen.
+  const [shown, setShown] = useState<ModelVersion | null>(null);
+  // Which version each asked-for URL is, so a load report says what is on screen. Bounded: only the
+  // asked-for URL and the one on screen are kept (a report for any other is a superseded load).
   const urls = useRef(new Map<string, ModelVersion>());
   useEffect(() => {
-    if (modelUrl && sceneModel && version !== null)
-      urls.current.set(modelUrl, { modelId: sceneModel.id, version });
-  }, [modelUrl, sceneModel, version]);
-  const [shown, setShown] = useState<ModelVersion | null>(null);
+    if (!modelUrl || !sceneModel || version === null) return;
+    urls.current.set(modelUrl, { modelId: sceneModel.id, version });
+    for (const [url, v] of urls.current)
+      if (url !== modelUrl && !(v.modelId === shown?.modelId && v.version === shown.version))
+        urls.current.delete(url);
+  }, [modelUrl, sceneModel, version, shown]);
   const onModel = (s: ModelStatus) => {
     const v = urls.current.get(s.url);
     setModel({ ...s, of: v });

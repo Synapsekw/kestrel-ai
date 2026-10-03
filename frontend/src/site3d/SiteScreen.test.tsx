@@ -125,7 +125,7 @@ const GLB = (v: number) => `http://fake/api/v1/projects/p1/asset-models/m1/versi
 /** The plant model's reads behind the panels (register, item, catalogue, the base version, a save). */
 const PLANT_ROUTES = [
   { method: "GET", path: /\/asset-models$/, body: { items: [plantModel({ current_version: 1 })] } },
-  { method: "GET", path: /\/versions\/1\/items$/, body: { items: [itemRow()], next_cursor: null } },
+  { method: "GET", path: /\/versions\/\d+\/items$/, body: { items: [itemRow()], next_cursor: null } },
   { method: "GET", path: /\/versions\/1\/items\/20-T-0001$/, body: ITEM },
   { method: "GET", path: /\/asset-models\/catalogue$/, body: { types: CATALOGUE } },
   {
@@ -141,16 +141,16 @@ const PLANT_ROUTES = [
   },
 ];
 
-function open(scene: SiteScene | { status: number }, route = "/p/p1/site") {
+function open(scene: SiteScene | (() => SiteScene) | { status: number }, route = "/p/p1/site") {
   const { api } = fakeClient([
-    "status" in scene
+    typeof scene !== "function" && "status" in scene
       ? {
           method: "GET",
           path: /\/site-scene/,
           status: scene.status,
           body: { error: { code: "boom", message: "The server failed", details: {} } },
         }
-      : { method: "GET", path: /\/site-scene/, body: scene },
+      : { method: "GET", path: /\/site-scene/, body: typeof scene === "function" ? () => scene() : scene },
     ...PLANT_ROUTES,
   ] as never);
   return renderWithDataRouter(<SiteScreen />, { api, route, path: "/p/:projectId/site/:modelId?" });
@@ -287,6 +287,33 @@ describe("SiteScreen", () => {
     expect(layersPanel()).toHaveTextContent("Stale: showing version 1. Version 2 could not load.");
     expect(screen.queryByText("The plant model could not load.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Reload view" })).toBeNull();
+  });
+
+  it("a newer manifest version beats a saved edit's version: the view never pins (fix round 1)", async () => {
+    let manifest = 1;
+    open(() => ({ ...MODEL_SCENE, model: { ...MODEL_SCENE.model!, version: manifest } }), "/p/p1/site/m1");
+    await viewStarted();
+    act(() => h.models[0].opts.onLoad?.(ITEMS));
+    act(() => h.engines[0].select(TANK));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const top = await screen.findByLabelText(/^top el/i);
+    await userEvent.clear(top);
+    await userEvent.type(top, "140");
+    await userEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+    await screen.findByText(/building version 2/i);
+    // the job ends; the manifest (still version 1 here) is read again, and the saved version 2 shows
+    act(() => useJobsStore.getState().upsert({ ...JOB, state: "succeeded", progress: 1 } as never));
+    await waitFor(() => expect(h.models[0].load).toHaveBeenCalledWith(GLB(2)));
+    act(() => h.models[0].opts.onLoad?.(ITEMS, GLB(2)));
+    const register = screen.getByRole("complementary", { name: "Plant register" });
+    expect(await within(register).findByText("Version 2")).toBeInTheDocument();
+    // a later rebuild: the manifest names version 5, which wins over the saved 2
+    manifest = 5;
+    act(() => useJobsStore.getState().upsert({ ...JOB, id: "j2", state: "queued" } as never));
+    act(() => useJobsStore.getState().upsert({ ...JOB, id: "j2", state: "succeeded", progress: 1 } as never));
+    await waitFor(() => expect(h.models[0].load).toHaveBeenCalledWith(GLB(5)));
+    act(() => h.models[0].opts.onLoad?.(ITEMS, GLB(5)));
+    expect(await within(register).findByText("Version 5")).toBeInTheDocument();
   });
 
   it("an unknown model id links back to the project's site", async () => {

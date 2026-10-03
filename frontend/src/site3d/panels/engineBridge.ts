@@ -24,7 +24,6 @@ export interface SiteControls {
   onSelect(cb: (node: string | null) => void): () => void;
   boxOf(node: string): THREE.Box3 | null;
   setColourBy(mode: ColourBy): void;
-  setModelOpacity(o: number): void;
 }
 
 /** S1's model layer (`ModelLayer`) as S3 uses it. */
@@ -32,7 +31,6 @@ export interface ModelLayerLike {
   select(itemId: string | null): void;
   itemBox(itemId: string): THREE.Box3 | null;
   setColourBy(mode: ColourBy): void;
-  setOpacity(o: number): void;
 }
 
 export function controlsOf(engine: SiteEngine, model: ModelLayerLike): SiteControls {
@@ -43,6 +41,5 @@ export function controlsOf(engine: SiteEngine, model: ModelLayerLike): SiteContr
       engine.onSelect((hit: PickHit | null) => cb(hit && hit.layerId === MODEL_LAYER_ID ? hit.itemId : null)),
     boxOf: (node) => model.itemBox(node),
     setColourBy: (mode) => model.setColourBy(mode),
-    setModelOpacity: (o) => model.setOpacity(o),
   };
 }

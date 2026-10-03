@@ -66,8 +66,9 @@ function Row({
 
 /**
  * Spec §11 Layers (top left): toggles, opacity, colour-by, cloud height colouring, point budget.
- * The parent places it (`absolute left-[64px] top-3`). The frosted float holds only the header; the
- * list scrolls in an opaque body (DESIGN.md: never blur a scrolling list).
+ * The parent places it (left 64 px, top 12 px) and bounds its height; the panel shrinks to that
+ * bound. The frosted float holds only the header; the list scrolls in an opaque body (DESIGN.md:
+ * never blur a scrolling list).
  */
 export function LayersPanel(p: LayersPanelProps) {
   const [open, setOpen] = useState(true);
@@ -81,7 +82,7 @@ export function LayersPanel(p: LayersPanelProps) {
       radius="panel"
       aria-label="Layers"
       data-testid="site-layers"
-      className="pointer-events-auto flex w-[280px] flex-col gap-2 p-3 animate-reveal reduce-motion:animate-none"
+      className="pointer-events-auto flex max-h-full min-h-0 w-[280px] flex-col gap-2 p-3 animate-reveal reduce-motion:animate-none"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">Layers</h2>
@@ -90,7 +91,7 @@ export function LayersPanel(p: LayersPanelProps) {
         </Button>
       </div>
       {open && (
-        <div className="flex max-h-[calc(100vh-220px)] flex-col gap-3 overflow-y-auto rounded-control bg-glass-solid p-2">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-control bg-glass-solid p-2">
           {groups.map(([group, rows]) => (
             <section
               key={group}

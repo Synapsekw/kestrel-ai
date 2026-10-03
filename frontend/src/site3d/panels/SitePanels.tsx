@@ -61,9 +61,12 @@ export function rowBox(frame: SiteFrameT, row: AssetItemRow): THREE.Box3 | null 
   return new THREE.Box3(new THREE.Vector3(x - 15, y0, z - 15), new THREE.Vector3(x + 15, y1, z + 15));
 }
 
-type SwapPhase = { kind: "building" } | { kind: "loading" } | { kind: "failed"; message: string } | null;
-
-const BUILD_FAILED = "The new version's 3D model could not be built.";
+type SwapPhase =
+  | { kind: "building" }
+  | { kind: "loading" }
+  | { kind: "unbuilt"; message: string }
+  | { kind: "failed"; message: string }
+  | null;
 
 /** Spec §11 panels over S1's view: Layers (top left), Register / Item / Edit (right), Run (bottom left). */
 export function SitePanels(p: SitePanelsProps) {
@@ -126,18 +129,24 @@ export function SitePanels(p: SitePanelsProps) {
     : !job || isActiveJob(job)
       ? { kind: "building" }
       : job.state !== "succeeded"
-        ? { kind: "failed", message: `${BUILD_FAILED}${job.error ? ` ${job.error}` : ""}` }
+        ? { kind: "unbuilt", message: job.error ?? "" }
         : p.view.version !== swap.version || p.view.state === "loading"
           ? { kind: "loading" }
           : p.view.state === "ready"
             ? null
             : { kind: "failed", message: p.view.error ?? "" };
+  // A swap that landed is done: forget it (React's "adjust state while rendering" pattern).
+  if (swap && phase === null) setSwap(null);
 
   // ---- selection and editing
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<AssetItem | null>(null);
+  /**
+   * The item being edited and the version the edit started from. The base stays fixed for the
+   * editor's life: the view may swap underneath (an earlier save landing), the draft and its base do not.
+   */
+  const [editing, setEditing] = useState<{ item: AssetItem; base: number } | null>(null);
   const [dirty, setDirty] = useState(false);
-  const { guard, dialog } = useDiscardGuard(dirty && editing !== null, editing?.name ?? "this item");
+  const { guard, dialog } = useDiscardGuard(dirty && editing !== null, editing?.item.name ?? "this item");
   const open = useCallback((id: string | null) => {
     setEditing(null);
     setDirty(false);
@@ -145,9 +154,11 @@ export function SitePanels(p: SitePanelsProps) {
   }, []);
   const guardRef = useRef(guard);
   const selectedRef = useRef(selectedId);
+  const editingRef = useRef(editing);
   useEffect(() => {
     guardRef.current = guard;
     selectedRef.current = selectedId;
+    editingRef.current = editing;
   });
   // S1's ModelLayer.select re-broadcasts to every onSelect listener; a selection made here is not
   // heard back as a new 3D click (S3-9 minor 3: pick → select → onSelect → open would run twice).
@@ -161,10 +172,23 @@ export function SitePanels(p: SitePanelsProps) {
     }
   };
   useEffect(() => {
-    if (!p.controls) return;
-    return p.controls.onSelect((node) => {
+    const controls = p.controls;
+    if (!controls) return;
+    return controls.onSelect((node) => {
       if (quiet.current || node === selectedRef.current) return;
-      guardRef.current(() => open(node));
+      guardRef.current(
+        () => open(node),
+        // Keep editing: the 3D pick moved the outline, put it back on the item being edited.
+        () => {
+          const id = editingRef.current?.item.id ?? null;
+          quiet.current = true;
+          try {
+            controls.select(id);
+          } finally {
+            quiet.current = false;
+          }
+        },
+      );
     });
   }, [p.controls, open]);
   // A new or gone view (a reload makes a new engine with nothing selected): drop the selection too,
@@ -216,11 +240,15 @@ export function SitePanels(p: SitePanelsProps) {
       <Alert tone="info" title={`Loading version ${swap.version}…`}>
         <Progress thin running label="Loading the 3D model" className="mt-2" />
       </Alert>
-    ) : phase?.kind === "failed" && swap ? (
+    ) : (phase?.kind === "failed" || phase?.kind === "unbuilt") && swap ? (
       <Alert
         tone="danger"
         role="alert"
-        title={`Version ${swap.version}'s 3D model could not load.`}
+        title={
+          phase.kind === "unbuilt"
+            ? `Version ${swap.version} could not be built.`
+            : `Version ${swap.version}'s 3D model could not load.`
+        }
         onDismiss={() => setSwap(null)}
       >
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
@@ -234,21 +262,32 @@ export function SitePanels(p: SitePanelsProps) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
-      <div className="absolute left-[64px] top-3">
-        <LayersPanel
-          rows={rows}
-          onVisible={onVisible}
-          onOpacity={onOpacity}
-          colourBy={colourBy}
-          onColourBy={(c) => {
-            setColourBy(c);
-            p.controls?.setColourBy(c);
-          }}
-          cloudColour={placeableCloud ? p.extra.cloudColour : null}
-          onCloudColour={p.extra.setCloudColour}
-          budget={placeableCloud ? p.extra.budget : null}
-          onBudget={p.extra.setBudget}
-        />
+      {/*
+        Left column beside S1's view palette (64 px) and clear of the register aside (340 + 2 x 12 px):
+        the Layers panel shrinks so the Run bar below always keeps a 12 px gap (1024 px minimum width).
+      */}
+      <div className="absolute bottom-3 left-[64px] right-[364px] top-3 flex flex-col items-start justify-between gap-3">
+        <div className="flex min-h-0 flex-col">
+          <LayersPanel
+            rows={rows}
+            onVisible={onVisible}
+            onOpacity={onOpacity}
+            colourBy={colourBy}
+            onColourBy={(c) => {
+              setColourBy(c);
+              p.controls?.setColourBy(c);
+            }}
+            cloudColour={placeableCloud ? p.extra.cloudColour : null}
+            onCloudColour={p.extra.setCloudColour}
+            budget={placeableCloud ? p.extra.budget : null}
+            onBudget={p.extra.setBudget}
+          />
+        </div>
+        {model && (
+          <div className="flex w-full shrink-0 justify-start">
+            <RunBar projectId={p.projectId} model={model} />
+          </div>
+        )}
       </div>
       {sceneModel && version !== null && (
         <aside
@@ -269,11 +308,11 @@ export function SitePanels(p: SitePanelsProps) {
           </header>
           {editing ? (
             <ItemEditor
-              key={`${editing.id}@${version}`}
+              key={editing.item.id}
               projectId={p.projectId}
               modelId={sceneModel.id}
-              baseVersion={version}
-              item={editing}
+              baseVersion={editing.base}
+              item={editing.item}
               catalogue={catalogue}
               onDirty={setDirty}
               onCancel={() => guard(() => open(selectedId))}
@@ -294,7 +333,7 @@ export function SitePanels(p: SitePanelsProps) {
                 selectIn3d(null);
                 open(null);
               }}
-              onEdit={setEditing}
+              onEdit={(item) => setEditing({ item, base: version })}
             />
           ) : (
             <RegisterPanel
@@ -309,13 +348,11 @@ export function SitePanels(p: SitePanelsProps) {
         </aside>
       )}
       {notice && (
-        <div className="pointer-events-auto absolute left-1/2 top-3 w-full max-w-md -translate-x-1/2 rounded-control bg-glass-solid shadow-elev-2">
-          {notice}
-        </div>
-      )}
-      {model && (
-        <div className="absolute bottom-3 left-3 right-[364px] flex justify-start">
-          <RunBar projectId={p.projectId} model={model} />
+        // Between the Layers panel (64 + 280 + 12 px) and the register aside (340 + 2 x 12 px).
+        <div className="absolute left-[356px] right-[364px] top-3 flex justify-center">
+          <div className="pointer-events-auto w-full max-w-md rounded-control bg-glass-solid shadow-elev-2">
+            {notice}
+          </div>
         </div>
       )}
       {dialog}

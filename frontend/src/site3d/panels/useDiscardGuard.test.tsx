@@ -11,7 +11,16 @@ function Harness({ dirty }: { dirty: boolean }) {
   const [picked, setPicked] = useState("none");
   return (
     <>
-      <button onClick={() => guard(() => setPicked("pump"))}>Pick another</button>
+      <button
+        onClick={() =>
+          guard(
+            () => setPicked("pump"),
+            () => setPicked("kept"),
+          )
+        }
+      >
+        Pick another
+      </button>
       <button onClick={() => navigate("/elsewhere")}>Leave</button>
       <output>{picked}</output>
       {dialog}
@@ -26,7 +35,7 @@ describe("useDiscardGuard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pick another" }));
     expect(screen.getByRole("dialog", { name: "Discard your changes to LNG tank 1?" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-    expect(screen.getByText("none")).toBeInTheDocument();
+    expect(screen.getByText("kept")).toBeInTheDocument(); // onKeep ran, the action did not
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Pick another" }));
     fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));

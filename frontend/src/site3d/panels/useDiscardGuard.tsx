@@ -3,21 +3,21 @@ import { useBlocker } from "react-router-dom";
 import { Button, Dialog } from "@/ui";
 
 /**
- * Spec §11 "unsaved edits prompt before they are dropped": `guard(action)` runs the action at once
- * when nothing is unsaved, else asks first; leaving the route asks too (react-router's blocker, so
+ * Spec §11 "unsaved edits prompt before they are dropped": `guard(action, onKeep?)` runs the action
+ * at once when nothing is unsaved, else asks first (and runs `onKeep` on Keep editing); leaving the route asks too (react-router's blocker, so
  * this needs the app's data router).
  */
 export function useDiscardGuard(
   dirty: boolean,
   name: string,
-): { guard(action: () => void): void; dialog: ReactNode } {
-  const [pending, setPending] = useState<(() => void) | null>(null);
+): { guard(action: () => void, onKeep?: () => void): void; dialog: ReactNode } {
+  const [pending, setPending] = useState<{ action: () => void; onKeep?: () => void } | null>(null);
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname,
   );
   const guard = useCallback(
-    (action: () => void) => {
-      if (dirty) setPending(() => action);
+    (action: () => void, onKeep?: () => void) => {
+      if (dirty) setPending({ action, onKeep });
       else action();
     },
     [dirty],
@@ -25,11 +25,12 @@ export function useDiscardGuard(
   const blocked = blocker.state === "blocked";
   const asking = pending !== null || blocked;
   const keep = () => {
+    pending?.onKeep?.();
     setPending(null);
     if (blocked) blocker.reset();
   };
   const discard = () => {
-    const action = pending;
+    const action = pending?.action;
     setPending(null);
     if (blocked) blocker.proceed();
     else action?.();

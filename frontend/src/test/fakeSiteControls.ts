@@ -15,7 +15,6 @@ export function fakeSiteControls(over: Partial<SiteControls> = {}) {
     }),
     boxOf: vi.fn(() => null),
     setColourBy: vi.fn(),
-    setModelOpacity: vi.fn(),
     ...over,
   };
   return {
