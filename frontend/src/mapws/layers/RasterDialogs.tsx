@@ -53,7 +53,7 @@ export function RasterDialogs({ projectId }: PanelProps) {
   }
   return (
     <ConfirmDeleteDialog
-      title={`Delete ${layer?.name ?? row.name}?`}
+      title="Are you sure?"
       body={
         surface
           ? "The surface and its folder are deleted. A volume that uses it must be deleted first."

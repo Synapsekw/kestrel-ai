@@ -3,13 +3,16 @@ import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { importReportAsset, type ReportAsset, type ReportConfig } from "@/api/reports";
 import { pushLog } from "@/app/diagnostics";
-import { Button, Field, Icon, Input, Segmented } from "@/ui";
+import type { Brand } from "@/api/brands";
+import { Button, Field, Icon, Input, Segmented, Select } from "@/ui";
 import { ReportFilters } from "./ReportFilters";
 
 type Cover = ReportConfig["cover"];
 type PaperSize = ReportConfig["paper"]["size"];
 
 export interface ReportSettingsProps {
+  /** App-level brands (useBrands in ReportBuilder); null or absent while they load. */
+  brands?: Brand[] | null;
   projectId: string;
   config: ReportConfig;
   onEdit: (change: (c: ReportConfig) => ReportConfig) => void;
@@ -47,7 +50,13 @@ function TextField({
 }
 
 /** The builder's right pane (spec §12): the cover fields with the logo picker, the paper, and the filters. */
-export function ReportSettings({ projectId, config, onEdit, matchCount }: ReportSettingsProps) {
+export function ReportSettings({
+  projectId,
+  config,
+  onEdit,
+  matchCount,
+  brands = null,
+}: ReportSettingsProps) {
   const cover = config.cover;
   const setCover = (patch: Partial<Cover>) => onEdit((c) => ({ ...c, cover: { ...c.cover, ...patch } }));
   const optional = (v: string): string | null => (v.trim() ? v : null);
@@ -55,6 +64,30 @@ export function ReportSettings({ projectId, config, onEdit, matchCount }: Report
   return (
     <div className="flex flex-col gap-6">
       <Region title="Cover">
+        <Field
+          label="Brand"
+          htmlFor="report-brand"
+          hint="Colours, fonts, logos and footer of the PDF. Brands are managed in App settings."
+        >
+          <Select
+            id="report-brand"
+            dense
+            value={config.brand_id ?? ""}
+            onChange={(e) => onEdit((c) => ({ ...c, brand_id: e.target.value || null }))}
+          >
+            <option value="">Kestrel theme</option>
+            {(brands ?? []).map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+            {brands && config.brand_id && !brands.some((b) => b.id === config.brand_id) ? (
+              <option value={config.brand_id} disabled>
+                Brand not found (Kestrel theme)
+              </option>
+            ) : null}
+          </Select>
+        </Field>
         <TextField
           id="report-cover-title"
           label="Title"

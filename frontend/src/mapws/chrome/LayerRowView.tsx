@@ -63,6 +63,7 @@ export function LayerRowView({
     if (key && key !== row.key) onDropOn(key);
   };
   const menu = kind?.menu?.(row) ?? [];
+  const remove = menu.find((item) => item.id === "delete");
   const RowExtra = kind?.RowExtra;
   return (
     <li
@@ -136,18 +137,23 @@ export function LayerRowView({
           />
         )}
       </div>
-      {menu.length > 0 ? (
-        <MenuButton
-          iconOnly
-          icon="more"
-          size="sm"
-          variant="ghost"
-          label={`${row.name} actions`}
-          items={menu}
-        />
-      ) : (
-        <span />
-      )}
+      <div className="flex items-start">
+        {remove && (
+          <IconButton size="sm" icon="trash" label={`Delete ${row.name}`} onClick={() => remove.onSelect()} />
+        )}
+        {menu.length > 0 ? (
+          <MenuButton
+            iconOnly
+            icon="more"
+            size="sm"
+            variant="ghost"
+            label={`${row.name} actions`}
+            items={menu}
+          />
+        ) : (
+          !remove && <span />
+        )}
+      </div>
     </li>
   );
 }

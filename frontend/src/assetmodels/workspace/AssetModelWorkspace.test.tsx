@@ -353,14 +353,41 @@ describe("AssetModelWorkspace", () => {
     const dialog = await openDetails();
     fireEvent.click(within(dialog).getByRole("button", { name: /delete asset model…/i }));
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
-    expect(within(dialog).getByText(/every version and its 3d model go with it/i)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: /delete permanently/i }));
+    const confirm = screen.getByRole("dialog", { name: "Are you sure?" });
+    expect(confirm).toHaveTextContent(/every version and its 3d model go with it/i);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Yes" }));
     await waitFor(() =>
       expect(requests.some((r) => r.method === "DELETE" && /\/asset-models\/m1$/.test(r.url))).toBe(true),
     );
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models`));
     expect(screen.getByTestId("location")).not.toHaveTextContent(/models\/m1/);
     expect(await screen.findByText(/build a 3d model of the asset/i)).toBeInTheDocument();
+  });
+
+  it("deleting another model from the picker keeps the open model", async () => {
+    const other = {
+      ...MODEL,
+      id: "m2",
+      name: "Stack",
+      tag: null,
+      current_version: null,
+      status: "empty" as const,
+    };
+    const { requests } = open([
+      { method: "GET", path: /\/asset-models$/, body: { items: [MODEL, other] } },
+      { method: "DELETE", path: /\/asset-models\/m2$/, status: 204 },
+    ]);
+    await screen.findByTestId("model-workspace");
+    fireEvent.click(screen.getByRole("button", { name: /asset model: feed tank/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Stack" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }),
+    );
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "DELETE" && /\/asset-models\/m2$/.test(r.url))).toBe(true),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models/m1`);
+    expect(screen.getByRole("button", { name: /asset model: feed tank/i })).toBeInTheDocument();
   });
 
   it("a failed versions read offers a retry instead of saying there are none", async () => {

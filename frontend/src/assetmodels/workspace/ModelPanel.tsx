@@ -1,7 +1,10 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { AssetModel } from "@contract/client";
-import { Button, Icon, Pill, Popover, Switch, cx, focusRing, transition } from "@/ui";
+import { deleteAssetModel } from "@/api/assetModels";
+import { useApi } from "@/api/client";
+import { ConfirmDeleteDialog } from "@/mapws/layers/ConfirmDeleteDialog";
+import { Button, Icon, IconButton, Pill, Popover, Switch, cx, focusRing, transition } from "@/ui";
 
 const TONE = { empty: "neutral", building: "accent", ready: "ok" } as const;
 
@@ -20,6 +23,7 @@ function ModelPicker({
   onDetails,
   onImportGlb,
   onImportReview,
+  onDeleted,
 }: {
   projectId: string;
   model: AssetModel;
@@ -28,8 +32,11 @@ function ModelPicker({
   onDetails(): void;
   onImportGlb(): void;
   onImportReview(): void;
+  onDeleted(model: AssetModel): void;
 }) {
+  const api = useApi();
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<AssetModel | null>(null);
   const anchor = useRef<HTMLButtonElement>(null);
   const sub = [
     model.asset_type,
@@ -76,13 +83,13 @@ function ModelPicker({
       >
         <ul aria-label="Asset models" className="flex max-h-72 flex-col gap-0.5 overflow-y-auto">
           {models.map((m) => (
-            <li key={m.id}>
+            <li key={m.id} className="flex items-center gap-0.5">
               <Link
                 to={`/p/${projectId}/models/${m.id}`}
                 onClick={() => setOpen(false)}
                 aria-current={m.id === model.id ? "page" : undefined}
                 className={cx(
-                  "flex items-center gap-2 rounded-control px-2 py-1.5 text-sm",
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1.5 text-sm",
                   transition,
                   focusRing,
                   m.id === model.id ? "bg-accent-soft" : "hover:bg-hover",
@@ -98,6 +105,15 @@ function ModelPicker({
                   {m.status}
                 </Pill>
               </Link>
+              <IconButton
+                size="sm"
+                icon="trash"
+                label={`Delete ${m.name}`}
+                onClick={() => {
+                  setOpen(false);
+                  setPending(m);
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -147,6 +163,17 @@ function ModelPicker({
           </Button>
         </div>
       </Popover>
+      {pending && (
+        <ConfirmDeleteDialog
+          title="Are you sure?"
+          body="Every version and its 3D model go with it. This can't be undone."
+          onConfirm={async () => {
+            await deleteAssetModel(api, projectId, pending.id);
+            onDeleted(pending);
+          }}
+          onClose={() => setPending(null)}
+        />
+      )}
     </>
   );
 }
@@ -161,6 +188,7 @@ export function ModelPanel({
   models,
   onNew,
   onDetails,
+  onDeleted,
   groups,
   hiddenGroups,
   onGroup,
@@ -180,6 +208,7 @@ export function ModelPanel({
   onNew(): void;
   /** Opens the dialog to rename, re-tag or delete the shown model. */
   onDetails(): void;
+  onDeleted(model: AssetModel): void;
   groups: readonly string[];
   hiddenGroups: ReadonlySet<string>;
   onGroup(group: string, visible: boolean): void;
@@ -209,6 +238,7 @@ export function ModelPanel({
         onDetails={onDetails}
         onImportGlb={onImportGlb}
         onImportReview={onImportReview}
+        onDeleted={onDeleted}
       />
       {groups.length > 0 && (
         <div className="flex flex-col gap-1.5">
