@@ -260,11 +260,31 @@ class CatalogueArgs(_A):
 
 
 def catalogue_text() -> str:
+    """The full catalogue, for the sub-run system prompt (a cached prefix, so no reply cap)."""
     load_all()
     return "\n".join(
         f"{x['type']} ({x['family']}, default height {x['default_height_m']:g} m): {x['doc']}"
         for x in catalogue()
     )
+
+
+SHORT_DOC = 110
+
+
+def _first_sentence(doc: str) -> str:
+    head = doc.split(". ", 1)[0].strip().rstrip(".")
+    return head if len(head) <= SHORT_DOC else head[: SHORT_DOC - 1].rstrip() + "…"
+
+
+def catalogue_listing() -> str:
+    """One short line per type, so every registered type fits in a tool reply (MAX_TEXT)."""
+    load_all()
+    lines = [
+        f"{x['type']} ({x['family']}, {x['default_height_m']:g} m): {_first_sentence(x['doc'])}"
+        for x in catalogue()
+    ]
+    lines.append("Call catalogue with a type for its parameter schema and defaults.")
+    return "\n".join(lines)
 
 
 class Catalogue:
@@ -275,7 +295,7 @@ class Catalogue:
 
     def run(self, rc, scope, a):
         if not a.type:
-            return ToolOut(catalogue_text(), "Read the catalogue")
+            return ToolOut(catalogue_listing(), "Read the catalogue")
         load_all()
         entry = next((x for x in catalogue() if x["type"] == a.type), None)
         if entry is None:

@@ -176,6 +176,18 @@ def test_catalogue(rc):
     assert "other (fallback" in T.catalogue_text()
 
 
+def test_catalogue_listing_names_every_type_within_the_reply_cap(rc):
+    """With every builder family registered the listing must not be cut off (coordinator fix)."""
+    from app.asset_models.builders.base import REGISTRY, load_all
+
+    load_all()
+    listing = T.run_plant_tool(rc, pkg(rc), "catalogue", {})
+    assert listing.ok and "(cut off)" not in listing.text
+    assert len(listing.text) <= T.MAX_TEXT
+    for t in REGISTRY:
+        assert f"\n{t} (" in "\n" + listing.text, t
+
+
 def test_upsert_environment(rc):
     sea = {
         "id": "sea",
