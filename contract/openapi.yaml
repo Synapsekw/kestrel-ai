@@ -6183,6 +6183,211 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
+  # ----- plant model (spec 2026-10-03-plant-model-generator §10; plan 2026-10-03-plant-model-f0)
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/items:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelVersion"
+    get:
+      tags: [assetmodels]
+      operationId: listAssetModelItems
+      summary: >-
+        The version's register, read from the index the GLB job writes (`asset_item`): at most 500 rows a
+        page, ordered by node. Empty until the version's GLB is built.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: matches the tag or the name, case-insensitive
+          schema: { type: string, maxLength: 120 }
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+        - name: area
+          in: query
+          required: false
+          schema: { type: string, maxLength: 80 }
+        - name: flag
+          in: query
+          required: false
+          description: only rows carrying this flag
+          schema: { $ref: "#/components/schemas/ItemFlagCode" }
+        - name: bbox
+          in: query
+          required: false
+          description: "plant metres `e0,n0,e1,n1`: only rows whose plant point is inside"
+          schema: { type: string, pattern: "^-?\\d+(\\.\\d+)?(,-?\\d+(\\.\\d+)?){3}$" }
+        - name: cursor
+          in: query
+          required: false
+          description: the previous page's `next_cursor`
+          schema: { type: string, maxLength: 200 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: one page of the register
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetItemPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "a malformed cursor (`code` is `invalid_cursor`) or a box with e1 < e0 or n1 < n0 (`invalid_bbox`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/items/{itemId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelVersion"
+      - $ref: "#/components/parameters/assetItemId"
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelItem
+      summary: One item of the version's spec, in full.
+      responses:
+        "200":
+          description: the item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/csv:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelVersion"
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelCsv
+      summary: >-
+        The version's register as CSV: Cowork's 17 columns in their order, then `flags` and `confidence`
+        (`utm39_E`/`utm39_N` are `site_E`/`site_N` when the site CRS is not UTM 39).
+      responses:
+        "200":
+          description: the CSV file
+          content:
+            text/csv:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the version's GLB and CSV are still building or failed (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/packages:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelRunId"
+    get:
+      tags: [assetmodels]
+      operationId: listAssetModelRunPackages
+      summary: A plant run's packages, in order (at most 64). Empty for build and refine runs.
+      responses:
+        "200":
+          description: the packages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SiteModelPackageList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/pages:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: createDrawingPages
+      summary: >-
+        Import several pages of one inspected PDF (or "all") as one Drawing each, named "<name> · p<k>",
+        built in order by one `drawing_import` job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingPagesCreate" }
+      responses:
+        "202":
+          description: the drawings, queued; the job builds them in page order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingPagesWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a build from this inspection is already queued (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a page the file does not have, a file that is not a PDF, or PDF support missing (`code` is `invalid_pages` or `pdf_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/unimported:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listUnimportedDrawings
+      summary: >-
+        Drawing files in the project folder (three levels deep, Kestrel's own folders skipped) whose
+        content matches no imported drawing (by sha256). At most 500.
+      responses:
+        "200":
+          description: the files
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnimportedDrawingList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/site-scene:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [assetmodels]
+      operationId: getSiteScene
+      summary: >-
+        The Site 3D view's manifest: the plant frame (from the chosen model, else the map workspace) and
+        the layers there are to show, each list at most 200.
+      parameters:
+        - name: modelId
+          in: query
+          required: false
+          description: the asset model to open; the newest plant model with a ready GLB when absent
+          schema: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: the scene manifest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SiteScene" }
+        "404":
+          description: "the project, or the asset model named by `modelId`, does not exist (`code` is `not_found`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/asset-models/catalogue:
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelCatalogue
+      summary: The plant item builder types, by family, with their param schemas (for the item editor).
+      responses:
+        "200":
+          description: the catalogue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelCatalogue" }
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/brands:
     get:
       tags: [brands]
@@ -7100,6 +7305,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    assetItemId:
+      name: itemId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[A-Za-z0-9_.\\-]{1,64}$" }
     sightingId:
       name: sightingId
       in: path
@@ -13697,7 +13907,7 @@ components:
       enum: [empty, building, ready]
     AssetModel:
       type: object
-      required: [id, name, asset_type, tag, status, current_version, live_run_id, captured_on, created_at, updated_at, frame, review]
+      required: [id, name, asset_type, tag, status, current_version, live_run_id, captured_on, created_at, updated_at, frame, review, kind]
       properties:
         id: { type: string }
         name: { type: string }
@@ -13719,6 +13929,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AssetReviewConfig"
             - type: "null"
+        kind: { $ref: "#/components/schemas/AssetModelKind" }
     AssetModelList:
       type: object
       required: [items]
@@ -13732,6 +13943,10 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         asset_type: { type: [string, "null"], maxLength: 80 }
         tag: { type: [string, "null"], maxLength: 80 }
+        kind:
+          description: "`plant` for a plant model; `asset` when absent"
+          allOf:
+            - $ref: "#/components/schemas/AssetModelKind"
     AssetModelPatch:
       type: object
       additionalProperties: false
@@ -13766,8 +13981,12 @@ components:
       additionalProperties: false
       required: [kind]
       properties:
-        kind: { type: string, enum: [drawing, cloud, photo, assumed] }
+        kind:
+          type: string
+          enum: [drawing, cloud, photo, assumed, operator]
+          description: "`operator`: set by hand (a plant frame or an edited item); needs no id"
         id: { type: [string, "null"] }
+        page: { type: [integer, "null"], minimum: 1, maximum: 10000, description: "the drawing's page, when it has several" }
         region:
           type: [array, "null"]
           items: { type: number, minimum: 0, maximum: 1 }
@@ -13810,6 +14029,13 @@ components:
       properties:
         asset: { $ref: "#/components/schemas/AssetInfo" }
         parts: { type: array, maxItems: 2000, items: { $ref: "#/components/schemas/AssetPart" } }
+        site:
+          description: the plant grid; null for a single asset (M1)
+          oneOf:
+            - $ref: "#/components/schemas/PlantFrame"
+            - type: "null"
+        items: { type: array, maxItems: 20000, items: { $ref: "#/components/schemas/AssetItem" } }
+        environment: { type: array, maxItems: 2000, items: { $ref: "#/components/schemas/EnvFeature" } }
     SpecIssue:
       type: object
       required: [code, part_id, message]
@@ -13839,7 +14065,7 @@ components:
         part_count: { type: integer }
         meta:
           type: [object, "null"]
-          description: "`build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]; an `imported` version: source_name, sha256, bytes, node_count, frame_conversion, parts[{node,name,group,extras}]"
+          description: "`build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]; an `imported` version: source_name, sha256, bytes, node_count, frame_conversion, parts[{node,name,group,extras}]; a spec of over 200 items and environment features adds `validation` {errors, error_count, warnings, warning_count} from the GLB job"
         created_at: { type: string, format: date-time }
     AssetModelVersionList:
       type: object
@@ -13886,7 +14112,7 @@ components:
         job_id: { type: string }
         provider: { $ref: "#/components/schemas/KeyedProviderName" }
         model_name: { type: string }
-        mode: { type: string, enum: [build, refine] }
+        mode: { type: string, enum: [build, refine, plant, plant_package] }
         notes: { type: [string, "null"] }
         state: { type: string, enum: [running, finished, stopped, failed] }
         stop_reason: { type: [string, "null"], enum: [budget, timeout, user, provider_error, interrupted, null] }
@@ -13909,6 +14135,16 @@ components:
             p95_mm}, parts [{id, n, median_mm, p95_mm}], inlier_share, points_used}.
         started_at: { type: string, format: date-time }
         ended_at: { type: [string, "null"], format: date-time }
+        packages:
+          description: a plant run's package counts; null for build and refine runs
+          oneOf:
+            - $ref: "#/components/schemas/AssetModelRunPackages"
+            - type: "null"
+        usage_by_stage:
+          description: a plant run's current stage and its use per stage; null for build and refine runs
+          oneOf:
+            - $ref: "#/components/schemas/AssetModelRunUsageByStage"
+            - type: "null"
     AssetModelRunList:
       type: object
       required: [items]
@@ -13919,8 +14155,20 @@ components:
       additionalProperties: false
       required: [mode, sources, provider]
       properties:
-        mode: { type: string, enum: [build, refine] }
-        sources: { type: array, minItems: 1, maxItems: 50, items: { $ref: "#/components/schemas/AssetSourceRef" } }
+        mode: { type: string, enum: [build, refine, plant, plant_package] }
+        sources:
+          type: array
+          description: "a plant run takes every page, so up to 200"
+          minItems: 1
+          maxItems: 200
+          items: { $ref: "#/components/schemas/AssetSourceRef" }
+        package_ids:
+          type: array
+          description: "`plant_package`: the packages of the model's last plant run to redo"
+          maxItems: 64
+          uniqueItems: true
+          items: { type: string, maxLength: 64 }
+        limits: { $ref: "#/components/schemas/AssetModelRunLimits" }
         provider: { $ref: "#/components/schemas/KeyedProviderName" }
         model_name: { type: [string, "null"], maxLength: 120 }
         notes: { type: [string, "null"], maxLength: 4000 }
@@ -13930,6 +14178,390 @@ components:
       properties:
         run: { $ref: "#/components/schemas/AssetModelRun" }
         job: { $ref: "#/components/schemas/Job" }
+    # ----- plant model (spec 2026-10-03-plant-model-generator §5, §10; plan 2026-10-03-plant-model-f0)
+    AssetModelKind:
+      type: string
+      enum: [asset, plant]
+      description: "`asset`: one asset made of parts (M1); `plant`: a site of typed items (the plant generator)"
+    PlantCrs:
+      type: object
+      additionalProperties: false
+      properties:
+        epsg: { type: [integer, "null"], minimum: 1024, maximum: 999999 }
+        wkt: { type: [string, "null"], maxLength: 20000 }
+    PlantDatum:
+      type: object
+      additionalProperties: false
+      description: the plant elevation at scene Y = 0 (for example HPFS, EL 100.0)
+      properties:
+        label: { type: string, minLength: 1, maxLength: 40, default: EL }
+        el_m: { type: number, default: 0 }
+    PlantCloudDatum:
+      type: object
+      additionalProperties: false
+      description: "plant EL = cloud z + offset_m (+ tilt · [dx, dy])"
+      required: [cloud_id, offset_m]
+      properties:
+        cloud_id: { type: string, minLength: 1, maxLength: 64 }
+        offset_m: { type: number }
+        tilt: { type: [array, "null"], items: { type: number }, minItems: 2, maxItems: 2 }
+    PlantFrame:
+      type: object
+      additionalProperties: false
+      description: >-
+        A plant spec's grid (`AssetSpec.site`; `spec.SiteFrame` in the backend). Site CRS from plant:
+        [X, Y] = origin_crs + R(plant_north_deg)·[E, N] with R(θ) = [[cos θ, sin θ], [-sin θ, cos θ]].
+        Scene and GLB: x = plant N, y = EL - datum.el_m, z = plant E (metres, Y up).
+      required: [crs, origin_crs, plant_north_deg, source]
+      properties:
+        crs: { $ref: "#/components/schemas/PlantCrs" }
+        origin_crs: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        plant_north_deg: { type: number, minimum: -360, maximum: 360, description: plant north, clockwise from grid north }
+        datum: { $ref: "#/components/schemas/PlantDatum" }
+        cloud_z_to_el:
+          oneOf:
+            - $ref: "#/components/schemas/PlantCloudDatum"
+            - type: "null"
+        source: { $ref: "#/components/schemas/AssetPartSource" }
+    PlantPoint:
+      type: array
+      description: "[E, N], plant metres"
+      items: { type: number }
+      minItems: 2
+      maxItems: 2
+    ItemFootprintRect:
+      type: object
+      additionalProperties: false
+      required: [kind, center, size]
+      properties:
+        kind: { type: string, enum: [rect] }
+        center: { $ref: "#/components/schemas/PlantPoint" }
+        size:
+          type: array
+          description: "[along, across] metres; `along` points rot_deg clockwise from plant north"
+          items: { type: number, exclusiveMinimum: 0 }
+          minItems: 2
+          maxItems: 2
+        rot_deg: { type: number, default: 0 }
+    ItemFootprintCircle:
+      type: object
+      additionalProperties: false
+      required: [kind, center, d]
+      properties:
+        kind: { type: string, enum: [circle] }
+        center: { $ref: "#/components/schemas/PlantPoint" }
+        d: { type: number, exclusiveMinimum: 0 }
+    ItemFootprintPolygon:
+      type: object
+      additionalProperties: false
+      required: [kind, pts]
+      properties:
+        kind: { type: string, enum: [polygon] }
+        pts: { type: array, minItems: 3, maxItems: 500, items: { $ref: "#/components/schemas/PlantPoint" } }
+    ItemFootprintLine:
+      type: object
+      additionalProperties: false
+      required: [kind, pts, width]
+      properties:
+        kind: { type: string, enum: [line] }
+        pts: { type: array, minItems: 2, maxItems: 500, items: { $ref: "#/components/schemas/PlantPoint" } }
+        width: { type: number, exclusiveMinimum: 0 }
+    ItemFootprint:
+      description: an item's plan outline, plant metres
+      oneOf:
+        - $ref: "#/components/schemas/ItemFootprintRect"
+        - $ref: "#/components/schemas/ItemFootprintCircle"
+        - $ref: "#/components/schemas/ItemFootprintPolygon"
+        - $ref: "#/components/schemas/ItemFootprintLine"
+      discriminator:
+        propertyName: kind
+        mapping:
+          rect: "#/components/schemas/ItemFootprintRect"
+          circle: "#/components/schemas/ItemFootprintCircle"
+          polygon: "#/components/schemas/ItemFootprintPolygon"
+          line: "#/components/schemas/ItemFootprintLine"
+    ItemFlagCode:
+      type: string
+      enum: [plan_offset, height_mismatch, missing_in_cloud, unregistered, builder_fallback, straddles_package]
+    ItemFlag:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { $ref: "#/components/schemas/ItemFlagCode" }
+        value: { type: [number, "null"] }
+        note: { type: [string, "null"], maxLength: 300 }
+    AssetItem:
+      type: object
+      additionalProperties: false
+      description: >-
+        One item of a plant spec. Plant metres; `parts` are M1 parts in item-local millimetres (origin at
+        the footprint's reference point at base_el).
+      required: [id, name, type, footprint, source]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9_.\\-]{1,64}$" }
+        tag: { type: [string, "null"], maxLength: 80 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: a builder type (`getAssetModelCatalogue`), checked by the spec validation, not by this schema
+        area: { type: [string, "null"], maxLength: 80 }
+        footprint: { $ref: "#/components/schemas/ItemFootprint" }
+        base_el: { type: [number, "null"] }
+        top_el: { type: [number, "null"] }
+        levels: { type: array, maxItems: 50, items: { type: number } }
+        params:
+          type: object
+          additionalProperties: true
+          description: the type's params, validated by its builder's schema
+        height_source: { type: string, enum: [drawing, cloud, indicative], default: indicative }
+        source: { $ref: "#/components/schemas/AssetPartSource" }
+        confidence: { type: string, enum: [high, medium, low], default: medium }
+        flags: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ItemFlag" } }
+        parts: { type: array, maxItems: 2000, items: { $ref: "#/components/schemas/AssetPart" } }
+        notes: { type: [string, "null"], maxLength: 1000 }
+    EnvFeature:
+      type: object
+      additionalProperties: false
+      description: a traced piece of the site's environment (land, sea, roads, paving), plant metres
+      required: [id, kind, pts, el, source]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9_.\\-]{1,64}$" }
+        kind: { type: string, enum: [land, sea, road, paved, laydown, slope, revetment] }
+        pts: { type: array, minItems: 3, maxItems: 5000, items: { $ref: "#/components/schemas/PlantPoint" } }
+        el: { type: number }
+        source: { $ref: "#/components/schemas/AssetPartSource" }
+        confidence: { type: string, enum: [high, medium, low], default: medium }
+    AssetItemRow:
+      type: object
+      description: one row of a version's register index; `node` is the item id
+      required: [node, tag, name, type, area, plant_e, plant_n, site_x, site_y, lon, lat, base_el, top_el,
+                 height_source, confidence, flags, source_sheet, has_geometry]
+      properties:
+        node: { type: string }
+        tag: { type: [string, "null"] }
+        name: { type: string }
+        type: { type: string }
+        area: { type: [string, "null"] }
+        plant_e: { type: [number, "null"] }
+        plant_n: { type: [number, "null"] }
+        site_x: { type: [number, "null"] }
+        site_y: { type: [number, "null"] }
+        lon: { type: [number, "null"] }
+        lat: { type: [number, "null"] }
+        base_el: { type: [number, "null"] }
+        top_el: { type: [number, "null"] }
+        height_source: { type: string, enum: [drawing, cloud, indicative] }
+        confidence: { type: string, enum: [high, medium, low] }
+        flags: { type: array, items: { $ref: "#/components/schemas/ItemFlag" } }
+        source_sheet: { type: [string, "null"] }
+        has_geometry: { type: boolean }
+    AssetItemPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/AssetItemRow" } }
+        next_cursor: { type: [string, "null"], description: null on the last page }
+    AssetBuilderType:
+      type: object
+      required: [type, family, doc, default_height_m, params_schema]
+      properties:
+        type: { type: string }
+        family: { type: string, enum: [structure, equipment, building, civil, environment, fallback] }
+        doc: { type: string }
+        default_height_m: { type: number }
+        params_schema:
+          type: object
+          additionalProperties: true
+          description: the JSON Schema of the type's params; every param has a default
+    AssetModelCatalogue:
+      type: object
+      required: [types]
+      properties:
+        types: { type: array, items: { $ref: "#/components/schemas/AssetBuilderType" } }
+    SiteModelPackage:
+      type: object
+      description: one package of a plant run, a page region traced by one sub-run
+      required: [id, run_id, n, label, drawing_id, region, area, expected, state, attempts, usage, item_count,
+                 summary, started_at, ended_at]
+      properties:
+        id: { type: string }
+        run_id: { type: string }
+        n: { type: integer, minimum: 1 }
+        label: { type: string }
+        drawing_id: { type: [string, "null"] }
+        region:
+          type: [array, "null"]
+          description: "[x0, y0, x1, y1] page fractions"
+          items: { type: number, minimum: 0, maximum: 1 }
+          minItems: 4
+          maxItems: 4
+        area: { type: [string, "null"] }
+        expected: { type: array, items: { type: string }, description: tags the equipment list promises here }
+        state: { type: string, enum: [queued, running, done, failed, skipped] }
+        attempts: { type: integer, minimum: 0 }
+        usage:
+          type: object
+          required: [input_tokens, output_tokens]
+          properties:
+            input_tokens: { type: integer }
+            output_tokens: { type: integer }
+        item_count: { type: integer, minimum: 0 }
+        summary: { type: [string, "null"] }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+    SiteModelPackageList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 64, items: { $ref: "#/components/schemas/SiteModelPackage" } }
+    AssetModelRunPackages:
+      type: object
+      description: a plant run's package counts
+      required: [total, done, failed, running]
+      properties:
+        total: { type: integer, minimum: 0 }
+        done: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        running: { type: integer, minimum: 0 }
+    AssetModelRunStageUsage:
+      type: object
+      required: [input_tokens, output_tokens, images, calls]
+      properties:
+        input_tokens: { type: integer, minimum: 0 }
+        output_tokens: { type: integer, minimum: 0 }
+        images: { type: integer, minimum: 0 }
+        calls: { type: integer, minimum: 0 }
+    AssetModelRunUsageByStage:
+      type: object
+      description: a plant run's stage and use per stage (spec §8.4), summed over the orchestrator and every sub-run
+      required: [current, stages, cost_estimate_usd, cost_label]
+      properties:
+        current: { type: string, description: "the stage running now: survey, trace, merge, cloud_check, environment, build or finish" }
+        stages:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/AssetModelRunStageUsage" }
+        cost_estimate_usd: { type: [number, "null"], description: "from a price table in app code; null when the model has no price" }
+        cost_label: { type: string, description: "says that the cost is an estimate" }
+    AssetModelRunLimits:
+      type: object
+      additionalProperties: false
+      description: a plant run's budget, overriding App settings for this run
+      properties:
+        max_tokens: { type: integer, minimum: 100000, maximum: 200000000 }
+        max_images: { type: integer, minimum: 1, maximum: 5000 }
+        max_seconds: { type: integer, minimum: 60, maximum: 86400 }
+        parallel: { type: integer, minimum: 1, maximum: 8 }
+    DrawingPagesCreate:
+      type: object
+      additionalProperties: false
+      required: [inspection_id, name, pages, placement]
+      properties:
+        inspection_id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        pages:
+          description: '"all", or the 1-based page numbers to import'
+          oneOf:
+            - type: string
+              const: all
+            - type: array
+              minItems: 1
+              maxItems: 500
+              uniqueItems: true
+              items: { type: integer, minimum: 1 }
+        dpi: { type: integer, enum: [100, 150, 200, 300], description: "150 when absent" }
+        placement: { $ref: "#/components/schemas/DrawingPlacementInput" }
+        captured_on: { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+    DrawingPagesWithJob:
+      type: object
+      required: [drawings, job]
+      properties:
+        drawings: { type: array, items: { $ref: "#/components/schemas/Drawing" } }
+        job: { $ref: "#/components/schemas/Job" }
+    UnimportedDrawing:
+      type: object
+      required: [path, name, format, size, pages]
+      properties:
+        path: { type: string, description: absolute path }
+        name: { type: string }
+        format: { type: string, enum: [pdf, dxf, tif, png, jpg, landxml] }
+        size: { type: integer, minimum: 0 }
+        pages: { type: [integer, "null"], description: a PDF's page count; null for other formats }
+    UnimportedDrawingList:
+      type: object
+      required: [files]
+      properties:
+        files: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/UnimportedDrawing" } }
+    SiteSceneFrame:
+      type: object
+      required: [crs, origin_crs, plant_north_deg, datum]
+      properties:
+        crs: { $ref: "#/components/schemas/PlantCrs" }
+        origin_crs: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        plant_north_deg: { type: number }
+        datum: { $ref: "#/components/schemas/PlantDatum" }
+    SiteSceneModel:
+      type: object
+      required: [id, version, glb_url, csv_url, kind]
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        glb_url: { type: string }
+        csv_url: { type: string }
+        kind: { $ref: "#/components/schemas/AssetModelKind" }
+    SiteSceneOrtho:
+      type: object
+      required: [id, name, tile_url_template, bounds_site, min_z, max_z]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        tile_url_template: { type: string, description: "with {z}, {x} and {y}" }
+        bounds_site: { type: array, items: { type: number }, minItems: 4, maxItems: 4 }
+        min_z: { type: integer }
+        max_z: { type: integer }
+    SiteSceneCloud:
+      type: object
+      required: [id, name, octree_url, crs_epsg, same_crs, z_offset_m]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        octree_url: { type: string }
+        crs_epsg: { type: [integer, "null"] }
+        same_crs: { type: boolean, description: false when the cloud cannot be placed in the plant frame }
+        z_offset_m: { type: number, description: "plant EL - cloud z (the plant's cloud_z_to_el), 0 when unknown" }
+    SiteSceneDrawing:
+      type: object
+      required: [id, name, tile_url_template, bounds_site]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        tile_url_template: { type: string }
+        bounds_site: { type: array, items: { type: number }, minItems: 4, maxItems: 4 }
+    SiteSceneCount:
+      type: object
+      required: [count, url]
+      properties:
+        count: { type: integer, minimum: 0 }
+        url: { type: string, description: the paged list to read them from }
+    SiteScene:
+      type: object
+      required: [frame, model, orthos, clouds, drawings, photos, findings]
+      properties:
+        frame:
+          oneOf:
+            - $ref: "#/components/schemas/SiteSceneFrame"
+            - type: "null"
+        model:
+          oneOf:
+            - $ref: "#/components/schemas/SiteSceneModel"
+            - type: "null"
+        orthos: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/SiteSceneOrtho" } }
+        clouds: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/SiteSceneCloud" } }
+        drawings: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/SiteSceneDrawing" } }
+        photos: { $ref: "#/components/schemas/SiteSceneCount" }
+        findings: { $ref: "#/components/schemas/SiteSceneCount" }
     # ----- asset findings (spec 2026-10-02-asset-findings §5, §8; plan 2026-10-03-asset-findings-c0)
     AssetVec3:
       type: array

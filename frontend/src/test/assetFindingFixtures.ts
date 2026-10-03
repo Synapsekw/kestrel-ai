@@ -65,6 +65,7 @@ export const exampleAssetModel: AssetModel = {
     breakdowns: [],
     footer_disclaimer: "",
   },
+  kind: "asset",
 };
 
 const assetBase: Finding = {

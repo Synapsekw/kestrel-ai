@@ -26,7 +26,12 @@ const STATE: Record<AssetModelRun["state"], { label: string; tone: PillTone }> =
   stopped: { label: "Stopped", tone: "warn" },
   failed: { label: "Failed", tone: "danger" },
 };
-const MODE: Record<RunMode, string> = { build: "Build", refine: "Refine" };
+const MODE: Record<RunMode, string> = {
+  build: "Build",
+  refine: "Refine",
+  plant: "Plant build",
+  plant_package: "Package re-run",
+};
 
 const when = (iso: string, now: number) => relativeTime(iso, now).replace(/ /g, " ");
 
