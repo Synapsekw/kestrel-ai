@@ -21,6 +21,7 @@ import { useLiveRun } from "@/assetmodels/run/useLiveRun";
 import { useAssetModelList, useVersionDetail, useVersions } from "@/assetmodels/useAssetModels";
 import { FindingsTopic } from "@/assetmodels/review/FindingsTopic";
 import { ImportGlbDialog } from "@/assetmodels/review/ImportGlbDialog";
+import { ReviewImportDialog } from "@/assetmodels/review/ReviewImportDialog";
 import { PhotosTopic } from "@/assetmodels/review/PhotosTopic";
 import { useFindingsLayer } from "@/assetmodels/review/useFindingsLayer";
 import { useGroundTiles } from "@/assetmodels/review/useGroundTiles";
@@ -438,6 +439,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     },
   };
   const [importOpen, setImportOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   // A new viewer element (the first, or one mounted again after a failed or still-building version)
   // starts empty: it gets the layers and the view switches once, before its engine loads. A reload
@@ -524,6 +526,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
       onViewSwitch={onViewSwitch}
       groundAvailable={ground !== null}
       onImportGlb={() => setImportOpen(true)}
+      onImportReview={() => setReviewOpen(true)}
     >
       {tools.cut && <CutBearing bearing={bearing} onBearing={onBearing} />}
     </ModelPanel>
@@ -567,6 +570,17 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
         setImportOpen(false);
         toast("ok", `Importing the GLB as version ${version}`);
         opened(version, jobId);
+      }}
+    />
+  );
+  const reviewDialog = reviewOpen && (
+    <ReviewImportDialog
+      projectId={projectId}
+      modelId={model.id}
+      onClose={() => setReviewOpen(false)}
+      onStarted={() => {
+        setReviewOpen(false);
+        toast("info", "Importing the review. Findings appear when it ends; you can keep working.");
       }}
     />
   );
@@ -658,6 +672,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
           />
         )}
         {importDialog}
+        {reviewDialog}
       </>
     );
 
@@ -791,6 +806,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
         {buildBar(true)}
       </div>
       {importDialog}
+      {reviewDialog}
     </>
   );
 }

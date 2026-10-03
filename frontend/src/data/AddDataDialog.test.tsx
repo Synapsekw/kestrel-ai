@@ -22,6 +22,7 @@ const { stub } = vi.hoisted(() => ({
       </div>
     ),
 }));
+vi.mock("@/assetmodels/review/ReviewImportDialog", () => ({ ReviewImportDialog: stub("Import inspection review") }));
 vi.mock("./ImportImagesDialog", () => ({ ImportImagesDialog: stub("Import images") }));
 vi.mock("@/maps/ImportMapDialog", () => ({ ImportMapDialog: stub("Import map") }));
 vi.mock("@/clouds/ImportCloudDialog", () => ({ ImportCloudDialog: stub("Import cloud") }));
@@ -37,13 +38,20 @@ describe("AddDataDialog", () => {
     useAddData.setState({ open: false, tile: null, projectId: null });
   });
 
-  it("offers five tiles, all enabled", () => {
+  it("offers six tiles, all enabled", () => {
     const { api } = fakeClient([]);
     renderWithProviders(<AddDataDialog project={exampleProject} onClose={() => {}} />, { api });
-    for (const name of [/Photos/, /Orthomosaic/, /Elevation/, /Point cloud/, /Drawing/]) {
+    for (const name of [/Photos/, /Orthomosaic/, /Elevation/, /Point cloud/, /Drawing/, /Inspection review/]) {
       expect(screen.getByRole("button", { name })).toBeEnabled();
       expect(screen.getByRole("button", { name })).not.toHaveAttribute("aria-disabled");
     }
+  });
+
+  it("offers an inspection review import", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(<AddDataDialog project={exampleProject} onClose={() => {}} />, { api });
+    fireEvent.click(screen.getByRole("button", { name: /inspection review/i }));
+    expect(screen.getByRole("dialog", { name: /import inspection review/i })).toBeInTheDocument();
   });
 
   it("closes when the photo import is queued, and says it runs in the background", () => {

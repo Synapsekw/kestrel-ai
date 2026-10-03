@@ -19,6 +19,7 @@ function ModelPicker({
   onNew,
   onDetails,
   onImportGlb,
+  onImportReview,
 }: {
   projectId: string;
   model: AssetModel;
@@ -26,6 +27,7 @@ function ModelPicker({
   onNew(): void;
   onDetails(): void;
   onImportGlb(): void;
+  onImportReview(): void;
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
@@ -124,6 +126,17 @@ function ModelPicker({
           <Button
             size="sm"
             variant="ghost"
+            icon="findings"
+            onClick={() => {
+              setOpen(false);
+              onImportReview();
+            }}
+          >
+            Import inspection review…
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             icon="settings"
             onClick={() => {
               setOpen(false);
@@ -158,6 +171,7 @@ export function ModelPanel({
   onViewSwitch,
   groundAvailable,
   onImportGlb,
+  onImportReview,
   children,
 }: {
   projectId: string;
@@ -178,6 +192,7 @@ export function ModelPanel({
   /** False when the asset has no geographic origin, so there is no street map to show. */
   groundAvailable: boolean;
   onImportGlb(): void;
+  onImportReview(): void;
   children?: ReactNode;
 }) {
   return (
@@ -193,6 +208,7 @@ export function ModelPanel({
         onNew={onNew}
         onDetails={onDetails}
         onImportGlb={onImportGlb}
+        onImportReview={onImportReview}
       />
       {groups.length > 0 && (
         <div className="flex flex-col gap-1.5">

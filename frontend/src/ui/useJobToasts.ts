@@ -178,8 +178,14 @@ export function jobToastText(job: Job): string {
       if (kept === null || created === null) return "Findings regrouped";
       return `Findings regrouped: ${kept} kept, ${created} new${merged > 0 ? `, ${merged} merged` : ""}`;
     }
-    case "review_kit_import":
-      return job.params?.dry_run === true ? "Review folder checked" : "Review job imported";
+    case "review_kit_import": {
+      if (job.params?.dry_run === true) return "Review folder checked";
+      const findings = num(r.findings);
+      const sightings = num(r.sightings);
+      const unmatched = num(r.unmatched_count) ?? 0;
+      if (findings === null || sightings === null) return "Review job imported";
+      return `Review job imported: ${findings} findings from ${sightings} sightings${unmatched > 0 ? `, ${unmatched} photos not matched` : ""}`;
+    }
   }
 }
 
