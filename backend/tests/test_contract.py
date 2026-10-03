@@ -271,6 +271,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # details.errors[{path, message}]).
     "createProjectTemplate": {422},
     "patchProjectTemplate": {422},
+    # D2: a generated brand name can already be taken (`brand_name_taken`, 409), normalise to nothing
+    # (`invalid_brand`) or a generated font name is not bundled (`unknown_font`, 422).
+    "createBrand": {409, 422},
+    "patchBrand": {409, 422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

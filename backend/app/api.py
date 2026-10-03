@@ -155,6 +155,7 @@ for _module in (
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
     # A unit inserts its own router module above its stubs module and deletes its tuples there.
     "app.asset_review.stubs",
+    "app.brands.router",  # report brands: app level, in catalogue.db (plan D2)
     "app.brands.stubs",
 ):
     try:
