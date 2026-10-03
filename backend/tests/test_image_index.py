@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import event
 from test_image_filters import world  # noqa: F401 - the shared five-image fixture
 
+from app.asset_review.review_status import set_status
 from app.imagery import index as image_index
 
 API = "/api/v1"
@@ -133,3 +134,33 @@ def test_twenty_thousand_images_answer_in_one_response(client, project, handle):
     body = _index(client, project["id"], source_id=src.id, sort="path")
     assert body["total"] == 20_000 and len(set(body["ids"])) == 20_000
     assert body["ids"][15_000] == "img-15000"
+
+
+def test_review_status_filter(client, world, handle):  # noqa: F811
+    """Asset findings spec §5.4: the filter matches the effective status, the one the GET answers.
+    a, b and c have a row. d (marked empty) and e have none: no row matches `not_assessed`, and
+    marked empty with no row matches `none` (coordinator ruling for D1)."""
+    ids = world["ids"]
+    with handle.session() as s:
+        set_status(s, ids["a"], "uncertain")
+        set_status(s, ids["b"], "finding")  # b has accepted boxes, so `none` would be refused
+        set_status(s, ids["c"], "not_assessed")
+    back = {v: k for k, v in ids.items()}
+
+    def names(value: str) -> list[str]:
+        return sorted(back[i] for i in _index(client, world["pid"], review_status=value)["ids"])
+
+    assert names("uncertain") == ["a"]
+    assert names("none") == ["d"]  # marked empty, no row
+    assert names("none,finding") == ["b", "d"]
+    assert names("not_assessed") == ["c", "e"]  # e: no row, not marked
+    assert names("finding,none,uncertain,not_assessed") == ["a", "b", "c", "d", "e"]
+    for name in "de":
+        got = client.get(f"{API}/projects/{world['pid']}/images/{ids[name]}/review").json()["status"]
+        assert names(got).count(name) == 1  # the GET and the filter agree
+    assert sorted(back[i] for i in _index(client, world["pid"])["ids"]) == ["a", "b", "c", "d", "e"]
+
+
+def test_review_status_rejects_unknown_values(client, world):  # noqa: F811
+    r = client.get(f"{API}/projects/{world['pid']}/images/index", params={"review_status": "maybe"})
+    assert r.status_code == 422
