@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-10-02
+last-updated: 2026-10-03
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -77,7 +77,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Foundation of the inspection platform (F): Aero glass UI, projects without kind, catalogue, findings, Models section, migration | merged/pushed to `main` (`09fb538..f3ff568`); installed 2026-09-27 | 11 units via parallel worktrees. 2576 backend, 1622 frontend, 103 browser, 8 Rust tests; smoke ok (CUDA); the smoke run caught and fixed an unbundled catalogue migration. Migration dry run on copies of AHTest, Ahmadia and acceptance: all reach `0010`/v2, 120,278 boxes rewritten, 0 unmapped, originals unchanged. **Not yet opened by the operator.** See [[2026-09-27-1030-foundation-inspection-platform]] |
 | I/M/C wave: Images, Maps and Point clouds workspaces (39 units + IMC-X) | merged/pushed to `main` (`4ebcac1..ad4e548`); installer built (`c4080c7`), **not installed** | all 39 units plus the IMC-X close-out merged via per-unit worktrees. IMC-X gate: 3946 backend, 3535 frontend, 162 browser, 8 Rust; frozen smoke ok (SAM on CUDA, drawings, pypdfium2). **CI frontend e2e red on `main` since `81b0310` (perf budgets on the slow runner); fix in flight.** See [[2026-09-27-2140-imc-wave-part-1]], [[2026-09-28-1905-imc-wave-part-2]] |
 | Reports (R): builder, live preview, render job with versions, templates, Data exports | merged/pushed to `main` (`07beeac..cd7c59d`); installer built (`8aead7b`), **not installed** | 13 units in parallel worktrees + R-X close-out; gate 5181 backend, 4065 frontend, 178 browser, cargo 8/8; frozen smoke renders a real report. See [[2026-10-01-2205-reports-wave]] |
-| Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); installed (`8aead7b`), operator walkthrough passed 2026-10-02 | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser |
+| Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); installed (`8aead7b`), operator walkthrough passed 2026-10-02 | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser; Location pane got a keyless cached basemap 2026-10-03 (`31a1a5ab`, [[2026-10-03-0723-site-basemap]]) |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 | M1 asset model builder (confined-space programme M1–M6) | merged 2026-10-02 (`914c4d5b`) | all 7 units green; frozen smoke `asset-models ok`; installer not built (app was running); HCl acceptance owed |
 
@@ -90,7 +90,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **M1 asset model builder** (2026-10-02, `1b392b1a..914c4d5b`, 7 unit merges on `main`, pushed). Asset models tab: Build with AI (Claude, OpenAI or Gemini) reads drawings, clouds and photos into a versioned part spec and a GLB; edit parts as new versions, compare and restore, download GLB/JSON; runs stop, draft and survive restarts. Frozen sidecar at `914c4d5b` passes smoke (`asset-models ok`); the installer was **not** built (`check-packaged-webview` refused while Kestrel AI was running). Walkthrough: `docs/evidence/2026-10-02-asset-model-m1/walkthrough.md`. See [[2026-10-02-2300-asset-model-builder-m1]] and [[2026-10-02-gotcha-shared-venv-install-while-python-runs]].
+**Shipped last:** **Site basemap under the Overview's Location pane** (2026-10-03, `31a1a5ab`, on `main`, pushed). Keyless Esri satellite / OSM street tiles, proxied and cached by the backend (`GET /basemap/{source}/{z}/{x}/{y}`), drawn inside the existing SVG with a Satellite/Map switch. Offline falls back to the plain outline. Gate green (5313 backend, 587 vitest files, 180 browser). The installer was rebuilt from `31a1a5ab` and **installed**; it has M1 am-u1..u4 but **not** am-u5..u7. Nobody has looked at it with real tiles yet. See [[2026-10-03-0723-site-basemap]].
+
+Before that: **M1 asset model builder** (2026-10-02, `1b392b1a..914c4d5b`, 7 unit merges on `main`, pushed). Asset models tab: Build with AI (Claude, OpenAI or Gemini) reads drawings, clouds and photos into a versioned part spec and a GLB; edit parts as new versions, compare and restore, download GLB/JSON; runs stop, draft and survive restarts. Frozen sidecar at `914c4d5b` passes smoke (`asset-models ok`); the installer was **not** built (`check-packaged-webview` refused while Kestrel AI was running). Walkthrough: `docs/evidence/2026-10-02-asset-model-m1/walkthrough.md`. See [[2026-10-02-2300-asset-model-builder-m1]] and [[2026-10-02-gotcha-shared-venv-install-while-python-runs]].
 
 Before that: **Point-cloud RAM admission at the measured plateau** (2026-10-02, `4a4e4d8d`, on `main`). The 842 M-point LNG cloud was refused at "39.0 GB needed"; PotreeConverter measured 10.3 GB peak on it, so the need is now min(45 MB/Mpt, 9 GB + 2.5 MB/Mpt) + 1 GiB (12.2 GB at 842 M). The installer was rebuilt from `4a4e4d8d` and **installed** (it supersedes `3c6b04bc` and still contains S1 and Reports; not the am-u1/am-u4 merges); the operator imported the cloud on it: "works great". See [[2026-10-02-1650-cloud-ram-admission]] and [[2026-10-02-gotcha-potreeconverter-ram-plateaus]].
 
@@ -275,6 +277,11 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Site basemap (opened 2026-10-03)
+
+- **Operator check:** the 7-step walkthrough in [[2026-10-03-0723-site-basemap]] on the installed `31a1a5ab` build. This is the first view with real tiles (e2e uses Prism).
+- **Known gaps:** the basemap disk cache has no size cap; Esri's terms strictly expect an ArcGIS account (OSM behind the Map switch is the clean option).
 
 ### M1 asset model builder (opened 2026-10-02)
 
