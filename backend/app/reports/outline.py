@@ -161,6 +161,11 @@ def build_outline(
     ctx = _context(handle, report_id, config, generated_at, key_for)
     n = count_findings(ctx)
     _warn_common(ctx, n)
+    if getattr(config, "brand_id", None):
+        from app.reports.brand import BRAND_MISSING, resolve_brand
+
+        if resolve_brand(handle, config, generated_at) is None:
+            ctx.warn("brand_missing", BRAND_MISSING)
     common = common_fingerprint(ctx)
     sections = []
     for sec in config.sections:
