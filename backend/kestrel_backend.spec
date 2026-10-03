@@ -27,6 +27,9 @@ hiddenimports = (
     + collect_submodules("trimesh")
     # google-genai (Gemini adapter, asset models 2026-10-02) imports its types/errors lazily inside llm.py.
     + collect_submodules("google.genai")
+    # ijson picks its parser backend by name at import (the compiled yajl2_c, else pure Python), so
+    # PyInstaller cannot see it; the review kit import streams surface.json with it (asset findings J5).
+    + collect_submodules("ijson")
     + [
         "torch",
         "torchvision",

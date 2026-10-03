@@ -20,6 +20,7 @@ PINS = {
     "openpyxl": "3.1.5",
     "ezdxf": "1.4.4",
     "pypdfium2": "5.13.0",  # map workspace M-B3: PDF drawings (spec 2026-09-26-map-workspace M9)
+    "ijson": "3.5.1",  # asset findings J5: streams the review kit's surface.json (spec 2026-10-02 §6.5)
 }
 
 

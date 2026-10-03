@@ -47,3 +47,5 @@ ezdxf==1.4.4
 # the wheel bundles PDFium (pypdfium2_raw), no other dependency.
 pypdfium2==5.13.0
 google-genai==1.75.0  # Gemini for asset model runs (spec 2026-10-02 §7.1)
+# ijson: review kit import streams surface.json, up to 20 MB (spec 2026-10-02-asset-findings §6.5); BSD-3
+ijson==3.5.1
