@@ -254,3 +254,81 @@ def test_a_resumed_plant_package_run_traces_only_its_queued_packages(handle, app
         assert [r.state for r in pk.rows(s, ids["run"])] == ["done", "done"]
         v2 = store.get_version(s, ids["model"], 2)
     assert {i["id"] for i in v2.spec["items"]} == {"keep", "from-p1", "from-p2"}
+
+
+def _settled(handle, ids):
+    from app.db.models import AssetModel, AssetModelRun
+
+    with handle.session() as s:
+        run, model = s.get(AssetModelRun, ids["run"]), s.get(AssetModel, ids["model"])
+        return run.state, run.summary, run.phase, run.ended_at is not None, model.live_run_id
+
+
+def test_a_failing_run_setup_settles_the_run(handle, app, monkeypatch, caplog):
+    import pytest
+    from plant_fakes import make_ctx
+
+    from app.asset_models.agent import runner as R
+    from app.jobs.cancellation import JobFailure
+
+    ids = seed_plant(handle, app)
+
+    def boom(_ctx):
+        raise ValueError("C:/secret/path")
+
+    monkeypatch.setattr(O, "build_context", boom)
+    ctx = make_ctx(handle, app, ids)
+    with pytest.raises(JobFailure) as e:
+        R.run_asset_model(ctx)
+    assert str(e.value) == INTERNAL
+    assert _settled(handle, ids) == ("failed", INTERNAL, "done", True, None)
+    assert ctx.published and ctx.published[-1][0] == "asset_models.changed"
+    assert "ValueError" in caplog.text and "secret" not in caplog.text
+
+
+def test_a_failing_mode_lookup_settles_the_run(handle, app, monkeypatch, caplog):
+    import pytest
+    from plant_fakes import make_ctx
+
+    from app.asset_models.agent import runner as R
+    from app.jobs.cancellation import JobFailure
+
+    ids = seed_plant(handle, app)
+    ctx = make_ctx(handle, app, ids)
+    real = handle.session
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:  # _mode_of's read
+            raise RuntimeError("C:/secret/db")
+        return real()
+
+    monkeypatch.setattr(handle, "session", flaky)
+    with pytest.raises(JobFailure):
+        R.run_asset_model(ctx)
+    monkeypatch.setattr(handle, "session", real)
+    assert _settled(handle, ids) == ("failed", INTERNAL, "done", True, None)
+    assert "RuntimeError" in caplog.text and "secret" not in caplog.text
+
+
+def test_safe_end_settles_the_row_when_end_raises(handle, app, monkeypatch):
+    from plant_fakes import make_ctx, make_rc
+
+    ids = seed_plant(handle, app)
+    ctx = make_ctx(handle, app, ids)
+    rc = make_rc(handle, app, ids, ctx)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(O, "_end", boom)
+    assert O._safe_end(rc, "stopped", "user", "Stopped.", kind="draft") == {
+        "run_id": ids["run"],
+        "version": None,
+    }
+    assert _settled(handle, ids) == ("failed", INTERNAL, "done", True, None)
+    assert ctx.published[-1] == (
+        "asset_models.changed",
+        {"asset_model_ids": [ids["model"]], "run_id": ids["run"]},
+    )

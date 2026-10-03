@@ -23,7 +23,7 @@ from app.asset_models.look.cloud import CloudSample, sample_cloud, source_of
 from app.asset_models.spec import AssetSpec
 from app.db.models import AssetModel, AssetModelRun, Drawing, PointCloud
 from app.db.models import Image as ImageRow
-from app.jobs.cancellation import JobCancelled
+from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.registry import register_job_type
 from app.project_agent.history import HistoryEntry, LlmError, ToolResult
 
@@ -145,8 +145,38 @@ def _cancelled_before_start(ctx) -> None:
 
 
 @register_job_type(RUN_JOB, on_cancelled_before_start=_cancelled_before_start)
+def settle_failed(project, model_id: str, run_id: str, publish) -> None:
+    """Settle a run row that could not end normally: failed with the fixed INTERNAL text, phase done,
+    live_run_id cleared, status refreshed, a change published. Never raises."""
+    try:
+        with project.session() as s:
+            run = s.get(AssetModelRun, run_id)
+            if run is not None and run.state == "running":
+                run.state, run.stop_reason, run.summary = "failed", None, INTERNAL
+                run.phase, run.ended_at = "done", _now()
+            model = s.get(AssetModel, model_id)
+            if model is not None:
+                if model.live_run_id == run_id:
+                    model.live_run_id = None
+                service.refresh_status(model)
+        publish("asset_models.changed", {"asset_model_ids": [model_id], "run_id": run_id})
+    except Exception as e:  # noqa: BLE001 - nothing more can be done; the startup sweep settles it
+        log.error("asset model run could not settle its row (%s)", type(e).__name__)
+
+
+def _setup_failed(ctx, e: Exception) -> JobFailure:
+    """A run whose setup raised before its own guard: settle the row, log the type name only."""
+    log.error("asset model run setup failed (%s)", type(e).__name__)
+    settle_failed(ctx.project, ctx.params.get("model_id"), ctx.params.get("run_id"), ctx.publish)
+    return JobFailure(INTERNAL)
+
+
 def run_asset_model(ctx) -> dict:
-    if _mode_of(ctx) in PLANT_MODES:  # spec 2026-10-03 §8: plant runs have their own orchestrator
+    try:
+        mode = _mode_of(ctx)
+    except Exception as e:  # noqa: BLE001 - never leave a run stuck "running"
+        raise _setup_failed(ctx, e) from None
+    if mode in PLANT_MODES:  # spec 2026-10-03 §8: plant runs have their own orchestrator
         from app.asset_models.agent.plant.orchestrator import run_plant
 
         return run_plant(ctx)

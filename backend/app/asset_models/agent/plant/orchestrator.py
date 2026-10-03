@@ -23,7 +23,7 @@ from app.asset_models.agent.plant.model import call_model
 from app.asset_models.agent.plant.state import STAGE_ORDER, env_of, load_package_items, save_package_items
 from app.asset_models.agent.plant.subrun import PackageResult, run_package
 from app.asset_models.agent.plant.tools_plant import execute, specs_for
-from app.asset_models.agent.runner import INTERNAL
+from app.asset_models.agent.runner import INTERNAL, _setup_failed, settle_failed
 from app.asset_models.look import LookError
 from app.asset_models.look.cloud import CloudSample, sample_cloud, source_of
 from app.asset_models.spec import AssetSpec
@@ -312,7 +312,10 @@ def _quiet(fn, rc) -> None:
 
 
 def run_plant(ctx) -> dict:
-    rc = build_context(ctx)
+    try:
+        rc = build_context(ctx)
+    except Exception as e:  # noqa: BLE001 - before the guard: settle the row, then fail the job
+        raise _setup_failed(ctx, e) from None
     return _guarded(rc, lambda: _package_rerun(rc) if rc.mode == "plant_package" else _full(rc))
 
 
@@ -347,19 +350,7 @@ def _safe_end(rc: PlantRunContext, state: str, reason: str | None, summary: str,
         return _end(rc, state, reason, summary, [], kind=kind)
     except Exception as e:  # noqa: BLE001 - the run must still end; type name only
         log.error("plant run could not record its end (%s)", type(e).__name__)
-    try:
-        with rc.handle.session() as s:
-            run = s.get(AssetModelRun, rc.run_id)
-            if run.state == "running":
-                run.state, run.stop_reason, run.summary = "failed", None, INTERNAL
-                run.phase, run.ended_at = "done", datetime.now(UTC)
-            model = s.get(AssetModel, rc.model_id)
-            if model.live_run_id == rc.run_id:
-                model.live_run_id = None
-            service.refresh_status(model)
-        rc.job.publish("asset_models.changed", {"asset_model_ids": [rc.model_id], "run_id": rc.run_id})
-    except Exception as e:  # noqa: BLE001 - nothing more can be done; the startup sweep settles it
-        log.error("plant run could not settle its row (%s)", type(e).__name__)
+    settle_failed(rc.handle, rc.model_id, rc.run_id, rc.job.publish)
     return {"run_id": rc.run_id, "version": None}
 
 
