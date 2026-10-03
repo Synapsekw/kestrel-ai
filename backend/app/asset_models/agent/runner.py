@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from PIL import Image
 
 from app.asset_models import service, store
+from app.asset_models.agent.plant import PLANT_MODES
 from app.asset_models.agent.prompt import SYSTEM, first_message
 from app.asset_models.agent.tools import TOOLS, RunContext, run_tool, tool_specs
 from app.asset_models.look import LookError
@@ -122,6 +123,10 @@ def _cancelled_before_start(ctx) -> None:
         if run is not None and run.state == "running":
             run.state, run.stop_reason, run.summary = "stopped", "user", "Stopped by the operator."
             run.phase, run.ended_at = "done", _now()
+            if run.mode in PLANT_MODES:
+                from app.asset_models.agent.plant import packages as plant_packages
+
+                plant_packages.mark_unfinished(s, run_id, "skipped", "Not started: the run was stopped.")
         model = s.get(AssetModel, model_id)
         if model is not None:
             if model.live_run_id == run_id:
@@ -132,6 +137,10 @@ def _cancelled_before_start(ctx) -> None:
 
 @register_job_type(RUN_JOB, on_cancelled_before_start=_cancelled_before_start)
 def run_asset_model(ctx) -> dict:
+    if _mode_of(ctx) in PLANT_MODES:  # spec 2026-10-03 §8: plant runs have their own orchestrator
+        from app.asset_models.agent.plant.orchestrator import run_plant
+
+        return run_plant(ctx)
     model_id, run_id = ctx.params["model_id"], ctx.params["run_id"]
     rc = RunContext(
         handle=ctx.project, model_id=model_id, run_id=run_id, sources=[], spec=AssetSpec(), samples={}
@@ -323,6 +332,15 @@ def run_asset_model(ctx) -> dict:
         log.error("asset model run failed (%s)", type(e).__name__)
         text = e.message if isinstance(e, LookError) else INTERNAL
         return _end(ctx, rc, "failed", None, text, [], base, kind="draft")
+
+
+def _mode_of(ctx) -> str | None:
+    run_id = ctx.params.get("run_id")
+    if not run_id:
+        return None
+    with ctx.project.session() as s:
+        run = s.get(AssetModelRun, run_id)
+        return run.mode if run is not None else None
 
 
 def _end(ctx, rc: RunContext, state, reason, summary, questions, base, *, kind) -> dict:
