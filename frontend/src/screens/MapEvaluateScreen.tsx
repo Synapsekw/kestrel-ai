@@ -33,6 +33,7 @@ import {
 } from "@/api/maps";
 import { useProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { addProjectType } from "@/catalogue/addProjectType";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { ExportMapDialog } from "@/maps/ExportMapDialog";
 import { LabelPanel } from "@/maps/LabelPanel";
@@ -44,7 +45,7 @@ import { ScorePanel } from "@/maps/ScorePanel";
 import { makeReadout, type Readout } from "@/maps/coords";
 import { toOl } from "@/maps/grid";
 import { useLabelLayers, type Tool } from "@/maps/labelLayers";
-import { LabelHistory, outsideZones, pickClassCommand, type LabelApi } from "@/maps/labelModel";
+import { LabelHistory, outsideZones, pickClassCommand, type Box, type LabelApi } from "@/maps/labelModel";
 import { type Match, type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
 import { matchLookup } from "@/maps/scoreView";
 import { MAX_COMPARE, countsFromDensity, toggleCompare } from "@/maps/runModel";
@@ -151,6 +152,8 @@ export function MapEvaluateScreen() {
   const [editVersion, setEditVersion] = useState(0);
   const [tool, setTool] = useState<Tool>("pan");
   const [activeClassId, setActiveClassId] = useState("");
+  const [pendingBox, setPendingBox] = useState<Box | null>(null);
+  const pendingBoxRef = useRef<Box | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const history = useRef(new LabelHistory());
   const [canUndo, setCanUndo] = useState(false);
@@ -413,6 +416,26 @@ export function MapEvaluateScreen() {
     [selectedLabel, labelApi, bumpHistory],
   );
 
+  const nameAnomaly = async (name: string) => {
+    if (!active) throw new Error("No map is open.");
+    const added = await addProjectType(api, projectId, name, "defect");
+    setActiveClassId(added.typeId);
+    const box = pendingBoxRef.current;
+    if (!box) return;
+    const body: MapLabelCreate = {
+      class_id: added.typeId,
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+    };
+    const id = await labelApi.create(body);
+    history.current.record({ kind: "create", id, body });
+    bumpHistory();
+    pendingBoxRef.current = null;
+    setPendingBox(null);
+  };
+
   useLabelLayers(olMap, active ?? EMPTY_GEOMAP, {
     labels,
     zones,
@@ -422,7 +445,12 @@ export function MapEvaluateScreen() {
     warnIds,
     matchOf: overlay ? matchLookup(primaryScore, "label") : undefined,
     onBox: (box) => {
-      if (!active || !effectiveClassId) return;
+      if (!active) return;
+      if (!effectiveClassId) {
+        pendingBoxRef.current = box;
+        setPendingBox(box);
+        return;
+      }
       const body: MapLabelCreate = {
         class_id: effectiveClassId,
         x: box.x,
@@ -694,6 +722,12 @@ export function MapEvaluateScreen() {
                 classes={classes}
                 activeClassId={effectiveClassId}
                 onClass={pickClass}
+                onNameAnomaly={nameAnomaly}
+                pendingBox={pendingBox !== null}
+                onDiscardPending={() => {
+                  pendingBoxRef.current = null;
+                  setPendingBox(null);
+                }}
                 selectedClassId={selectedLabel?.class_id ?? null}
                 zones={zones}
                 labels={labels}

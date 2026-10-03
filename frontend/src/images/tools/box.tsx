@@ -19,7 +19,7 @@ export const BOX_TOOL: ToolDefinition = {
   action: "box",
   icon: "label",
   label: "Box",
-  hint: "Drag with the active type",
+  hint: "Drag to mark an anomaly",
   statusHints: "Drag draw · Esc cancel · T type",
   cursor: "crosshair",
   drawsShapes: true,

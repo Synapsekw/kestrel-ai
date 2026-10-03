@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ClassDef, MapLabel, MapRun, MapZone } from "@contract/client";
+import { NameAnomalyField } from "@/catalogue/NameAnomalyField";
 import { Alert, Button, Field, IconButton, Input, Kbd, Segmented, Select, cx } from "@/ui";
 import type { Tool } from "./labelLayers";
 import { runTitle } from "./runModel";
@@ -10,6 +11,11 @@ export interface LabelPanelProps {
   classes: ClassDef[];
   activeClassId: string;
   onClass: (id: string) => void;
+  /** Names an anomaly and, when a box is waiting, uses it for that box. */
+  onNameAnomaly?: (name: string) => Promise<void>;
+  /** A box was drawn and the project has no type to give it yet. */
+  pendingBox?: boolean;
+  onDiscardPending?: () => void;
   /** The class of the currently selected label, or null when nothing is selected. Picking a class
    * reclasses this label instead of setting the drawing class (spec: "Boxes: ... reclass"). */
   selectedClassId: string | null;
@@ -63,7 +69,11 @@ export function LabelPanel(p: LabelPanelProps) {
       <p className="text-xs text-muted">
         {p.selectedClassId
           ? "A class here recolours the selected label."
-          : "A class here sets what you draw next."}
+          : p.pendingBox
+            ? "Name the box you just drew."
+            : p.classes.length === 0
+              ? "Drag a box, then name the anomaly."
+              : "A class here sets what you draw next."}
       </p>
       <ul className="flex flex-col gap-0.5" aria-label="Classes">
         {p.classes.map((c) => {
@@ -91,6 +101,26 @@ export function LabelPanel(p: LabelPanelProps) {
           );
         })}
       </ul>
+      {p.onNameAnomaly && (
+        <div className="flex flex-col gap-1.5">
+          <NameAnomalyField
+            onCreate={p.onNameAnomaly}
+            placeholder={p.pendingBox ? "Name this anomaly" : "New anomaly"}
+            submitLabel={p.pendingBox ? "Create" : "Add"}
+          />
+          {p.pendingBox && p.onDiscardPending && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="self-start"
+              onClick={p.onDiscardPending}
+            >
+              Discard box
+            </Button>
+          )}
+        </div>
+      )}
       {p.warnCount > 0 && (
         <p className="text-sm text-warn">{p.warnCount} labels are outside every zone and will not count.</p>
       )}

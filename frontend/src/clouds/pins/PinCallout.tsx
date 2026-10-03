@@ -10,6 +10,7 @@ import {
 import type { ClassDef } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { attachmentThumbnailUrl, listAttachments, type FindingAttachment } from "@/api/findings";
+import { NameAnomalyField } from "@/catalogue/NameAnomalyField";
 import { cloudShortcut } from "@/clouds/keys";
 import { useWorkspaceSeams, type WorkspaceSeams } from "@/clouds/workspace/seams";
 import { formatFindingNumber } from "@/findings/format";
@@ -135,6 +136,8 @@ export interface PinCalloutCreateProps {
   busy: boolean;
   locationText: string;
   onCreate: (v: PinDraftInput) => void;
+  /** Names a defect that this project does not list yet, and returns it so the draft can use it. */
+  onCreateType?: (name: string) => Promise<ClassDef>;
   onCancel: () => void;
   /** Set to this form's submit, so the workspace's global Enter can create (plan Ruling 9). */
   submitRef: MutableRefObject<(() => void) | null>;
@@ -149,6 +152,7 @@ export function PinCalloutCreate({
   busy,
   locationText,
   onCreate,
+  onCreateType,
   onCancel,
   submitRef,
 }: PinCalloutCreateProps) {
@@ -235,7 +239,7 @@ export function PinCalloutCreate({
           label="Type"
           items={items}
           value={typeId}
-          triggerPlaceholder="Choose a defect type…"
+          triggerPlaceholder={defectTypes.length === 0 ? "No types yet" : "Choose a defect type…"}
           onChange={(id) => {
             setTypeId(id);
             setSeverity(defectTypes.find((t) => t.id === id)?.default_severity ?? null);
@@ -243,6 +247,16 @@ export function PinCalloutCreate({
             noteRef.current?.focus();
           }}
         />
+        {onCreateType && (
+          <NameAnomalyField
+            placeholder={defectTypes.length === 0 ? "Name this anomaly" : "Or name a new anomaly"}
+            onCreate={async (name) => {
+              const created = await onCreateType(name);
+              setTypeId(created.id);
+              setSeverity(created.default_severity);
+            }}
+          />
+        )}
         <Segmented
           label="Severity"
           size="sm"

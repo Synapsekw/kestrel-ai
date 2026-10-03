@@ -1,8 +1,11 @@
 import { useRef } from "react";
+import { addProjectType } from "@/catalogue/addProjectType";
+import { NameAnomalyField } from "@/catalogue/NameAnomalyField";
 import { retypeSelection } from "@/images/canvas/actions";
 import type { CommandContext } from "@/images/canvas/commands";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import { ComboboxList, Popover } from "@/ui";
+import { clearHeldShape, commitHeldShape } from "./toolApi";
 import { getTool } from "./registry";
 import { rememberType } from "./typeMemory";
 
@@ -27,17 +30,37 @@ export function TypePicker({ ctx }: { ctx: CommandContext }) {
       (filter ? filter(t) : true) &&
       (!selectionHasPoint || picker.purpose !== "retype" || t.kind === "defect"),
   );
-  const close = () => ctx.store.getState().closePicker();
-  const pick = (id: string) => {
-    close();
+  const dismiss = () => {
+    clearHeldShape();
+    ctx.store.getState().closePicker();
+  };
+  const apply = async (id: string) => {
+    const purpose = picker.purpose;
     const s = ctx.store.getState();
-    if (picker.purpose === "retype") {
-      void retypeSelection(ctx, id);
+    s.closePicker();
+    if (purpose === "retype") {
+      clearHeldShape();
+      await retypeSelection(ctx, id);
       return;
     }
     s.setActiveType(id);
     if (s.projectId) rememberType(s.projectId, s.tool, id);
+    await commitHeldShape(ctx, id);
   };
+  const nameAnomaly = async (name: string) => {
+    const s = ctx.store.getState();
+    if (!s.projectId) throw new Error("Open a project first.");
+    const added = await addProjectType(ctx.api, s.projectId, name, "defect");
+    ctx.store.getState().setTypes(added.project.classes);
+    await apply(added.typeId);
+  };
+  const nameField = (
+    <NameAnomalyField
+      onCreate={nameAnomaly}
+      placeholder={offered.length === 0 ? "Name this anomaly" : "Name a new anomaly"}
+      submitLabel={offered.length === 0 ? "Create" : "Add"}
+    />
+  );
   return (
     <>
       <span
@@ -46,20 +69,31 @@ export function TypePicker({ ctx }: { ctx: CommandContext }) {
         className="pointer-events-none absolute h-px w-px"
         style={{ left: picker.at.x, top: picker.at.y }}
       />
-      <Popover open onClose={close} anchorRef={anchor} label="Choose a type">
-        <ComboboxList
-          label="Type"
-          items={offered.map((t) => ({
-            id: t.id,
-            label: t.name,
-            hint: [t.kind === "defect" ? "Defect" : "Object", t.group].filter(Boolean).join(" · "),
-            hotkey: t.hotkey,
-            colour: t.colour,
-          }))}
-          value={picker.purpose === "active" ? activeTypeId : null}
-          emptyText="No types to offer here"
-          onSelect={pick}
-        />
+      <Popover open onClose={dismiss} anchorRef={anchor} label="Choose a type">
+        <div className="flex w-[280px] flex-col gap-2">
+          {offered.length === 0 ? (
+            <>
+              <p className="px-1 text-sm text-muted">Name the anomaly you just marked.</p>
+              {nameField}
+            </>
+          ) : (
+            <>
+              <ComboboxList
+                label="Type"
+                items={offered.map((t) => ({
+                  id: t.id,
+                  label: t.name,
+                  hint: [t.kind === "defect" ? "Defect" : "Object", t.group].filter(Boolean).join(" · "),
+                  hotkey: t.hotkey,
+                  colour: t.colour,
+                }))}
+                value={picker.purpose === "active" ? activeTypeId : null}
+                onSelect={(id) => void apply(id)}
+              />
+              {nameField}
+            </>
+          )}
+        </div>
       </Popover>
     </>
   );
