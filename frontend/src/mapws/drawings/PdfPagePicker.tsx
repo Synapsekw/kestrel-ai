@@ -46,7 +46,7 @@ export function PdfPagePicker({
             variant="ghost"
             onClick={() => onChange({ page: 1, pages: Array.from({ length: pageCount }, (_, i) => i + 1) })}
           >
-            All
+            All pages
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onChange({ pages: [] })}>
             None
