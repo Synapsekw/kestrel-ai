@@ -11,6 +11,7 @@ import {
   Field,
   GlassPanel,
   Icon,
+  IconButton,
   Input,
   Pill,
   Popover,
@@ -22,6 +23,7 @@ import {
   stagger,
   transition,
 } from "@/ui";
+import { DeleteCloudDialog } from "./DeleteCloudDialog";
 import { CLOUD_PANEL_WIDTH } from "./layout";
 import type { RenderSettings } from "./types";
 
@@ -38,14 +40,17 @@ function CloudPicker({
   clouds,
   onImport,
   onDetails,
+  onDeleted,
 }: {
   projectId: string;
   cloud: PointCloud;
   clouds: readonly PointCloud[];
   onImport(): void;
   onDetails(): void;
+  onDeleted(id: string): void;
 }) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<PointCloud | null>(null);
   const anchor = useRef<HTMLButtonElement>(null);
   const file = cloud.source_path.split(/[\\/]/).pop() ?? cloud.source_path;
   const title = [
@@ -89,13 +94,13 @@ function CloudPicker({
       >
         <ul aria-label="Point clouds" className="flex max-h-72 flex-col gap-0.5 overflow-y-auto">
           {clouds.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} className="flex items-center gap-0.5">
               <Link
                 to={`/p/${projectId}/clouds/${c.id}`}
                 onClick={() => setOpen(false)}
                 aria-current={c.id === cloud.id ? "page" : undefined}
                 className={cx(
-                  "flex items-center gap-2 rounded-control px-2 py-1.5 text-sm",
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1.5 text-sm",
                   transition,
                   focusRing,
                   c.id === cloud.id ? "bg-accent-soft" : "hover:bg-hover",
@@ -109,6 +114,15 @@ function CloudPicker({
                   {c.status}
                 </Pill>
               </Link>
+              <IconButton
+                size="sm"
+                icon="trash"
+                label={`Delete ${c.name}`}
+                onClick={() => {
+                  setOpen(false);
+                  setPending(c);
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -136,6 +150,19 @@ function CloudPicker({
           </Button>
         </div>
       </Popover>
+      {pending && (
+        <DeleteCloudDialog
+          open
+          projectId={projectId}
+          cloud={pending}
+          onClose={() => setPending(null)}
+          onDeleted={() => {
+            const id = pending.id;
+            setPending(null);
+            onDeleted(id);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -151,6 +178,7 @@ export function CloudPanel({
   clouds,
   onImport,
   onDetails,
+  onDeleted,
   embedded = false,
   children,
 }: {
@@ -159,6 +187,7 @@ export function CloudPanel({
   clouds: readonly PointCloud[];
   onImport(): void;
   onDetails(): void;
+  onDeleted(id: string): void;
   embedded?: boolean;
   children?: ReactNode;
 }) {
@@ -170,6 +199,7 @@ export function CloudPanel({
         clouds={clouds}
         onImport={onImport}
         onDetails={onDetails}
+        onDeleted={onDeleted}
       />
       {children}
     </>

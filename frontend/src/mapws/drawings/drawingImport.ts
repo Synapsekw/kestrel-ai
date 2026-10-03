@@ -1,5 +1,11 @@
 import type { LinearUnit } from "@/api/designSurfaces";
-import type { DrawingCreate, DrawingFormat, DrawingInspection, DrawingPage } from "@/api/drawings";
+import type {
+  DrawingCreate,
+  DrawingFormat,
+  DrawingInspection,
+  DrawingPage,
+  DrawingPagesCreate,
+} from "@/api/drawings";
 import type { SegmentedOption } from "@/ui";
 
 export type DrawingFamily = "vector" | "pdf" | "raster";
@@ -99,7 +105,7 @@ export function initialDrawingForm(insp: DrawingInspection): DrawingForm {
         : "none";
   return {
     page: 1,
-    pages: [1],
+    pages: family === "pdf" ? allPdfPages(insp) : [1],
     dpi: DEFAULT_DPI,
     placement,
     epsg: epsg ? String(epsg) : "",
@@ -157,13 +163,6 @@ export function allPdfPages(insp: DrawingInspection): number[] {
 
 const PAGE_SUFFIX = / · p\d+$/;
 
-function withPageSuffix(name: string, page: number): string {
-  const suffix = ` · p${page}`;
-  const base = name.trim().replace(PAGE_SUFFIX, "");
-  if (!base) return "";
-  return base.slice(0, MAX_NAME_LENGTH - suffix.length) + suffix;
-}
-
 function parseEpsg(s: string): number | null {
   return /^\d{4,6}$/.test(s.trim()) ? Number(s.trim()) : null;
 }
@@ -217,29 +216,46 @@ export function toDrawingRequest(insp: DrawingInspection, f: DrawingForm): Drawi
   return { ok: true, body };
 }
 
+export type DrawingPagesRequest = { ok: true; body: DrawingPagesCreate } | { ok: false; error: string };
+
 /**
- * One build request per selected PDF page (each page is its own drawing). Other files stay one
- * request. A custom name shared by several pages gains a ` · pN` suffix so the drawings stay distinct.
+ * One request for several PDF pages (createDrawingPages): `"all"` when every page is chosen, else
+ * the chosen pages in order. The server names each drawing `<name> · p<k>`, so a custom name loses
+ * any page suffix of its own; the DPI is lowered per page on the server.
  */
-export function toDrawingRequests(
-  insp: DrawingInspection,
-  f: DrawingForm,
-): { ok: true; bodies: DrawingCreate[] } | { ok: false; error: string } {
-  if (familyOf(insp.format) !== "pdf") {
-    const one = toDrawingRequest(insp, f);
-    return one.ok ? { ok: true, bodies: [one.body] } : one;
-  }
+export function toDrawingPagesRequest(insp: DrawingInspection, f: DrawingForm): DrawingPagesRequest {
+  const count = insp.page_count ?? insp.pages.length;
   const pages = chosenPages(f.pages);
   if (pages.length === 0) return { ok: false, error: "Choose at least one page." };
-  const bodies: DrawingCreate[] = [];
-  for (const page of pages) {
-    const named =
-      pages.length > 1 && f.name != null
-        ? { ...f, page, name: withPageSuffix(f.name, page) }
-        : { ...f, page };
-    const one = toDrawingRequest(insp, named);
-    if (!one.ok) return one;
-    bodies.push(one.body);
+  if (pages.some((p) => p < 1 || p > count))
+    return { ok: false, error: `Choose a page between 1 and ${count}.` };
+  const name = (f.name ?? stem(insp.path)).trim().replace(PAGE_SUFFIX, "").trim();
+  if (!name) return { ok: false, error: "Give the drawing a name." };
+  if (name.length > MAX_NAME_LENGTH) return { ok: false, error: "Keep the name under 200 characters." };
+  return {
+    ok: true,
+    body: {
+      inspection_id: insp.id,
+      name,
+      pages: pages.length === count ? "all" : pages,
+      dpi: f.dpi,
+      placement: { method: "none" },
+    },
+  };
+}
+
+export type AutoImport =
+  | { kind: "pages"; body: DrawingPagesCreate }
+  | { kind: "one"; body: DrawingCreate }
+  | { kind: "error"; error: string };
+
+/** What setup and "Import and include" send with no one at the dialog: every page of a PDF, else the dialog's defaults. */
+export function autoImportRequest(insp: DrawingInspection): AutoImport {
+  const form = initialDrawingForm(insp);
+  if (familyOf(insp.format) === "pdf" && form.pages.length > 1) {
+    const r = toDrawingPagesRequest(insp, form);
+    return r.ok ? { kind: "pages", body: r.body } : { kind: "error", error: r.error };
   }
-  return { ok: true, bodies };
+  const r = toDrawingRequest(insp, form);
+  return r.ok ? { kind: "one", body: r.body } : { kind: "error", error: r.error };
 }

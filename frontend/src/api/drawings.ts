@@ -22,6 +22,9 @@ export type DrawingGeoref = S["DrawingGeoref"];
 export type DrawingGeorefPut = S["DrawingGeorefPut"];
 export type GeorefWarning = S["GeorefWarning"];
 export type DrawingVectorTile = S["DrawingVectorTile"];
+export type DrawingPagesCreate = S["DrawingPagesCreate"];
+export type DrawingPagesWithJob = S["DrawingPagesWithJob"];
+export type UnimportedDrawing = S["UnimportedDrawing"];
 
 const P = "/api/v1/projects/{projectId}" as const;
 
@@ -60,6 +63,23 @@ export function createDrawing(
   body: DrawingCreate,
 ): Promise<DrawingWithJob> {
   return unwrap(api.POST(`${P}/drawings`, { params: { path: { projectId } }, body }));
+}
+
+/** Every chosen page of a PDF, one `drawing_import` job (plant-model spec §8.1). */
+export function createDrawingPages(
+  api: ApiClient,
+  projectId: string,
+  body: DrawingPagesCreate,
+): Promise<DrawingPagesWithJob> {
+  return unwrap(api.POST(`${P}/drawings/pages`, { params: { path: { projectId } }, body }));
+}
+
+/** Drawing files in the project folder that were never imported (≤ 500). */
+export async function listUnimportedDrawings(
+  api: ApiClient,
+  projectId: string,
+): Promise<UnimportedDrawing[]> {
+  return (await unwrap(api.GET(`${P}/drawings/unimported`, { params: { path: { projectId } } }))).files;
 }
 
 export function patchDrawing(

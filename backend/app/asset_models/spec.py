@@ -191,8 +191,9 @@ class Placement(_Strict):
 
 
 class Source(_Strict):
-    kind: Literal["drawing", "cloud", "photo", "assumed"]
+    kind: Literal["drawing", "cloud", "photo", "assumed", "operator"]
     id: str | None = None
+    page: int | None = Field(None, ge=1, le=10_000)
     region: Annotated[list[Unit], Field(min_length=4, max_length=4)] | None = None
     note: str | None = Field(None, max_length=500)
 
@@ -202,7 +203,7 @@ class Source(_Strict):
             x0, y0, x1, y1 = self.region
             if x1 <= x0 or y1 <= y0:
                 raise ValueError("region must be [x0, y0, x1, y1] with x1 > x0 and y1 > y0")
-        if self.kind != "assumed" and not self.id:
+        if self.kind not in ("assumed", "operator") and not self.id:
             raise ValueError("a drawing, cloud or photo source needs its id")
         return self
 
@@ -237,6 +238,128 @@ class AssetInfo(_Strict):
     attributes: dict[str, str] = Field(default_factory=dict)
 
 
+# ----- plant (spec 2026-10-03-plant-model-generator §5; plan 2026-10-03-plant-model-f0 Task 2) -----
+# Plant metres: [E, N] in the drawing's plant grid, elevations as plant EL. M1 parts stay millimetres.
+
+MAX_ITEMS = 20_000
+MAX_ENV = 2_000
+
+ItemId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.\-]{1,64}$")]
+HeightSource = Literal["drawing", "cloud", "indicative"]
+EnvKind = Literal["land", "sea", "road", "paved", "laydown", "slope", "revetment"]
+FlagCode = Literal[
+    "plan_offset",
+    "height_mismatch",
+    "missing_in_cloud",
+    "unregistered",
+    "builder_fallback",
+    "straddles_package",
+]
+
+
+class SiteCrs(_Strict):
+    epsg: int | None = Field(None, ge=1024, le=999_999)
+    wkt: str | None = Field(None, max_length=20_000)
+
+
+class Datum(_Strict):
+    label: str = Field("EL", min_length=1, max_length=40)
+    el_m: float = 0.0
+
+
+class CloudDatum(_Strict):
+    """plant EL = cloud z + offset_m (+ tilt · [dx, dy])."""
+
+    cloud_id: str = Field(min_length=1, max_length=64)
+    offset_m: float
+    tilt: tuple[float, float] | None = None
+
+
+class SiteFrame(_Strict):
+    """The plant grid: [X, Y] = origin_crs + R(plant_north_deg)·[E, N], with R(θ) = [[cos θ, sin θ],
+    [-sin θ, cos θ]] (siteframe.PlantGrid). Its contract schema is PlantFrame, because the map
+    workspace's SiteFrame is another schema."""
+
+    crs: SiteCrs
+    origin_crs: tuple[float, float]
+    plant_north_deg: float = Field(ge=-360, le=360)
+    datum: Datum = Field(default_factory=Datum)
+    cloud_z_to_el: CloudDatum | None = None
+    source: Source
+
+
+class RectFootprint(_Strict):
+    """size = (along, across); the along axis points rot_deg clockwise from plant north."""
+
+    kind: Literal["rect"]
+    center: Pt2
+    size: tuple[Pos, Pos]
+    rot_deg: float = 0
+
+
+class CircleFootprint(_Strict):
+    kind: Literal["circle"]
+    center: Pt2
+    d: Pos
+
+
+class PolygonFootprint(_Strict):
+    kind: Literal["polygon"]
+    pts: Annotated[list[Pt2], Field(min_length=3, max_length=500)]
+
+
+class LineFootprint(_Strict):
+    kind: Literal["line"]
+    pts: Annotated[list[Pt2], Field(min_length=2, max_length=500)]
+    width: Pos
+
+
+Footprint = Annotated[
+    RectFootprint | CircleFootprint | PolygonFootprint | LineFootprint, Field(discriminator="kind")
+]
+
+
+class ItemFlag(_Strict):
+    code: FlagCode
+    value: float | None = None
+    note: str | None = Field(None, max_length=300)
+
+
+class Item(_Strict):
+    """One plant item. `type` is a builder type, checked by validate() against the registry, not by
+    this schema (spec §15). `parts` are M1 parts in item-local millimetres: origin at the footprint's
+    reference point (siteframe.footprint_ref) at base_el, Y up, X plant north, Z plant east."""
+
+    id: ItemId
+    tag: str | None = Field(None, max_length=80)
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    type: Annotated[str, Field(min_length=1, max_length=64)]
+    area: str | None = Field(None, max_length=80)
+    footprint: Footprint
+    base_el: float | None = None
+    top_el: float | None = None
+    levels: Annotated[list[float], Field(max_length=50)] = Field(default_factory=list)
+    params: dict[str, Any] = Field(default_factory=dict)
+    height_source: HeightSource = "indicative"
+    source: Source
+    confidence: Confidence = "medium"
+    flags: Annotated[list[ItemFlag], Field(max_length=20)] = Field(default_factory=list)
+    parts: Annotated[list[Part], Field(max_length=MAX_PARTS)] = Field(default_factory=list)
+    notes: str | None = Field(None, max_length=1000)
+
+
+class EnvFeature(_Strict):
+    id: ItemId
+    kind: EnvKind
+    pts: Annotated[list[Pt2], Field(min_length=3, max_length=5000)]
+    el: float
+    source: Source
+    confidence: Confidence = "medium"
+
+
 class AssetSpec(_Strict):
     asset: AssetInfo = Field(default_factory=AssetInfo)
     parts: Annotated[list[Part], Field(max_length=MAX_PARTS)] = Field(default_factory=list)
+    site: SiteFrame | None = None
+    items: Annotated[list[Item], Field(max_length=MAX_ITEMS)] = Field(default_factory=list)
+    environment: Annotated[list[EnvFeature], Field(max_length=MAX_ENV)] = Field(default_factory=list)

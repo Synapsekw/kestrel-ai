@@ -11,6 +11,7 @@ import yaml
 from test_contract import EXPECTED_STUBS, METHODS, SPEC
 from test_workspace_contract import WORKSPACE_OPERATIONS
 
+from app.asset_models.stubs_plant import stub_operation_ids as plant_stub_operation_ids
 from app.workspace import stubs
 
 UNIT_LISTS = {
@@ -34,10 +35,12 @@ def _workspace_ops() -> set[str]:
 def test_expected_stubs_match_the_workspace_stub_lists():
     ours = _workspace_ops()
     routed = stubs.stub_operation_ids()
+    # The plant intake stubs (I1) are workspace-tagged but routed from app/asset_models.
+    expected = EXPECTED_STUBS - plant_stub_operation_ids()
     assert routed <= ours, sorted(routed - ours)
-    assert EXPECTED_STUBS & ours == routed, {
-        "expected but not a stub": sorted((EXPECTED_STUBS & ours) - routed),
-        "a stub but not expected": sorted(routed - EXPECTED_STUBS),
+    assert expected & ours == routed, {
+        "expected but not a stub": sorted((expected & ours) - routed),
+        "a stub but not expected": sorted(routed - expected),
     }
 
 

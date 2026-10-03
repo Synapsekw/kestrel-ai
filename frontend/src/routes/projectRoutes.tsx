@@ -1,5 +1,5 @@
 import type { RouteObject } from "react-router-dom";
-import { AssetModelsScreen, CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
+import { AssetModelsScreen, CloudsScreen, Later, SiteScreen, VolumesScreen } from "@/app/lazyScreens";
 import { DrawingsScreen } from "@/drawings/DrawingsScreen";
 import { FindingsScreen } from "@/findings/FindingsScreen";
 import { ImagesWorkspace } from "@/images/workspace/ImagesWorkspace";
@@ -72,6 +72,24 @@ export const projectRoutes: RouteObject[] = [
     element: (
       <Later>
         <AssetModelsScreen />
+      </Later>
+    ),
+  },
+  // The Site 3D view (plant model S1): the plant model over the draped ortho and drawings. No tab and
+  // no nav entry in G1; S3 adds "Open in site" / "Open in 3D" entry points.
+  {
+    path: "site",
+    element: (
+      <Later>
+        <SiteScreen />
+      </Later>
+    ),
+  },
+  {
+    path: "site/:modelId",
+    element: (
+      <Later>
+        <SiteScreen />
       </Later>
     ),
   },

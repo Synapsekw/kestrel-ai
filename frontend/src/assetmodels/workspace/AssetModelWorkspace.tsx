@@ -129,11 +129,20 @@ interface ModelWorkspaceProps {
   models: readonly AssetModel[];
   onNew(): void;
   onDetails(): void;
+  onDeleted(model: AssetModel): void;
   onModelChanged(): void;
 }
 
 /** The viewer and the glass panels for one asset model (keyed by model id: a switch starts afresh). */
-function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelChanged }: ModelWorkspaceProps) {
+function ModelWorkspace({
+  projectId,
+  model,
+  models,
+  onNew,
+  onDetails,
+  onDeleted,
+  onModelChanged,
+}: ModelWorkspaceProps) {
   const api = useApi();
   const backend = useBackend();
   const viewer = useRef<ModelViewerHandle>(null);
@@ -442,6 +451,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
       models={models}
       onNew={onNew}
       onDetails={onDetails}
+      onDeleted={onDeleted}
       groups={groups}
       hiddenGroups={hiddenGroups}
       onGroup={onGroup}
@@ -741,6 +751,13 @@ export function AssetModelWorkspace() {
     />
   );
   const onNew = () => setNewOpen(true);
+  const removed = (m: AssetModel) => {
+    setDetailsOpen(false);
+    setDeleted((d) => new Set(d).add(m.id));
+    toast("ok", `Deleted ${m.name}`);
+    reload();
+    if (m.id === modelId) navigate(`/p/${projectId}/models`);
+  };
 
   if (!all)
     return (
@@ -783,13 +800,7 @@ export function AssetModelWorkspace() {
         toast("ok", "Saved the details");
         reload();
       }}
-      onDeleted={(m) => {
-        setDetailsOpen(false);
-        setDeleted((d) => new Set(d).add(m.id));
-        toast("ok", `Deleted ${m.name}`);
-        reload();
-        navigate(`/p/${projectId}/models`);
-      }}
+      onDeleted={removed}
     />
   );
   return (
@@ -804,6 +815,7 @@ export function AssetModelWorkspace() {
             models={all}
             onNew={onNew}
             onDetails={() => setDetailsOpen(true)}
+            onDeleted={removed}
             onModelChanged={reload}
           />
         ) : (

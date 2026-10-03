@@ -1,0 +1,1800 @@
+{
+ "asset": {
+  "name": "Fixture plant",
+  "type": "plant"
+ },
+ "site": {
+  "crs": {
+   "epsg": 32639,
+   "wkt": null
+  },
+  "origin_crs": [
+   244338.089,
+   3179515.69
+  ],
+  "plant_north_deg": 17.9991,
+  "datum": {
+   "label": "HPFS",
+   "el_m": 100.0
+  },
+  "source": {
+   "kind": "assumed",
+   "note": "KIPIC Al-Zour plant grid, from the Cowork register"
+  }
+ },
+ "items": [
+  {
+   "id": "trestle-001",
+   "tag": null,
+   "name": "TRESTLE 1",
+   "type": "trestle",
+   "area": "10",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2250.0,
+      506.75
+     ],
+     [
+      2370.0,
+      506.75
+     ]
+    ],
+    "width": 13.5
+   },
+   "base_el": 93.56,
+   "top_el": 104.46,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "jetty_platform-001",
+   "tag": null,
+   "name": "JETTY PLATFORM 1",
+   "type": "jetty_platform",
+   "area": "10",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     2408.0,
+     520.0
+    ],
+    "size": [
+     40.0,
+     60.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 93.56,
+   "top_el": 104.46,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "dolphin-001",
+   "tag": null,
+   "name": "DOLPHIN 1",
+   "type": "dolphin",
+   "area": "10",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     2452.0,
+     506.0
+    ],
+    "size": [
+     12.0,
+     12.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 93.56,
+   "top_el": 105.56,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "dolphin-002",
+   "tag": null,
+   "name": "DOLPHIN 2",
+   "type": "dolphin",
+   "area": "10",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     2472.0,
+     506.0
+    ],
+    "size": [
+     12.0,
+     12.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 93.56,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "pipe_rack-001",
+   "tag": null,
+   "name": "PIPE RACK 1",
+   "type": "pipe_rack",
+   "area": "30",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1050.0,
+      304.5
+     ],
+     [
+      1130.0,
+      304.5
+     ]
+    ],
+    "width": 9.0
+   },
+   "base_el": 100.0,
+   "top_el": 116.2,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "pipe_rack-002",
+   "tag": null,
+   "name": "PIPE RACK 2",
+   "type": "pipe_rack",
+   "area": "30",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1138.0,
+      304.5
+     ],
+     [
+      1218.0,
+      304.5
+     ]
+    ],
+    "width": 9.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "pipe_sleeper-001",
+   "tag": null,
+   "name": "PIPE SLEEPER 1",
+   "type": "pipe_sleeper",
+   "area": "30",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1226.0,
+      301.0
+     ],
+     [
+      1286.0,
+      301.0
+     ]
+    ],
+    "width": 2.0
+   },
+   "base_el": 100.0,
+   "top_el": 100.6,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "catwalk-001",
+   "tag": null,
+   "name": "CATWALK 1",
+   "type": "catwalk",
+   "area": "10",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2486.0,
+      500.75
+     ],
+     [
+      2536.0,
+      500.75
+     ]
+    ],
+    "width": 1.5
+   },
+   "base_el": 104.5,
+   "top_el": 106.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "walkway-001",
+   "tag": null,
+   "name": "WALKWAY 1",
+   "type": "walkway",
+   "area": "30",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1294.0,
+      300.6
+     ],
+     [
+      1324.0,
+      300.6
+     ]
+    ],
+    "width": 1.2
+   },
+   "base_el": 100.0,
+   "top_el": 102.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stair_tower-001",
+   "tag": null,
+   "name": "STAIR TOWER 1",
+   "type": "stair_tower",
+   "area": "30",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1333.5,
+     304.0
+    ],
+    "size": [
+     8.0,
+     3.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 116.2,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "overbridge-001",
+   "tag": null,
+   "name": "OVERBRIDGE 1",
+   "type": "overbridge",
+   "area": "70",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      850.0,
+      251.5
+     ],
+     [
+      870.0,
+      251.5
+     ]
+    ],
+    "width": 3.0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "platform-001",
+   "tag": null,
+   "name": "PLATFORM 1",
+   "type": "platform",
+   "area": "30",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1347.0,
+     303.0
+    ],
+    "size": [
+     6.0,
+     8.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "10-A-0001",
+   "tag": "10-A-0001",
+   "name": "GANGWAY 1",
+   "type": "gangway",
+   "area": "10",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     2546.0,
+     510.0
+    ],
+    "size": [
+     20.0,
+     4.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 104.5,
+   "top_el": 110.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "20-T-0001",
+   "tag": "20-T-0001",
+   "name": "TANK LNG 1",
+   "type": "tank_lng",
+   "area": "20",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     1296.75,
+     596.75
+    ],
+    "d": 93.5
+   },
+   "base_el": 100.0,
+   "top_el": 151.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-20",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "20-T-0002",
+   "tag": "20-T-0002",
+   "name": "TANK LNG 2",
+   "type": "tank_lng",
+   "area": "20",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     1398.25,
+     596.75
+    ],
+    "d": 93.5
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-20",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "30-V-0001",
+   "tag": "30-V-0001",
+   "name": "VESSEL V 1",
+   "type": "vessel_v",
+   "area": "30",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     1360.5,
+     301.5
+    ],
+    "d": 3.0
+   },
+   "base_el": 100.0,
+   "top_el": 112.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "30-V-0002",
+   "tag": "30-V-0002",
+   "name": "VESSEL V 2",
+   "type": "vessel_v",
+   "area": "30",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     1371.5,
+     301.5
+    ],
+    "d": 3.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "30-V-0003",
+   "tag": "30-V-0003",
+   "name": "VESSEL V 3",
+   "type": "vessel_v",
+   "area": "30",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     1382.5,
+     301.5
+    ],
+    "d": 3.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "30-V-0004",
+   "tag": "30-V-0004",
+   "name": "VESSEL H 1",
+   "type": "vessel_h",
+   "area": "30",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1398.0,
+     301.75
+    ],
+    "size": [
+     3.5,
+     12.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 104.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high",
+   "flags": [
+    {
+     "code": "missing_in_cloud",
+     "value": null,
+     "note": "Scanned area, no points."
+    }
+   ]
+  },
+  {
+   "id": "70-T-0001",
+   "tag": "70-T-0001",
+   "name": "STORAGE TANK SMALL 1",
+   "type": "storage_tank_small",
+   "area": "70",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     882.0,
+     254.0
+    ],
+    "d": 8.0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "50-P-0001",
+   "tag": "50-P-0001",
+   "name": "PUMP 1",
+   "type": "pump",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1501.5,
+     250.75
+    ],
+    "size": [
+     1.5,
+     3.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 102.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "high",
+   "flags": [
+    {
+     "code": "height_mismatch",
+     "value": 0.8,
+     "note": "Cloud top is 0.8 m above the drawing."
+    }
+   ]
+  },
+  {
+   "id": "50-P-0002",
+   "tag": "50-P-0002",
+   "name": "PUMP 2",
+   "type": "pump",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1512.5,
+     250.75
+    ],
+    "size": [
+     1.5,
+     3.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "50-P-0003",
+   "tag": "50-P-0003",
+   "name": "PUMP 3",
+   "type": "pump",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1523.5,
+     250.75
+    ],
+    "size": [
+     1.5,
+     3.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "50-P-0004",
+   "tag": "50-P-0004",
+   "name": "PUMP 4",
+   "type": "pump",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1534.5,
+     250.75
+    ],
+    "size": [
+     1.5,
+     3.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 102.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "50-P-0005",
+   "tag": "50-P-0005",
+   "name": "PUMP GROUP 1",
+   "type": "pump_group",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1550.0,
+     253.0
+    ],
+    "size": [
+     6.0,
+     12.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "30-K-0001",
+   "tag": "30-K-0001",
+   "name": "COMPRESSOR 1",
+   "type": "compressor",
+   "area": "30",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1419.5,
+     304.0
+    ],
+    "size": [
+     8.0,
+     15.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 106.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "50-H-0001",
+   "tag": "50-H-0001",
+   "name": "HEATER 1",
+   "type": "heater",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1569.0,
+     253.0
+    ],
+    "size": [
+     6.0,
+     10.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 112.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "50-E-0001",
+   "tag": "50-E-0001",
+   "name": "VAPORIZER ORV 1",
+   "type": "vaporizer_orv",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1597.0,
+     255.0
+    ],
+    "size": [
+     10.0,
+     30.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "50-E-0002",
+   "tag": "50-E-0002",
+   "name": "VAPORIZER SCV 1",
+   "type": "vaporizer_scv",
+   "area": "50",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1626.0,
+     254.0
+    ],
+    "size": [
+     8.0,
+     12.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 110.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-S-0001",
+   "tag": "70-S-0001",
+   "name": "STACK 1",
+   "type": "stack",
+   "area": "70",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     895.0,
+     251.0
+    ],
+    "d": 2.0
+   },
+   "base_el": 100.0,
+   "top_el": 130.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-F-0001",
+   "tag": "70-F-0001",
+   "name": "FLARE 1",
+   "type": "flare",
+   "area": "70",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     905.5,
+     251.5
+    ],
+    "d": 3.0
+   },
+   "base_el": 100.0,
+   "top_el": 190.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "10-L-0001",
+   "tag": "10-L-0001",
+   "name": "LOADING ARM 1",
+   "type": "loading_arm",
+   "area": "10",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     2558.0,
+     502.0
+    ],
+    "size": [
+     4.0,
+     4.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 104.5,
+   "top_el": 122.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "10-A-0002",
+   "tag": "10-A-0002",
+   "name": "CRANE 1",
+   "type": "crane",
+   "area": "10",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     2569.5,
+     501.5
+    ],
+    "size": [
+     3.0,
+     3.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 104.5,
+   "top_el": 129.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "10-M-0001",
+   "tag": "10-M-0001",
+   "name": "MONITOR 1",
+   "type": "monitor",
+   "area": "10",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     2579.5,
+     500.5
+    ],
+    "d": 1.0
+   },
+   "base_el": 104.5,
+   "top_el": 108.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-G-0001",
+   "tag": "70-G-0001",
+   "name": "GENERATOR 1",
+   "type": "generator",
+   "area": "70",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     922.75,
+     253.1
+    ],
+    "size": [
+     6.2,
+     15.5
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 104.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-TR-0001",
+   "tag": "70-TR-0001",
+   "name": "TRANSFORMER 1",
+   "type": "transformer",
+   "area": "70",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     941.0,
+     252.0
+    ],
+    "size": [
+     4.0,
+     5.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 104.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-PK-0001",
+   "tag": "70-PK-0001",
+   "name": "PACKAGE 1",
+   "type": "package",
+   "area": "70",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     954.5,
+     252.0
+    ],
+    "size": [
+     4.0,
+     6.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-PK-0002",
+   "tag": "70-PK-0002",
+   "name": "PACKAGE 2",
+   "type": "package",
+   "area": "70",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     968.5,
+     252.0
+    ],
+    "size": [
+     4.0,
+     6.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "70-PK-0003",
+   "tag": "70-PK-0003",
+   "name": "PACKAGE 3",
+   "type": "package",
+   "area": "70",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     982.5,
+     252.0
+    ],
+    "size": [
+     4.0,
+     6.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "10-N-0001",
+   "tag": "10-N-0001",
+   "name": "NAV AID 1",
+   "type": "nav_aid",
+   "area": "10",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     2588.75,
+     500.75
+    ],
+    "d": 1.5
+   },
+   "base_el": 104.5,
+   "top_el": 112.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "80-B-0001",
+   "tag": "80-B-0001",
+   "name": "CONTROL BUILDING, \"MAIN\"",
+   "type": "building",
+   "area": "80",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     670.0,
+     480.0
+    ],
+    "size": [
+     20.0,
+     40.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "80-SS-0001",
+   "tag": "80-SS-0001",
+   "name": "SUBSTATION 1",
+   "type": "substation",
+   "area": "80",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     713.0,
+     477.5
+    ],
+    "size": [
+     15.0,
+     30.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 109.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "30-AH-0001",
+   "tag": "30-AH-0001",
+   "name": "ANALYZER HOUSE 1",
+   "type": "analyzer_house",
+   "area": "30",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1437.0,
+     301.5
+    ],
+    "size": [
+     3.0,
+     4.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 103.5,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "30-BC-0001",
+   "tag": "30-BC-0001",
+   "name": "SHELTER 1",
+   "type": "shelter",
+   "area": "30",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1083.5,
+     450.0
+    ],
+    "size": [
+     20.0,
+     67.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 120.6,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-30",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "gate-001",
+   "tag": null,
+   "name": "GATE 1",
+   "type": "gate",
+   "area": "80",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     741.0,
+     471.0
+    ],
+    "size": [
+     2.0,
+     10.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "road-001",
+   "tag": null,
+   "name": "ROAD 1",
+   "type": "road",
+   "area": "80",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      754.0,
+      473.5
+     ],
+     [
+      954.0,
+      473.5
+     ]
+    ],
+    "width": 7.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "road-002",
+   "tag": null,
+   "name": "ROAD 2",
+   "type": "road",
+   "area": "80",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      650.0,
+      613.5
+     ],
+     [
+      850.0,
+      613.5
+     ]
+    ],
+    "width": 7.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "paved-001",
+   "tag": null,
+   "name": "PAVED 1",
+   "type": "paved",
+   "area": "70",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      993.5,
+      250.0
+     ],
+     [
+      1033.5,
+      250.0
+     ],
+     [
+      1033.5,
+      280.0
+     ],
+     [
+      1013.5,
+      287.5
+     ],
+     [
+      993.5,
+      280.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "laydown-001",
+   "tag": null,
+   "name": "LAYDOWN 1",
+   "type": "laydown",
+   "area": "70",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1041.5,
+      250.0
+     ],
+     [
+      1091.5,
+      250.0
+     ],
+     [
+      1091.5,
+      290.0
+     ],
+     [
+      1066.5,
+      300.0
+     ],
+     [
+      1041.5,
+      290.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "parking-001",
+   "tag": null,
+   "name": "PARKING 1",
+   "type": "parking",
+   "area": "80",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      858.0,
+      610.0
+     ],
+     [
+      888.0,
+      610.0
+     ],
+     [
+      888.0,
+      625.0
+     ],
+     [
+      873.0,
+      628.75
+     ],
+     [
+      858.0,
+      625.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "trench-001",
+   "tag": null,
+   "name": "TRENCH 1",
+   "type": "trench",
+   "area": "50",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1640.0,
+      250.6
+     ],
+     [
+      1700.0,
+      250.6
+     ]
+    ],
+    "width": 1.2
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "channel-001",
+   "tag": null,
+   "name": "CHANNEL 1",
+   "type": "channel",
+   "area": "50",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1708.0,
+      251.5
+     ],
+     [
+      1788.0,
+      251.5
+     ]
+    ],
+    "width": 3.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-50",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "basin-001",
+   "tag": null,
+   "name": "BASIN 1",
+   "type": "basin",
+   "area": "70",
+   "footprint": {
+    "kind": "rect",
+    "center": [
+     1109.5,
+     255.0
+    ],
+    "size": [
+     10.0,
+     20.0
+    ],
+    "rot_deg": 0.0
+   },
+   "base_el": 100.0,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "wall-001",
+   "tag": null,
+   "name": "WALL 1",
+   "type": "wall",
+   "area": "70",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      1127.5,
+      250.15
+     ],
+     [
+      1177.5,
+      250.15
+     ]
+    ],
+    "width": 0.3
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "fence-001",
+   "tag": null,
+   "name": "FENCE 1",
+   "type": "fence",
+   "area": "80",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      896.0,
+      610.05
+     ],
+     [
+      1046.0,
+      610.05
+     ]
+    ],
+    "width": 0.1
+   },
+   "base_el": 100.0,
+   "top_el": 102.4,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-80",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "revetment-001",
+   "tag": null,
+   "name": "REVETMENT 1",
+   "type": "revetment",
+   "area": "10",
+   "footprint": {
+    "kind": "line",
+    "pts": [
+     [
+      2250.0,
+      644.0
+     ],
+     [
+      2370.0,
+      644.0
+     ]
+    ],
+    "width": 8.0
+   },
+   "base_el": 93.56,
+   "top_el": null,
+   "height_source": "indicative",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-10",
+    "page": 1
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "other-001",
+   "tag": null,
+   "name": "OTHER 1",
+   "type": "other",
+   "area": "70",
+   "footprint": {
+    "kind": "polygon",
+    "pts": [
+     [
+      1185.5,
+      250.0
+     ],
+     [
+      1195.5,
+      250.0
+     ],
+     [
+      1195.5,
+      258.0
+     ],
+     [
+      1190.5,
+      260.0
+     ],
+     [
+      1185.5,
+      258.0
+     ]
+    ]
+   },
+   "base_el": 100.0,
+   "top_el": 103.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "70-T-0099",
+   "tag": "70-T-0099",
+   "name": "HCL TANK",
+   "type": "composite",
+   "area": "70",
+   "footprint": {
+    "kind": "circle",
+    "center": [
+     880.0,
+     220.0
+    ],
+    "d": 4.2
+   },
+   "base_el": 100.0,
+   "top_el": 108.0,
+   "height_source": "drawing",
+   "source": {
+    "kind": "drawing",
+    "id": "fixture-sheet-70",
+    "page": 1
+   },
+   "confidence": "high",
+   "parts": [
+    {
+     "id": "shell",
+     "name": "Shell",
+     "group": "Shell",
+     "shape": "cylinder",
+     "params": {
+      "id": 4000,
+      "thickness": 10,
+      "height": 8000
+     },
+     "source": {
+      "kind": "assumed"
+     }
+    }
+   ]
+  }
+ ],
+ "environment": [
+  {
+   "id": "env-land",
+   "kind": "land",
+   "pts": [
+    [
+     600.0,
+     200.0
+    ],
+    [
+     2150.0,
+     200.0
+    ],
+    [
+     2150.0,
+     900.0
+    ],
+    [
+     600.0,
+     900.0
+    ]
+   ],
+   "el": 100.0,
+   "source": {
+    "kind": "assumed"
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "env-sea",
+   "kind": "sea",
+   "pts": [
+    [
+     2150.0,
+     150.0
+    ],
+    [
+     2900.0,
+     150.0
+    ],
+    [
+     2900.0,
+     950.0
+    ],
+    [
+     2150.0,
+     950.0
+    ]
+   ],
+   "el": 93.56,
+   "source": {
+    "kind": "assumed"
+   },
+   "confidence": "medium"
+  },
+  {
+   "id": "env-ring-road",
+   "kind": "road",
+   "pts": [
+    [
+     640.0,
+     880.0
+    ],
+    [
+     2100.0,
+     880.0
+    ],
+    [
+     2100.0,
+     888.0
+    ],
+    [
+     640.0,
+     888.0
+    ]
+   ],
+   "el": 100.0,
+   "source": {
+    "kind": "assumed"
+   },
+   "confidence": "medium"
+  }
+ ]
+}

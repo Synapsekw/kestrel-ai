@@ -1,0 +1,408 @@
+{
+ "source": "Cowork KIPIC_AlZour_LNG_Plant.glb, extras.type per node",
+ "types": {
+  "compressor": {
+   "count": 6,
+   "example": {
+    "extents_m": [
+     11.2,
+     6.3,
+     11.4
+    ],
+    "node": "40-K-0001D",
+    "tris": 104
+   },
+   "materials": [
+    "Concrete",
+    "Machine_Green"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 104,
+   "tris_median": 104,
+   "tris_min": 104
+  },
+  "crane": {
+   "count": 16,
+   "example": {
+    "extents_m": [
+     7.25,
+     8.0,
+     0.48
+    ],
+    "node": "20-A-0011",
+    "tris": 52
+   },
+   "materials": [
+    "Handrail"
+   ],
+   "submeshes_max": 1,
+   "tris_max": 52,
+   "tris_median": 52,
+   "tris_min": 52
+  },
+  "flare": {
+   "count": 1,
+   "example": {
+    "extents_m": [
+     8.78,
+     53.02,
+     8.78
+    ],
+    "node": "60-A-0001",
+    "tris": 404
+   },
+   "materials": [
+    "Safety_Red",
+    "Steel_Dark",
+    "Steel_Structure"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 404,
+   "tris_median": 404,
+   "tris_min": 404
+  },
+  "generator": {
+   "count": 5,
+   "example": {
+    "extents_m": [
+     16.5,
+     4.0,
+     8.21
+    ],
+    "node": "10-A-0003-G-01",
+    "tris": 36
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_White",
+    "Machine_Green"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 36,
+   "tris_median": 36,
+   "tris_min": 36
+  },
+  "heater": {
+   "count": 15,
+   "example": {
+    "extents_m": [
+     16.4,
+     5.0,
+     8.9
+    ],
+    "node": "50-F-0002A",
+    "tris": 36
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_White"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 36,
+   "tris_median": 36,
+   "tris_min": 24
+  },
+  "loading_arm": {
+   "count": 8,
+   "example": {
+    "extents_m": [
+     14.41,
+     18.12,
+     2.42
+    ],
+    "node": "10-Z-0001A",
+    "tris": 180
+   },
+   "materials": [
+    "Equipment_White",
+    "Handrail"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 180,
+   "tris_median": 180,
+   "tris_min": 180
+  },
+  "monitor": {
+   "count": 4,
+   "example": {
+    "extents_m": [
+     2.54,
+     16.31,
+     2.0
+    ],
+    "node": "10-RCM-001",
+    "tris": 92
+   },
+   "materials": [
+    "Grating",
+    "Safety_Red"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 92,
+   "tris_median": 92,
+   "tris_min": 92
+  },
+  "nav_aid": {
+   "count": 4,
+   "example": {
+    "extents_m": [
+     0.6,
+     4.6,
+     0.57
+    ],
+    "node": "10-FH-10V01",
+    "tris": 72
+   },
+   "materials": [
+    "Handrail",
+    "Safety_Red"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 72,
+   "tris_median": 72,
+   "tris_min": 72
+  },
+  "package": {
+   "count": 91,
+   "example": {
+    "extents_m": [
+     5.9,
+     2.0,
+     2.5
+    ],
+    "node": "20-DCP-001",
+    "tris": 12
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_Grey",
+    "Equipment_White",
+    "Safety_Red"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 52,
+   "tris_median": 36,
+   "tris_min": 12
+  },
+  "pump": {
+   "count": 91,
+   "example": {
+    "extents_m": [
+     1.8,
+     2.0,
+     1.8
+    ],
+    "node": "20-P-0001A",
+    "tris": 128
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_Grey",
+    "Pump_Blue",
+    "Steel_Dark"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 380,
+   "tris_median": 128,
+   "tris_min": 76
+  },
+  "pump_group": {
+   "count": 5,
+   "example": {
+    "extents_m": [
+     3.5,
+     2.7,
+     8.0
+    ],
+    "node": "70-P-0005B",
+    "tris": 140
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_Grey",
+    "Pump_Blue"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 140,
+   "tris_median": 140,
+   "tris_min": 76
+  },
+  "stack": {
+   "count": 3,
+   "example": {
+    "extents_m": [
+     3.7,
+     15.05,
+     3.7
+    ],
+    "node": "50-F-0001A-stack",
+    "tris": 192
+   },
+   "materials": [
+    "Safety_Red",
+    "Steel_Dark"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 192,
+   "tris_median": 192,
+   "tris_min": 192
+  },
+  "storage_tank_small": {
+   "count": 13,
+   "example": {
+    "extents_m": [
+     5.8,
+     3.0,
+     3.8
+    ],
+    "node": "20-A-0009-V-01",
+    "tris": 12
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_White",
+    "Handrail"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 1952,
+   "tris_median": 1952,
+   "tris_min": 12
+  },
+  "tank_lng": {
+   "count": 8,
+   "example": {
+    "children": [
+     "20-T-0001_Outer_Tank",
+     "20-t-0001-pump-platform",
+     "20-t-0001-safety-platform",
+     "20-t-0001-instrument-platform",
+     "20-t-0001-flare-platform",
+     "20-t-0001-unloading-platform",
+     "20-t-0001-walking-platform"
+    ],
+    "extents_m": [
+     96.5,
+     51.9,
+     96.5
+    ],
+    "node": "20-T-0001",
+    "tris": 24596
+   },
+   "materials": [
+    "Concrete",
+    "Concrete_Tank",
+    "Grating",
+    "Handrail",
+    "Steel_Structure"
+   ],
+   "submeshes_max": 19,
+   "tris_max": 24596,
+   "tris_median": 24596,
+   "tris_min": 24596
+  },
+  "transformer": {
+   "count": 5,
+   "example": {
+    "extents_m": [
+     7.8,
+     4.0,
+     9.6
+    ],
+    "node": "20-SS-02-trafo",
+    "tris": 36
+   },
+   "materials": [
+    "Concrete",
+    "Steel_Dark",
+    "Steel_Structure"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 36,
+   "tris_median": 36,
+   "tris_min": 36
+  },
+  "vaporizer_orv": {
+   "count": 12,
+   "example": {
+    "extents_m": [
+     16.1,
+     8.0,
+     10.2
+    ],
+    "node": "50-E-0001A",
+    "tris": 252
+   },
+   "materials": [
+    "Aluminium_Panel",
+    "Concrete",
+    "Concrete_Dark",
+    "Equipment_Grey"
+   ],
+   "submeshes_max": 4,
+   "tris_max": 252,
+   "tris_median": 252,
+   "tris_min": 252
+  },
+  "vaporizer_scv": {
+   "count": 3,
+   "example": {
+    "extents_m": [
+     28.4,
+     5.2,
+     9.2
+    ],
+    "node": "50-F-0001A",
+    "tris": 36
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_Grey",
+    "Machine_Green"
+   ],
+   "submeshes_max": 3,
+   "tris_max": 36,
+   "tris_median": 36,
+   "tris_min": 36
+  },
+  "vessel_h": {
+   "count": 13,
+   "example": {
+    "extents_m": [
+     5.2,
+     3.82,
+     17.25
+    ],
+    "node": "10-V-0001",
+    "tris": 408
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_White"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 408,
+   "tris_median": 408,
+   "tris_min": 408
+  },
+  "vessel_v": {
+   "count": 23,
+   "example": {
+    "extents_m": [
+     6.72,
+     26.6,
+     6.72
+    ],
+    "node": "30-V-0001",
+    "tris": 480
+   },
+   "materials": [
+    "Concrete",
+    "Equipment_White"
+   ],
+   "submeshes_max": 2,
+   "tris_max": 480,
+   "tris_median": 480,
+   "tris_min": 480
+  }
+ }
+}

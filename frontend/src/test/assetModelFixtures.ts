@@ -14,6 +14,7 @@ export const MODEL: AssetModel = {
   updated_at: "2026-10-02T09:00:00Z",
   frame: null,
   review: null,
+  kind: "asset",
 };
 
 const SHELL = {
