@@ -16,12 +16,13 @@ from plant_b3_helpers import (
     cowork,
     cowork_item,
     make_item,
+    materials,
     tri_count,
 )
 from shapely.geometry import Point, Polygon
 
 from app.asset_models.builders import civil
-from app.asset_models.builders.base import Instanced
+from app.asset_models.builders.base import BuildCtx, Instanced
 from app.asset_models.builders.palette import PALETTE
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
 
@@ -274,3 +275,66 @@ def test_parking_stalls_stay_inside_a_concave_lot():
     centres = stalls.transforms[:, [0, 2], 3]
     assert len(centres) > 0
     assert all(poly.contains(Point(x, z)) for x, z in centres)
+
+
+# ------------------------------------------------------------------ walls and fences
+def test_wall_has_height_thickness_and_coping():
+    item = make_item("wall", {"kind": "line", "pts": [[E0, N0], [E0 + 40, N0]], "width": 0.7}, top_el=103.0)
+    nodes = by_name(build_ok(item))
+    assert nodes["wall"].geometry.is_watertight
+    assert nodes["wall"].geometry.volume == pytest.approx(40 * 0.7 * 2.9, rel=1e-6)
+    assert bounds(list(nodes.values()))[:, 1].tolist() == pytest.approx([0.0, 3.0])
+    assert nodes["coping"].material == "Concrete_Dark"
+
+
+def test_fence_posts_are_instanced_along_the_line():
+    nodes = by_name(build_ok(make_item("fence", FENCE_30, top_el=102.5)))
+    posts = nodes["posts"].geometry
+    assert isinstance(posts, Instanced) and len(posts.transforms) == 11
+    assert materials(list(nodes.values())) == {"Steel_Dark", "Fence"}
+    assert bounds(list(nodes.values()))[:, 1].tolist() == pytest.approx([0.0, 2.5])
+
+
+def test_closed_fence_ring_does_not_double_the_corner_post():
+    nodes = by_name(build_ok(make_item("fence", FENCE_RING)))
+    xf = nodes["posts"].geometry.transforms
+    assert len(xf) == 4 + 7 + 4 + 7
+    xz = np.round(xf[:, [0, 2], 3], 6)
+    assert len({tuple(p) for p in xz}) == len(xz)
+
+
+def test_fence_with_repeated_points_builds_without_nan():
+    fp = {
+        "kind": "line",
+        "pts": [[E0, N0], [E0, N0], [E0 + 15, N0], [E0 + 15, N0], [E0 + 30, N0]],
+        "width": 0.1,
+    }
+    nodes = by_name(build_ok(make_item("fence", fp)))
+    xf = nodes["posts"].geometry.transforms
+    assert np.isfinite(xf).all() and len(xf) == 11
+
+
+def test_fence_lod_halves_the_posts():
+    nodes = by_name(build_ok(make_item("fence", FENCE_30), BuildCtx(grid=None, lod=0.5)))
+    assert len(nodes["posts"].geometry.transforms) == 6
+
+
+def test_fence_around_a_polygon_footprint_follows_its_outline():
+    nodes = by_name(build_ok(make_item("fence", RECT)))
+    assert len(nodes["posts"].geometry.transforms) == 4 + 7 + 4 + 7
+
+
+def test_very_long_fence_posts_stay_within_max_instances():
+    # one straight 100 km run (stations alone gives MAX_INSTANCES + 1: both ends), and a
+    # 500-vertex zigzag of ~1 km legs where every leg's ceil() adds a post over the cap
+    straight = {"kind": "line", "pts": [[E0, N0], [E0 + 100_000, N0]], "width": 0.1}
+    zigzag = {"kind": "line", "pts": [[E0 + 1000 * i, N0 + 5 * (i % 2)] for i in range(500)], "width": 0.1}
+    for fp in (straight, zigzag):
+        xf = by_name(build_ok(make_item("fence", fp)))["posts"].geometry.transforms
+        assert 0 < len(xf) <= civil.MAX_INSTANCES
+        assert np.isfinite(xf).all()
+
+
+@pytest.mark.parametrize("type_", ["wall", "fence"])
+def test_wall_fence_goldens(type_):
+    assert_golden(build_ok(sample(type_)), type_)

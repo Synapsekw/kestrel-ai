@@ -330,3 +330,73 @@ def build_parking(item: Item, ctx: BuildCtx) -> list[MeshNode]:
                 line = unit_box(depth, 0.02, 0.12)
                 nodes.append(MeshNode("stalls", "Paving", instanced(line, np.asarray(rows), LIFT["Asphalt"])))
     return record(nodes, p)
+
+
+# ------------------------------------------------------------------ walls and fences
+class WallParams(B3Params):
+    coping: bool = True
+
+
+class FenceParams(B3Params):
+    post_spacing: float = Field(3.0, gt=0.5, le=20)
+    post: float = Field(0.08, gt=0.01, le=1)
+
+
+@builder(
+    "wall",
+    family="civil",
+    params=WallParams,
+    default_height_m=3.0,
+    doc="Wall: a line footprint (width = thickness) extruded to height, with a coping.",
+)
+def build_wall(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = WallParams.model_validate(item.params)
+    base, top, defaulted = ctx.height(item, 3.0)
+    h = top - base
+    if not h > 0:
+        raise ValueError("wall needs a height")
+    poly = outline(item, ctx)
+    cop = min(0.1, h / 10) if p.coping else 0.0
+    nodes = [MeshNode("wall", "Concrete", prism(poly, 0.0, h - cop))]
+    if cop:
+        cap = largest_polygon(poly.buffer(0.05, join_style="mitre", mitre_limit=2.0))
+        nodes.append(MeshNode("coping", "Concrete_Dark", prism(cap, h - cop, h)))
+    return record(nodes, p, defaulted)
+
+
+def fence_like(pts: np.ndarray, h: float, p: FenceParams, lod: float) -> list[MeshNode]:
+    rows = stations(pts, p.post_spacing, lod)
+    if len(rows) > MAX_INSTANCES:  # every vertex gets a post: thin a many-vertex line evenly
+        rows = rows[np.unique(np.linspace(0, len(rows) - 1, MAX_INSTANCES).round().astype(int))]
+    post = unit_box(p.post, h, p.post)
+    panels, rails = [], []
+    for a, b in zip(pts[:-1], pts[1:], strict=True):
+        if np.hypot(*(b - a)) <= MIN_SEG_M:
+            continue
+        panels.append(bar(a, b, 0.05, h - 0.05, 0.02))
+        rails.append(bar(a, b, h - 0.06, h - 0.01, 0.05))
+    return [
+        MeshNode("posts", "Steel_Dark", instanced(post, rows)),
+        MeshNode("rails", "Steel_Dark", merge(rails)),
+        MeshNode("mesh", "Fence", merge(panels)),
+    ]
+
+
+@builder(
+    "fence",
+    family="civil",
+    params=FenceParams,
+    default_height_m=2.5,
+    doc="Fence: posts (instanced) at post_spacing along a line footprint, mesh panels, top rail.",
+)
+def build_fence(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = FenceParams.model_validate(item.params)
+    base, top, defaulted = ctx.height(item, 2.5)
+    h = top - base
+    if not h > 0.2:
+        raise ValueError("fence needs a height above 0.2 m")
+    if item.footprint.kind == "line":
+        pts = local_line(item, ctx)
+    else:
+        pts = np.asarray(outline(item, ctx).exterior.coords)  # closed ring: first point repeated last
+    return record(fence_like(pts, h, p, ctx.lod), p, defaulted)
