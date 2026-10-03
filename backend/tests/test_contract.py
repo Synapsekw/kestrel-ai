@@ -131,7 +131,6 @@ BACKEND_PENDING: dict[str, str] = {
     # values the backend refuses until the named unit lands (an `asset` anchor; the asset filters,
     # `anchor_kind=asset` and the `-height`/`zone` sorts; `frame`/`review` on a patch). That unit
     # deletes its line.
-    "createFinding": "J4",
     "listFindings": "J4",
     "patchAssetModel": "J1",
 }

@@ -53,7 +53,6 @@ J4_STUBS: list[Stub] = [
     ("POST", M + "/findings/regroup", "regroupAssetFindings"),
     ("POST", "/findings/{findingId}/merge", "mergeFinding"),
     ("POST", "/findings/{findingId}/split", "splitFinding"),
-    ("GET", "/findings/{findingId}/sightings", "listFindingSightings"),
 ]
 
 # J5: the kit import (spec §6.5).

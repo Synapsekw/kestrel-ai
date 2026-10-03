@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from app.catalogue import service as catalogue_service
 from app.data_items import search
 from app.errors import AppError
-from app.findings import activity, attachments, comments, jobs, query, service, thumbnails
+from app.findings import activity, attachments, comments, jobs, query, service, sightings, thumbnails
 from app.findings.anchors import AnchorIn
 from app.findings.schemas import (
     ActivityOut,
@@ -28,6 +28,8 @@ from app.findings.schemas import (
     FindingOut,
     FindingPage,
     FindingPatch,
+    FindingSightingList,
+    FindingSightingOut,
     FindingSummary,
 )
 from app.jobs.schemas import JobOut
@@ -47,7 +49,12 @@ search.register_finding_search(
 
 def _detail(handle: ProjectHandle, finding_id: str) -> FindingDetail:
     row, n_att, n_com = service.get_finding(handle, finding_id)
-    return FindingDetail(**FindingOut.from_row(row).model_dump(), attachment_count=n_att, comment_count=n_com)
+    rep = None
+    if row.anchor_kind == "asset":
+        with handle.session() as s:
+            rep = sightings.representatives(s, [finding_id]).get(finding_id)
+    out = FindingOut.from_row(row, representative=rep)
+    return FindingDetail(**out.model_dump(), attachment_count=n_att, comment_count=n_com)
 
 
 @router.get("/findings", response_model=FindingPage)
@@ -85,7 +92,8 @@ def list_findings(
     )
     with handle.session() as s:
         rows, nxt = query.list_findings(s, filters, sort=sort, cursor=cursor, limit=limit)
-        items = [FindingOut.from_row(r) for r in rows]
+        reps = sightings.representatives(s, [r.id for r in rows if r.anchor_kind == "asset"])
+        items = [FindingOut.from_row(r, representative=reps.get(r.id)) for r in rows]
     return FindingPage(items=items, next_cursor=nxt)
 
 
@@ -102,7 +110,7 @@ def create_finding(body: FindingCreate, handle: ProjectHandle = Depends(get_proj
     if "severity" in body.model_fields_set:
         kw["severity"] = body.severity
     row = service.create_finding(handle, **kw)
-    return FindingDetail(**FindingOut.from_row(row).model_dump(), attachment_count=0, comment_count=0)
+    return _detail(handle, row.id)
 
 
 @router.get("/findings/summary", response_model=FindingSummary)
@@ -197,6 +205,19 @@ def _attachment_out(a) -> FindingAttachmentOut:
 @router.get("/findings/{findingId}/thumbnail", response_class=FileResponse)
 def get_finding_thumbnail(findingId: str, handle: ProjectHandle = Depends(get_project)) -> FileResponse:  # noqa: N803
     return FileResponse(thumbnails.finding_thumbnail(handle, findingId), media_type="image/jpeg")
+
+
+@router.get("/findings/{findingId}/sightings", response_model=FindingSightingList)
+def list_finding_sightings(
+    findingId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingSightingList:
+    """An asset finding's sightings, representative first. An image finding is its one implicit
+    sighting; a map or cloud finding has none (decision A2)."""
+    with handle.session() as s:
+        f = service.get_or_404(s, findingId)
+        items = [FindingSightingOut(**d) for d in sightings.listing(s, f)]
+    return FindingSightingList(items=items)
 
 
 @router.get("/findings/{findingId}/comments", response_model=FindingCommentPage)

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.db.models import Activity, Finding
 
 Status = Literal["open", "reviewed", "closed"]
-AnchorKind = Literal["image", "map", "cloud"]
+AnchorKind = Literal["image", "map", "cloud", "asset"]
 
 
 class BoxGeometry(BaseModel):
@@ -52,7 +52,28 @@ class CloudAnchorIn(BaseModel):
     uncertainty_m: float | None = Field(None, ge=0)
 
 
-FindingAnchorIn = Annotated[ImageAnchorIn | MapAnchorIn | CloudAnchorIn, Field(discriminator="kind")]
+class SightingIn(BaseModel):
+    """One sighting of a new asset finding (contract `FindingSightingInput`): a rectangle in image
+    pixels, or a polygon when `points` is given (its envelope then comes from the points)."""
+
+    image_id: str
+    box: BoxGeometry
+    points: list[Annotated[list[float], Field(min_length=2, max_length=2)]] | None = Field(
+        None, min_length=3, max_length=4096
+    )
+    severity: int | None = Field(None, ge=1, le=9)
+    group_tag: str | None = Field(None, max_length=80)
+
+
+class AssetAnchorIn(BaseModel):
+    kind: Literal["asset"]
+    asset_model_id: str
+    sightings: list[SightingIn] = Field(min_length=1, max_length=50)
+
+
+FindingAnchorIn = Annotated[
+    ImageAnchorIn | MapAnchorIn | CloudAnchorIn | AssetAnchorIn, Field(discriminator="kind")
+]
 
 
 class FindingCreate(BaseModel):
@@ -178,7 +199,9 @@ class FindingOut(BaseModel):
     representative: FindingRepresentative | None
 
     @classmethod
-    def from_row(cls, r: Finding) -> "FindingOut":
+    def from_row(cls, r: Finding, representative: dict | None = None) -> "FindingOut":
+        """`representative` is the asset finding's representative sighting (`sightings.representatives`);
+        other kinds answer `representative_of(r)`."""
         return cls(
             id=r.id,
             number=r.number,
@@ -205,7 +228,11 @@ class FindingOut(BaseModel):
             component=r.component,
             placement=r.placement,
             sighting_count=r.sighting_count if r.anchor_kind == "asset" else 1,
-            representative=representative_of(r),
+            representative=(
+                (FindingRepresentative(**representative) if representative else None)
+                if r.anchor_kind == "asset"
+                else representative_of(r)
+            ),
         )
 
 
@@ -217,6 +244,36 @@ class FindingDetail(FindingOut):
 class FindingPage(BaseModel):
     items: list[FindingOut]
     next_cursor: str | None = None
+
+
+class FindingSightingOut(BaseModel):
+    """Contract `FindingSighting`; built by `sightings.listing`."""
+
+    id: str
+    asset_model_id: str
+    finding_id: str | None
+    image_id: str
+    annotation_id: str
+    image_name: str
+    captured_at: datetime | None
+    severity: int | None
+    group_tag: str | None
+    placement: Literal["point", "patch", "none", "pending"]
+    center: list[float] | None
+    normal: list[float] | None
+    part: str | None
+    coverage: float | None
+    placed_version: int | None
+    stale: bool
+    height_m: float | None
+    bearing_deg: float | None
+    side: str | None
+    zone: str | None
+    created_at: datetime
+
+
+class FindingSightingList(BaseModel):
+    items: list[FindingSightingOut]
 
 
 class TypeCount(BaseModel):
