@@ -5,6 +5,35 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { disposeChildren } from "@/clouds/viewer/dispose";
 import { NoWebGlError } from "@/clouds/viewer/engine";
 import { tokenColor, tokenRgb } from "@/clouds/viewer/overlay";
+import { CAMERA_PICK_PX, frustumCorners, nearestOnScreen, pyramidGeometry, type CameraPose } from "./cameras";
+import { DEFAULT_FOCUS, focusView, type FocusSettings } from "./focus";
+import type { GroundTile } from "./ground";
+import { labelAt, parseLabelGrid, parsePatchMesh, type LabelGrid } from "./patch";
+import {
+  PIN_LIFT_FRACTION,
+  liftedPosition,
+  pinScale,
+  worldPerPixelOrtho,
+  worldPerPixelPerspective,
+} from "./pins";
+import { PatchLoader, frustumOf, type FetchPatch, type PatchBuffers, type PlacementItem } from "./placements";
+
+export interface PickHit {
+  kind: "finding" | "camera" | "part";
+  id: string;
+}
+export const GHOST_OPACITY = 0.25;
+export const PATCH_ALPHA_TEST = 0.3;
+export const PATCH_POLYGON_OFFSET = -4;
+export const PATCH_RENDER_ORDER = 3;
+export const PIN_RENDER_ORDER = 10;
+export const GROUND_RENDER_ORDER = -10;
+/**
+ * The default for `setAutoRotate(on)` with no speed (U5's Overview hero calls it that way). The unit is
+ * three.js OrbitControls' `autoRotateSpeed`: 2.0 is one turn per 30 s at 60 fps, so 0.6 is one turn
+ * per 100 s, the kit's value.
+ */
+export const AUTO_ROTATE_SPEED = 0.6;
 
 export type ModelView = "top" | "front" | "side" | "iso" | "fit";
 export interface ModelPart {
@@ -30,6 +59,23 @@ export interface ModelEngine {
   /** xyz triples, asset frame. */
   setOverlay(points: Float32Array | null): void;
   setView(view: ModelView): void;
+  /** Patches as textured meshes (loaded when visible) and pins as 6 px spheres; replaces the last set. */
+  setPlacements(items: PlacementItem[], fetchPatch: FetchPatch): void;
+  /** One instanced wire pyramid per pose; an empty list clears them. */
+  setCameras(poses: CameraPose[], colourOf: (p: CameraPose) => string): void;
+  /** Marks one camera; `cone` draws its view frustum out to the target. */
+  setSelectedCamera(imageId: string | null, cone: boolean): void;
+  /** Orthographic along the patch direction or pin normal; false when the finding has no placement. */
+  focusFinding(findingId: string, settings?: FocusSettings): boolean;
+  /** Every model material at 0.25 opacity with depth writes off, so findings behind show through. */
+  setGhost(on: boolean): void;
+  setAutoRotate(on: boolean, speed?: number): void;
+  /** Basemap tiles under the model; null removes them. */
+  setGround(tiles: GroundTile[] | null): void;
+  /** The perspective camera at the photo's pose; null returns to the view before the first pose. */
+  viewFromPose(pose: CameraPose | null): void;
+  /** Clicks on a finding (patch label or pin), a camera (13 px) or a part. */
+  onPick(cb: ((hit: PickHit) => void) | null): void;
   dispose(): void;
 }
 
@@ -64,6 +110,110 @@ export function partsFromScene(
 /** Top view looks straight down; a hair of tilt keeps the camera's +Y up well defined (north up the screen). */
 const TOP_TILT = 0.002;
 
+/**
+ * The on-demand render loop: a request renders for the next second; `keepAlive` (auto-rotate) keeps
+ * it going. At most one frame is ever pending, even when `draw` itself requests a render
+ * (OrbitControls' auto-rotate fires "change" from `update()`), so callbacks never multiply.
+ */
+export function renderLoop(o: {
+  draw(): void;
+  keepAlive(): boolean;
+  raf?: (cb: FrameRequestCallback) => number;
+  caf?: (id: number) => void;
+  now?: () => number;
+}): { request(): void; stop(): void } {
+  const raf = o.raf ?? ((cb: FrameRequestCallback) => requestAnimationFrame(cb));
+  const caf = o.caf ?? ((id: number) => cancelAnimationFrame(id));
+  const now = o.now ?? (() => performance.now());
+  let pending = 0;
+  let idleUntil = 0;
+  let stopped = false;
+  const frame = () => {
+    pending = 0;
+    if (stopped) return;
+    o.draw();
+    if (!pending && !stopped && (now() < idleUntil || o.keepAlive())) pending = raf(frame);
+  };
+  return {
+    request() {
+      if (stopped) return;
+      idleUntil = now() + 1000;
+      if (!pending) pending = raf(frame);
+    },
+    stop() {
+      stopped = true;
+      if (pending) caf(pending);
+      pending = 0;
+    },
+  };
+}
+
+/** The M1 perspective camera's vertical field of view, which every preset view frames with. */
+export const MODEL_FOV = 38;
+
+/** The perspective view before the first `viewFromPose`, restored by `viewFromPose(null)`. */
+export interface SavedView {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  up: THREE.Vector3;
+  fov: number;
+  near: number;
+  far: number;
+}
+
+export function saveView(camera: THREE.PerspectiveCamera, target: THREE.Vector3): SavedView {
+  return {
+    position: camera.position.clone(),
+    target: target.clone(),
+    up: camera.up.clone(),
+    fov: camera.fov,
+    near: camera.near,
+    far: camera.far,
+  };
+}
+
+/** Puts the camera (and the orbit target) back where `saveView` found it. */
+export function restoreView(camera: THREE.PerspectiveCamera, target: THREE.Vector3, v: SavedView): void {
+  camera.position.copy(v.position);
+  camera.up.copy(v.up);
+  camera.fov = v.fov;
+  camera.near = v.near;
+  camera.far = v.far;
+  target.copy(v.target);
+  camera.updateProjectionMatrix();
+}
+
+/** A preset view drops a photo pose's roll and lens: Y up and the M1 field of view. */
+export function presetCamera(camera: THREE.PerspectiveCamera): void {
+  camera.up.set(0, 1, 0);
+  camera.fov = MODEL_FOV;
+}
+
+interface GhostBase {
+  transparent: boolean;
+  opacity: number;
+  depthWrite: boolean;
+}
+
+/**
+ * Ghost on: see-through at `GHOST_OPACITY` with depth writes off. Ghost off: the material's authored
+ * transparent, opacity and depthWrite (recorded the first time it is ghosted), so GLB glass and
+ * BLEND/MASK materials keep their alpha. A material never ghosted is left as it is.
+ */
+export function ghostMaterial(m: THREE.Material, on: boolean): void {
+  const ud = m.userData as { ghostBase?: GhostBase };
+  if (!on && !ud.ghostBase) return;
+  const base = (ud.ghostBase ??= {
+    transparent: m.transparent,
+    opacity: m.opacity,
+    depthWrite: m.depthWrite,
+  });
+  m.transparent = on ? true : base.transparent;
+  m.opacity = on ? GHOST_OPACITY : base.opacity;
+  m.depthWrite = on ? false : base.depthWrite;
+  m.needsUpdate = true;
+}
+
 export function createModelEngine(o: {
   canvas: HTMLCanvasElement;
   host: HTMLElement;
@@ -88,7 +238,7 @@ export function createModelEngine(o: {
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
   sun.position.set(-8, 16, 10);
   scene.add(sun);
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 1000);
+  const camera = new THREE.PerspectiveCamera(MODEL_FOV, 1, 0.05, 1000);
   camera.up.set(0, 1, 0);
   const controls = new OrbitControls(camera, o.canvas);
   controls.enableDamping = true;
@@ -105,22 +255,82 @@ export function createModelEngine(o: {
   let levelsOn = false;
   let selected: string | null = null;
   let bounds = new THREE.Box3(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
-  let raf = 0;
-  let idleUntil = 0;
   let disposed = false;
   let loadSeq = 0;
 
-  const frame = () => {
-    raf = 0;
-    if (disposed) return;
-    controls.update();
-    renderer.render(scene, camera);
-    if (performance.now() < idleUntil) raf = requestAnimationFrame(frame);
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 1e5);
+  let active: THREE.PerspectiveCamera | THREE.OrthographicCamera = camera;
+  let orthoHeight = 10;
+  const surface = new THREE.Group(); // textured patches
+  const pins = new THREE.Group();
+  const cams = new THREE.Group();
+  const ground = new THREE.Group();
+  scene.add(surface, pins, cams, ground);
+  const textureLoader = new THREE.TextureLoader();
+  textureLoader.setCrossOrigin("anonymous");
+  let items: PlacementItem[] = [];
+  let loader: PatchLoader | null = null;
+  let poses: CameraPose[] = [];
+  let selectedCam: { id: string | null; cone: boolean } = { id: null, cone: false };
+  let ghostOn = false;
+  let pickCb: ((hit: PickHit) => void) | null = null;
+  let savedView: SavedView | null = null;
+  /** How far the ground tiles reach, so a preset view does not clip them (0 without ground). */
+  let groundFar = 0;
+  /** The model's height above the datum, the H of the kit's fractions. */
+  const assetHeight = () => Math.max(bounds.max.y - Math.min(bounds.min.y, 0), 1);
+  /** Releases textures too: `disposeChildren` frees geometry and materials only. */
+  const disposeTextured = (g: THREE.Object3D) => {
+    g.traverse((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined)?.map?.dispose());
+    disposeChildren(g);
   };
+  /** `disposeChildren` frees geometry and material; the InstancedMesh's own dispose frees its instance buffers. */
+  const disposeCameras = () => {
+    for (const c of cams.children)
+      if ((c as THREE.InstancedMesh).isInstancedMesh) (c as THREE.InstancedMesh).dispose();
+    disposeChildren(cams);
+  };
+  const sizeOrtho = (aspect: number) => {
+    ortho.top = orthoHeight / 2;
+    ortho.bottom = -orthoHeight / 2;
+    ortho.left = (-orthoHeight * aspect) / 2;
+    ortho.right = (orthoHeight * aspect) / 2;
+  };
+
+  const viewportHeight = () => o.host.clientHeight || 1;
+  const updatePins = () => {
+    const h = viewportHeight();
+    for (const p of pins.children) {
+      const wpp =
+        active === ortho
+          ? worldPerPixelOrtho(ortho.top, ortho.bottom, ortho.zoom, h)
+          : worldPerPixelPerspective(camera.fov, camera.position.distanceTo(p.position), h);
+      p.scale.setScalar(pinScale(wpp, 1));
+    }
+  };
+  const sphere = new THREE.Sphere();
+  const requestVisiblePatches = () => {
+    if (!loader) return;
+    const f = frustumOf(active);
+    loader.update(
+      items,
+      (s) => f.intersectsSphere(sphere.set(new THREE.Vector3(...s.center), s.radius)),
+      (c) => active.position.distanceTo(new THREE.Vector3(...c)),
+    );
+  };
+  // auto-rotate keeps the loop alive; otherwise it idles a second after the last change
+  const loop = renderLoop({
+    draw: () => {
+      controls.update();
+      updatePins();
+      requestVisiblePatches();
+      renderer.render(scene, active);
+    },
+    keepAlive: () => controls.autoRotate,
+  });
   const requestRender = () => {
     if (disposed) return;
-    idleUntil = performance.now() + 1000;
-    if (!raf) raf = requestAnimationFrame(frame);
+    loop.request();
   };
   controls.addEventListener("change", requestRender);
   const resize = () => {
@@ -130,6 +340,8 @@ export function createModelEngine(o: {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    sizeOrtho(w / h);
+    ortho.updateProjectionMatrix();
     requestRender();
   };
   const ro = new ResizeObserver(resize);
@@ -156,6 +368,11 @@ export function createModelEngine(o: {
   };
 
   const setView = (view: ModelView) => {
+    // any preset view leaves the focus and pose views
+    active = camera;
+    controls.object = camera;
+    savedView = null;
+    presetCamera(camera);
     const size = bounds.getSize(new THREE.Vector3());
     const centre = bounds.getCenter(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 0.5);
@@ -165,7 +382,7 @@ export function createModelEngine(o: {
     const dist = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2));
     camera.position.copy(centre).addScaledVector(dir, -dist);
     camera.near = dist / 100;
-    camera.far = dist * 10;
+    camera.far = Math.max(dist * 10, groundFar);
     camera.updateProjectionMatrix();
     controls.target.copy(centre);
     controls.update();
@@ -215,8 +432,124 @@ export function createModelEngine(o: {
     requestRender();
   };
 
-  // click to select a part
+  const applyGhost = () => applyMaterials((m) => ghostMaterial(m, ghostOn));
+
+  const addPatch = async (id: string, b: PatchBuffers) => {
+    const item = items.find((p) => p.sightingId === id);
+    if (!item) return;
+    const mesh = parsePatchMesh(b.mesh);
+    const labels = parseLabelGrid(b.labels);
+    const bitmap = await createImageBitmap(b.texture, { imageOrientation: "flipY" });
+    if (disposed || !items.includes(item)) {
+      bitmap.close();
+      return;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+    g.setAttribute("uv", new THREE.BufferAttribute(mesh.uvs, 2));
+    g.computeBoundingSphere();
+    const tex = new THREE.Texture(bitmap);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.NearestFilter;
+    tex.flipY = false; // the bitmap was flipped when it was decoded
+    tex.needsUpdate = true;
+    const m = new THREE.Mesh(
+      g,
+      new THREE.MeshBasicMaterial({
+        map: tex,
+        alphaTest: PATCH_ALPHA_TEST,
+        polygonOffset: true,
+        polygonOffsetFactor: PATCH_POLYGON_OFFSET,
+        polygonOffsetUnits: PATCH_POLYGON_OFFSET,
+        depthWrite: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    m.renderOrder = PATCH_RENDER_ORDER;
+    m.userData = { kind: "patch", findingId: item.findingId, sightingId: id, labels };
+    surface.add(m);
+    requestRender();
+  };
+
+  const drawSelectedCamera = () => {
+    disposeChildren(helpers, (c) => c.userData.kind === "camera-selection");
+    const p = selectedCam.id ? poses.find((x) => x.imageId === selectedCam.id) : undefined;
+    if (!p) return;
+    const pos = new THREE.Vector3(...p.position);
+    const tgt = new THREE.Vector3(...p.target);
+    const group = new THREE.Group();
+    group.userData.kind = "camera-selection";
+    group.position.copy(pos);
+    group.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, tgt, new THREE.Vector3(...p.up)));
+    const colour = tokenColor(tokenRgb("accent"));
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(Math.max(0.1, assetHeight() * 0.004), 12, 8),
+      new THREE.MeshBasicMaterial({ color: colour, toneMapped: false }),
+    );
+    group.add(dot);
+    if (selectedCam.cone) {
+      const c = frustumCorners(p.hfovDeg, p.vfovDeg, pos.distanceTo(tgt));
+      const edges = [
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [0, 4],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 1],
+      ];
+      const g = new THREE.BufferGeometry().setFromPoints(
+        edges.flatMap(([a, b]) => [new THREE.Vector3(...c[a]), new THREE.Vector3(...c[b])]),
+      );
+      group.add(
+        new THREE.LineSegments(
+          g,
+          new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.95 }),
+        ),
+      );
+    }
+    helpers.add(group);
+  };
+
+  // click to pick a finding, a camera or a part
   const raycaster = new THREE.Raycaster();
+  /** With the cut on, the half beyond the plane is clipped away: a click picks what is still drawn. */
+  const visibleHit = (h: THREE.Intersection) =>
+    h.object.visible && (cutBearing === null || cutPlane.distanceToPoint(h.point) >= 0);
+
+  /** Kit pickSurface: a patch counts only where its label grid has a defect and the model is not in front. */
+  const pickPlacement = (): PickHit | null => {
+    const hits = raycaster.intersectObjects([...surface.children, ...pins.children], false);
+    let occluder: number | null = null;
+    const slack = (0.035 * assetHeight()) / 80;
+    for (const h of hits) {
+      const u = h.object.userData as { kind: string; findingId: string | null; labels?: LabelGrid };
+      // an ungrouped sighting is not a finding yet: the click falls through to cameras, then parts
+      if (u.findingId === null) continue;
+      if (u.kind === "patch") {
+        if (!h.uv || !u.labels || labelAt(u.labels, h.uv.x, h.uv.y) === 0) continue;
+        if (occluder === null)
+          occluder = raycaster.intersectObject(modelRoot, true).find(visibleHit)?.distance ?? Infinity;
+        if (occluder < h.distance - slack) continue;
+      }
+      return { kind: "finding", id: u.findingId };
+    }
+    return null;
+  };
+
+  const pickCameraAt = (x: number, y: number, rect: DOMRect): PickHit | null => {
+    if (poses.length === 0 || !cams.visible) return null;
+    const v = new THREE.Vector3();
+    const pts = poses.map((p) => {
+      v.set(...p.position).project(active);
+      return { id: p.imageId, x: v.x, y: v.y, z: v.z };
+    });
+    const id = nearestOnScreen(pts, x, y, { width: rect.width, height: rect.height }, CAMERA_PICK_PX);
+    return id ? { kind: "camera", id } : null;
+  };
+
   let downAt: [number, number] | null = null;
   const onDown = (e: PointerEvent) => {
     downAt = [e.clientX, e.clientY];
@@ -230,15 +563,19 @@ export function createModelEngine(o: {
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1,
       ),
-      camera,
+      active,
     );
-    // With the cut on, the half beyond the plane is clipped away: a click picks what is still drawn.
-    const hit = raycaster
-      .intersectObject(modelRoot, true)
-      .find((h) => h.object.visible && (cutBearing === null || cutPlane.distanceToPoint(h.point) >= 0));
+    const placed = pickPlacement() ?? pickCameraAt(e.clientX - rect.left, e.clientY - rect.top, rect);
+    if (placed) {
+      pickCb?.(placed);
+      return;
+    }
+    const hit = raycaster.intersectObject(modelRoot, true).find(visibleHit);
     let n: THREE.Object3D | null = hit?.object ?? null;
     while (n && !idByNode.has(n)) n = n.parent;
-    engine.select((n && idByNode.get(n)) ?? null);
+    const id = (n && idByNode.get(n)) ?? null;
+    engine.select(id);
+    if (id) pickCb?.({ kind: "part", id });
   };
   o.canvas.addEventListener("pointerdown", onDown);
   o.canvas.addEventListener("pointerup", onUp);
@@ -294,6 +631,8 @@ export function createModelEngine(o: {
       });
       bounds = new THREE.Box3().setFromObject(gltf.scene);
       applyCut();
+      // fresh clones carry the GLB's own alpha: only a ghost that is on touches them
+      if (ghostOn) applyGhost();
       applyVisibility();
       drawLevels();
       if (opts?.keepCamera) requestRender();
@@ -341,12 +680,181 @@ export function createModelEngine(o: {
       requestRender();
     },
     setView,
+    setPlacements(next, fetchPatch) {
+      items = next;
+      loader?.dispose();
+      disposeTextured(surface);
+      disposeChildren(pins);
+      loader = new PatchLoader(fetchPatch, (id, b) => {
+        void addPatch(id, b).catch(() => {
+          // a patch that does not parse is left out; the pin list and other patches stay
+        });
+      });
+      const lift = assetHeight() * PIN_LIFT_FRACTION;
+      for (const it of next) {
+        if (it.kind !== "point") continue;
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(1, 16, 12),
+          new THREE.MeshBasicMaterial({ color: new THREE.Color(it.colour), toneMapped: false }),
+        );
+        m.position.set(...liftedPosition(it.center, it.normal, lift));
+        m.renderOrder = PIN_RENDER_ORDER;
+        m.userData = { kind: "pin", findingId: it.findingId, sightingId: it.sightingId };
+        pins.add(m);
+      }
+      requestRender();
+    },
+    setCameras(next, colourOf) {
+      disposeCameras();
+      poses = next;
+      if (next.length > 0) {
+        const size = Math.max(0.3, assetHeight() * 0.015);
+        const mesh = new THREE.InstancedMesh(
+          pyramidGeometry(),
+          new THREE.MeshBasicMaterial({ wireframe: true, toneMapped: false }),
+          next.length,
+        );
+        const m = new THREE.Matrix4();
+        const look = new THREE.Matrix4();
+        const q = new THREE.Quaternion();
+        const s = new THREE.Vector3(size, size, size);
+        const c = new THREE.Color();
+        next.forEach((p, i) => {
+          const pos = new THREE.Vector3(...p.position);
+          q.setFromRotationMatrix(
+            look.lookAt(pos, new THREE.Vector3(...p.target), new THREE.Vector3(...p.up)),
+          );
+          mesh.setMatrixAt(i, m.compose(pos, q, s));
+          mesh.setColorAt(i, c.set(colourOf(p)));
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mesh.userData.kind = "cameras";
+        cams.add(mesh);
+      }
+      drawSelectedCamera();
+      requestRender();
+    },
+    setSelectedCamera(imageId, cone) {
+      selectedCam = { id: imageId, cone };
+      drawSelectedCamera();
+      requestRender();
+    },
+    focusFinding(findingId, settings) {
+      // only grouped placements carry a finding id; an ungrouped sighting (null) never matches
+      const mine = items.filter((p) => p.findingId !== null && p.findingId === findingId);
+      const item = mine.find((p) => p.kind === "patch") ?? mine[0];
+      if (!item) return false;
+      const fv = focusView(
+        { kind: item.kind, center: item.center, normal: item.normal, size: item.size },
+        assetHeight(),
+        settings ?? DEFAULT_FOCUS,
+      );
+      controls.autoRotate = false;
+      orthoHeight = fv.viewHeight;
+      sizeOrtho((o.host.clientWidth || 1) / viewportHeight());
+      ortho.zoom = 1;
+      const target = new THREE.Vector3(...fv.target);
+      ortho.position.copy(target).addScaledVector(new THREE.Vector3(...fv.direction), fv.distance);
+      ortho.up.set(0, 1, 0);
+      ortho.near = 0.05;
+      ortho.far = fv.distance * 2 + assetHeight() * 4;
+      ortho.lookAt(target);
+      ortho.updateProjectionMatrix();
+      active = ortho;
+      controls.object = ortho;
+      controls.target.copy(target);
+      controls.update();
+      requestRender();
+      return true;
+    },
+    setGhost(on) {
+      ghostOn = on;
+      applyGhost();
+    },
+    setAutoRotate(on, speed) {
+      controls.autoRotate = on;
+      controls.autoRotateSpeed = speed ?? AUTO_ROTATE_SPEED;
+      requestRender();
+    },
+    setGround(tiles) {
+      disposeTextured(ground);
+      for (const t of tiles ?? []) {
+        const tl = new THREE.Vector3(t.tl[0], t.y, t.tl[1]);
+        const tr = new THREE.Vector3(t.tr[0], t.y, t.tr[1]);
+        const bl = new THREE.Vector3(t.bl[0], t.y, t.bl[1]);
+        const br = tr.clone().add(bl).sub(tl);
+        const g = new THREE.BufferGeometry();
+        g.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute(
+            [...tl.toArray(), ...tr.toArray(), ...bl.toArray(), ...br.toArray()],
+            3,
+          ),
+        );
+        g.setAttribute("uv", new THREE.Float32BufferAttribute([0, 1, 1, 1, 0, 0, 1, 0], 2));
+        g.setIndex([0, 2, 1, 1, 2, 3]);
+        const tex = textureLoader.load(t.url, requestRender);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        // Drawn without depth writes: the ground never hides the model, pins or cameras.
+        const m = new THREE.Mesh(
+          g,
+          new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            depthWrite: false,
+            toneMapped: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        m.renderOrder = GROUND_RENDER_ORDER;
+        m.userData.kind = "ground";
+        ground.add(m);
+      }
+      groundFar = 0;
+      if (tiles?.length) {
+        const reach = Math.max(
+          ...tiles.flatMap((t) => [Math.hypot(...t.tl), Math.hypot(...t.tr), Math.hypot(...t.bl)]),
+        );
+        groundFar = reach * 4;
+        camera.far = Math.max(camera.far, groundFar);
+        camera.updateProjectionMatrix();
+      }
+      requestRender();
+    },
+    viewFromPose(pose) {
+      active = camera;
+      controls.object = camera;
+      if (!pose) {
+        if (savedView) {
+          restoreView(camera, controls.target, savedView);
+          savedView = null;
+        }
+        controls.update();
+        requestRender();
+        return;
+      }
+      if (!savedView) savedView = saveView(camera, controls.target);
+      const tgt = new THREE.Vector3(...pose.target);
+      camera.position.set(...pose.position);
+      camera.up.set(...pose.up);
+      camera.fov = pose.vfovDeg;
+      camera.near = 0.05;
+      camera.far = Math.max(camera.far, camera.position.distanceTo(tgt) * 20);
+      camera.lookAt(tgt);
+      camera.updateProjectionMatrix();
+      controls.target.copy(tgt);
+      controls.update();
+      requestRender();
+    },
+    onPick(cb) {
+      pickCb = cb;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
       loadSeq++;
-      cancelAnimationFrame(raf);
-      raf = 0;
+      loop.stop();
       ro.disconnect();
       o.canvas.removeEventListener("pointerdown", onDown);
       o.canvas.removeEventListener("pointerup", onUp);
@@ -355,6 +863,11 @@ export function createModelEngine(o: {
       disposeChildren(modelRoot);
       disposeChildren(helpers);
       nodes.clear();
+      loader?.dispose();
+      disposeTextured(surface);
+      disposeTextured(ground);
+      disposeChildren(pins);
+      disposeCameras();
       renderer.dispose();
     },
   };

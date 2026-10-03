@@ -21,6 +21,15 @@ const stub = (load: () => Promise<unknown>, dispose = vi.fn()) => ({
   setHeadOff: vi.fn(),
   setOverlay: vi.fn(),
   setView: vi.fn(),
+  setPlacements: vi.fn(),
+  setCameras: vi.fn(),
+  setSelectedCamera: vi.fn(),
+  focusFinding: vi.fn(() => true),
+  setGhost: vi.fn(),
+  setAutoRotate: vi.fn(),
+  setGround: vi.fn(),
+  viewFromPose: vi.fn(),
+  onPick: vi.fn(),
 });
 
 describe("ModelViewer", () => {
@@ -122,5 +131,55 @@ describe("ModelViewer", () => {
     (await screen.findByRole("button", { name: /reload view/i })).click();
     await waitFor(() => expect(good.load).toHaveBeenCalledWith("v2.glb", { keepCamera: false }));
     expect(bad.dispose).toHaveBeenCalled();
+  });
+  it("replays placements, cameras, ghost, rotate, ground and the pose onto the engine after a load", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    const eng = stub(() => new Promise((r) => (resolve = r)));
+    create.mockImplementation(() => eng);
+    const ref = createRef<ModelViewerHandle>();
+    render(<ModelViewer ref={ref} glbUrl="x.glb" onParts={() => {}} onSelect={() => {}} />);
+    const fetchPatch = vi.fn();
+    const pose = {
+      imageId: "i1",
+      position: [1, 2, 3],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      hfovDeg: 70,
+      vfovDeg: 50,
+      sequence: null,
+      outcome: null,
+    } as const;
+    act(() => {
+      ref.current!.setPlacements([], fetchPatch);
+      ref.current!.setCameras([pose as never], () => "#ffffff");
+      ref.current!.setSelectedCamera("i1", true);
+      ref.current!.setGhost(true);
+      ref.current!.setAutoRotate(true, 1.2);
+      ref.current!.setGround([]);
+      ref.current!.viewFromPose(pose as never);
+    });
+    eng.setGhost.mockClear();
+    await act(async () => resolve([]));
+    await waitFor(() => expect(eng.setGhost).toHaveBeenCalledWith(true));
+    expect(eng.setPlacements).toHaveBeenLastCalledWith([], fetchPatch);
+    expect(eng.setCameras).toHaveBeenCalled();
+    expect(eng.setSelectedCamera).toHaveBeenLastCalledWith("i1", true);
+    expect(eng.setAutoRotate).toHaveBeenLastCalledWith(true, 1.2);
+    expect(eng.setGround).toHaveBeenLastCalledWith([]);
+    expect(eng.viewFromPose).toHaveBeenLastCalledWith(pose);
+  });
+
+  it("passes the engine's picks out and forwards focusFinding", async () => {
+    const eng = stub(() => Promise.resolve([]));
+    create.mockImplementation(() => eng);
+    const onPick = vi.fn();
+    const ref = createRef<ModelViewerHandle>();
+    render(<ModelViewer ref={ref} glbUrl="x.glb" onParts={() => {}} onSelect={() => {}} onPick={onPick} />);
+    await waitFor(() => expect(eng.onPick).toHaveBeenCalled());
+    const cb = eng.onPick.mock.calls[0][0] as (h: unknown) => void;
+    cb({ kind: "finding", id: "f1" });
+    expect(onPick).toHaveBeenCalledWith({ kind: "finding", id: "f1" });
+    expect(ref.current!.focusFinding("f1")).toBe(true);
+    expect(eng.focusFinding).toHaveBeenCalledWith("f1", undefined);
   });
 });
