@@ -18,6 +18,7 @@ import numpy as np
 import shapely
 from pyproj import CRS
 from pyproj.exceptions import CRSError
+from scipy import signal
 
 from app.asset_models.siteframe import PlantGrid, footprint_polygon, footprint_ref
 from app.asset_models.spec import CloudDatum, Item, ItemFlag, SiteCrs, SiteFrame
@@ -411,3 +412,133 @@ def _fit_offsets(a: np.ndarray, frame: SiteFrame, cloud_id: str) -> CloudDatum:
                 tilt=(round(float(sol[1]), 7), round(float(sol[2]), 7)),
             )
     return CloudDatum(cloud_id=cloud_id, offset_m=round(med, 3))
+
+
+# ---------------------------------------------------------------- per item
+
+
+def _raster(loc: _Local, cell: float, pick: np.ndarray | None = None):
+    """(hit grid of the picked points, footprint mask of cell centres) on the window at `cell` metres."""
+    e0, n0, e1, n1 = loc.window
+    w = max(1, math.ceil((e1 - e0) / cell))
+    h = max(1, math.ceil((n1 - n0) / cell))
+    hit = np.zeros((h, w), bool)
+    sel = np.ones(len(loc.e), bool) if pick is None else pick
+    cols = np.clip(((loc.e[sel] - e0) / cell).astype(np.int64), 0, w - 1)
+    rows_ = np.clip(((loc.n[sel] - n0) / cell).astype(np.int64), 0, h - 1)
+    hit[rows_, cols] = True
+    ce, cn = np.meshgrid(e0 + (np.arange(w) + 0.5) * cell, n0 + (np.arange(h) + 0.5) * cell)
+    mask = shapely.contains_xy(loc.poly, ce, cn)
+    return hit, mask
+
+
+def _best_shift(occ: np.ndarray, mask: np.ndarray, cell: float) -> tuple[float, float] | None:
+    """The (dE, dN) shift of the footprint mask that best covers the occupied cells, within SEARCH_M.
+    Ties go to the smallest shift. None when too little of the cloud matches any shift."""
+    m = int(mask.sum())
+    if m == 0 or int(occ.sum()) < 4:
+        return None
+    h, w = mask.shape
+    s = min(max(1, math.ceil(SEARCH_M / cell)), h - 1, w - 1)
+    if s < 1:
+        return None
+    corr = signal.correlate(occ.astype(np.float32), mask.astype(np.float32), mode="full", method="fft")
+    sub = corr[h - 1 - s : h + s, w - 1 - s : w + s]
+    best = float(sub.max())
+    if best < max(4.0, 0.2 * m):
+        return None
+    dy, dx = np.mgrid[-s : s + 1, -s : s + 1]
+    norms = np.hypot(dy, dx).astype(np.float64)
+    norms[sub < best - 0.5] = np.inf
+    k = np.unravel_index(int(np.argmin(norms)), norms.shape)
+    return float(dx[k] * cell), float(dy[k] * cell)
+
+
+def _check_one(
+    sample: PlantSample, grid: PlantGrid, item: Item, datum: CloudDatum | None
+) -> ItemCheck | None:
+    loc = _local(sample, grid, item, max(RING_M, SEARCH_M))
+    if loc is None:
+        return None
+    if len(loc.z) == 0:
+        return ItemCheck(item.id, None, None, 0.0, None, [])
+    e0, n0, e1, n1 = loc.window
+    cell = max(0.5, math.sqrt((e1 - e0) * (n1 - n0) / WINDOW_CELLS))
+    cover_cell = max(cell, COVER_CELL_M)
+    any_hit, _ = _raster(loc, cover_cell)
+    coverage = round(float(any_hit.mean()), 3)
+    outside = loc.z[~loc.inside]
+    ground_z = float(np.percentile(outside, 10)) if len(outside) >= 20 else None
+    el_off = _el_offset(datum, grid.frame, *loc.ref_site) if datum is not None else None
+    ground_el = round(ground_z + el_off, 2) if ground_z is not None and el_off is not None else None
+    if item.type in NO_BODY_TYPES or ground_z is None:
+        return ItemCheck(item.id, ground_el, None, coverage, None, [])
+    above = loc.z > ground_z + ABOVE_ITEM_M
+    in_above = above & loc.inside
+    top_z = float(np.percentile(loc.z[in_above], 98)) if int(in_above.sum()) >= 10 else None
+    top_el = round(top_z + el_off, 2) if top_z is not None and el_off is not None else None
+    hit2, mask2 = _raster(loc, cover_cell, in_above)
+    cells = int(mask2.sum())
+    occupancy = float((hit2 & mask2).sum()) / cells if cells else (1.0 if int(in_above.sum()) >= 3 else 0.0)
+    flags: list[ItemFlag] = []
+    offset_m = None
+    if coverage >= COVER_MIN and occupancy < OCCUPANCY_MAX:
+        flags.append(
+            ItemFlag(
+                code="missing_in_cloud",
+                value=round(occupancy, 3),
+                note="The scan covers this footprint but nothing stands above the ground in it.",
+            )
+        )
+    else:
+        occ, mask = _raster(loc, cell, above)
+        shift = _best_shift(occ, mask, cell)
+        if shift is not None:
+            de, dn = shift
+            offset_m = round(math.hypot(de, dn), 2)
+            if offset_m > PLAN_TOL_M:
+                flags.append(
+                    ItemFlag(
+                        code="plan_offset",
+                        value=offset_m,
+                        note=f"The cloud fits best {de:+.1f} m east, {dn:+.1f} m north of the drawn "
+                        "position. The position is kept as drawn.",
+                    )
+                )
+    if (
+        item.height_source == "drawing"
+        and item.top_el is not None
+        and top_el is not None
+        and abs(top_el - item.top_el) > HEIGHT_TOL_M
+    ):
+        flags.append(
+            ItemFlag(
+                code="height_mismatch",
+                value=round(top_el - item.top_el, 2),
+                note=f"Cloud top EL {top_el:.2f} against drawing top EL {item.top_el:.2f}.",
+            )
+        )
+    return ItemCheck(item.id, ground_el, top_el, coverage, offset_m, flags)
+
+
+def check_items(
+    sample: PlantSample, grid: PlantGrid, items: list[Item], datum: CloudDatum | None
+) -> CheckResult:
+    frame = grid.frame
+    skip = _skip_note(sample, frame)
+    if skip is not None:
+        return CheckResult(None, {}, [], note=skip)
+    if datum is not None and datum.cloud_id != sample.cloud_id:
+        datum = None
+    if len(sample.xyz) == 0:
+        return CheckResult(datum, {}, [], note=NO_POINTS)
+    out: dict[str, ItemCheck] = {}
+    for it in items:
+        try:
+            chk = _check_one(sample, grid, it, datum)
+        except (ValueError, ArithmeticError, shapely.errors.ShapelyError):
+            chk = None  # one unreadable footprint never stops the check (the validator reports it)
+        if chk is not None:
+            out[it.id] = chk
+    cands: list[Candidate] = []  # unregistered candidates arrive in the next task
+    return CheckResult(datum, out, cands, note=None if datum is not None else NO_DATUM)

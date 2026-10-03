@@ -237,3 +237,102 @@ def test_fit_datum_falls_back_to_base_elevations(scene):
     sample = pc.to_sample(g, pts)
     assert cc.fit_datum(sample, g, with_bases).offset_m == pytest.approx(pc.EL_OFFSET, abs=0.05)
     assert cc.fit_datum(sample, g, items[:2]) is None  # one drawn base, one without: under 3 usable
+
+
+@pytest.fixture(scope="module")
+def checked(scene):
+    pts, items = scene
+    g = pc.grid()
+    sample = pc.to_sample(g, pts)
+    datum = cc.fit_datum(sample, g, items)
+    return items, datum, cc.check_items(sample, g, items, datum)
+
+
+def test_check_skips_cloud_in_other_crs(scene):
+    pts, items = scene
+    g = pc.grid()
+    for epsg, wording in ((32640, "different coordinate system"), (None, "no coordinate system")):
+        sample = pc.to_sample(g, pts, epsg=epsg)
+        assert cc.fit_datum(sample, g, items) is None
+        result = cc.check_items(sample, g, items, None)
+        assert result.items == {} and result.candidates == [] and result.datum is None
+        assert wording in result.note
+
+
+# ---------------------------------------------------------------- per item
+
+
+def test_known_tanks_get_cloud_heights(checked):
+    _, _, r = checked
+    a, b = r.items["tank-a"], r.items["tank-b"]
+    assert a.ground_el == pytest.approx(pc.GROUND_EL, abs=0.05) and a.top_el == pytest.approx(134.5, abs=0.05)
+    assert b.top_el == pytest.approx(129.5, abs=0.05)
+    assert a.flags == [] and b.flags == []
+    assert a.coverage > 0.9 and a.offset_m == 0.0
+
+
+def test_drawing_height_that_disagrees_is_flagged(checked):
+    _, _, r = checked
+    (flag,) = r.items["tank-c"].flags
+    assert flag.code == "height_mismatch" and flag.value == pytest.approx(-2.5, abs=0.05)
+
+
+def test_scanned_but_empty_footprint_is_missing_in_cloud(checked):
+    _, _, r = checked
+    pad = r.items["pad-missing"]
+    assert [f.code for f in pad.flags] == ["missing_in_cloud"]
+    assert pad.top_el is None and pad.coverage >= 0.5
+
+
+def test_offset_item_is_flagged_with_the_shift(checked):
+    _, _, r = checked
+    chk = r.items["pkg-offset"]
+    (flag,) = chk.flags
+    assert flag.code == "plan_offset" and flag.value == pytest.approx(3.0, abs=0.5)
+    assert "+3.0 m east" in flag.note
+    assert chk.top_el == pytest.approx(108.5, abs=0.05)
+
+
+def test_check_without_a_datum_flags_but_gives_no_heights(scene):
+    pts, items = scene
+    g = pc.grid()
+    r = cc.check_items(pc.to_sample(g, pts), g, items, None)
+    assert "No cloud datum" in r.note
+    assert all(c.top_el is None and c.ground_el is None for c in r.items.values())
+    assert [f.code for f in r.items["pad-missing"].flags] == ["missing_in_cloud"]
+    assert [f.code for f in r.items["pkg-offset"].flags] == ["plan_offset"]
+
+
+def test_check_survives_a_degenerate_footprint(scene):
+    pts, items = scene
+    g = pc.grid()
+    bad = pc.item("bad", "trestle", {"kind": "line", "pts": [[1330, 600], [1330, 600]], "width": 4})
+    r = cc.check_items(pc.to_sample(g, pts), g, [*items, bad], None)
+    assert "bad" not in r.items and len(r.items) == len(items)
+
+
+def test_flat_types_get_coverage_only(scene):
+    pts, _ = scene
+    g = pc.grid()
+    road = pc.item("rd", "road", {"kind": "line", "pts": [[1300, 600], [1330, 600]], "width": 6})
+    r = cc.check_items(pc.to_sample(g, pts), g, [road], None)
+    assert r.items["rd"].flags == [] and r.items["rd"].coverage > 0.5
+
+
+def test_per_item_points_are_capped(scene, monkeypatch):
+    pts, items = scene
+    g = pc.grid()
+    monkeypatch.setattr(cc, "ITEM_CAP", 1_000)
+    seen = []
+    real = cc._local
+
+    def spy(*a, **k):
+        loc = real(*a, **k)
+        seen.append(len(loc.z))
+        return loc
+
+    monkeypatch.setattr(cc, "_local", spy)
+    sample = pc.to_sample(g, pts)
+    r = cc.check_items(sample, g, items, cc.fit_datum(sample, g, items))
+    assert seen and max(seen) <= 1_000
+    assert r.items["tank-b"].top_el == pytest.approx(129.5, abs=0.1)
