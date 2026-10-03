@@ -176,6 +176,12 @@ def test_resolve_review_needs_a_known_profile_and_a_frame():
     assert frame_io.resolve_review(None, FRAME) is None
 
 
+def test_resolve_review_with_a_malformed_frame_is_a_422_not_a_500():
+    with pytest.raises(AppError) as e:
+        frame_io.resolve_review({"profile_id": "stack"}, {"no_height": 1})
+    assert e.value.code == "invalid_review" and e.value.status == 422
+
+
 def test_resolve_review_uses_the_frame_height():
     out = frame_io.resolve_review({"profile_id": "telecom_tower"}, FRAME)
     assert out["profile_id"] == "telecom_tower"

@@ -11,6 +11,7 @@ compute the silhouette and height; mark the version ready and update the model's
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -28,6 +29,7 @@ from app.jobs.registry import register_job_type
 GLB_IMPORT_JOB = "asset_glb_import"
 MAX_GLB_BYTES = 2 * 1024**3
 MAX_ERROR_DETAIL = 300
+PROGRESS_INTERVAL_S = 0.25
 
 
 def _invalid(reason: str) -> AppError:
@@ -137,7 +139,7 @@ def run_glb_import(ctx) -> dict:
     out = store.version_glb_path(ctx.project, ctx.params["asset_model_id"], int(ctx.params["version"]))
     tmp = out.with_name(out.name + ".tmp")
     try:
-        return _run(ctx, out, tmp)
+        result = _run(ctx, out, tmp)
     except JobCancelled:
         tmp.unlink(missing_ok=True)
         out.unlink(missing_ok=True)
@@ -149,6 +151,14 @@ def run_glb_import(ctx) -> dict:
         tmp.unlink(missing_ok=True)
         out.unlink(missing_ok=True)
         raise _fail(ctx, f"The import failed: {type(e).__name__}.") from None
+    # The version is committed as ready: nothing below may unlink its file or re-mark it failed.
+    message = result.pop("message")
+    try:
+        ctx.publish("asset_models.changed", {"asset_model_ids": [result["asset_model_id"]]})
+        ctx.progress(1, message)
+    except Exception:  # noqa: BLE001 - a lost notification must not undo a finished import
+        pass
+    return result
 
 
 def _scrub(text: str, *paths: Path) -> str:
@@ -184,9 +194,14 @@ def _run(ctx, out: Path, tmp: Path) -> dict:
         info = glb.parse(src)
         out.parent.mkdir(parents=True, exist_ok=True)
 
+        last = [0.0]
+
         def on_chunk(done: int, total: int) -> None:
             ctx.check_cancelled()
-            ctx.progress(0.6 * done / max(total, 1), f"Copying {src.name}")
+            now = time.monotonic()
+            if done >= total or now - last[0] >= PROGRESS_INTERVAL_S:
+                last[0] = now
+                ctx.progress(0.6 * done / max(total, 1), f"Copying {src.name}")
 
         src_sha, sha, size = glb.write_normalised(
             src, tmp, info, frame_io.matrix_of(conversion), on_chunk=on_chunk
@@ -246,6 +261,10 @@ def _run(ctx, out: Path, tmp: Path) -> dict:
             model.review = frame_io.rescale_review(model.review, old_h, new_h)
         v.glb_status, v.meta, v.part_count = "ready", meta, len(parts)
         refresh_status(model)
-    ctx.publish("asset_models.changed", {"asset_model_ids": [mid]})
-    ctx.progress(1, f"Imported version {n}: {len(parts):,} parts, {height:g} m tall")
-    return {"asset_model_id": mid, "version": n, "height_m": height, "parts": len(parts)}
+    return {
+        "asset_model_id": mid,
+        "version": n,
+        "height_m": height,
+        "parts": len(parts),
+        "message": f"Imported version {n}: {len(parts):,} parts, {height:g} m tall",
+    }

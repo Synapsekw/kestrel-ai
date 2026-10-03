@@ -156,7 +156,8 @@ def _node_names(nodes: list) -> list[str | None]:
 
 
 def parse(path: Path) -> GlbInfo:
-    """The header and JSON chunk of `path`: nodes, names, extras and bounds. The BIN chunk is not read."""
+    """The header and JSON chunk of `path`: nodes, names, extras and bounds. The BIN chunk is not read.
+    Only the header's declared `total_length` bytes belong to the file; trailing bytes are ignored."""
     with open(path, "rb") as f:
         total, clen = read_header(f)
         raw = f.read(clen)
@@ -198,6 +199,11 @@ def normalise(doc: dict, matrix: np.ndarray | None) -> dict:
         if name is not None:
             node["name"] = name
     taken = {n for n in names if n is not None}
+    for node in nodes:  # the viewer collects parts by a string `extras.group`; give every mesh node one
+        if isinstance(node, dict) and isinstance(node.get("mesh"), int):
+            extras = node.get("extras") if isinstance(node.get("extras"), dict) else {}
+            if not isinstance(extras.get("group"), str):
+                node["extras"] = {**extras, "group": _group_of(node["name"], extras)}
     if matrix is not None:
         scenes = doc.get("scenes") or [{"nodes": []}]
         doc["scenes"] = scenes
@@ -222,7 +228,8 @@ def write_normalised(
     on_chunk: Callable[[int, int], None] | None = None,
 ) -> tuple[str, str, int]:
     """Write the stored copy. Returns (source_sha256, stored_sha256, stored_bytes). `on_chunk(done,
-    total)` runs after each streamed MiB, so a job can report progress and check cancellation."""
+    total)` runs after each streamed MiB, so a job can report progress and check cancellation.
+    `source_sha256` covers the header's declared `total_length` bytes; trailing bytes are ignored."""
     rest = info.total_length - 20 - info.json_length
     if rest < 0:
         raise GlbError("The GLB's header length is shorter than its JSON chunk.")

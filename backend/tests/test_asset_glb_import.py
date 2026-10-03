@@ -5,6 +5,7 @@ an `imported` version, the frame, restore, and the failure paths."""
 import json
 import re
 import struct
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -127,6 +128,36 @@ def test_import_with_conversion_lands_in_the_canonical_frame(
     stored = store.version_glb_path(handle, model["id"], 1).read_bytes()
     raw = src.read_bytes()
     assert stored[-(len(raw) - 20 - info.json_length) :] == raw[20 + info.json_length :]  # BIN not rewritten
+
+
+def _offset_box_glb(path, offset):
+    sc = trimesh.Scene()
+    box = trimesh.creation.box(extents=[1, 1, 1])
+    box.apply_translation(offset)
+    sc.add_geometry(box, node_name="Box_000", geom_name="g")
+    path.write_bytes(sc.export(file_type="glb"))
+    return path
+
+
+@pytest.mark.parametrize(
+    ("conversion", "source_offset", "canonical_centre"),
+    [
+        # x_east_minus_z_north maps (x, y, z) to (-z, y, x): source +X (east) lands on canonical +Z.
+        ("x_east_minus_z_north", [4.0, 0.5, 0.0], [0.0, 0.5, 4.0]),
+        ("x_east_minus_z_north", [0.0, 0.5, 3.0], [-3.0, 0.5, 0.0]),
+        # enu_z_up maps (x, y, z) to (y, z, x): source +X (east) lands on +Z, source +Y on +X.
+        ("enu_z_up", [4.0, 0.0, 0.5], [0.0, 0.5, 4.0]),
+        ("enu_z_up", [0.0, 3.0, 0.5], [3.0, 0.5, 0.0]),
+    ],
+)
+def test_import_conversion_puts_an_off_axis_part_where_the_mapping_says(
+    client, base, model, project_id, wait_job, handle, tmp_path, conversion, source_offset, canonical_centre
+):
+    src = _offset_box_glb(tmp_path / "box.glb", source_offset)
+    body = _import(client, base, model, path=str(src), frame_conversion=conversion)
+    assert wait_job(project_id, body["job"]["id"])["state"] == "succeeded"
+    mesh, _ = meshes.load_version_mesh(handle, model["id"], 1)
+    assert np.allclose(mesh.bounds.mean(axis=0), canonical_centre, atol=1e-4)
 
 
 def test_import_refuses_what_is_not_a_glb(client, base, model, tmp_path):
@@ -432,3 +463,53 @@ def test_restore_keeps_the_original_conversion_and_source_hash(
     v2 = client.get(f"{base}/{model['id']}/versions/2").json()["meta"]
     assert v2["frame_conversion"] == "x_east_minus_z_north" and v2["source_sha256"] == v1["source_sha256"]
     assert v2["sha256"] == v1["sha256"] and v2["bounds_m"] == v1["bounds_m"]
+
+
+def test_progress_is_throttled_but_every_chunk_checks_cancellation(handle, tmp_path, monkeypatch):
+    from app.asset_review.glb_import import run_glb_import
+
+    monkeypatch.setattr(glb, "COPY_CHUNK", 256)
+    mid, job = _started(handle, tmp_path)
+    src = Path(job.params["path"])
+    info = glb.parse(src)
+    chunks = -(-(info.total_length - 20 - info.json_length) // 256)
+    assert chunks > 20
+    checks, copying = [0], [0]
+
+    class Ctx(_ctx_for(handle, job).__class__):
+        def progress(self, _f, message=""):
+            if message.startswith("Copying"):
+                copying[0] += 1
+
+        def check_cancelled(self):
+            checks[0] += 1
+
+    run_glb_import(Ctx())
+    assert 1 <= copying[0] <= max(3, chunks // 4) and copying[0] < chunks
+    assert checks[0] >= chunks
+    stored = store.version_glb_path(handle, mid, 1).read_bytes()
+    raw = src.read_bytes()
+    assert stored[-(len(raw) - 20 - info.json_length) :] == raw[20 + info.json_length :]
+
+
+@pytest.mark.parametrize("failing", ["publish", "progress"])
+def test_a_failing_final_notification_leaves_the_ready_version_alone(handle, tmp_path, failing):
+    from app.asset_review.glb_import import run_glb_import
+
+    mid, job = _started(handle, tmp_path)
+
+    class Ctx(_ctx_for(handle, job).__class__):
+        def publish(self, *_a):
+            if failing == "publish":
+                raise RuntimeError("bus down")
+
+        def progress(self, fraction, *_a):
+            if failing == "progress" and fraction == 1:
+                raise RuntimeError("bus down")
+
+    result = run_glb_import(Ctx())
+    assert result["version"] == 1 and "message" not in result
+    with handle.session() as s:
+        v = store.get_version(s, mid, 1)
+        assert v.glb_status == "ready" and "error" not in (v.meta or {})
+    assert store.version_glb_path(handle, mid, 1).exists()

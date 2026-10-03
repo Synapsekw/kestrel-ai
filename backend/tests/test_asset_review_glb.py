@@ -207,3 +207,17 @@ def test_write_normalised_removes_a_partial_dest(tmp_path):
     with pytest.raises(glb.GlbError):
         glb.write_normalised(cut, dest, glb.parse(cut), None)
     assert not dest.exists()
+
+
+def test_normalise_gives_every_mesh_node_a_string_group(tmp_path):
+    src = _scene_glb(tmp_path)
+    info = glb.parse(src)
+    out = glb.normalise(info.doc, None)
+    groups = {p.name: p.group for p in info.parts}
+    for node in out["nodes"]:
+        if isinstance(node.get("mesh"), int):
+            assert node["extras"]["group"] == groups[node["name"]]
+    by_name = {n["name"]: n for n in out["nodes"] if isinstance(n.get("mesh"), int)}
+    assert by_name["Leg_000"]["extras"]["group"] == "Leg"
+    assert by_name["Platform_002"]["extras"] == {"group": "Deck", "tag": "P-1"}  # kept as written
+    assert glb.normalise(out, None) == out  # idempotent on a stored copy

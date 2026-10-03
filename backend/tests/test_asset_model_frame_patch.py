@@ -87,10 +87,10 @@ def test_an_explicit_review_with_a_height_change_is_resolved_not_rescaled(client
     assert body["min_m"] == pytest.approx(8.4) and body["max_m"] == pytest.approx(67.2)
 
 
-def test_clearing_the_frame_keeps_the_stored_review_out_of_rescaling(client, url):
+def test_clearing_the_frame_clears_the_stale_review(client, url):
     client.patch(url, json={"frame": FRAME, "review": {"profile_id": "stack"}})
     r = client.patch(url, json={"frame": None})
-    assert r.status_code == 200 and r.json()["frame"] is None
+    assert r.status_code == 200 and r.json()["frame"] is None and r.json()["review"] is None
 
 
 def test_review_null_clears_it_and_a_rename_keeps_both(client, url):

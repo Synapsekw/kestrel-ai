@@ -168,7 +168,7 @@ def resolve_review(raw: dict | None, frame: dict | None) -> dict | None:
     overrides = {k: v for k, v in raw.items() if k != "profile_id"} or None
     try:
         return resolve(pid, float(frame["height_m"]), overrides).model_dump(mode="json")
-    except (ValidationError, ValueError, TypeError) as e:
+    except (ValidationError, ValueError, TypeError, KeyError, AttributeError) as e:
         n = len(e.errors()) if isinstance(e, ValidationError) else 1
         raise AppError(
             "invalid_review", "The review settings are not valid.", 422, {"error_count": n}
@@ -182,6 +182,8 @@ def apply_patch(row, fields: dict) -> None:
     if "frame" in fields:
         raw = fields["frame"]
         row.frame = None if raw is None else Frame.model_validate(raw).model_dump(mode="json")
+        if raw is None and "review" not in fields:
+            row.review = None  # a review is resolved against the frame's height; without one it is stale
     if "review" in fields:
         row.review = resolve_review(fields["review"], row.frame)
     elif row.review and row.frame and old_h and float(row.frame["height_m"]) != old_h:
