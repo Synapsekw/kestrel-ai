@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssetSourceRef, Image as ImageRow } from "@contract/client";
 import { useApi } from "@/api/client";
 import { listDataItems, type DataItem } from "@/api/dataItems";
-import { listDrawings, type Drawing } from "@/api/drawings";
+import { listDrawings, listUnimportedDrawings, type Drawing, type UnimportedDrawing } from "@/api/drawings";
 import { messageOf } from "@/api/errors";
 import { IMAGE_PAGE_SIZE, fetchImagePage } from "@/api/images";
 import { useChangesStore } from "@/store/changes";
@@ -151,4 +151,29 @@ export function useProjectDrawings(projectId: string) {
     [],
   );
   return { ...state, reload, add };
+}
+
+/** Drawing files in the project folder never imported (GET /drawings/unimported, ≤ 500); `drop` hides one just imported. */
+export function useUnimportedDrawings(projectId: string) {
+  const api = useApi();
+  const [state, setState] = useState<{ items: UnimportedDrawing[] | null; error: string | null }>({
+    items: null,
+    error: null,
+  });
+  useEffect(() => {
+    let live = true;
+    listUnimportedDrawings(api, projectId).then(
+      (items) => live && setState({ items, error: null }),
+      (e: unknown) =>
+        live && setState({ items: [], error: messageOf(e, "could not read the project folder") }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, projectId]);
+  const drop = useCallback(
+    (path: string) => setState((s) => ({ ...s, items: s.items?.filter((f) => f.path !== path) ?? null })),
+    [],
+  );
+  return { ...state, drop };
 }

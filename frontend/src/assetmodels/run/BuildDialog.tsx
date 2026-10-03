@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   AssetModel,
@@ -10,14 +10,24 @@ import type {
 import { listVersions, startRun } from "@/api/assetModels";
 import { useApi } from "@/api/client";
 import type { DataItem } from "@/api/dataItems";
+import type { UnimportedDrawing } from "@/api/drawings";
 import { ApiFailure, codeOf, messageOf } from "@/api/errors";
 import { providerLabel, useProviders } from "@/api/providers";
-import { useJobsStore } from "@/store/jobs";
+import { useTrackedJob } from "@/jobs/useTrackedJob";
+import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Dialog, Field, Input, Segmented, Skeleton, Textarea } from "@/ui";
 import { DrawingSources } from "./DrawingSources";
 import { groupDrawingFiles, type DrawingFile } from "./drawingFiles";
+import { importDrawingFile } from "./importFile";
 import { GroupHead, SourceRow } from "./SourceRows";
-import { MAX_SOURCES, sourceKey, useDataSources, usePhotoSources, useProjectDrawings } from "./sources";
+import {
+  MAX_SOURCES,
+  sourceKey,
+  useDataSources,
+  usePhotoSources,
+  useProjectDrawings,
+  useUnimportedDrawings,
+} from "./sources";
 
 const NOTES_MAX = 4000;
 const MODEL_NAME_MAX = 120;
@@ -189,6 +199,18 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
     () => (drawingList.items ? groupDrawingFiles(drawingList.items) : null),
     [drawingList.items],
   );
+  const unimported = useUnimportedDrawings(projectId);
+  const [importing, setImporting] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<Record<string, string>>({});
+  const [importJob, setImportJob] = useState<string | null>(null);
+  const tracked = useTrackedJob(projectId, importJob);
+  const { reload: reloadDrawings, add: addDrawings } = drawingList;
+  useEffect(() => {
+    if (tracked.job && !isActiveJob(tracked.job)) {
+      setImportJob(null);
+      reloadDrawings();
+    }
+  }, [tracked.job, reloadDrawings]);
   const clouds = useDataSources(projectId, "point_cloud");
 
   // Refine starts from the current version's sources unless the caller brought its own.
@@ -235,6 +257,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
     return { chosen: kept, dropped: gone };
   }, [seeded, drawingList.items, drawingList.error, clouds]);
   const isChosen = (r: AssetSourceRef) => chosen.has(sourceKey(r));
+  // An import awaits the server: it adds its pages to the selection as it stands then, not as it was.
+  const chosenNow = useRef(chosen);
+  useEffect(() => {
+    chosenNow.current = chosen;
+  }, [chosen]);
   const onToggle = (r: AssetSourceRef, on: boolean) => {
     const next = new Map(chosen);
     if (on) next.set(sourceKey(r), r);
@@ -246,6 +273,29 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
     for (const d of file.drawings) next.delete(sourceKey({ type: "drawing", id: d.id }));
     if (on) for (const r of file.refs) next.set(sourceKey(r), r);
     setPicked(next);
+  };
+  const onImport = async (file: UnimportedDrawing) => {
+    if (importing) return;
+    setImporting(file.path);
+    setImportErrors((m) => {
+      const next = { ...m };
+      delete next[file.path];
+      return next;
+    });
+    try {
+      const { drawings: made, job } = await importDrawingFile(api, projectId, file.path);
+      useJobsStore.getState().upsert(job);
+      addDrawings(made);
+      const next = new Map(chosenNow.current);
+      for (const d of made) next.set(sourceKey({ type: "drawing", id: d.id }), { type: "drawing", id: d.id });
+      setPicked(next);
+      unimported.drop(file.path);
+      setImportJob(job.id);
+    } catch (e) {
+      setImportErrors((m) => ({ ...m, [file.path]: messageOf(e, "The file could not be imported.") }));
+    } finally {
+      setImporting(null);
+    }
   };
   const waiting = [...chosen.values()].filter(
     (r) => r.type === "drawing" && drawingList.items?.find((d) => d.id === r.id)?.status === "importing",
@@ -357,6 +407,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
             error={drawingList.error}
             isChosen={isChosen}
             onToggleFile={onToggleFile}
+            unimported={unimported.items}
+            unimportedError={unimported.error}
+            importing={importing}
+            importErrors={importErrors}
+            onImport={(f) => void onImport(f)}
           />
           <DataGroup
             title="Point clouds"
