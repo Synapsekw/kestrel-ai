@@ -65,6 +65,11 @@ export function RegisterPanel(p: RegisterPanelProps) {
   const win = computeWindow(scrollTop, height, ROW_H, reg.rows.length);
   const ids = { type: useId(), area: useId(), flag: useId() };
   const filtered = !!(q || type || area || flag);
+  // A new query starts at the top of its list.
+  useEffect(() => {
+    if (containerRef.current) containerRef.current.scrollTop = 0;
+    syncScroll();
+  }, [q, type, area, flag, containerRef, syncScroll]);
 
   const onScroll = () => {
     syncScroll();
@@ -152,7 +157,11 @@ export function RegisterPanel(p: RegisterPanelProps) {
           {filtered ? "Clear the search or a filter to see more." : "A plant run or an edit adds them."}
         </EmptyState>
       )}
-      <div ref={containerRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="relative min-h-0 flex-1 overflow-y-auto rounded-control bg-glass-solid"
+      >
         <ul aria-label="Register items" style={{ height: win.totalHeight }} className="relative">
           {reg.rows.slice(win.start, win.end).map((r: AssetItemRow, i) => {
             const flags = (r.flags ?? []).length;

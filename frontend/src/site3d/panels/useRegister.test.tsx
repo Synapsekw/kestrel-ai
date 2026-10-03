@@ -113,4 +113,20 @@ describe("useRegister", () => {
     expect(h.result.current.error).toBeNull();
     expect(h.result.current.rows).toHaveLength(1);
   });
+
+  it("returning to an earlier query starts again at its first page", async () => {
+    const h = setup({ q: "a" });
+    await act(async () => calls[0].resolve(page(["a1"], "c2")));
+    act(() => h.result.current.loadMore());
+    await waitFor(() => expect(calls).toHaveLength(2));
+    await act(async () => calls[1].resolve(page(["a2"], null)));
+    h.rerender({ q: { q: "b" } });
+    await act(async () => calls[2].resolve(page(["b1"], null)));
+    h.rerender({ q: { q: "a" } });
+    const back = calls[calls.length - 1];
+    expect(back.query.q).toBe("a");
+    expect(back.cursor).toBeNull();
+    await act(async () => back.resolve(page(["a1"], "c2")));
+    expect(h.result.current.rows.map((r) => r.node)).toEqual(["a1"]);
+  });
 });

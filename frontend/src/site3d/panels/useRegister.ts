@@ -44,6 +44,8 @@ export function useRegister(
     cursor: null,
     attempt: 0,
   });
+  // A new query forgets the old query's cursor, so coming back to a query starts at page 1.
+  if (want.key !== key) setWant({ key, cursor: null, attempt: 0 });
   const cursor = want.key === key ? want.cursor : null;
   const attempt = want.key === key ? want.attempt : 0;
   const current: Loaded = loaded.key === key ? loaded : { key, ...EMPTY };
