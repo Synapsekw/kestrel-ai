@@ -168,6 +168,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createAssetModelVersion": {422},
     "getAssetModelGlb": {409},
     "deleteAssetModel": {409},
+    # asset findings J2: a model whose frame has no origin (`no_origin`) or with a pose job live
+    # (`job_running`); a manual pose whose target is its position or whose up is along the view
+    # (`invalid_pose`).
+    "estimateImagePoses": {409, 422},
+    "putImagePose": {422},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
     # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
     # `grid_too_large`, `insufficient_disk`).
