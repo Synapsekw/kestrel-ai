@@ -10,6 +10,7 @@ never reprojected.
 from __future__ import annotations
 
 import math
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,7 +19,7 @@ import numpy as np
 import shapely
 from pyproj import CRS
 from pyproj.exceptions import CRSError
-from scipy import signal
+from scipy import ndimage, signal
 
 from app.asset_models.siteframe import PlantGrid, footprint_polygon, footprint_ref
 from app.asset_models.spec import CloudDatum, Item, ItemFlag, SiteCrs, SiteFrame
@@ -540,5 +541,122 @@ def check_items(
             chk = None  # one unreadable footprint never stops the check (the validator reports it)
         if chk is not None:
             out[it.id] = chk
-    cands: list[Candidate] = []  # unregistered candidates arrive in the next task
+    cands = _candidates(sample, grid, items, datum)
     return CheckResult(datum, out, cands, note=None if datum is not None else NO_DATUM)
+
+
+# ---------------------------------------------------------------- unregistered candidates
+
+
+def _cells(sample: PlantSample, grid: PlantGrid, e0: float, n0: float, cell: float, w: int, h: int):
+    """(flat cell index, z) per point, in CHUNK-sized slices of the sample."""
+    for s in range(0, len(sample.xyz), CHUNK):
+        sl = slice(s, s + CHUNK)
+        xy = sample.site_xy(sl)
+        e, n = grid.site_to_plant(xy[:, 0], xy[:, 1])
+        c = np.floor((np.asarray(e) - e0) / cell).astype(np.int64)
+        r = np.floor((np.asarray(n) - n0) / cell).astype(np.int64)
+        ok = (c >= 0) & (c < w) & (r >= 0) & (r < h)
+        yield r[ok] * w + c[ok], sample.xyz[sl, 2][ok]
+
+
+def _footprint_mask(items: list[Item], e0: float, n0: float, cell: float, h: int, w: int) -> np.ndarray:
+    m = np.zeros((h, w), bool)
+    for it in items:
+        try:
+            poly = _poly(it)
+        except (ValueError, ArithmeticError, shapely.errors.ShapelyError):
+            continue
+        if poly is None:
+            continue
+        grown = poly.buffer(CAND_EXCLUDE_M)
+        a0, b0, a1, b1 = grown.bounds
+        c0, c1 = max(0, int((a0 - e0) // cell)), min(w - 1, int((a1 - e0) // cell))
+        r0, r1 = max(0, int((b0 - n0) // cell)), min(h - 1, int((b1 - n0) // cell))
+        if c1 < c0 or r1 < r0:
+            continue
+        ce, cn = np.meshgrid(
+            e0 + (np.arange(c0, c1 + 1) + 0.5) * cell, n0 + (np.arange(r0, r1 + 1) + 0.5) * cell
+        )
+        m[r0 : r1 + 1, c0 : c1 + 1] |= shapely.contains_xy(grown, ce, cn)
+    return m
+
+
+def _candidates(
+    sample: PlantSample, grid: PlantGrid, items: list[Item], datum: CloudDatum | None
+) -> list[Candidate]:
+    """Connected above-ground cell clusters at least CAND_MIN_M x CAND_MIN_M that no footprint covers."""
+    x0, y0, x1, y1 = sample.bbox
+    ce, cn = grid.site_to_plant(np.array([x0, x1, x1, x0]), np.array([y0, y0, y1, y1]))
+    e0, n0 = float(np.min(ce)), float(np.min(cn))
+    span_e, span_n = float(np.max(ce)) - e0, float(np.max(cn)) - n0
+    area = max((x1 - x0) * (y1 - y0), 1.0)
+    cell = max(CAND_CELL_M, math.sqrt(CAND_PTS_PER_CELL / max(len(sample.xyz) / area, 1e-9)))
+    if (span_e / cell) * (span_n / cell) > CAND_MAX_GRID:
+        cell = math.sqrt(span_e * span_n / CAND_MAX_GRID)
+    w, h = int(span_e // cell) + 1, int(span_n // cell) + 1
+    cmin = np.full(h * w, np.inf, np.float32)
+    for k, z in _cells(sample, grid, e0, n0, cell, w, h):
+        np.minimum.at(cmin, k, z)
+    b = CAND_BLOCK
+    hb, wb = -(-h // b), -(-w // b)
+    pad = np.full((hb * b, wb * b), np.nan, np.float32)
+    pad[:h, :w] = np.where(np.isfinite(cmin), cmin, np.nan).reshape(h, w)
+    blocks = pad.reshape(hb, b, wb, b).transpose(0, 2, 1, 3).reshape(hb, wb, b * b)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # all-empty blocks give NaN, filled below
+        gb = np.nanpercentile(blocks, 10, axis=2)
+    holes = np.isnan(gb)
+    if holes.all():
+        return []
+    if holes.any():
+        near = ndimage.distance_transform_edt(holes, return_distances=False, return_indices=True)
+        gb = gb[tuple(near)]
+    gb = ndimage.minimum_filter(gb, size=3, mode="nearest")
+    ground = np.repeat(np.repeat(gb, b, axis=0), b, axis=1)[:h, :w].ravel()
+    cnt = np.zeros(h * w, np.int64)
+    cmax = np.full(h * w, -np.inf, np.float32)
+    for k, z in _cells(sample, grid, e0, n0, cell, w, h):
+        up = z > ground[k] + ABOVE_CAND_M
+        cnt += np.bincount(k[up], minlength=h * w)
+        np.maximum.at(cmax, k[up], z[up])
+    occ = (cnt >= 2).reshape(h, w) & ~_footprint_mask(items, e0, n0, cell, h, w)
+    lab, _ = ndimage.label(occ, structure=np.ones((3, 3), bool))
+    cmax = cmax.reshape(h, w)
+    found: list[tuple[int, Candidate]] = []
+    for i, sl in enumerate(ndimage.find_objects(lab), start=1):
+        if sl is None:
+            continue
+        size_n = (sl[0].stop - sl[0].start) * cell
+        size_e = (sl[1].stop - sl[1].start) * cell
+        if size_e < CAND_MIN_M - 1e-9 or size_n < CAND_MIN_M - 1e-9:
+            continue
+        rr, cc = np.nonzero(lab[sl] == i)
+        rr, cc = rr + sl[0].start, cc + sl[1].start
+        e = e0 + cc * cell
+        n = n0 + rr * cell
+        corners = np.concatenate(
+            [np.column_stack([e + de, n + dn]) for de in (0.0, cell) for dn in (0.0, cell)]
+        )
+        hull = shapely.MultiPoint(corners).convex_hull
+        ring = list(hull.exterior.coords)[:-1] if hull.geom_type == "Polygon" else list(hull.coords)
+        top_z = float(np.percentile(cmax[rr, cc], 98))
+        if datum is not None:
+            sx, sy = grid.plant_to_site(np.array([e.mean() + cell / 2]), np.array([n.mean() + cell / 2]))
+            top_z += _el_offset(datum, grid.frame, float(sx[0]), float(sy[0]))
+        found.append(
+            (
+                len(rr),
+                Candidate(
+                    id="",
+                    pts=[(round(float(a), 2), round(float(c), 2)) for a, c in ring[:500]],
+                    top_el=round(top_z, 2),
+                    size_m=(round(size_e, 1), round(size_n, 1)),
+                ),
+            )
+        )
+    found.sort(key=lambda t: -t[0])
+    out = [c for _, c in found[:CAND_LIMIT]]
+    for k, c in enumerate(out, start=1):
+        c.id = f"cand-{k:03d}"
+    return out

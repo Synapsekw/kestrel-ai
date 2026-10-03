@@ -336,3 +336,27 @@ def test_per_item_points_are_capped(scene, monkeypatch):
     r = cc.check_items(sample, g, items, cc.fit_datum(sample, g, items))
     assert seen and max(seen) <= 1_000
     assert r.items["tank-b"].top_el == pytest.approx(129.5, abs=0.1)
+
+
+# ---------------------------------------------------------------- candidates
+
+
+def test_unregistered_cluster_is_the_one_candidate(checked):
+    _, _, r = checked
+    (cand,) = r.candidates  # the 2 x 2 m box and the offset item's sliver are not candidates
+    assert cand.id == "cand-001"
+    e = np.mean([p[0] for p in cand.pts])
+    n = np.mean([p[1] for p in cand.pts])
+    assert abs(e - 1400) < 1.5 and abs(n - 520) < 1.5
+    assert all(4.5 <= s <= 9.0 for s in cand.size_m)
+    assert cand.top_el == pytest.approx(109.5, abs=0.1)
+
+
+def test_candidates_survive_a_sparse_sample(scene, tmp_path, handle, make_cloud):
+    pts, items = scene
+    g = pc.grid()
+    cid = make_cloud(make_las(tmp_path / "p.las", 0, points=pc.to_site(g, pts)))
+    s = cc.sample_plant_cloud(handle, cid, _site_box(g, pts), max_points=30_000)
+    r = cc.check_items(s, g, items, cc.fit_datum(s, g, items))
+    assert len(r.candidates) == 1
+    assert [f.code for f in r.items["tank-c"].flags] == ["height_mismatch"]
