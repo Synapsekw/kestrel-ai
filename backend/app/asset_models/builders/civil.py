@@ -14,8 +14,9 @@ import numpy as np
 import trimesh
 from pydantic import BaseModel, Field
 from shapely import make_valid
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.polygon import orient
+from shapely.prepared import prep
 
 from app.asset_models.builders.base import BuildCtx, Instanced, MeshNode, Params, builder
 from app.asset_models.siteframe import footprint_polygon
@@ -315,13 +316,17 @@ def build_parking(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         if depth > 0.5:
             sides = [-1, 1] if lv >= 2 * p.stall_d + 6.0 else [-1]
             n = max(1, math.floor(lu * ctx.lod / p.stall_w))
+            n = max(1, min(n, MAX_INSTANCES // len(sides) - 1))  # (n + 1) per row stays under the cap
+            inside = prep(poly.buffer(0.05))  # a few cm so stalls on the edge of a plain rect stay
             rows = []
             for side in sides:
                 mid_v = side * (lv / 2 - 0.25 - depth / 2)
                 for k in range(n + 1):
                     s = -lu / 2 + k * lu / n
                     q = c + u * s + v * mid_v
-                    rows.append((q[0], q[1], v[0], v[1]))
-            line = unit_box(depth, 0.02, 0.12)
-            nodes.append(MeshNode("stalls", "Paving", instanced(line, np.asarray(rows), LIFT["Asphalt"])))
+                    if inside.contains(Point(q[0], q[1])):  # concave lot: no stalls in the notch
+                        rows.append((q[0], q[1], v[0], v[1]))
+            if rows:
+                line = unit_box(depth, 0.02, 0.12)
+                nodes.append(MeshNode("stalls", "Paving", instanced(line, np.asarray(rows), LIFT["Asphalt"])))
     return record(nodes, p)

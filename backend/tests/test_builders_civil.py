@@ -18,7 +18,7 @@ from plant_b3_helpers import (
     make_item,
     tri_count,
 )
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 from app.asset_models.builders import civil
 from app.asset_models.builders.base import Instanced
@@ -247,3 +247,30 @@ def test_parking_has_stall_lines_along_its_long_side():
 @pytest.mark.parametrize("type_", ["road", "paved", "laydown", "parking", "revetment"])
 def test_flat_goldens(type_):
     assert_golden(build_ok(sample(type_)), type_)
+
+
+def test_parking_stalls_are_capped_at_max_instances():
+    huge = make_item("parking", {"kind": "rect", "center": [E0, N0], "size": [30_000.0, 40.0], "rot_deg": 0})
+    stalls = by_name(build_ok(huge))["stalls"].geometry
+    assert 0 < len(stalls.transforms) <= civil.MAX_INSTANCES
+
+
+def test_parking_stalls_stay_inside_a_concave_lot():
+    # a 60 x 10 leg plus a 10 x 30 leg: the min rotated rect covers a big empty corner
+    lot = {
+        "kind": "polygon",
+        "pts": [
+            [E0, N0],
+            [E0 + 60, N0],
+            [E0 + 60, N0 + 10],
+            [E0 + 10, N0 + 10],
+            [E0 + 10, N0 + 40],
+            [E0, N0 + 40],
+        ],
+    }
+    item = make_item("parking", lot)
+    poly = civil.outline(item, CTX).buffer(0.05)
+    stalls = by_name(build_ok(item))["stalls"].geometry
+    centres = stalls.transforms[:, [0, 2], 3]
+    assert len(centres) > 0
+    assert all(poly.contains(Point(x, z)) for x, z in centres)
