@@ -33,7 +33,7 @@ from app.db.models import (
 from app.detect.counts import Entry, apply_transition
 from app.errors import AppError, not_found
 from app.findings import annotations as hooks
-from app.findings import trash
+from app.findings import sightings, trash
 from app.findings.annotations import GROUND_TRUTH
 from app.imagery import shapes, summary
 from app.projects.service import ProjectHandle
@@ -112,8 +112,13 @@ def check_cap(s, image_id: str, adding: int = 1) -> None:
 
 
 def _finding_id(s, box_id: str) -> str | None:
+    """The box's finding: its image finding, else the asset finding of the sighting it is (the
+    contract's Box.finding_id; ruling R16)."""
     f = hooks.finding_of(s, box_id)
-    return f.id if f is not None else None
+    if f is not None:
+        return f.id
+    sighting = sightings.of_box(s, box_id)
+    return sighting.finding_id if sighting is not None else None
 
 
 def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:

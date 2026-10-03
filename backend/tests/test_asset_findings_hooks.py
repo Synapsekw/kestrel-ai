@@ -223,3 +223,12 @@ def test_a_reclass_with_a_move_leaves_the_only_sighting_pending(client, handle, 
     assert (row.type_id, row.placement) == (rust["id"], None)
     assert by_photo(handle, f["id"])[p0].placement == "pending"
     assert_counts_true(handle)
+
+
+def test_a_sighting_box_answers_its_asset_finding(client, handle, ctx):
+    """Ruling R16: Box.finding_id is the annotation's finding, an asset finding for a sighting box."""
+    p0 = ctx["photos"][0]
+    f = post_asset(client, ctx["pid"], ctx["crack"], ctx["model"], [p0])
+    r = client.patch(f"{ctx['base']}/boxes/{_box_of(handle, f['id'], p0)}", json={"x": 14.0})
+    assert r.status_code == 200, r.text
+    assert r.json()["finding_id"] == f["id"]

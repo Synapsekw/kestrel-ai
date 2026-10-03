@@ -33,7 +33,7 @@ SORT_KEYS = {
     "zone": ("z", "h"),
 }
 NO_HEIGHT = -1.0e12  # a finding with no height (unplaced, or not an asset finding) sorts last
-NO_ZONE = "￿"  # after every zone id in SQLite's binary text order
+NO_ZONE = "\uffff"  # after every zone id in SQLite's binary text order
 MAX_PAGE = 500
 MAX_BULK = 1000
 TREND_DAYS = 60

@@ -38,6 +38,14 @@ def test_photo_unit_ignores_tags_across_photos_and_orders_placed_first_highest_f
     assert group_by_photo(items) == [["high"], ["low"], ["loose"]]
 
 
+def test_photo_unit_two_defect_types_on_one_photo_are_two_groups():
+    items = [
+        _item("crack", (0.0, 10.0, 0.0), image_id="p1"),
+        _item("rust", (0.0, 9.0, 0.0), type_id="rust", image_id="p1"),
+    ]
+    assert group_by_photo(items) == [["crack"], ["rust"]]
+
+
 def test_a_chain_joins_through_the_middle_sighting():
     items = [_item("a", (0.0, 0.0, 0.0)), _item("b", (0.6, 0.0, 0.0)), _item("c", (1.2, 0.0, 0.0))]
     assert group_sightings(items, 0.75) == [["a", "b", "c"]]
