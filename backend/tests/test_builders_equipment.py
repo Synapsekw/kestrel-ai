@@ -584,3 +584,26 @@ def test_tank_lng_scales_to_other_diameters():  # Review Focus 4
 
 def test_tank_lng_lod_lowers_triangles():
     assert tris(built("tank_lng", 0.25)) < tris(built("tank_lng"))
+
+
+def _lng_dome_y(derived: dict, r: np.ndarray) -> np.ndarray:
+    ro, hw, rise = derived["od_m"] / 2, derived["wall_top_m"], derived["dome_rise_m"]
+    rs = (ro**2 + rise**2) / (2 * rise)
+    return np.where(r >= ro, hw, hw + rise - rs + np.sqrt(np.maximum(rs**2 - r**2, 0.0)))
+
+
+@pytest.mark.parametrize(("d", "h"), [(93.5, 51.5), (60.0, 35.0)])
+def test_tank_lng_walkway_deck_clears_the_dome(d, h):
+    nodes = REGISTRY["tank_lng"].fn(make_item("tank_lng", circle(d), h=h), CTX)
+    deck = next(n for n in nodes if n.name == "walkway_deck").geometry
+    v = expanded(deck).vertices
+    clear = v[:, 1] - _lng_dome_y(nodes[0].extras["derived"], np.hypot(v[:, 0], v[:, 2]))
+    assert clear.min() > 0.0, clear.min()
+
+
+def test_tank_lng_riser_runs_clear_the_roof_edge_rail():
+    nodes = {n.name: n for n in built("tank_lng")}
+    rail_top = expanded(nodes["roof_edge_rails"].geometry).bounds[1][1]
+    v = expanded(nodes["risers"].geometry).vertices
+    over_wall = v[np.hypot(v[:, 0], v[:, 2]) < 93.5 / 2]  # the inner ends of the horizontal runs
+    assert len(over_wall) and over_wall[:, 1].min() > rail_top

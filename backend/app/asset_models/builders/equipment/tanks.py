@@ -129,6 +129,7 @@ def _horizontal(p: StorageTankSmallParams, plan: k.Plan, H: float, ctx: BuildCtx
 H_LNG = 51.5
 REF_OD = 93.5  # Cowork 20-T-0001 outer wall OD; default layouts are stored at this size
 DOME_RISE_RATIO = 10.5 / 93.5
+WALK_CLEAR = 0.6  # walkway deck centre above the dome surface, m
 
 
 class RoofPlatform(Params):
@@ -284,14 +285,40 @@ def _roof_platform(name: str, pf: RoofPlatform, scale: float, dome: _Dome, H: fl
     return k.turn(nodes, k.yaw(pf.bearing_deg))
 
 
-def _walkway(w: RoofWalkway, scale: float, dome: _Dome, H: float) -> list[MeshNode]:
+def _walk_points(w: RoofWalkway, scale: float) -> list[np.ndarray]:
+    """Plan points along the walkway, at most 3 m apart (each segment is sloped to follow the dome)."""
     a, b = _polar(w.from_bearing_deg, w.from_r_m * scale), _polar(w.to_bearing_deg, w.to_r_m * scale)
     span = float(np.linalg.norm(b - a))
     if span < 1.0:
         return []
     count = max(2, math.ceil(span / 3.0))
-    pts = [a + (b - a) * i / count for i in range(count + 1)]
-    ys = [min(dome.y(float(np.hypot(*q))) + 0.6, H - k.RAIL_H - k.DECK_T) for q in pts]
+    return [a + (b - a) * i / count for i in range(count + 1)]
+
+
+def _walk_top() -> float:
+    """Walkway top (post tops) above the dome surface under it, m."""
+    return WALK_CLEAR + k.DECK_T / 2 + k.RAIL_H
+
+
+def _fit_rise(ro: float, hw: float, rise: float, r_min: float, H: float) -> float:
+    """Lower the dome crown so a walkway passing radius r_min tops out at H (the item's top_el)."""
+
+    def over(x: float) -> float:
+        return _Dome(ro, hw, x).y(r_min) + _walk_top() - H
+
+    lo, hi = 1e-3, rise
+    if r_min >= ro or over(hi) <= 0 or over(lo) > 0:
+        return rise  # fits already, or lowering the dome cannot help
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if over(mid) <= 0 else (lo, mid)
+    return lo
+
+
+def _walkway(w: RoofWalkway, pts: list[np.ndarray], dome: _Dome) -> list[MeshNode]:
+    a, b = pts[0], pts[-1]
+    span = float(np.linalg.norm(b - a))
+    ys = [dome.y(float(np.hypot(*q))) + WALK_CLEAR for q in pts]
     deck = [
         k.bar((p0[0], y0, p0[1]), (p1[0], y1, p1[1]), w.width_m, k.DECK_T)
         for p0, p1, y0, y1 in zip(pts[:-1], pts[1:], ys[:-1], ys[1:], strict=True)
@@ -362,7 +389,7 @@ def _risers(ro: float, y0: float, hw: float, ods: list[float], ctx: BuildCtx) ->
     pipes, z = [], -(len(ods) - 1) * 0.6
     zs = []
     for od in ods:
-        x, y_top = ro + 0.3 + od / 2, hw + 1.0 + od / 2
+        x, y_top = ro + 0.3 + od / 2, hw + k.DECK_T + k.RAIL_H + 0.3 + od / 2  # runs clear the roof-edge rail
         pipes.append(k.rod((x, y0, z), (x, y_top, z), od / 2, ctx))
         pipes.append(k.rod((x, y_top, z), (ro - 1.0, y_top, z), od / 2, ctx))
         zs.append(z)
@@ -391,8 +418,11 @@ def build_tank_lng(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     hw = H - rise
     if hw < p.slab_t_m + 2.0:
         raise ValueError("tank_lng: height too small for the wall and dome")
-    dome = _Dome(ro, hw, rise)
     scale = od / REF_OD
+    walk = _walk_points(p.walkway, scale) if p.walkway is not None else []
+    if walk:
+        rise = _fit_rise(ro, hw, rise, min(float(np.hypot(*q)) for q in walk), H)
+    dome = _Dome(ro, hw, rise)
     rs = ro + p.slab_overhang_m
     nodes = [
         k.node(
@@ -409,8 +439,8 @@ def build_tank_lng(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     for i, pf in enumerate(platforms):
         name = f"platform_{pf.kind}" if kinds[pf.kind] == 1 else f"platform_{pf.kind}_{i}"
         nodes += _roof_platform(name, pf, scale, dome, H)
-    if p.walkway is not None:
-        nodes += _walkway(p.walkway, scale, dome, H)
+    if walk:
+        nodes += _walkway(p.walkway, walk, dome)
     if p.stair_tower_bearing_deg is not None:
         nodes += k.turn(_stair_tower(ro, hw), k.yaw(p.stair_tower_bearing_deg))
     if p.risers_bearing_deg is not None and p.riser_od_m:
