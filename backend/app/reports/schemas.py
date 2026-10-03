@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 SectionKey = Literal[
     "cover",
     "summary",
+    "asset_summary",
     "findings_table",
     "finding_pages",
     "measurements",
@@ -30,6 +31,7 @@ SectionKey = Literal[
 SECTION_KEYS: tuple[SectionKey, ...] = (
     "cover",
     "summary",
+    "asset_summary",
     "findings_table",
     "finding_pages",
     "measurements",
@@ -39,7 +41,19 @@ SECTION_KEYS: tuple[SectionKey, ...] = (
 )
 FindingStatus = Literal["open", "reviewed", "closed"]
 DateRule = Literal["all", "range", "last_days", "since_last_issued"]
-FindingsTableColumn = Literal["number", "type", "severity", "status", "data_item", "observed", "note"]
+FindingsTableColumn = Literal[
+    "number",
+    "type",
+    "severity",
+    "status",
+    "data_item",
+    "observed",
+    "note",
+    "zone",
+    "side",
+    "height",
+    "sightings",
+]
 FINDINGS_TABLE_COLUMNS: tuple[FindingsTableColumn, ...] = (
     "number",
     "type",
@@ -171,9 +185,15 @@ class SummaryOptions(_Strict):
     show_deltas: bool = True
 
 
+class AssetSummaryOptions(_Strict):
+    asset_model_id: str | None = None
+    show_map: bool = True
+    show_tables: bool = True
+
+
 class FindingsTableOptions(_Strict):
     columns: list[FindingsTableColumn] = Field(
-        default_factory=lambda: list(FINDINGS_TABLE_COLUMNS), min_length=1, max_length=7
+        default_factory=lambda: list(FINDINGS_TABLE_COLUMNS), min_length=1, max_length=11
     )
     sort: FindingsTableSort = "severity_desc"
 
@@ -183,6 +203,7 @@ class FindingPagesOptions(_Strict):
     photos_max: int = Field(4, ge=0, le=6)
     comments: CommentsMode = "last"
     context_inset: bool = True
+    min_severity: int | None = Field(None, ge=1, le=9)
 
 
 class MeasurementsOptions(_Strict):
@@ -227,6 +248,12 @@ class ReportSectionSummary(_Strict):
     options: SummaryOptions = Field(default_factory=SummaryOptions)
 
 
+class ReportSectionAssetSummary(_Strict):
+    key: Literal["asset_summary"] = "asset_summary"
+    enabled: bool = False
+    options: AssetSummaryOptions = Field(default_factory=AssetSummaryOptions)
+
+
 class ReportSectionFindingsTable(_Strict):
     key: Literal["findings_table"] = "findings_table"
     enabled: bool = True
@@ -266,6 +293,7 @@ class ReportSectionAppendix(_Strict):
 ReportSection = Annotated[
     ReportSectionCover
     | ReportSectionSummary
+    | ReportSectionAssetSummary
     | ReportSectionFindingsTable
     | ReportSectionFindingPages
     | ReportSectionMeasurements
@@ -277,10 +305,11 @@ ReportSection = Annotated[
 
 
 def default_sections() -> list[ReportSection]:
-    """The eight sections in canonical order, every one enabled with its default options."""
+    """The nine sections in canonical order with default options; asset_summary starts disabled."""
     return [
         ReportSectionCover(),
         ReportSectionSummary(),
+        ReportSectionAssetSummary(),
         ReportSectionFindingsTable(),
         ReportSectionFindingPages(),
         ReportSectionMeasurements(),
@@ -294,10 +323,11 @@ class ReportConfig(_Strict):
     cover: ReportCover = Field(default_factory=ReportCover)
     paper: ReportPaper = Field(default_factory=ReportPaper)
     filters: ReportFilters = Field(default_factory=ReportFilters)
-    sections: list[ReportSection] = Field(default_factory=default_sections, min_length=8, max_length=8)
+    sections: list[ReportSection] = Field(default_factory=default_sections, min_length=8, max_length=9)
     # Spec 2026-10-02-asset-findings §5.8: a `Brand` id; None (or a brand since deleted) is the
     # Kestrel theme. Configs saved before it existed read None.
     brand_id: str | None = Field(None, max_length=64)
+    csv_layout: Literal["findings", "asset_sightings"] = "findings"
 
 
 # ------------------------------------------------------------------------------ snapshots (spec 9.1)

@@ -64,7 +64,7 @@ describe("ReportPreview", () => {
     await screen.findByText("Findings at a glance");
     act(() => io.show(tail("summary")));
     await waitFor(() => expect(screen.queryByTestId("pending-summary")).toBeNull());
-    expect(loadBlocks.mock.calls.map(([, c]) => c)).toEqual([null, "2", "4", "6"]);
+    expect(loadBlocks.mock.calls.map(([, c]) => c)).toEqual([null, "2", "4"]);
   });
 
   it("refetches only a section whose etag changed, keeping its old blocks meanwhile", async () => {

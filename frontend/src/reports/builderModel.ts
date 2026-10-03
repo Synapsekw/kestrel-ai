@@ -11,6 +11,7 @@ export const PATCH_DEBOUNCE_MS = 400;
 export const SECTION_LABEL: Record<SectionKey, string> = {
   cover: "Cover",
   summary: "Executive summary",
+  asset_summary: "Asset summary",
   findings_table: "Findings table",
   finding_pages: "Finding pages",
   measurements: "Measurements",

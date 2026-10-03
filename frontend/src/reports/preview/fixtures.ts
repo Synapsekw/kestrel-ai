@@ -189,8 +189,8 @@ export const FIXTURE_BLOCKS: Record<SectionKey, Block[]> = {
       unit: "",
     },
     { kind: "para", text: "Work progressed on the north face.\n\nTwo cracks need review.", style: "body" },
-    MAP_FIXTURE,
   ],
+  asset_summary: [MAP_FIXTURE],
   findings_table: [
     {
       kind: "table",

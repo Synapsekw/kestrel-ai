@@ -41,6 +41,7 @@ export function reportConfig(over: Partial<ReportConfig> = {}): ReportConfig {
       report_date: null,
     },
     brand_id: null,
+    csv_layout: "findings",
     paper: { size: "A4", orientation: "portrait" },
     filters: {
       severity_min: null,
@@ -69,6 +70,7 @@ export function reportConfig(over: Partial<ReportConfig> = {}): ReportConfig {
           photos_max: 4,
           comments: "last",
           context_inset: true,
+          min_severity: null,
         },
       },
       {

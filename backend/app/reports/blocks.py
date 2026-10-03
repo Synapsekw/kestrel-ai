@@ -19,6 +19,7 @@ _BLOCK = TypeAdapter(Block)
 Figure = Block  # a Block of kind "figure"
 CONTENT_WIDTH_MM = 174.0  # A4 210 mm less two 18 mm margins (spec §10.1)
 EMPTY = "No findings match the filters"
+NONE = "-"  # a missing value (no em dash: index Global Constraints)
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 

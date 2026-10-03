@@ -31,6 +31,7 @@ from app.reports.context import (  # noqa: F401 - re-exported: R5 and R9 import 
 from app.reports.schemas import Block, ReportConfig, ReportDocument
 from app.reports.sections import (
     appendix,
+    asset_summary,
     comparison,
     cover,
     finding_pages,
@@ -45,6 +46,7 @@ SECTION_MODULES = {
     for m in (
         cover,
         summary,
+        asset_summary,
         findings_table,
         finding_pages,
         measurements,

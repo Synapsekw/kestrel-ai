@@ -211,9 +211,9 @@ def test_a_chart_names_its_type_chart_since_kind_is_the_discriminator(spec):
     assert chart["chart"]["enum"] == ["bar", "stacked_bar", "line"]
 
 
-def test_a_config_always_lists_the_eight_sections(spec):
+def test_a_config_lists_eight_or_nine_sections(spec):
     sections = _schemas(spec)["ReportConfig"]["properties"]["sections"]
-    assert (sections["minItems"], sections["maxItems"]) == (8, 8)
+    assert (sections["minItems"], sections["maxItems"]) == (8, 9)
     assert [s.key for s in schemas.default_sections()] == list(schemas.SECTION_KEYS)
 
 

@@ -302,6 +302,7 @@ export function versionBlocksLoader(
 const SECTION_TITLES: Record<SectionKey, string> = {
   cover: "Cover",
   summary: "Summary",
+  asset_summary: "Asset summary",
   findings_table: "Findings",
   finding_pages: "Finding details",
   measurements: "Measurements",

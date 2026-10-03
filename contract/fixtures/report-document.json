@@ -102,7 +102,13 @@
             }
           ]
         },
-        {"kind": "page_break"},
+        {"kind": "page_break"}
+      ]
+    },
+    {
+      "key": "asset_summary",
+      "title": "Asset summary",
+      "blocks": [
         {"kind": "asset_map", "title": "Tower A", "drawing": {"width": 760, "height": 400, "font_size": 11, "plot": {"x0": 110, "y0": 10, "x1": 622, "y1": 362}, "silhouette": [], "bands": [{"y0": 10, "y1": 120, "label": "Upper floors", "shaded": true}, {"y0": 120, "y1": 362, "label": "Lower floors", "shaded": false}], "levels": [], "x_ticks": [{"at": 110, "label": "N"}, {"at": 238, "label": "E"}], "y_ticks": [{"at": 362, "label": "0 m"}, {"at": 10, "label": "60 m"}], "x_title": "Side of the asset", "dots": [{"x": 300, "y": 90, "r": 5.5, "colour": "#FF7A2D", "label": "F-0042"}], "marker": null}, "caption": "Each dot is one finding at its height and side of the asset.", "width_mm": 174, "height_mm": 92}
       ]
     },

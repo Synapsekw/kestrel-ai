@@ -94,14 +94,42 @@ def test_the_seeded_rows_are_the_code_built_ins(tmp_path):
     try:
         with cat.session() as s:
             for template in BUILTIN_TEMPLATES:
-                assert _out(s.get(ReportTemplate, template.id)) == template, template.id
+                stored = _out(s.get(ReportTemplate, template.id))
+                # the frozen seed predates asset_summary: a seeded row lists the other eight sections
+                mine = template.model_copy(
+                    update={
+                        "config": template.config.model_copy(
+                            update={
+                                "sections": [x for x in template.config.sections if x.key != "asset_summary"]
+                            }
+                        )
+                    }
+                )
+                assert stored == mine, template.id
     finally:
         cat.engine.dispose()
 
 
-# Report config keys added after 0002 (each with a default that a seeded row reads back): the
-# frozen 0002 seed never carries them, and must not be rewritten to. R1 adds its keys here.
-ADDED_AFTER_0002 = {"brand_id"}
+# Report config pieces added after 0002, each read back by a seeded row as its default: the frozen 0002
+# seed never carries them and must not be rewritten to (C0 Task 3b; R1 adds its own here).
+ADDED_AFTER_0002 = {"brand_id", "csv_layout"}
+SECTIONS_AFTER_0002 = {"asset_summary"}
+OPTIONS_AFTER_0002 = {"finding_pages": {"min_severity"}}
+
+
+def _as_of_0002(config: dict) -> dict:
+    out = {k: v for k, v in config.items() if k not in ADDED_AFTER_0002}
+    out["sections"] = [
+        {
+            **s,
+            "options": {
+                k: v for k, v in s["options"].items() if k not in OPTIONS_AFTER_0002.get(s["key"], set())
+            },
+        }
+        for s in config["sections"]
+        if s["key"] not in SECTIONS_AFTER_0002
+    ]
+    return out
 
 
 def test_the_migration_carries_a_frozen_copy():
@@ -113,11 +141,7 @@ def test_the_migration_carries_a_frozen_copy():
             "id": t.id,
             "name": t.name,
             "description": t.description,
-            "config": {
-                k: v
-                for k, v in t.config.model_dump(mode="json", by_alias=True).items()
-                if k not in ADDED_AFTER_0002
-            },
+            "config": _as_of_0002(t.config.model_dump(mode="json", by_alias=True)),
         }
         for t in BUILTIN_TEMPLATES
     ]
