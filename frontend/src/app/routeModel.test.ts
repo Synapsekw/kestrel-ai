@@ -10,6 +10,15 @@ import {
 } from "./routeModel";
 
 describe("routeInfo", () => {
+  it("the Site 3D view is full-bleed and names itself in the breadcrumb", () => {
+    expect(layoutOf("site", false)).toBe("fullbleed");
+    expect(layoutOf("site", true)).toBe("fullbleed");
+    const info = routeInfo("/p/p1/site/m1");
+    expect(info.page).toBe("Site 3D");
+    expect(info.tab).toBeNull();
+    expect(info.layout).toBe("fullbleed");
+  });
+
   it.each([
     ["/", "projects", null, "Projects"],
     ["/projects", "projects", null, "Projects"],

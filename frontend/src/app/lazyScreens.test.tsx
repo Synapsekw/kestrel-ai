@@ -3,7 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { fakeClient } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
-import { AboutScreen, CloudsScreen, Later } from "./lazyScreens";
+import { EMPTY_SCENE } from "@/test/siteSceneFixtures";
+import { AboutScreen, CloudsScreen, Later, SiteScreen } from "./lazyScreens";
 
 describe("lazy screens (foundation F0)", () => {
   it.each([
@@ -16,6 +17,19 @@ describe("lazy screens (foundation F0)", () => {
         <MemoryRouter initialEntries={["/p/p1/clouds"]}>
           <Routes>
             <Route path="/p/:projectId/clouds" element={<CloudsScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </TestApiProvider>,
+    ],
+    [
+      "Site 3D",
+      <TestApiProvider
+        key="s"
+        api={fakeClient([{ method: "GET", path: /\/site-scene/, body: EMPTY_SCENE }]).api}
+      >
+        <MemoryRouter initialEntries={["/p/p1/site"]}>
+          <Routes>
+            <Route path="/p/:projectId/site" element={<SiteScreen />} />
           </Routes>
         </MemoryRouter>
       </TestApiProvider>,
