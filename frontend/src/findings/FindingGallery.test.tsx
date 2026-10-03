@@ -60,7 +60,11 @@ describe("FindingGallery", () => {
   });
 
   it("renders only the visible rows of a long register", () => {
-    const many = Array.from({ length: 600 }, (_, i) => ({ ...exampleAssetFinding, id: `f-${i}`, number: 1000 + i }));
+    const many = Array.from({ length: 600 }, (_, i) => ({
+      ...exampleAssetFinding,
+      id: `f-${i}`,
+      number: 1000 + i,
+    }));
     gallery(many);
     // jsdom: 960 px wide (5 columns), 600 px tall: 3 visible rows plus 2 overscan, at most 25 tiles.
     expect(screen.getAllByRole("listitem").length).toBeLessThanOrEqual(25);

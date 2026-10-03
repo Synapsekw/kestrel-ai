@@ -74,7 +74,9 @@ describe("FindingsScreen with asset findings", () => {
     expect(screen.queryByRole("grid", { name: "Findings" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "F-0402 Crack" }));
     await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent(`/findings/${ASSET_FINDING_ID_2}?view=gallery`),
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        `/findings/${ASSET_FINDING_ID_2}?view=gallery`,
+      ),
     );
   });
 

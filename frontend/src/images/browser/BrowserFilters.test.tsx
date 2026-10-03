@@ -58,7 +58,9 @@ describe("BrowserFilters", () => {
   it("filters by photo review status from More", () => {
     const { onChange } = renderFilters();
     fireEvent.click(screen.getByRole("button", { name: /More/ }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Photo review" }), { target: { value: "uncertain" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Photo review" }), {
+      target: { value: "uncertain" },
+    });
     expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_BROWSER_FILTERS, reviewStatus: "uncertain" });
   });
 
