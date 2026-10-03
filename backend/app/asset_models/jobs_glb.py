@@ -61,7 +61,7 @@ def run_glb(ctx) -> dict:
         raise JobFailure("The model spec has errors; open the version to see them.") from None
     except Exception as e:
         tmp.unlink(missing_ok=True)
-        _mark_failed(ctx)
+        _mark_failed(ctx, meta={"validation": checked} if checked else None)
         raise JobFailure(f"The 3D model could not be built: {type(e).__name__}") from None
     with ctx.project.session() as s:
         v = store.get_version(s, mid, n)

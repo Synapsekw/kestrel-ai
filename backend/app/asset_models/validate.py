@@ -185,6 +185,10 @@ def _check_plant(spec: AssetSpec, report: Report) -> None:
             report.errors.append(Issue("duplicate_item_id", item_id, f"{n} items share the id {item_id!r}"))
     outlines: dict[str, list[tuple[str, Polygon]]] = defaultdict(list)
     for item in spec.items:
+        if item.id == RESERVED_ID:
+            report.errors.append(
+                Issue("reserved_id", item.id, f"{RESERVED_ID!r} is reserved; pick another id")
+            )
         d = REGISTRY.get(item.type)
         if d is None and item.type in PLANNED_TYPES:
             report.warnings.append(
@@ -226,6 +230,10 @@ def _check_plant(spec: AssetSpec, report: Report) -> None:
                 Issue("duplicate_env_id", env_id, f"{n} environment features share the id {env_id!r}")
             )
     for feature in spec.environment:
+        if feature.id == RESERVED_ID:
+            report.errors.append(
+                Issue("reserved_id", feature.id, f"{RESERVED_ID!r} is reserved; pick another id")
+            )
         poly = Polygon(feature.pts)
         if not poly.is_valid or poly.area <= 1e-6:
             report.errors.append(

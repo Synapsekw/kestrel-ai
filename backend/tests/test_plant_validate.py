@@ -142,6 +142,22 @@ def test_environment_outlines_and_ids_are_checked():
     assert not report.ok
 
 
+def test_an_item_or_environment_id_of_world_is_reserved():
+    clash = validate(spec(item(1, id="world")))
+    assert codes(clash.errors) == [("reserved_id", "world")]
+    assert not clash.ok
+    sea = {
+        "id": "world",
+        "kind": "sea",
+        "pts": [[0, 0], [100, 0], [100, 100]],
+        "el": 92.5,
+        "source": {"kind": "assumed"},
+    }
+    env = validate(spec(environment=[sea]))
+    assert codes(env.errors) == [("reserved_id", "world")]
+    assert not env.ok
+
+
 def test_large_means_over_200_items_and_features():
     assert not is_large(spec(*[item(i) for i in range(ASYNC_VALIDATE_ITEMS)]))
     assert is_large(spec(*[item(i) for i in range(ASYNC_VALIDATE_ITEMS + 1)]))
@@ -200,3 +216,22 @@ def test_a_large_valid_spec_builds_and_keeps_its_report(client, model_url, proje
     assert version["glb_status"] == "ready"
     assert version["meta"]["validation"]["warning_count"] == 1
     assert [(w["code"], w["part_id"]) for w in version["warnings"]] == [("item_flags", "i3")]
+
+
+def test_a_build_failure_after_validation_keeps_the_report(
+    client, model_url, project_id, wait_job, monkeypatch
+):
+    from app.asset_models import jobs_glb
+
+    def boom(_spec):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(jobs_glb, "build_glb", boom)
+    items = [item(i) for i in range(ASYNC_VALIDATE_ITEMS + 1)]
+    items[5] = item(5, params={"material": "Chrome"})  # invalid_params: an error that does not block
+    r = client.post(f"{model_url}/versions", json={"spec": {"items": items}})
+    assert r.status_code == 201, r.text
+    assert wait_job(project_id, r.json()["job"]["id"])["state"] == "failed"
+    version = client.get(f"{model_url}/versions/1").json()
+    assert version["glb_status"] == "failed"
+    assert version["meta"]["validation"]["error_count"] >= 1
