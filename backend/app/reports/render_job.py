@@ -35,7 +35,7 @@ from app.reports.service import PAGE_COUNT_KEY
 from app.reports.snapshots import render_to_cache
 from app.reports.snapshots.cache import prune
 from app.reports.theme import THEME_VERSION
-from app.reports.writers import csv_out, rows, xlsx_out
+from app.reports.writers import asset_csv, asset_rows, csv_out, rows, xlsx_out
 
 PHASES = {"compose": (0.0, 0.05), "snapshots": (0.05, 0.60), "pdf": (0.60, 0.95), "tables": (0.95, 1.0)}
 TABLE_CHECK_EVERY = 200
@@ -207,6 +207,17 @@ def _counts_tables(doc: ReportDocument) -> list[list[list]]:
     return tables
 
 
+def write_csv_file(handle, partial: Path, config, *, where, ids, scale, number, on_row) -> Path:
+    """`sightings.csv` in the kit's columns for `asset_sightings`, else today's `findings.csv`."""
+    if str(config.csv_layout) == "asset_sightings":
+        path = partial / "sightings.csv"
+        asset_csv.write_asset_sightings(path, asset_rows.csv_rows(handle, where, scale=scale), on_row=on_row)
+        return path
+    path = partial / "findings.csv"
+    csv_out.write_csv(path, rows.export_rows(handle, ids, scale=scale, version_number=number), on_row=on_row)
+    return path
+
+
 def _write_tables(
     handle,
     ctx,
@@ -215,6 +226,7 @@ def _write_tables(
     *,
     formats,
     ids,
+    where,
     doc,
     config,
     scale,
@@ -240,11 +252,12 @@ def _write_tables(
     enabled = [s.key for s in config.sections if s.enabled]
     for fmt in wanted:
         ctx.check_cancelled()
-        source = rows.export_rows(handle, ids, scale=scale, version_number=number)
         if fmt == "csv":
-            path = partial / "findings.csv"
-            csv_out.write_csv(path, source, on_row=on_row)
+            path = write_csv_file(
+                handle, partial, config, where=where, ids=ids, scale=scale, number=number, on_row=on_row
+            )
         else:
+            source = rows.export_rows(handle, ids, scale=scale, version_number=number)
             path = partial / "findings.xlsx"
             xlsx_out.write_xlsx(
                 path,
@@ -342,6 +355,7 @@ def _run_pipeline(ctx: JobContext) -> dict:
             partial,
             formats=formats,
             ids=ids,
+            where=cctx.where,
             doc=doc,
             config=config,
             scale=scale,
