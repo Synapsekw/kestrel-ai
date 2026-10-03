@@ -24071,6 +24071,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description the pose has no view direction, an up vector along the view, or a 180 degree field of view (`code` is `invalid_pose`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

@@ -5869,6 +5869,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ImagePose" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the pose has no view direction, an up vector along the view, or a 180 degree field of view (`code` is `invalid_pose`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/asset-models/{assetModelId}/placements:
     parameters:
