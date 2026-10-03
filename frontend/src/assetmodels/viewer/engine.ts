@@ -5,6 +5,15 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { disposeChildren } from "@/clouds/viewer/dispose";
 import { NoWebGlError } from "@/clouds/viewer/engine";
 import { tokenColor, tokenRgb } from "@/clouds/viewer/overlay";
+import {
+  buildOverlayGrid,
+  gatherVisiblePoints,
+  markVisibleCells,
+  OVERLAY_BUDGET,
+  type OverlayGrid,
+  type OverlayPlane,
+} from "./overlayBudget";
+import { createOnDemandLoop } from "./renderLoop";
 
 export type ModelView = "top" | "front" | "side" | "iso" | "fit";
 export interface ModelPart {
@@ -105,24 +114,61 @@ export function createModelEngine(o: {
   let levelsOn = false;
   let selected: string | null = null;
   let bounds = new THREE.Box3(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
-  let raf = 0;
-  let idleUntil = 0;
   let disposed = false;
   let loadSeq = 0;
+  let liveOverlay: {
+    grid: OverlayGrid;
+    mask: Uint8Array;
+    prev: Uint8Array;
+    buffer: Float32Array;
+    attr: THREE.BufferAttribute;
+    geo: THREE.BufferGeometry;
+  } | null = null;
+  const frustum = new THREE.Frustum();
+  const projScreen = new THREE.Matrix4();
+  const overlayPlanes: OverlayPlane[] = Array.from({ length: 6 }, () => ({ nx: 0, ny: 0, nz: 0, c: 0 }));
 
-  const frame = () => {
-    raf = 0;
-    if (disposed) return;
-    controls.update();
-    renderer.render(scene, camera);
-    if (performance.now() < idleUntil) raf = requestAnimationFrame(frame);
+  // Re-gather only when the set of cells in frame changes. A stable orbit then redraws one small buffer.
+  const syncOverlay = () => {
+    const live = liveOverlay;
+    if (!live) return;
+    camera.updateMatrixWorld();
+    frustum.setFromProjectionMatrix(
+      projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+    const planes = frustum.planes;
+    for (let i = 0; i < 6; i++) {
+      const src = planes[i];
+      const dst = overlayPlanes[i];
+      dst.nx = src.normal.x;
+      dst.ny = src.normal.y;
+      dst.nz = src.normal.z;
+      dst.c = src.constant;
+    }
+    markVisibleCells(live.grid, overlayPlanes, live.mask);
+    let same = true;
+    for (let i = 0; same && i < live.mask.length; i++) same = live.mask[i] === live.prev[i];
+    if (same) return;
+    live.prev.set(live.mask);
+    const n = gatherVisiblePoints(live.grid, live.mask, live.buffer.length / 3, live.buffer);
+    live.attr.needsUpdate = true;
+    live.geo.setDrawRange(0, n);
   };
-  const requestRender = () => {
-    if (disposed) return;
-    idleUntil = performance.now() + 1000;
-    if (!raf) raf = requestAnimationFrame(frame);
-  };
-  controls.addEventListener("change", requestRender);
+
+  const loop = createOnDemandLoop({
+    now: () => performance.now(),
+    requestFrame: (cb) => requestAnimationFrame(cb),
+    cancelFrame: (id) => cancelAnimationFrame(id),
+    update() {
+      controls.update();
+    },
+    render() {
+      syncOverlay();
+      renderer.render(scene, camera);
+    },
+    holdMs: 1000,
+  });
+  controls.addEventListener("change", loop.request);
   const resize = () => {
     if (disposed) return;
     const w = o.host.clientWidth || 1;
@@ -130,7 +176,7 @@ export function createModelEngine(o: {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    requestRender();
+    loop.request();
   };
   const ro = new ResizeObserver(resize);
   ro.observe(o.host);
@@ -141,7 +187,7 @@ export function createModelEngine(o: {
       const group = node.userData.group as string;
       node.visible = !hiddenGroups.has(group) && !(headOff && group === "Head");
     }
-    requestRender();
+    loop.request();
   };
   const applyMaterials = (fn: (m: THREE.Material, id: string) => void) => {
     for (const [id, node] of nodes) {
@@ -152,7 +198,7 @@ export function createModelEngine(o: {
         mats.forEach((m) => fn(m, id));
       });
     }
-    requestRender();
+    loop.request();
   };
 
   const setView = (view: ModelView) => {
@@ -169,7 +215,7 @@ export function createModelEngine(o: {
     camera.updateProjectionMatrix();
     controls.target.copy(centre);
     controls.update();
-    requestRender();
+    loop.request();
   };
 
   const applyCut = () => {
@@ -212,7 +258,7 @@ export function createModelEngine(o: {
         helpers.add(line);
       }
     }
-    requestRender();
+    loop.request();
   };
 
   // click to select a part
@@ -296,7 +342,7 @@ export function createModelEngine(o: {
       applyCut();
       applyVisibility();
       drawLevels();
-      if (opts?.keepCamera) requestRender();
+      if (opts?.keepCamera) loop.request();
       else setView("iso");
       return parts;
     },
@@ -324,9 +370,18 @@ export function createModelEngine(o: {
     },
     setOverlay(points) {
       disposeChildren(helpers, (c) => c.userData.kind === "overlay");
+      liveOverlay = null;
       if (points && points.length >= 3) {
+        const grid = buildOverlayGrid(points);
+        const budget = Math.min(OVERLAY_BUDGET, Math.floor(points.length / 3));
+        const buffer = new Float32Array(budget * 3);
         const geo = new THREE.BufferGeometry();
-        geo.setAttribute("position", new THREE.BufferAttribute(points, 3));
+        const attr = new THREE.BufferAttribute(buffer, 3);
+        attr.setUsage(THREE.DynamicDrawUsage);
+        geo.setAttribute("position", attr);
+        geo.setDrawRange(0, 0);
+        const [cx, cy, cz] = grid.center;
+        geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), Math.max(grid.radius, 1e-3));
         const cloud = new THREE.Points(
           geo,
           new THREE.PointsMaterial({
@@ -337,20 +392,28 @@ export function createModelEngine(o: {
         );
         cloud.userData.kind = "overlay";
         helpers.add(cloud);
+        const bytes = Math.ceil(grid.boxes.length / 8);
+        liveOverlay = {
+          grid,
+          mask: new Uint8Array(bytes),
+          prev: new Uint8Array(bytes),
+          buffer,
+          attr,
+          geo,
+        };
       }
-      requestRender();
+      loop.request();
     },
     setView,
     dispose() {
       if (disposed) return;
       disposed = true;
       loadSeq++;
-      cancelAnimationFrame(raf);
-      raf = 0;
+      loop.dispose();
       ro.disconnect();
       o.canvas.removeEventListener("pointerdown", onDown);
       o.canvas.removeEventListener("pointerup", onUp);
-      controls.removeEventListener("change", requestRender);
+      controls.removeEventListener("change", loop.request);
       controls.dispose();
       disposeChildren(modelRoot);
       disposeChildren(helpers);

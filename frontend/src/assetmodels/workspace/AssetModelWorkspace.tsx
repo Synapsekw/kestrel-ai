@@ -362,6 +362,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     }
     let live = true;
     // At most 300 000 points (3.6 MB), fetched once per run and cloud and kept for the session.
+    // The viewer draws a budgeted subset, not this whole buffer, on each frame.
     fetch(
       assetModelOverlayUrl(backend.baseUrl, backend.token, projectId, model.id, overlayRunId, overlayCloud),
     )
