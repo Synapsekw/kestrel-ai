@@ -112,7 +112,7 @@ function watchFor(text: string) {
 
 const MISSING = "This point cloud is not in the project";
 
-async function deleteFromDetails(name: string) {
+async function deleteFromDetails() {
   await openTopic("Layers");
   await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
   await userEvent.click(screen.getByRole("button", { name: "Details…" }));
@@ -431,7 +431,7 @@ describe("CloudWorkspace (spec §6)", () => {
     await screen.findByRole("toolbar", { name: "Point cloud" });
     const missingSeen = watchFor(MISSING);
     const release = holdListReads(); // the reload after the delete has not answered yet
-    await deleteFromDetails(exampleCloud.name);
+    await deleteFromDetails();
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`),
     );
@@ -456,7 +456,7 @@ describe("CloudWorkspace (spec §6)", () => {
     await screen.findByRole("toolbar", { name: "Point cloud" });
     const missingSeen = watchFor(MISSING);
     const release = holdListReads();
-    await deleteFromDetails(exampleCloud.name);
+    await deleteFromDetails();
     expect(await screen.findByText("Import a LAS or LAZ point cloud")).toBeInTheDocument();
     act(() => release());
     await new Promise((r) => setTimeout(r, 50));

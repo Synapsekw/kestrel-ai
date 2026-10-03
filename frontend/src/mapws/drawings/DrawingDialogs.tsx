@@ -17,7 +17,6 @@ export function DrawingDialogs({ projectId }: PanelProps) {
   const { workspace } = useWorkspaceStores();
   const select = useWorkspace((s) => s.select);
   const intent = useDrawingUi((s) => s.intent);
-  const drawing = useDrawingsStore((s) => (intent ? (s.byId[intent.id] ?? null) : null));
 
   useEffect(() => {
     if (!intent || intent.kind === "delete") return;
