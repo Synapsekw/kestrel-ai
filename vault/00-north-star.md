@@ -78,6 +78,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | I/M/C wave: Images, Maps and Point clouds workspaces (39 units + IMC-X) | merged/pushed to `main` (`4ebcac1..ad4e548`); installer built (`c4080c7`), **not installed** | all 39 units plus the IMC-X close-out merged via per-unit worktrees. IMC-X gate: 3946 backend, 3535 frontend, 162 browser, 8 Rust; frozen smoke ok (SAM on CUDA, drawings, pypdfium2). **CI frontend e2e red on `main` since `81b0310` (perf budgets on the slow runner); fix in flight.** See [[2026-09-27-2140-imc-wave-part-1]], [[2026-09-28-1905-imc-wave-part-2]] |
 | Reports (R): builder, live preview, render job with versions, templates, Data exports | merged/pushed to `main` (`07beeac..cd7c59d`); installer built (`8aead7b`), **not installed** | 13 units in parallel worktrees + R-X close-out; gate 5181 backend, 4065 frontend, 178 browser, cargo 8/8; frozen smoke renders a real report. See [[2026-10-01-2205-reports-wave]] |
 | Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); installed (`8aead7b`), operator walkthrough passed 2026-10-02 | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser; Location pane got a keyless cached basemap 2026-10-03 (`31a1a5ab`, [[2026-10-03-0723-site-basemap]]) |
+| Workspace rail: one tool layout for Maps and Point clouds | merged to `main` (`8340215a`, not pushed); installed 2026-10-03 | shared `ui/WorkspaceRail` + `TopicPanel`; map palette/layers panel and cloud palette/panel/inspector tabs replaced; 9 SDD tasks + final opus review (1 critical, 2 important fixed). Gate lint 0, vitest 4283, e2e 189. One known focus bug open (§5). See [[2026-10-03-1016-workspace-rail]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 | M1 asset model builder (confined-space programme M1–M6) | merged 2026-10-02 (`914c4d5b`) | all 7 units green; frozen smoke `asset-models ok`; installer not built (app was running); HCl acceptance owed |
 
@@ -90,7 +91,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Site basemap under the Overview's Location pane** (2026-10-03, `31a1a5ab`, on `main`, pushed). Keyless Esri satellite / OSM street tiles, proxied and cached by the backend (`GET /basemap/{source}/{z}/{x}/{y}`), drawn inside the existing SVG with a Satellite/Map switch. Offline falls back to the plain outline. Gate green (5313 backend, 587 vitest files, 180 browser). The installer was rebuilt from `31a1a5ab` and **installed**; it has M1 am-u1..u4 but **not** am-u5..u7. Nobody has looked at it with real tiles yet. See [[2026-10-03-0723-site-basemap]].
+**Shipped last:** **Workspace rail for Maps and Point clouds** (2026-10-03, `e9317f74..f2671c28`, merged as `8340215a` on `main`, **not pushed**). Both workspaces share one left rail: Layers · Findings · Measure, then AI · Drawings (map) or Clip · Photos (cloud). One topic panel is open at a time (`\` toggles it), and the inspector shows only the selection. Each concept has one home; there is one "All surveys" switch on the timeline. Merged-tree gate: lint 0, vitest 4283, build ok, e2e 189/8 skipped (backend and contract unchanged; the branch gate had pytest 5306). The installer was rebuilt from `8340215a` and **installed**; it carries M1 am-u1..u7 and the basemap (the frozen sidecar from `914c4d5b` has no backend diff to it). Known bug: after `\` opens the panel, Space/Enter press the panel's eye (§5). See [[2026-10-03-1016-workspace-rail]].
+
+Before that: **Site basemap under the Overview's Location pane** (2026-10-03, `31a1a5ab`, on `main`, pushed). Keyless Esri satellite / OSM street tiles, proxied and cached by the backend (`GET /basemap/{source}/{z}/{x}/{y}`), drawn inside the existing SVG with a Satellite/Map switch. Offline falls back to the plain outline. Gate green (5313 backend, 587 vitest files, 180 browser). The installer was rebuilt from `31a1a5ab` and **installed**; it has M1 am-u1..u4 but **not** am-u5..u7. Nobody has looked at it with real tiles yet. See [[2026-10-03-0723-site-basemap]].
 
 Before that: **M1 asset model builder** (2026-10-02, `1b392b1a..914c4d5b`, 7 unit merges on `main`, pushed). Asset models tab: Build with AI (Claude, OpenAI or Gemini) reads drawings, clouds and photos into a versioned part spec and a GLB; edit parts as new versions, compare and restore, download GLB/JSON; runs stop, draft and survive restarts. Frozen sidecar at `914c4d5b` passes smoke (`asset-models ok`); the installer was **not** built (`check-packaged-webview` refused while Kestrel AI was running). Walkthrough: `docs/evidence/2026-10-02-asset-model-m1/walkthrough.md`. See [[2026-10-02-2300-asset-model-builder-m1]] and [[2026-10-02-gotcha-shared-venv-install-while-python-runs]].
 
@@ -131,7 +134,7 @@ Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight (M1):** close Kestrel AI, build the installer from `main`, install, then the HCl acceptance (§5 Owed). The other session's artifact-port plan treats M1 as P0.
+**In flight (M1):** the installer from `8340215a` (2026-10-03) contains M1; the HCl acceptance is what remains (§5 Owed). The other session's artifact-port plan treats M1 as P0.
 
 **In flight:** nothing for Overview v2: the operator checked it on the installed `8aead7b` (2026-10-02, "all good, all working"). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
@@ -278,6 +281,14 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 
 ## 5. Owed
 
+### Workspace rail (opened 2026-10-03)
+
+- **Bug:** after `\` opens the rail panel, focus lands on its first control (the map's header eye), so Space/Enter hide the topic instead of panning. Fix in `frontend/src/ui/WorkspaceRail.tsx`: a `\` open focuses the region (`tabIndex -1`).
+- **Push:** `main` at `8340215a` and later is not on `origin`.
+- **Operator check:** the 10-step walkthrough in [[2026-10-03-1016-workspace-rail]] on the installed `8340215a` build.
+- **Unrun:** the CDP drivers changed in `2659edd5`; the e2e flows "filter a map finding" and "review a detection from the AI topic".
+- **Accepted gaps:** no volumes list in map Measure; no header eye on cloud topics; Photos is help text only; cloud lists are not virtualised (`TopicList`).
+
 ### Site basemap (opened 2026-10-03)
 
 - **Operator check:** the 7-step walkthrough in [[2026-10-03-0723-site-basemap]] on the installed `31a1a5ab` build. This is the first view with real tiles (e2e uses Prism).
@@ -285,7 +296,7 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 
 ### M1 asset model builder (opened 2026-10-02)
 
-- **Installer:** not built from `914c4d5b` (the app was running). `pnpm -C frontend build:installer`, then install.
+- **Installer:** done 2026-10-03 — built from `8340215a` and installed (see [[2026-10-03-1016-workspace-rail]]).
 - **Acceptance (spec §11):** needs the HCl GA drawing (P-00212-DW-MD-143TD1 rev 3) as `backend/tests/data/asset_models/hcl-tank-ga.pdf`; the live test's bearing/elevation table must be transcribed from `source_2/model_meta.json` first.
 - **Gemini:** default model id `gemini-2.5-pro` unconfirmed; one live Test in App settings.
 - **Known gaps:** DXF/LandXML drawings have no image view for the agent; compare is unsigned distance; 2 000-part validate is ~8 s synchronous; unsaved Part edits drop silently. Full deferred lists in `.superpowers/sdd/am-common/ledgers/` (git-ignored).
