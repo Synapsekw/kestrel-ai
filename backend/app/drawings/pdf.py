@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import math
 import os
+import threading
 from pathlib import Path
 
 from app.drawings import store
@@ -25,6 +26,10 @@ STRIP_ROWS = 1024
 MAX_THUMB_PAGES = 50
 THUMB = 160
 MESSAGE = "Reading drawing"
+
+# PDFium is not thread-safe, and plant sub-runs read drawings from several threads: one process-wide
+# lock covers every open_pdf context. Re-entrant so nested use in one thread cannot deadlock.
+_PDFIUM_LOCK = threading.RLock()
 
 
 def unavailable_reason() -> str | None:
@@ -54,6 +59,11 @@ def effective_dpi(requested: int, w_pt: float, h_pt: float) -> int:
 
 @contextlib.contextmanager
 def open_pdf(path: Path):
+    with _PDFIUM_LOCK:
+        yield from _open_pdf_locked(path)
+
+
+def _open_pdf_locked(path: Path):
     import pypdfium2 as pdfium
 
     try:
