@@ -102,6 +102,8 @@ def _resume(handle, runner, model_id: str, run_id: str) -> bool:
 
 
 def _give_up(handle, runner, model_id: str, run_id: str, summary: str, st: PlantState | None = None) -> None:
+    """Fail the run (interrupted) and keep its finished packages as a draft. A run already ended is
+    left alone, so the sweep's fallback never overwrites a give-up that only lost its draft."""
     rd = store.run_dir(handle, model_id, run_id)
     if st is None:
         try:
@@ -109,9 +111,11 @@ def _give_up(handle, runner, model_id: str, run_id: str, summary: str, st: Plant
         except Exception:  # noqa: BLE001 - a corrupt state file: close the run without a draft
             st = None
     with handle.session() as s:
+        run = s.get(AssetModelRun, run_id)
+        if run is None or run.state != "running":
+            return
         finished = [r.n for r in pk.rows(s, run_id) if r.state in ("done", "failed")]
         pk.mark_unfinished(s, run_id, "skipped", "Not finished: the run was interrupted.")
-        run = s.get(AssetModelRun, run_id)
         run.state, run.stop_reason, run.summary = "failed", "interrupted", summary
         run.phase, run.ended_at = "done", datetime.now(UTC)
         model = s.get(AssetModel, model_id)
@@ -120,13 +124,22 @@ def _give_up(handle, runner, model_id: str, run_id: str, summary: str, st: Plant
             service.refresh_status(model)
     if st is None:
         return
+    try:
+        _write_draft(handle, runner, model_id, run_id, rd, st, finished, summary)
+    except Exception as e:  # noqa: BLE001 - the run is already closed; only its draft is lost
+        log.error("plant run could not keep its draft (%s)", type(e).__name__)
+
+
+def _write_draft(handle, runner, model_id, run_id, rd, st: PlantState, finished, summary: str) -> None:
+    from app.asset_models.agent.plant.orchestrator import _drop_blocking
+
     items = load_merged(rd)
     if items is None:
         pairs = [(f"P{n}", x) for n in finished if (x := load_package_items(rd, n))]
         items = merge_items([x for _, x in pairs], [label for label, _ in pairs])
     if not items:
         return
-    spec = AssetSpec(site=site_of(st), items=items, environment=env_of(st))
+    spec = _drop_blocking(AssetSpec(site=site_of(st), items=items, environment=env_of(st)))  # R20
     row, _job = service.add_version(handle, runner, model_id, spec, kind="draft", note=summary, run_id=run_id)
     with handle.session() as s:
         s.get(AssetModelRun, run_id).version = row.version

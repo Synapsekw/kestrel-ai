@@ -55,7 +55,7 @@ def cut_off(handle, app):
 @pytest.fixture
 def held(monkeypatch):
     """Holds the resumed job before it reads the run, so the rows the sweep wrote can be asserted
-    before the job moves them on. Set it to let the job go."""
+    before the job moves them on. Set it to let the job go; teardown sets it too."""
     from app.asset_models.agent.plant import orchestrator
 
     gate, real = threading.Event(), orchestrator.build_context
@@ -65,7 +65,8 @@ def held(monkeypatch):
         return real(ctx)
 
     monkeypatch.setattr(orchestrator, "build_context", build_context)
-    return gate
+    yield gate
+    gate.set()  # a test that fails before setting it must not leave the resumed job blocked
 
 
 def after_trace_script():
@@ -201,3 +202,38 @@ def test_the_startup_sweep_resumes_plant_runs_and_fails_m1_runs(
     startup.sweep_interrupted(handle, app.state.jobs)
     run = wait_run(client, project_id, wait_job, handle, ids["run"])
     assert run.state == "finished" and run.stop_reason is None
+
+
+def test_giving_up_drops_a_blocking_item_and_keeps_the_draft(handle, app, cut_off):
+    ids, _, rd = cut_off
+    d0 = ids["drawings"][0]
+    bad = Item.model_validate({**item("bad-heights", did=d0, e=-50.0), "top_el": 90.0})
+    save_package_items(rd, 1, [Item.model_validate(item("t1", tag="T1", did=d0)), bad])
+    st = load_state(rd)
+    st.run_interrupts = resume.MAX_RUN_INTERRUPTS
+    save_state(rd, st)
+    assert resume.sweep_plant_runs(handle, app.state.jobs) == []
+    with handle.session() as s:
+        run = s.get(AssetModelRun, ids["run"])
+        assert run.state == "failed" and run.summary == resume.GAVE_UP and run.version is not None
+        v = store.get_version(s, ids["model"], run.version)
+        assert [i["id"] for i in v.spec["items"]] == ["t1"]
+
+
+def test_a_failing_draft_does_not_close_the_run_again_as_cut_off(handle, app, cut_off, monkeypatch, caplog):
+    ids, _, rd = cut_off
+    st = load_state(rd)
+    st.run_interrupts = resume.MAX_RUN_INTERRUPTS
+    save_state(rd, st)
+    calls = []
+
+    def boom(*_a, **_k):
+        calls.append(1)
+        raise RuntimeError("C:/secret")
+
+    monkeypatch.setattr(resume.service, "add_version", boom)
+    assert resume.sweep_plant_runs(handle, app.state.jobs) == []
+    with handle.session() as s:
+        run = s.get(AssetModelRun, ids["run"])
+        assert run.state == "failed" and run.summary == resume.GAVE_UP and run.version is None
+    assert calls == [1] and "secret" not in caplog.text
