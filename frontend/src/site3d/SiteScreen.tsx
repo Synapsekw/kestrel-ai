@@ -1,28 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useBackend } from "@/api/client";
-import { siteModelUrl, toFrameT, useSiteScene, type SiteScene } from "@/api/siteScene";
+import { siteModelUrl, toFrameT, useSiteScene } from "@/api/siteScene";
 import { findingPath } from "@/findings/links";
-import { Alert, Button, EmptyState, GlassPanel, Pill, Skeleton, buttonClass } from "@/ui";
-import type { SiteEngine } from "./engine/SiteEngine";
-import { sceneLayerRows, type ModelState } from "./layerRows";
-import { drawingLayerId } from "./layers/drawing.layer";
-import { ExtraLayerStatus } from "./layers/ExtraLayerStatus";
-import { orthoLayerId } from "./layers/ortho.layer";
-import type { PickHit } from "./layers/types";
-import { LayersPlaceholder } from "./panels/LayersPlaceholder";
+import { Alert, Button, EmptyState, GlassPanel, IconButton, Skeleton, buttonClass } from "@/ui";
+import type { ModelState } from "./layerRows";
 import { useExtraLayerClicks, useSiteExtraLayers } from "./layers/useSiteExtraLayers";
-import { SelectionPlaceholder } from "./panels/SelectionPlaceholder";
-import { SiteView, type ModelStatus, type SiteViewHandle } from "./SiteView";
-
-const GROUPS = ["model", "ortho", "drawing"] as const;
-
-/** The layer ids behind one of the placeholder's group rows (visibility is kept per layer id). */
-function groupIds(scene: SiteScene, row: string): string[] {
-  if (row === "ortho") return scene.orthos.map((o) => orthoLayerId(o.id));
-  if (row === "drawing") return scene.drawings.map((d) => drawingLayerId(d.id));
-  return [row];
-}
+import { controlsOf } from "./panels/engineBridge";
+import { SitePanels, type SiteModelView } from "./panels/SitePanels";
+import { SiteView, type ModelStatus, type SiteEngineInfo, type SiteViewHandle } from "./SiteView";
 
 function BuildLink({ projectId }: { projectId: string }) {
   return (
@@ -32,52 +18,70 @@ function BuildLink({ projectId }: { projectId: string }) {
   );
 }
 
-/** The Site 3D view, `/p/:projectId/site[/:modelId]` (spec 2026-10-03 §11; S3 replaces the placeholders). */
+/** A version of one model (the view's asked-for version, or the one on screen). */
+type ModelVersion = { modelId: string; version: number };
+
+/** The Site 3D view, `/p/:projectId/site[/:modelId]` (spec 2026-10-03 §11): S1's view under S3's panels. */
 export function SiteScreen() {
   const { projectId = "", modelId } = useParams();
   const backend = useBackend();
   const { scene, error, errorCode, loading, reload } = useSiteScene(projectId, modelId ?? null);
   const view = useRef<SiteViewHandle>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
-  const [selected, setSelected] = useState<PickHit | null>(null);
-  const [model, setModel] = useState<ModelStatus | null>(null);
+  const [gone, setGone] = useState<ReadonlySet<string>>(() => new Set());
+  /** The view's last model report, with the version its URL is (`of`, from `urls`). */
+  const [model, setModel] = useState<(ModelStatus & { of?: ModelVersion }) | null>(null);
   const [viewFailed, setViewFailed] = useState(false);
+  const [noModelCard, setNoModelCard] = useState(true);
   const frame = useMemo(() => (scene ? toFrameT(scene.frame) : null), [scene]);
-  const modelUrl = scene?.model
-    ? siteModelUrl(backend, projectId, scene.model.id, scene.model.version)
-    : null;
+
+  // The version the view shows: the manifest's, until a saved edit asks for its new one (R-S3-10).
+  const sceneModel = scene?.model ?? null;
+  const [want, setWant] = useState<ModelVersion | null>(null);
+  const version = sceneModel ? (want?.modelId === sceneModel.id ? want.version : sceneModel.version) : null;
+  const modelUrl =
+    sceneModel && version !== null ? siteModelUrl(backend, projectId, sceneModel.id, version) : null;
+  // Which version each asked-for URL is, so a load report says what is on screen.
+  const urls = useRef(new Map<string, ModelVersion>());
+  useEffect(() => {
+    if (modelUrl && sceneModel && version !== null)
+      urls.current.set(modelUrl, { modelId: sceneModel.id, version });
+  }, [modelUrl, sceneModel, version]);
+  const [shown, setShown] = useState<ModelVersion | null>(null);
+  const onModel = (s: ModelStatus) => {
+    const v = urls.current.get(s.url);
+    setModel({ ...s, of: v });
+    if (s.state === "ready" && v) setShown(v);
+  };
+
   const reported: ModelState = model?.url === modelUrl && model ? model.state : "loading";
   // Ruling R-S1-15: without a running view the model never loads, so it is "Not shown", not "Loading".
   const modelState: ModelState = !modelUrl ? "none" : viewFailed && reported === "loading" ? "off" : reported;
-  const items = model?.url === modelUrl ? (model?.info?.items ?? 0) : 0;
+  const shownVersion = sceneModel && shown?.modelId === sceneModel.id ? shown.version : null;
+  const modelView: SiteModelView = {
+    version,
+    shown: shownVersion,
+    state: modelState,
+    items: model?.url === modelUrl ? (model?.info?.items ?? 0) : 0,
+    error: model?.url === modelUrl ? (model?.error ?? null) : null,
+  };
+
   const navigate = useNavigate();
-  const [engine, setEngine] = useState<SiteEngine | null>(null);
-  // The root that shows for this URL: the new one after a swap, the old one if the swap failed.
-  const modelRoot = model?.url === modelUrl ? model.root : null;
+  const [engineInfo, setEngineInfo] = useState<SiteEngineInfo | null>(null);
+  const engine = engineInfo?.engine ?? null;
+  const modelLayer = engineInfo?.model ?? null;
+  const controls = useMemo(
+    () => (engine && modelLayer ? controlsOf(engine, modelLayer) : null),
+    [engine, modelLayer],
+  );
+  // The root on screen (R-S3-29): the new one after a swap, the old one while a swap loads or after
+  // it failed; null when the report is for another model.
+  const modelRoot = model && sceneModel && model.of?.modelId === sceneModel.id ? model.root : null;
   const extra = useSiteExtraLayers({ engine, scene, frame, projectId, modelRoot });
   useExtraLayerClicks(engine, extra, {
     photo: (imageId) => navigate(`/p/${projectId}/images/${encodeURIComponent(imageId)}`),
     finding: (findingId) => navigate(findingPath(projectId, findingId)),
   });
-
-  const toggle = (row: string, visible: boolean) =>
-    setHidden((prev) => {
-      const next = new Set(prev);
-      for (const id of scene ? groupIds(scene, row) : [row]) {
-        if (visible) next.delete(id);
-        else next.add(id);
-      }
-      return next;
-    });
-  // A group row reads as off when every layer in it is hidden.
-  const hiddenRows = new Set(
-    scene
-      ? GROUPS.filter((g) => {
-          const ids = groupIds(scene, g);
-          return ids.length > 0 && ids.every((id) => hidden.has(id));
-        })
-      : [],
-  );
 
   let body;
   if (loading) {
@@ -139,33 +143,41 @@ export function SiteScreen() {
           frame={frame}
           modelUrl={modelUrl}
           hidden={hidden}
-          onSelect={setSelected}
-          onModel={setModel}
+          onModel={onModel}
           onFailure={(kind) => setViewFailed(kind !== null)}
-          onEngine={(e) => setEngine(e?.engine ?? null)}
+          onEngine={setEngineInfo}
+          onLayerGone={(id) => setGone((prev) => new Set(prev).add(id))}
         />
-        <ExtraLayerStatus rows={extra.rows} />
-        <div className="absolute left-[64px] top-3 z-10">
-          <LayersPlaceholder
-            rows={sceneLayerRows(scene, modelState, items)}
-            hidden={hiddenRows}
-            onToggle={toggle}
-          />
-        </div>
-        {selected && (
-          <div className="absolute right-3 top-3 z-10">
-            <SelectionPlaceholder
-              hit={selected}
-              onClear={() => {
-                view.current?.clearSelection();
-                view.current?.focus();
-              }}
-            />
-          </div>
-        )}
-        {modelState === "none" && (
+        <SitePanels
+          projectId={projectId}
+          scene={scene}
+          frame={frame}
+          controls={controls}
+          s1Layers={engineInfo?.layers ?? []}
+          extra={extra}
+          view={modelView}
+          onShowVersion={(v) => sceneModel && setWant({ modelId: sceneModel.id, version: v })}
+          hidden={hidden}
+          onHidden={(id, off) =>
+            setHidden((prev) => {
+              const next = new Set(prev);
+              if (off) next.add(id);
+              else next.delete(id);
+              return next;
+            })
+          }
+          gone={gone}
+        />
+        {modelState === "none" && noModelCard && (
           <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center p-6">
-            <GlassPanel variant="float" className="pointer-events-auto max-w-sm px-6">
+            <GlassPanel variant="float" className="pointer-events-auto relative max-w-sm px-6">
+              <IconButton
+                icon="x"
+                label="Dismiss"
+                size="sm"
+                className="absolute right-2 top-2"
+                onClick={() => setNoModelCard(false)}
+              />
               <EmptyState
                 icon="cube"
                 title="No plant model yet"
@@ -178,14 +190,8 @@ export function SiteScreen() {
             </GlassPanel>
           </div>
         )}
-        {modelState === "loading" && (
-          <div role="status" className="absolute inset-x-0 bottom-6 z-10 mx-auto w-fit">
-            <Pill tone="accent" live>
-              Loading the plant model
-            </Pill>
-          </div>
-        )}
-        {modelState === "error" && !viewFailed && (
+        {/* Nothing on screen: the view offers a reload. A failed swap keeps the old model (SitePanels says it is stale). */}
+        {modelState === "error" && !viewFailed && shownVersion === null && (
           <div className="absolute inset-x-0 bottom-6 z-10 mx-auto w-fit max-w-md px-4">
             <Alert
               tone="danger"
@@ -194,7 +200,7 @@ export function SiteScreen() {
                   size="sm"
                   icon="refresh"
                   onClick={() => {
-                    // Forget the failed load so the retry shows the loading pill (ruling R-S1-24).
+                    // Forget the failed load so the retry reads as loading (ruling R-S1-24).
                     setModel(null);
                     view.current?.reload();
                   }}

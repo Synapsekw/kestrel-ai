@@ -31,7 +31,8 @@ export interface RegisterPanelProps {
   catalogueTypes: readonly string[];
   /** The selected item's node (its id). */
   selectedId: string | null;
-  onPick(node: string): void;
+  /** The row comes along so the caller can fly to it when the 3D model has no box for it. */
+  onPick(node: string, row: AssetItemRow): void;
 }
 
 /** Spec section 11 Register (right): search by tag or name, filter by area, type and flag, fly to a row. */
@@ -175,7 +176,7 @@ export function RegisterPanel(p: RegisterPanelProps) {
                 <button
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => p.onPick(r.node)}
+                  onClick={() => p.onPick(r.node, r)}
                   className={cx(
                     "flex h-full w-full items-center gap-2 rounded-sm px-2 text-left hover:bg-hover",
                     selected && "bg-accent-soft",

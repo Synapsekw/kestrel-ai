@@ -84,3 +84,63 @@ export async function routeSiteScene(
     (route) => route.fulfill({ status: 200, contentType: "model/gltf-binary", headers: CORS, body: glb }),
   );
 }
+
+const tankRow = {
+  node: "20-t-0001",
+  tag: "20-T-0001",
+  name: "LNG tank",
+  type: "tank_lng",
+  area: "20",
+  plant_e: 0,
+  plant_n: 0,
+  site_x: null,
+  site_y: null,
+  lon: null,
+  lat: null,
+  base_el: 100,
+  top_el: 135,
+  height_source: "drawing",
+  confidence: "high",
+  flags: [],
+  source_sheet: "T0006",
+  has_geometry: true,
+};
+const tankItem = {
+  id: "20-t-0001",
+  tag: "20-T-0001",
+  name: "LNG tank",
+  type: "tank_lng",
+  area: "20",
+  footprint: { kind: "circle", center: [0, 0], d: 80 },
+  base_el: 100,
+  top_el: 135,
+  levels: [],
+  params: {},
+  height_source: "drawing",
+  source: { kind: "assumed" },
+  confidence: "high",
+  flags: [],
+  parts: [],
+  notes: null,
+};
+
+/**
+ * The fixture plant's register and its tank (S3's panels read them; Prism's examples name other
+ * items). Version 1 only, the version the site manifest names.
+ */
+export async function routePlantItems(page: Page): Promise<void> {
+  const base = `/api/v1/projects/${P}/asset-models/${MODEL}/versions/1/items`;
+  await page.route(
+    (u) => u.pathname === base || u.pathname.startsWith(`${base}/`),
+    (route) => {
+      if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      const one = new URL(route.request().url()).pathname !== base;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: CORS,
+        body: JSON.stringify(one ? tankItem : { items: [tankRow], next_cursor: null }),
+      });
+    },
+  );
+}

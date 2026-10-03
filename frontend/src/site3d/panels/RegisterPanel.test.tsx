@@ -46,7 +46,7 @@ describe("RegisterPanel", () => {
     expect(row).toHaveTextContent("1 flag");
     expect(screen.getByRole("button", { name: /untagged/i })).toHaveTextContent("Pipe rack segment");
     fireEvent.click(row);
-    expect(onPick).toHaveBeenCalledWith("30-P-0001");
+    expect(onPick).toHaveBeenCalledWith("30-P-0001", expect.objectContaining({ node: "30-P-0001" }));
     expect(screen.getByText("3 items")).toBeInTheDocument();
   });
 

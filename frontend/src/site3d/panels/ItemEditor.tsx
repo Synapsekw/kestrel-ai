@@ -252,6 +252,10 @@ export function ItemEditor(p: ItemEditorProps) {
         }
       >
         <Select id={`${ids}-type`} dense value={draft.type} onChange={(e) => setType(e.target.value)}>
+          {/* the catalogue is [] until it arrives (or when it fails): the item's own type still shows */}
+          {!p.catalogue.some((c) => c.type === draft.type) && (
+            <option value={draft.type}>{draft.type.replace(/_/g, " ")}</option>
+          )}
           {p.catalogue.map((c) => (
             <option key={c.type} value={c.type}>
               {c.type.replace(/_/g, " ")}

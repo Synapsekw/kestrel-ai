@@ -3,10 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { LayerRow } from "@/site3d/layerRows";
 import { LayersPanel, type LayersPanelProps } from "./LayersPanel";
 
-const base = { available: true, toggleable: true, detail: "" };
 const ROWS: LayerRow[] = [
   {
-    ...base,
     id: "model",
     label: "Plant model",
     group: "Model",
@@ -15,7 +13,6 @@ const ROWS: LayerRow[] = [
     status: { kind: "ready" },
   },
   {
-    ...base,
     id: "ortho:o1",
     label: "May ortho",
     group: "Imagery",
@@ -24,7 +21,6 @@ const ROWS: LayerRow[] = [
     status: { kind: "ready" },
   },
   {
-    ...base,
     id: "ortho:o2",
     label: "April ortho",
     group: "Imagery",
@@ -33,7 +29,6 @@ const ROWS: LayerRow[] = [
     status: { kind: "unavailable", reason: "This map was removed." },
   },
   {
-    ...base,
     id: "cloud:c1",
     label: "Local scan",
     group: "Point clouds",
@@ -45,7 +40,6 @@ const ROWS: LayerRow[] = [
     },
   },
   {
-    ...base,
     id: "cloud:c2",
     label: "May survey",
     group: "Point clouds",
@@ -54,7 +48,6 @@ const ROWS: LayerRow[] = [
     status: { kind: "error", message: "The cloud could not load: HTTP 404" },
   },
   {
-    ...base,
     id: "water",
     label: "Water",
     group: "Environment",
@@ -63,7 +56,6 @@ const ROWS: LayerRow[] = [
     status: { kind: "ready" },
   },
   {
-    ...base,
     id: "sky",
     label: "Sky",
     group: "Environment",
@@ -72,7 +64,6 @@ const ROWS: LayerRow[] = [
     status: { kind: "ready" },
   },
   {
-    ...base,
     id: "photos",
     label: "Photos",
     group: "Data",

@@ -1,41 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_ONLY_SCENE, MODEL_SCENE, TILE_SCENE } from "@/test/siteSceneFixtures";
 import type { SiteLayer } from "@/site3d/layers/types";
-import { extraRows, groupRows, s1Rows, sceneLayerRows, statusLine } from "./layerRows";
-
-describe("sceneLayerRows", () => {
-  it("greys what the project does not have (Review Focus 1)", () => {
-    const rows = sceneLayerRows(FRAME_ONLY_SCENE, "none", 0);
-    expect(rows.map((r) => [r.id, r.available, r.detail])).toEqual([
-      ["model", false, "None yet"],
-      ["ortho", false, "None placed"],
-      ["drawing", false, "None placed"],
-      ["cloud", false, "None"],
-      ["photos", false, "None"],
-      ["findings", false, "None"],
-    ]);
-  });
-
-  it("counts what is there; S2 layers are not toggleable yet (R14)", () => {
-    const rows = Object.fromEntries(sceneLayerRows(TILE_SCENE, "ready", 2).map((r) => [r.id, r]));
-    expect(rows.model.detail).toBe("2 items");
-    expect(rows.model.toggleable).toBe(true);
-    expect(rows.ortho.detail).toBe("1 map");
-    expect(rows.drawing.detail).toBe("1 drawing");
-    expect(rows.cloud.detail).toBe("1 cloud · not in this view yet");
-    expect(rows.cloud.toggleable).toBe(false);
-    expect(rows.photos.detail).toBe("36 photos · not in this view yet");
-  });
-
-  it("says when the model is loading or failed", () => {
-    expect(sceneLayerRows(MODEL_SCENE, "loading", 0)[0].detail).toBe("Loading");
-    expect(sceneLayerRows(MODEL_SCENE, "error", 0)[0].detail).toBe("Could not load");
-    expect(sceneLayerRows(MODEL_SCENE, "ready", 1)[0].detail).toBe("1 item");
-    // Ruling R-S1-15: the view could not start, so the model is not shown (not "Loading" forever).
-    const off = sceneLayerRows(MODEL_SCENE, "off", 0)[0];
-    expect([off.detail, off.available, off.toggleable]).toEqual(["Not shown", true, false]);
-  });
-});
+import { extraRows, groupRows, s1Rows, statusLine } from "./layerRows";
 
 const layer = (id: string, label: string, opacity = false) =>
   ({
@@ -81,6 +46,42 @@ describe("panel rows", () => {
       kind: "ready",
       note: "1 item",
     });
+  });
+
+  it("without a model layer the Plant model row still shows, off, saying why (Review Focus 1)", () => {
+    const rows = (state: "none" | "off" | "loading") =>
+      s1Rows([], { visible: {}, opacity: {}, model: { state, items: 0 } });
+    expect(rows("none").map((r) => [r.id, r.label, r.visible, statusLine(r.status)?.text])).toEqual([
+      ["model", "Plant model", false, "None yet"],
+    ]);
+    expect(rows("none")[0].status.kind).toBe("unavailable");
+    // Ruling R-S1-15: the view could not start, so the model is "Not shown", not "Loading" forever.
+    expect(statusLine(rows("off")[0].status)?.text).toBe("Not shown");
+    expect(statusLine(rows("loading")[0].status)?.text).toBe("Loading");
+    expect(
+      s1Rows([layer("model", "Plant model")], {
+        visible: {},
+        opacity: {},
+        model: { state: "none", items: 0 },
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("a failed swap reads stale, not 'Could not load': the old version is still on screen (S3-9 minor 2)", () => {
+    const ls = [layer("model", "Plant model")];
+    const row = (model: Parameters<typeof s1Rows>[1]["model"]) =>
+      s1Rows(ls, { visible: {}, opacity: {}, model })[0];
+    expect(row({ state: "error", items: 0, version: 4, shown: 3 }).status).toEqual({
+      kind: "error",
+      message: "Stale: showing version 3. Version 4 could not load.",
+    });
+    expect(statusLine(row({ state: "loading", items: 2, version: 4, shown: 3 }).status)?.text).toBe(
+      "Loading version 4",
+    );
+    // Nothing on screen yet: a plain failure.
+    expect(statusLine(row({ state: "error", items: 0, version: 4, shown: null }).status)?.text).toBe(
+      "Could not load",
+    );
   });
 
   it("reads S2's rows with their live status and no opacity", () => {

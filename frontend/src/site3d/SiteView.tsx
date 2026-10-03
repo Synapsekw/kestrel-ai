@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type * as THREE from "three";
 import { useBackend } from "@/api/client";
+import { messageOf } from "@/api/errors";
 import { absUrl, type SiteScene } from "@/api/siteScene";
 import { NoWebGlError } from "@/clouds/viewer/engine";
 import { Alert, Button, isTypingTarget } from "@/ui";
@@ -23,6 +24,8 @@ export interface ModelStatus {
    * stays shown: the old model after a failed swap, null when nothing ever loaded.
    */
   root: THREE.Object3D | null;
+  /** Why the load failed (state "error"), in words. */
+  error?: string;
 }
 export interface SiteViewHandle {
   clearSelection(): void;
@@ -43,7 +46,8 @@ export interface SiteViewProps {
   modelUrl: string | null;
   /** Hidden layer ids: the model layer's and each drape's (`ortho:<id>`, `drawing:<id>`). */
   hidden: ReadonlySet<string>;
-  onSelect(hit: PickHit | null): void;
+  /** Optional: S3's panels hear selection through `controlsOf(engine, model).onSelect`. */
+  onSelect?(hit: PickHit | null): void;
   onModel(s: ModelStatus): void;
   /** The 3D view could not start (null once a reload starts it). */
   onFailure?(kind: "no-webgl" | "failed" | null): void;
@@ -104,13 +108,13 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     }
     cbs.current.onFailure?.(null);
     engine.current = eng;
-    const off = eng.onSelect((hit) => cbs.current.onSelect(hit));
+    const off = eng.onSelect((hit) => cbs.current.onSelect?.(hit));
     const map = layers.current;
     announce();
     return () => {
       off();
       // dispose() drops listeners without emitting, so say the selection is gone.
-      cbs.current.onSelect(null);
+      cbs.current.onSelect?.(null);
       eng.dispose();
       if (engine.current === eng) engine.current = null;
       map.clear();
@@ -131,7 +135,14 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
         setAreas({ url: u, list: info.areas });
         cbs.current.onModel({ url: u, state: "ready", info, root: layer.scene });
       },
-      onError: (_err, u) => cbs.current.onModel({ url: u, state: "error", info: null, root: layer.scene }),
+      onError: (err, u) =>
+        cbs.current.onModel({
+          url: u,
+          state: "error",
+          info: null,
+          root: layer.scene,
+          error: messageOf(err, "The 3D model could not load."),
+        }),
     });
     layer.setVisible(!cbs.current.hidden.has(layer.id));
     layers.current.set(layer.id, layer);
@@ -143,7 +154,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
       eng.removeLayer(layer.id);
       if (map.get(layer.id) === layer) map.delete(layer.id);
       if (model.current === layer) model.current = null;
-      cbs.current.onSelect(null);
+      cbs.current.onSelect?.(null);
       announce();
     };
   }, [modelId, engineKey, announce]);

@@ -19,7 +19,6 @@ function fakes() {
   const model: ModelLayerLike = {
     select: vi.fn(),
     itemBox: vi.fn(() => box),
-    load: vi.fn(async () => undefined),
     setColourBy: vi.fn(),
     setOpacity: vi.fn(),
   };
@@ -36,12 +35,6 @@ describe("controlsOf", () => {
     expect(model.select).toHaveBeenCalledWith("20-T-0001");
     expect(c.boxOf("20-T-0001")).toBe(box);
     expect(model.itemBox).toHaveBeenCalledWith("20-T-0001");
-  });
-
-  it("swaps the GLB through the model layer's load (the camera stays)", async () => {
-    const { engine, model } = fakes();
-    await controlsOf(engine, model).loadModel("v4.glb");
-    expect(model.load).toHaveBeenCalledWith("v4.glb");
   });
 
   it("reports 3D selection as a node name, or null", () => {
