@@ -144,7 +144,6 @@ def _cancelled_before_start(ctx) -> None:
     ctx.publish("asset_models.changed", {"asset_model_ids": [model_id], "run_id": run_id})
 
 
-@register_job_type(RUN_JOB, on_cancelled_before_start=_cancelled_before_start)
 def settle_failed(project, model_id: str, run_id: str, publish) -> None:
     """Settle a run row that could not end normally: failed with the fixed INTERNAL text, phase done,
     live_run_id cleared, status refreshed, a change published. Never raises."""
@@ -171,6 +170,7 @@ def _setup_failed(ctx, e: Exception) -> JobFailure:
     return JobFailure(INTERNAL)
 
 
+@register_job_type(RUN_JOB, on_cancelled_before_start=_cancelled_before_start)
 def run_asset_model(ctx) -> dict:
     try:
         mode = _mode_of(ctx)
