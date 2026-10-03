@@ -193,9 +193,7 @@ def build_monitor(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         tower = k.lattice(wb, 0.8, 0.1, yp, 3.0, 0.15, 0.08)
         tower += [k.box(0.3, 0.12, 0.3, x=sx * wb / 2, z=sz * wb / 2) for sx in (-1, 1) for sz in (-1, 1)]
         rl, lb = wb / 2 + 0.2, 90.0 * round((p.aim_deg + 180.0) / 90.0)  # on a face, clear of the legs
-    pm = p.platform_m
-    if pm / 2 < rl + 0.1:
-        raise ValueError("monitor: platform_m too small to cover the tower and its ladder")
+    pm = max(p.platform_m, 2 * (rl + 0.1))  # grown so the deck covers the tower top and the ladder head
     sq = [(pm / 2, pm / 2), (pm / 2, -pm / 2), (-pm / 2, -pm / 2), (-pm / 2, pm / 2)]
     a, pitch = math.radians(p.aim_deg), math.radians(15.0)
     base = np.array([0.0, yp + 0.9, 0.0])
@@ -212,7 +210,7 @@ def build_monitor(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         ),
         *k.ladder("ladder", math.cos(la) * rl, math.sin(la) * rl, 0.0, yp, lb - 180.0),
     ]
-    return k.finish(k.turn(nodes, plan.place()), item, p, {"platform_el_m": yp})
+    return k.finish(k.turn(nodes, plan.place()), item, p, {"platform_el_m": yp, "platform_m_used": pm})
 
 
 def _light_head(ym: float, H: float, lamp: str, ctx: BuildCtx) -> list[MeshNode]:

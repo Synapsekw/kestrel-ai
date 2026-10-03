@@ -1081,9 +1081,19 @@ def test_monitor_lattice_stands_on_grade_with_its_ladder_on_a_face():
     assert min(abs(x), abs(z)) < 0.05  # on a face axis, not in a corner where a leg stands
 
 
-def test_monitor_platform_narrower_than_tower_and_ladder_is_refused():
-    with pytest.raises(ValueError, match="platform_m"):
-        REGISTRY["monitor"].fn(make_item("monitor", circle(3.0), h=25.0), CTX)
+@pytest.mark.parametrize(
+    ("d", "h", "params"), [(2.5, 15.0, {}), (2.54, 16.3, {"tower": "lattice"}), (3.0, 25.0, {})]
+)
+def test_monitor_platform_grows_to_cover_a_wide_tower_and_its_ladder(d, h, params):
+    it = make_item("monitor", circle(d), h=h, params=params)
+    nodes, flags = build_item(it, CTX)
+    assert not [f for f in flags if f.code == "builder_fallback"]
+    p = {n.name: expanded(n.geometry) for n in nodes}
+    x, _, z = p["ladder_stiles"].centroid
+    deck = p["platform"].bounds
+    assert min(-deck[0][0], deck[1][0], -deck[0][2], deck[1][2]) >= math.hypot(x, z)
+    used = nodes[0].extras["derived"]["platform_m_used"]
+    assert used == pytest.approx(deck[1][0] - deck[0][0], abs=1e-3) and used > 2.0
 
 
 @pytest.mark.parametrize(("kind", "part"), [("horn", "horn"), ("beacon", "daymark")])
