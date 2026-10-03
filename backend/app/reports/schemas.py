@@ -4,7 +4,8 @@ sections 7.1, 7.2, 8, 9.1, 14; plan 2026-09-30-reports-r0).
 R0 owns this module. The other R units import from it and never add a model here: a unit that
 needs a contract change edits openapi.yaml and this module together, minimally, and lists it as a
 hand-off (index, "Rules while Reports is in flight"). The models express exactly what the contract
-expresses and no more - no cross-field validators - so a schema-valid body is never answered
+expresses and no more - no cross-field validators (ReportConfig's one normaliser adds a missing
+section and never refuses) - so a schema-valid body is never answered
 `validation_error`; a rule the schema cannot state is its owner's `invalid_report` or
 `invalid_template` (R1). Config and request models forbid extra keys; the config models carry the
 defaults of a new report. Configs are dumped with `by_alias=True` (`ReportDateFilter.from`).
@@ -13,7 +14,7 @@ defaults of a new report. Configs are dumped with `by_alias=True` (`ReportDateFi
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ------------------------------------------------------------------------------ literals
 
@@ -328,6 +329,30 @@ class ReportConfig(_Strict):
     # Kestrel theme. Configs saved before it existed read None.
     brand_id: str | None = Field(None, max_length=64)
     csv_layout: Literal["findings", "asset_sightings"] = "findings"
+
+    @model_validator(mode="after")
+    def _add_missing_sections(self) -> "ReportConfig":
+        """Normalise on read: a config saved before a section existed (the frozen catalogue 0002
+        seed predates asset_summary) gains it, disabled and with its default options, so the
+        builder can list it. It joins the disabled sections in canonical order (at the end when none
+        is disabled), which is where the code built-ins put it. This adds, never refuses: a
+        config with a repeated section is left as sent for `invalid_report`'s duplicate check."""
+        keys = [s.key for s in self.sections]
+        if len(set(keys)) != len(keys) or len(keys) == len(SECTION_KEYS):
+            return self
+        rank = {k: i for i, k in enumerate(SECTION_KEYS)}
+        defaults = {s.key: s for s in default_sections()}
+        sections = list(self.sections)
+        for key in SECTION_KEYS:
+            if key in keys:
+                continue
+            pool = [i for i, s in enumerate(sections) if not s.enabled]
+            before = [i for i in pool if rank[sections[i].key] < rank[key]]
+            after = [i for i in pool if rank[sections[i].key] > rank[key]]
+            at = max(before) + 1 if before else min(after) if after else len(sections)
+            sections.insert(at, defaults[key].model_copy(update={"enabled": False}))
+        self.sections = sections
+        return self
 
 
 # ------------------------------------------------------------------------------ snapshots (spec 9.1)

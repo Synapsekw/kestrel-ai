@@ -95,17 +95,9 @@ def test_the_seeded_rows_are_the_code_built_ins(tmp_path):
         with cat.session() as s:
             for template in BUILTIN_TEMPLATES:
                 stored = _out(s.get(ReportTemplate, template.id))
-                # the frozen seed predates asset_summary: a seeded row lists the other eight sections
-                mine = template.model_copy(
-                    update={
-                        "config": template.config.model_copy(
-                            update={
-                                "sections": [x for x in template.config.sections if x.key != "asset_summary"]
-                            }
-                        )
-                    }
-                )
-                assert stored == mine, template.id
+                # the frozen seed predates asset_summary; ReportConfig adds it on read, disabled, where
+                # the code built-in has it, so a seeded row reads back as the code built-in
+                assert stored == template, template.id
     finally:
         cat.engine.dispose()
 
