@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createApiClient } from "@contract/client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { errorBody, fakeClient, type FakeRoute } from "@/test/fixtures";
+import { errorBody, fakeClient, fakeFetch, type FakeRoute } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { EAND_ID, PARTNER_ID, eandBrand, exampleBrands, partnerBrand } from "@/test/brandFixtures";
 import type { Brand } from "@/api/brands";
@@ -57,6 +58,28 @@ describe("BrandsSection", () => {
     const patch = requests.find((r) => r.method === "PATCH");
     expect(patch?.url).toBe(`/api/v1/brands/${EAND_ID}`);
     expect(patch?.body).toEqual({ colors: { ...eandBrand.colors, accent_dark: "#00AA55" } });
+  });
+
+  it("locks the editor while a save is in flight, so edits are not lost", async () => {
+    const { fetch: inner } = fakeFetch([
+      { method: "GET", path: /\/api\/v1\/brands$/, body: { items: exampleBrands } },
+      { method: "PATCH", path: /\/brands\/[^/]+$/, body: { ...eandBrand, owner: "Acme" } },
+    ]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const gated = (async (input: Request | string | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      if (req.method === "PATCH") await gate;
+      return inner(input, init);
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: gated });
+    renderWithProviders(<BrandsSection />, { api });
+    fireEvent.change(await screen.findByLabelText("Owner"), { target: { value: "Acme" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save brand" }));
+    await waitFor(() => expect(screen.getByLabelText("Name")).toBeDisabled());
+    release();
+    await screen.findByText("Saved");
+    expect(screen.getByLabelText("Name")).toBeEnabled();
   });
 
   it("shows the footer line with the year and a sample client", async () => {

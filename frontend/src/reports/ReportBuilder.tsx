@@ -262,7 +262,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
             config={config}
             onEdit={edit}
             matchCount={matchCount}
-            brands={brandList.loading ? null : brandList.brands}
+            brands={brandList.loading || brandList.error || brandList.unavailable ? null : brandList.brands}
           />
         </aside>
       </div>

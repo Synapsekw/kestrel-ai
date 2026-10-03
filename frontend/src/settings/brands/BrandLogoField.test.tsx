@@ -53,6 +53,18 @@ describe("BrandLogoField", () => {
     expect((onChange.mock.calls[0][0] as Brand).logo_on_dark).toBe("logo-2222222222222222");
   });
 
+  it("disables the button while the file dialog is open", async () => {
+    let finish: (v: string | null) => void = () => undefined;
+    vi.mocked(openDialog).mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve as (v: string | null) => void)) as never,
+    );
+    setup(eandBrand, "tauri");
+    fireEvent.click(screen.getByRole("button", { name: "Choose logo" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Choose logo" })).toBeDisabled());
+    finish(null);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Choose logo" })).toBeEnabled());
+  });
+
   it("takes a path in the browser", async () => {
     const { onChange, requests } = setup(eandBrand, "mock");
     fireEvent.change(screen.getByLabelText("Logo on dark file path"), {

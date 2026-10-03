@@ -49,16 +49,24 @@ function FontSelect({
   value,
   onChange,
   hint,
+  disabled,
 }: {
   id: string;
   label: string;
   value: string | null;
   onChange: (v: string | null) => void;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <Field label={label} htmlFor={id} hint={hint}>
-      <Select id={id} dense value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+      <Select
+        id={id}
+        dense
+        disabled={disabled}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+      >
         <option value="">Report default</option>
         {BRAND_FONTS.map((f) => (
           <option key={f} value={f}>
@@ -121,6 +129,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
       setConfirming(false);
       onDeleted(brand.id);
     } catch (e) {
+      pushLog(`brand delete failed: ${messageOf(e, String(e))}`);
       setConfirming(false);
       setError(messageOf(e, "The brand could not be deleted."));
     } finally {
@@ -145,6 +154,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
           <Input
             id="brand-name"
             dense
+            disabled={saving}
             value={draft.name}
             invalid={Boolean(nameError ?? errors.name)}
             onChange={(e) => edit({ name: e.target.value })}
@@ -164,12 +174,14 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
                   <ColourSwatch
                     label={`${COLOUR_LABELS[key]} colour`}
                     value={/^#[0-9a-f]{6}$/i.test(draft.colors[key]) ? draft.colors[key] : brand.colors[key]}
+                    disabled={saving}
                     onChange={(c) => edit({ colors: { ...draft.colors, [key]: c.toUpperCase() } })}
                   />
                   <Input
                     id={`brand-colour-${key}`}
                     aria-label={`${COLOUR_LABELS[key]} hex`}
                     dense
+                    disabled={saving}
                     value={draft.colors[key]}
                     invalid={Boolean(errors.colors[key])}
                     onChange={(e) => edit({ colors: { ...draft.colors, [key]: e.target.value.trim() } })}
@@ -187,6 +199,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
               id="brand-font-text"
               label="Text font"
               value={draft.font_text}
+              disabled={saving}
               onChange={(v) => edit({ font_text: v })}
               hint={
                 draft.font_text === "Poppins"
@@ -198,6 +211,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
               id="brand-font-numerals"
               label="Numerals font"
               value={draft.font_numerals}
+              disabled={saving}
               onChange={(v) => edit({ font_numerals: v })}
             />
           </div>
@@ -222,6 +236,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
               <Input
                 id="brand-website"
                 dense
+                disabled={saving}
                 value={draft.website}
                 onChange={(e) => edit({ website: e.target.value })}
               />
@@ -230,6 +245,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
               <Input
                 id="brand-owner"
                 dense
+                disabled={saving}
                 value={draft.owner}
                 onChange={(e) => edit({ owner: e.target.value })}
               />
@@ -239,6 +255,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
             <Input
               id="brand-pdf-author"
               dense
+              disabled={saving}
               value={draft.pdf_author}
               onChange={(e) => edit({ pdf_author: e.target.value })}
             />
@@ -251,6 +268,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
             <Textarea
               id="brand-confidentiality"
               rows={3}
+              disabled={saving}
               value={draft.confidentiality}
               onChange={(e) => edit({ confidentiality: e.target.value })}
             />
@@ -266,11 +284,9 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
           >
             Save brand
           </Button>
-          {saved && !dirty && (
-            <span role="status" className="text-xs text-muted">
-              Saved
-            </span>
-          )}
+          <span role="status" className="text-xs text-muted">
+            {saved && !dirty ? "Saved" : null}
+          </span>
           <span className="flex-1" />
           {!brand.builtin && (
             <Button variant="danger" icon="trash" onClick={() => setConfirming(true)}>
@@ -288,7 +304,7 @@ export function BrandEditor({ brand, onChange, onDeleted }: BrandEditorProps) {
         onClose={() => setConfirming(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setConfirming(false)}>
+            <Button variant="secondary" disabled={deleting} onClick={() => setConfirming(false)}>
               Cancel
             </Button>
             <Button variant="danger" loading={deleting} onClick={() => void remove()}>

@@ -57,6 +57,7 @@ export function BrandLogoField({ brand, slot, label, hint, onChange }: BrandLogo
     try {
       onChange(await clearBrandLogo(api, brand.id, slot));
     } catch (e) {
+      pushLog(`brand logo remove failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "Could not remove the logo."));
     } finally {
       setBusy(false);
@@ -65,6 +66,7 @@ export function BrandLogoField({ brand, slot, label, hint, onChange }: BrandLogo
 
   async function pick() {
     setError(null);
+    setBusy(true);
     let picked: unknown;
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
@@ -75,9 +77,11 @@ export function BrandLogoField({ brand, slot, label, hint, onChange }: BrandLogo
     } catch (e) {
       pushLog(`brand logo dialog failed: ${messageOf(e, String(e))}`);
       setError("The file dialog did not open. Try again.");
+      setBusy(false);
       return;
     }
     if (typeof picked === "string") await add(picked);
+    else setBusy(false);
   }
 
   return (
