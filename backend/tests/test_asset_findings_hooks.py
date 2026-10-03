@@ -13,6 +13,7 @@ from asset_findings_helpers import (
     make_photos,
     place,
     post_asset,
+    refresh_finding,
     sightings_of,
 )
 from findings_helpers import add_type, use_types
@@ -166,3 +167,59 @@ def test_drawing_on_a_photo_still_makes_an_image_finding(client, ctx):
     assert r.status_code == 201, r.text
     kinds = sorted(f["anchor"]["kind"] for f in _all_findings(client, ctx))
     assert kinds == ["asset", "image"]
+
+
+def test_a_geometry_edit_on_a_type_turned_object_keeps_the_sighting(client, handle, ctx):
+    """Ruling R11 (foundation spec section 7.2: defect -> object keeps existing findings): only a
+    reclass of the box itself takes its sighting away, never a nudge."""
+    p0 = ctx["photos"][0]
+    f = post_asset(client, ctx["pid"], ctx["crack"], ctx["model"], [p0])
+    sighting = by_photo(handle, f["id"])[p0]
+    place(handle, sighting.id, (0.0, 12.0, 5.0))
+    r = client.patch(f"{API}/catalogue/types/{ctx['crack']}", json={"kind": "object"})
+    assert r.status_code == 200, r.text
+    r = client.patch(f"{ctx['base']}/boxes/{sighting.annotation_id}", json={"x": 12.0})
+    assert r.status_code == 200, r.text
+    got = client.get(f"{ctx['base']}/findings/{f['id']}").json()
+    assert (got["status"], got["sighting_count"]) == ("open", 1)
+    after = by_photo(handle, f["id"])[p0]
+    assert (after.id, after.placement, after.placed_version) == (sighting.id, "pending", None)
+    assert _comments(client, ctx, f["id"]) == []
+    assert_counts_true(handle)
+
+
+def test_a_reclass_with_a_move_leaves_the_split_sighting_pending(client, handle, project, ctx):
+    rust = add_type(client, "rust")
+    use_types(client, project, rust)
+    p0, p1 = ctx["photos"][:2]
+    f = post_asset(client, ctx["pid"], ctx["crack"], ctx["model"], [p0, p1])
+    for i, row in enumerate(by_photo(handle, f["id"]).values()):
+        place(handle, row.id, (0.0, 10.0 + i, 5.0))
+    refresh_finding(handle, f["id"])
+    box_id = _box_of(handle, f["id"], p1)
+    r = client.patch(f"{ctx['base']}/boxes/{box_id}", json={"class_id": rust["id"], "x": 12.0})
+    assert r.status_code == 200, r.text
+    [old, new] = _all_findings(client, ctx)
+    assert (old["id"], new["type_id"]) == (f["id"], rust["id"])
+    moved = by_photo(handle, new["id"])[p1]
+    assert (moved.placement, moved.placed_version) == ("pending", None)
+    assert finding_row(handle, new["id"]).placement is None  # ruling R1: its representative is pending
+    assert finding_row(handle, f["id"]).placement == "point"  # the sighting left behind is still placed
+    assert_counts_true(handle)
+
+
+def test_a_reclass_with_a_move_leaves_the_only_sighting_pending(client, handle, project, ctx):
+    rust = add_type(client, "rust")
+    use_types(client, project, rust)
+    p0 = ctx["photos"][0]
+    f = post_asset(client, ctx["pid"], ctx["crack"], ctx["model"], [p0])
+    place(handle, by_photo(handle, f["id"])[p0].id, (0.0, 12.0, 5.0))
+    refresh_finding(handle, f["id"])
+    assert finding_row(handle, f["id"]).placement == "point"
+    box_id = _box_of(handle, f["id"], p0)
+    r = client.patch(f"{ctx['base']}/boxes/{box_id}", json={"class_id": rust["id"], "x": 12.0})
+    assert r.status_code == 200, r.text
+    row = finding_row(handle, f["id"])
+    assert (row.type_id, row.placement) == (rust["id"], None)
+    assert by_photo(handle, f["id"])[p0].placement == "pending"
+    assert_counts_true(handle)

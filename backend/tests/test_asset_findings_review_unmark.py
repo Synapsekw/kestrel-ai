@@ -23,10 +23,12 @@ def _review_url(project_id: str, image_id: str) -> str:
     return f"{API}/projects/{project_id}/images/{image_id}/review"
 
 
-def _seed_none(client, project_id: str, image_id: str) -> None:
+def _seed_none(client, handle, project_id: str, image_id: str) -> None:
     r = client.put(_review_url(project_id, image_id), json={"status": "none", "note": "clean"})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "none"
+    with handle.session() as s:
+        assert s.get(Image, image_id).marked_empty is True
 
 
 def _row(handle, image_id: str) -> tuple[str, bool]:
@@ -36,7 +38,7 @@ def _row(handle, image_id: str) -> tuple[str, bool]:
 
 def test_bulk_unmark_moves_a_none_review_to_not_assessed(client, project_id, handle):
     image_id = _photo(handle, "a.jpg")
-    _seed_none(client, project_id, image_id)
+    _seed_none(client, handle, project_id, image_id)
     r = client.post(
         f"{API}/projects/{project_id}/images/bulk-mark-empty",
         json={"image_ids": [image_id], "marked_empty": False},
@@ -49,7 +51,7 @@ def test_bulk_unmark_moves_a_none_review_to_not_assessed(client, project_id, han
 
 def test_accepting_a_proposal_moves_a_none_review_to_not_assessed(client, project, project_id, handle):
     image_id = _photo(handle, "b.jpg")
-    _seed_none(client, project_id, image_id)
+    _seed_none(client, handle, project_id, image_id)
     with handle.session() as s:  # a proposal arriving after the mark (a later photo run)
         box = Box(
             image_id=image_id,
@@ -73,7 +75,7 @@ def test_accepting_a_proposal_moves_a_none_review_to_not_assessed(client, projec
 
 def test_clear_mark_for_ground_truth_moves_only_none_rows(client, project_id, handle):
     empty, unsure = _photo(handle, "c.jpg"), _photo(handle, "d.jpg")
-    _seed_none(client, project_id, empty)
+    _seed_none(client, handle, project_id, empty)
     assert client.put(_review_url(project_id, unsure), json={"status": "uncertain"}).status_code == 200
     with handle.session() as s:
         clear_mark_for_ground_truth(s, [empty, unsure])

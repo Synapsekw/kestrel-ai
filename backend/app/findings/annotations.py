@@ -68,18 +68,24 @@ def _sighting_box_changed(
 ) -> None:
     """A sighting's box changed:
 
-    - no longer ground truth, or now an object type: the sighting goes (the finding is closed when
-      it was the last one);
-    - reclassed to another defect type: it splits out into a finding of that type, or, when it is
-      the only sighting, the finding's type follows;
-    - otherwise (a geometry edit): the sighting is `pending` until `asset_place` places it again."""
-    if box.review_state not in GROUND_TRUTH or not _is_defect(s, box.class_id):
+    - no longer ground truth, or reclassed to an object type: the sighting goes (the finding is
+      closed when it was the last one);
+    - otherwise the sighting is `pending` until `asset_place` places it again (the box may have
+      moved), and when it was reclassed to another defect type it splits out into a finding of that
+      type, or, when it is the only sighting, the finding's type follows.
+
+    A geometry edit on a type the catalogue has since turned into an object type keeps the sighting
+    (spec 2026-09-26-foundation section 7.2: defect -> object keeps existing findings; ruling R11)."""
+    reclassed = previous_class_id is not None and previous_class_id != box.class_id
+    if box.review_state not in GROUND_TRUTH or (reclassed and not _is_defect(s, box.class_id)):
         sightings.remove(
             s, project_id=project_id, catalogue=catalogue, rows=[sighting], reason=sightings.NOT_A_SIGHTING
         )
         return
+    sighting.placement = "pending"
+    sighting.placed_version = None
+    s.flush()
     f = s.get(Finding, sighting.finding_id) if sighting.finding_id else None
-    reclassed = previous_class_id is not None and previous_class_id != box.class_id
     if reclassed and f is not None and f.type_id != box.class_id:
         if len(sightings.of_finding(s, f.id)) > 1:
             from app.asset_review import group  # group imports this package
@@ -100,11 +106,8 @@ def _sighting_box_changed(
                 finding_id=f.id,
                 fields={"type_id": box.class_id},
             )
-        return
-    sighting.placement = "pending"
-    sighting.placed_version = None
+        f = s.get(Finding, sighting.finding_id)  # the new finding after a split
     if f is not None:
-        s.flush()
         sightings.refresh(s, f)
         events.mark_changed(s, project_id, [f.id])
 
