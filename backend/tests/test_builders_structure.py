@@ -80,6 +80,16 @@ SPECS["gangway"] = TypeSpec(
     {"tower_columns", "tower_bracing", "tower_platform", "boom", "treads", "counterweight"},
 )  # fmt: skip
 # -- platforms (task 6)
+SPECS["platform"] = TypeSpec(
+    rect(8, 6), 100.0, 104.0, rect(8, 6),
+    {"deck", "columns", "beams", "bracing", "stair", "stair_treads", "handrail_posts", "handrail_rails"},
+    pad_xz=1.1,
+)  # fmt: skip
+SPECS["stair_tower"] = TypeSpec(
+    rect(6, 3), 100.0, 112.0, rect(6, 3),
+    {"base_slab", "columns", "landings", "stringers", "treads", "handrail_posts", "handrail_rails"},
+    pad_xz=0.35,
+)  # fmt: skip
 TYPES = list(SPECS)
 
 
@@ -422,3 +432,29 @@ def test_gangway_tower_at_the_start_and_boom_sloping_down():
     assert cols.max() < -6 + 1.8 + 1e-6  # tower in the first 1.8 m of the 12 m footprint (x from -6)
     treads = node(nodes, "treads").geometry.transforms
     assert treads[0, 1, 3] > treads[-1, 1, 3]  # the boom slopes down away from the tower
+
+
+# ---------------------------------------------------------------- platforms (task 6)
+def test_platform_columns_deck_per_level_and_stair():
+    nodes = build(case("platform"))
+    assert instances(nodes, "columns") == 4
+    deck = node(build(case("platform", levels=[102.0])), "deck").geometry
+    assert {2.0, 4.0} <= {round(float(y), 3) for y in deck.vertices[:, 1]}
+    treads = node(nodes, "stair_treads").geometry.transforms
+    assert treads[:, 2, 3].max() < -3.0  # the stair stands outside the west (left) edge of the 6 m deck
+    assert treads[:, 1, 3].max() == pytest.approx(4.0)
+    assert "stair" not in {n.name for n in build(case("platform", params={"stair": False}))}
+
+
+def test_circle_platform_gets_perimeter_columns():
+    it = item("platform", {"kind": "circle", "center": [0, 0], "d": 8}, 100.0, 106.0)
+    assert instances(build(it), "columns") >= 3
+
+
+def test_stair_tower_flights_and_landings():
+    nodes = build(case("stair_tower"))
+    assert instances(nodes, "columns") == 4
+    assert instances(nodes, "landings") == 4  # 12 m at <= 3.6 m per flight
+    ys = sorted(node(nodes, "landings").geometry.transforms[:, 1, 3])
+    assert ys == pytest.approx([2.975, 5.975, 8.975, 11.975])
+    assert instances(build(case("stair_tower", levels=[104.0, 108.0])), "landings") == 3

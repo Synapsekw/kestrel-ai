@@ -660,3 +660,194 @@ def build_gangway(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         cw = k.placed_block(k.xz(run.at(ts * 0.25), h + 0.5), (ts * 0.4, 1.0, ts * 0.8), run.u)
         nodes.append(MeshNode("counterweight", "Steel_Dark", cw))
     return _stamp(nodes, p, dflt)
+
+
+# ---------------------------------------------------------------- platform, stair tower
+class PlatformParams(_P):
+    grating_m: float = Field(0.05, gt=0.01, le=0.5)
+    beam_depth_m: float = Field(0.3, gt=0.05, le=2)
+    column_spacing_m: float = Field(8.0, gt=1, le=30)
+    column_section_m: float = Field(0.3, gt=0.05, le=2)
+    bracing: bool = True
+    handrail: bool = True
+    post_spacing_m: float = Field(3.0, gt=0.5, le=10)
+    stair: bool = Field(True, description="a stair flight to grade outside the stair_side edge")
+    stair_side: Literal["left", "right"] = "left"
+
+
+PLATFORM_DOC = (
+    "Elevated steel access platform (equipment, valve, manifold or tank-roof platform): grating deck at "
+    "each level, edge beams, columns on a grid clipped to the outline, end-bay bracing, perimeter "
+    "handrail, and a stair flight to the base outside one long edge. Footprint: polygon, rect or circle. "
+    "base_el = what it stands on (grade, or a tank roof); top_el = top deck; levels = intermediate decks."
+)
+
+
+@builder("platform", family="structure", params=PlatformParams, doc=PLATFORM_DOC, default_height_m=4.0)
+def build_platform(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = PlatformParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 4.0)
+    h = top_el - base
+    ring = k.outline(item, ctx)
+    run = k.runs(item, ctx)[0] if item.footprint.kind == "rect" else k.rect_run(ring)
+    decks = _levels(item, base, h)
+    if not decks or abs(decks[-1] - h) > 1e-6:
+        decks = sorted(set(decks) | {h})
+    inner = np.asarray(Polygon(ring).buffer(-p.column_section_m / 2, join_style=2).exterior.coords)[:-1]
+    grat, beams, rails = [], [], []
+    for y in decks:
+        grat.append(k.slab(ring, y - p.grating_m, y))
+        ring_c = np.vstack([inner, inner[:1]])
+        for a, b in zip(ring_c[:-1], ring_c[1:], strict=True):
+            beams.append(
+                k.member(
+                    k.xz(a, y - p.grating_m - p.beam_depth_m / 2),
+                    k.xz(b, y - p.grating_m - p.beam_depth_m / 2),
+                    0.2,
+                    p.beam_depth_m,
+                )
+            )
+        if p.handrail:
+            rails += k.handrail(
+                np.asarray(Polygon(ring).buffer(-0.05, join_style=2).exterior.coords)[:-1],
+                y,
+                height=RAIL_H,
+                spacing=p.post_spacing_m,
+                closed=True,
+                lod=ctx.lod,
+            )
+    rows = k.grid_rows(ring, run, p.column_spacing_m, p.column_spacing_m, p.column_section_m / 2)
+    edge = k.perimeter_points(ring, p.column_spacing_m, p.column_section_m / 2)
+    cols = k.dedupe(np.vstack([*rows, edge]), min(0.45 * p.column_spacing_m, 1.5))
+    col_h = decks[-1] - p.grating_m
+    nodes = [
+        MeshNode("deck", "Grating", k.merge(grat)),
+        MeshNode(
+            "columns",
+            "Steel_Structure",
+            Instanced(
+                k.column_mesh(col_h, p.column_section_m),
+                k.posed(np.c_[cols[:, 0], np.zeros(len(cols)), cols[:, 1]], run.u),
+            ),
+        ),
+        MeshNode("beams", "Steel_Structure", k.merge(beams)),
+    ]
+    if p.bracing:
+        br = []
+        for row in {0: rows[0], 1: rows[-1]}.values():
+            for a, b in zip(row[:-1], row[1:], strict=True):
+                br.append(k.member(k.xz(a, FOOT), k.xz(b, decks[0] - p.grating_m - p.beam_depth_m), 0.12))
+        if br:
+            nodes.append(MeshNode("bracing", "Steel_Structure", k.merge(br)))
+    if p.stair and h >= 1.0:
+        s = (-1.0 if p.stair_side == "left" else 1.0) * (run.width / 2 + 0.55)
+        going = h / math.tan(math.radians(40))
+        n = max(3, round(h / 0.2))
+        t_bot, t_top = run.length - going, run.length
+        strs = [
+            k.member(k.xz(run.at(t_bot, s + q), FOOT), k.xz(run.at(t_top, s + q), h), 0.08, 0.25)
+            for q in (-0.45, 0.45)
+        ]
+        srail = [
+            k.member(k.xz(run.at(t_bot, s + q), RAIL_H), k.xz(run.at(t_top, s + q), h + RAIL_H), 0.05)
+            for q in (-0.45, 0.45)
+        ]
+        tr = [k.xz(run.at(t_bot + going * (i + 0.5) / n, s), h * (i + 1) / n) for i in range(n)]
+        nodes.append(MeshNode("stair", "Steel_Structure", k.merge(strs)))
+        nodes.append(
+            MeshNode(
+                "stair_treads", "Grating", Instanced(k.block((0.25, 0.04, 0.9)), k.posed(np.array(tr), run.u))
+            )
+        )
+        rails.append(MeshNode("handrail_rails", "Handrail", k.merge(srail)))
+    nodes += _merge_rails(rails)
+    return _stamp(nodes, p, dflt)
+
+
+class StairTowerParams(_P):
+    flight_rise_m: float = Field(3.6, gt=1, le=8, description="height between landings when levels is empty")
+    landing_m: float = Field(1.4, gt=0.6, le=5)
+    column_section_m: float = Field(0.25, gt=0.05, le=1)
+    base_slab: bool = True
+
+
+STAIR_DOC = (
+    "Stair tower: four corner columns, switchback flights (stringers, treads, handrails) between landings, "
+    "grating landings at each level, guarded top landing, concrete base slab. Footprint: rect (along = "
+    "flight direction) or polygon. base_el = grade; top_el = top landing; levels = landing elevations."
+)
+
+
+@builder("stair_tower", family="structure", params=StairTowerParams, doc=STAIR_DOC, default_height_m=12.0)
+def build_stair_tower(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = StairTowerParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 12.0)
+    h = top_el - base
+    ring = k.outline(item, ctx)
+    run = k.runs(item, ctx)[0] if item.footprint.kind == "rect" else k.rect_run(ring)
+    L, W, c = run.length, run.width, p.column_section_m
+    lands = _levels(item, base, h)
+    if not lands:
+        n = max(1, math.ceil(h / p.flight_rise_m - 1e-9))
+        lands = [h * (i + 1) / n for i in range(n)]
+    if abs(lands[-1] - h) > 1e-6:
+        lands = sorted(set(lands) | {h})
+    ld = min(p.landing_m, L / 3)
+    corners = [run.at(t, s) for t in (c / 2, L - c / 2) for s in (-W / 2 + c / 2, W / 2 - c / 2)]
+    nodes = []
+    if p.base_slab:
+        pad = np.asarray(Polygon(ring).buffer(0.3, join_style=2).exterior.coords)[:-1]
+        nodes.append(MeshNode("base_slab", "Concrete", k.slab(pad, 0.0, 0.2)))
+    nodes.append(
+        MeshNode(
+            "columns",
+            "Steel_Structure",
+            Instanced(k.column_mesh(h, c), k.posed(np.array([k.xz(q, 0.0) for q in corners]), run.u)),
+        )
+    )
+    land_xf, strs, rails, treads = [], [], [], []
+    y_prev = 0.0
+    for i, y in enumerate(lands):
+        up = i % 2 == 0  # even flights climb +u on the left half, odd ones come back on the right half
+        s = (-W / 4) if up else (W / 4)
+        t_start = ld if up else L - ld
+        going = min(L - 2 * ld, (y - y_prev) / math.tan(math.radians(35)))
+        direction = 1.0 if up else -1.0
+        rise = y - y_prev
+        n = max(3, round(rise / 0.2))
+        t_end = t_start + direction * going
+        for q in (-W / 4 + 0.05, W / 4 - 0.05):
+            strs.append(
+                k.member(
+                    k.xz(run.at(t_start, s + q), max(y_prev, FOOT)), k.xz(run.at(t_end, s + q), y), 0.08, 0.25
+                )
+            )
+        q_out = -W / 4 + 0.05 if up else W / 4 - 0.05
+        rails.append(
+            k.member(
+                k.xz(run.at(t_start, s + q_out), y_prev + RAIL_H),
+                k.xz(run.at(t_end, s + q_out), y + RAIL_H),
+                0.05,
+            )
+        )
+        treads += [
+            k.xz(run.at(t_start + direction * going * (j + 0.5) / n, s), y_prev + rise * (j + 1) / n)
+            for j in range(n)
+        ]
+        t_land = L - ld / 2 if up else ld / 2
+        land_xf.append(k.posed(k.xz(run.at(t_land), y - 0.025)[None], run.u)[0])
+        y_prev = y
+    nodes.append(MeshNode("landings", "Grating", Instanced(k.block((ld, 0.05, W - 0.1)), np.array(land_xf))))
+    nodes.append(MeshNode("stringers", "Steel_Structure", k.merge(strs)))
+    nodes.append(
+        MeshNode(
+            "treads",
+            "Grating",
+            Instanced(k.block((0.25, 0.04, W / 2 - 0.2)), k.posed(np.array(treads), run.u)),
+        )
+    )
+    top = np.asarray(Polygon(ring).buffer(-0.05, join_style=2).exterior.coords)[:-1]
+    guard = k.handrail(top, h, height=RAIL_H, spacing=2.5, closed=True, lod=ctx.lod)
+    guard.append(MeshNode("handrail_rails", "Handrail", k.merge(rails)))
+    nodes += _merge_rails(guard)
+    return _stamp(nodes, p, dflt)
