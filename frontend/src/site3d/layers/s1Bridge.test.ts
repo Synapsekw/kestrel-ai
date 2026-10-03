@@ -47,7 +47,12 @@ describe("siteToScene (S1), as S2 reads it", () => {
 
   it("puts plant north on scene +x: a point 10 m along plant north lands at x = 10", () => {
     const t = (FRAME.plant_north_deg * Math.PI) / 180;
-    const [x, y, z] = siteToScene(FRAME, FRAME.origin_crs[0] + 10 * Math.sin(t), FRAME.origin_crs[1] + 10 * Math.cos(t), 100);
+    const [x, y, z] = siteToScene(
+      FRAME,
+      FRAME.origin_crs[0] + 10 * Math.sin(t),
+      FRAME.origin_crs[1] + 10 * Math.cos(t),
+      100,
+    );
     expect(x).toBeCloseTo(10, 6);
     expect(y).toBeCloseTo(0, 6);
     expect(z).toBeCloseTo(0, 6);

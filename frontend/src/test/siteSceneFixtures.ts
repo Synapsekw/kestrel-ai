@@ -1,4 +1,4 @@
-import type { SceneCloud, SiteScene } from "@/api/siteScene";
+import { toFrameT, type SceneCloud, type SiteScene } from "@/api/siteScene";
 import type { SiteFrameT } from "@/site3d/engine/siteTransform";
 
 export const SCENE_PROJECT = "p1";
@@ -70,13 +70,8 @@ export const TILE_SCENE: SiteScene = {
   ],
 };
 
-/** Al-Zour's plant grid: UTM 39N, theta 17.9991 deg, datum HPFS 100. */
-export const FRAME: SiteFrameT = {
-  crs: { epsg: 32639, wkt: null },
-  origin_crs: [244338.089, 3179515.69],
-  plant_north_deg: 17.9991,
-  datum: { label: "HPFS", el_m: 100 },
-};
+/** Al-Zour's plant grid, as S1's `SiteFrameT` (the numbers live once, in `TEST_FRAME`). */
+export const FRAME: SiteFrameT = toFrameT(TEST_FRAME)!;
 
 export const cloudRow = (o: Partial<SceneCloud> = {}): SceneCloud => ({
   id: "c1",

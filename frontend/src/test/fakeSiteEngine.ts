@@ -9,7 +9,17 @@ export function fakeSiteEngine() {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1e6);
   const canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () =>
-    ({ left: 0, top: 0, right: 200, bottom: 200, width: 200, height: 200, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    ({
+      left: 0,
+      top: 0,
+      right: 200,
+      bottom: 200,
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
   const renderer = { info: { render: { frame: 0 } } } as unknown as THREE.WebGLRenderer;
   const requestRender = vi.fn();
   const layers = new Map<string, SiteLayer>();
@@ -29,5 +39,14 @@ export function fakeSiteEngine() {
       layers.delete(id);
     }),
   };
-  return { engine: raw as unknown as SiteEngine, scene, camera, canvas, renderer, requestRender, layers, raw };
+  return {
+    engine: raw as unknown as SiteEngine,
+    scene,
+    camera,
+    canvas,
+    renderer,
+    requestRender,
+    layers,
+    raw,
+  };
 }
