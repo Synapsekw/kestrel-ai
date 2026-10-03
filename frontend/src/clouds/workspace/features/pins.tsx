@@ -18,6 +18,7 @@ import { toCloudPin, useCloudPins } from "@/clouds/pins/useCloudPins";
 import { useFindingArrival } from "@/clouds/pins/useFindingArrival";
 import { readLastType, usePinTool } from "@/clouds/pins/usePinTool";
 import type { Vec3 } from "@/clouds/viewer/types";
+import { addProjectType } from "@/catalogue/addProjectType";
 import { formatFindingNumber } from "@/findings/format";
 import { useInspectorCommands } from "@/findings/inspectorStore";
 import { useFindingKeys } from "@/findings/useFindingKeys";
@@ -354,6 +355,12 @@ export function usePinsFeature(ctx: FeatureContext): WorkspaceFeature {
       busy={tool.busy}
       locationText={locationLabel(draft.p[2], draft.normal)}
       onCreate={(v) => void tool.create(v)}
+      onCreateType={async (name) => {
+        const added = await addProjectType(api, projectId, name, "defect");
+        const created = added.project.classes.find((c) => c.id === added.typeId);
+        if (!created) throw new Error("Could not add the anomaly.");
+        return created;
+      }}
       onCancel={() => tool.cancel()}
       submitRef={submitRef}
     />

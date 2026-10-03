@@ -113,6 +113,16 @@ def anchor_of(r: Finding) -> dict[str, Any]:
         return {"kind": "image", "image_id": r.image_id, "annotation_id": r.annotation_id}
     if r.anchor_kind == "map":
         return {"kind": "map", "map_id": r.map_id, "geometry": r.geometry}
+    if r.anchor_kind == "asset":
+        point = [r.ax, r.ay, r.az] if r.ax is not None else None
+        normal = [r.an_x, r.an_y, r.an_z] if None not in (r.an_x, r.an_y, r.an_z) else None
+        return {
+            "kind": "asset",
+            "asset_model_id": r.asset_model_id,
+            "asset_version": r.asset_version,
+            "point": point,
+            "normal": normal,
+        }
     return {
         "kind": "cloud",
         "cloud_id": r.cloud_id,
@@ -155,8 +165,8 @@ class FindingOut(BaseModel):
     updated_at: datetime
     reviewed_at: datetime | None
     closed_at: datetime | None
-    # Asset findings (spec 2026-10-02-asset-findings §8). C0 answers them for the kinds that exist
-    # today; D1 reads the asset columns.
+    # Asset findings (spec 2026-10-02-asset-findings §8): read from migration 0016's columns. An
+    # image, map or cloud finding has them null and one implicit sighting (§4 A2).
     asset_model_id: str | None
     height_m: float | None
     bearing_deg: float | None
@@ -187,14 +197,14 @@ class FindingOut(BaseModel):
             updated_at=r.updated_at,
             reviewed_at=r.reviewed_at,
             closed_at=r.closed_at,
-            asset_model_id=None,
-            height_m=None,
-            bearing_deg=None,
-            side=None,
-            zone=None,
-            component=None,
-            placement=None,
-            sighting_count=1,
+            asset_model_id=r.asset_model_id,
+            height_m=r.height_m,
+            bearing_deg=r.bearing_deg,
+            side=r.side,
+            zone=r.zone,
+            component=r.component,
+            placement=r.placement,
+            sighting_count=r.sighting_count if r.anchor_kind == "asset" else 1,
             representative=representative_of(r),
         )
 

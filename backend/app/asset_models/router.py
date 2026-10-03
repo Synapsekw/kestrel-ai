@@ -6,7 +6,7 @@ import shutil
 
 from fastapi import APIRouter, Depends, Path, Request, Response
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.asset_models import jobs_glb as _jobs  # noqa: F401 - registers `asset_model_glb`
 from app.asset_models import service, store
@@ -25,7 +25,7 @@ from app.asset_models.schemas import (
 from app.asset_models.spec import AssetSpec
 from app.asset_models.store import INT32_MAX
 from app.asset_models.validate import validate
-from app.db.models import AssetModel, AssetModelVersion
+from app.db.models import AssetModel, AssetModelVersion, Finding, FindingSighting
 from app.errors import AppError
 from app.events_util import publish_asset_models_changed
 from app.jobs.schemas import JobOut
@@ -78,11 +78,41 @@ def patch_asset_model(
     return out
 
 
+def _placed_on(findings: int, loose: int) -> str:
+    """What holds the model, as the subject of the refusal: for example `1 finding is`."""
+    parts = []
+    if findings:
+        parts.append("1 finding" if findings == 1 else f"{findings} findings")
+    if loose:
+        parts.append("1 ungrouped sighting" if loose == 1 else f"{loose} ungrouped sightings")
+    return f"{' and '.join(parts)} {'is' if findings + loose == 1 else 'are'}"
+
+
 @router.delete(P + "/{assetModelId}", status_code=204)
 def delete_asset_model(assetModelId: str, request: Request, handle: ProjectHandle = Depends(get_project)):  # noqa: N803
     jobs = request.app.state.jobs
     with handle.session() as s:
         row = store.get_model(s, assetModelId)
+        # Any finding, closed ones too, and any sighting not yet grouped: their pins, heights and
+        # zones were computed on this model (asset findings plan, Review Focus 4). A grouped
+        # sighting belongs to a finding on this same model, so the findings count covers it. The
+        # foreign keys would refuse the delete as well, as a 500.
+        held = s.scalar(
+            select(func.count()).select_from(Finding).where(Finding.asset_model_id == assetModelId)
+        )
+        loose = s.scalar(
+            select(func.count())
+            .select_from(FindingSighting)
+            .where(FindingSighting.asset_model_id == assetModelId, FindingSighting.finding_id.is_(None))
+        )
+        if held or loose:
+            raise AppError(
+                "has_findings",
+                f"{_placed_on(held, loose)} placed on this model. Delete them or move them to another"
+                " model first.",
+                409,
+                {"count": held + loose},
+            )
         pairs = s.execute(
             select(AssetModelVersion.glb_job_id, AssetModelVersion.glb_status).where(
                 AssetModelVersion.model_id == assetModelId

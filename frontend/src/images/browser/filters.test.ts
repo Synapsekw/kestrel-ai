@@ -80,6 +80,17 @@ describe("browser filters → index query", () => {
     expect(applyPreset(null)).toEqual(DEFAULT_BROWSER_FILTERS);
   });
 
+  it("sends the photo review status, and counts it under More", () => {
+    expect(filtersToIndexQuery(f({ reviewStatus: "uncertain" }))).toEqual({
+      sort: "capture_time",
+      order: "asc",
+      fields: "geo",
+      review_status: "uncertain",
+    });
+    expect(moreFilterCount(f({ reviewStatus: "none" }))).toBe(1);
+    expect(moreFilterCount(DEFAULT_BROWSER_FILTERS)).toBe(0);
+  });
+
   it("counts the filters hidden under More", () => {
     expect(moreFilterCount(DEFAULT_BROWSER_FILTERS)).toBe(0);
     expect(moreFilterCount(f({ typeIds: ["a"], unlabeled: true, search: "x", reviewed: "yes" }))).toBe(4);

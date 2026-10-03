@@ -121,6 +121,27 @@ describe("DataTable", () => {
     expect(onEndReached).toHaveBeenCalledTimes(2);
   });
 
+  it("asks again for a replaced list of the same length (a filter change)", () => {
+    const onEndReached = vi.fn();
+    const table = (rows: Row[]) => (
+      <DataTable
+        label="Findings"
+        columns={COLUMNS}
+        rows={rows}
+        rowKey={(r) => r.id}
+        onEndReached={onEndReached}
+      />
+    );
+    const { rerender } = render(table(make(30)));
+    expect(onEndReached).not.toHaveBeenCalled();
+    scrollTo(screen.getByRole("grid", { name: "Findings" }), 30 * ROW_HEIGHT);
+    expect(onEndReached).toHaveBeenCalledTimes(1);
+    rerender(table([]));
+    rerender(table(make(30)));
+    scrollTo(screen.getByRole("grid", { name: "Findings" }), 30 * ROW_HEIGHT + 10);
+    expect(onEndReached).toHaveBeenCalledTimes(2);
+  });
+
   it("sorts from the header", async () => {
     const onSortChange = vi.fn();
     const { rerender } = render(

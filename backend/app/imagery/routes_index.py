@@ -10,7 +10,14 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app.imagery import index as image_index
 from app.imagery import jobs_summary
-from app.imagery.filters import SEVERITY_PATTERN, SORT_NAMES, STATUS_PATTERN, ImageFilters, parse_csv
+from app.imagery.filters import (
+    REVIEW_PATTERN,
+    SEVERITY_PATTERN,
+    SORT_NAMES,
+    STATUS_PATTERN,
+    ImageFilters,
+    parse_csv,
+)
 from app.imagery.index_schemas import ImageIndexOut
 from app.imagery.jobs_summary import run_summary_rebuild  # noqa: F401 - registers `summary_rebuild`
 from app.jobs.schemas import JobOut
@@ -45,6 +52,9 @@ def get_image_index(
     has_suggestions: bool | None = None,
     reviewed: bool | None = None,
     unlabeled: bool | None = None,
+    review_status: str | None = Query(
+        None, pattern=REVIEW_PATTERN, description="csv of photo review statuses"
+    ),
     search: str | None = None,
     sort: IndexSort = "path",
     order: Literal["asc", "desc"] = "asc",
@@ -59,6 +69,7 @@ def get_image_index(
         has_suggestions=has_suggestions,
         reviewed=reviewed,
         unlabeled=unlabeled,
+        review_status=parse_csv(review_status),
         search=search,
     )
     return ImageIndexOut(**image_index.build_index(handle, f, sort=sort, order=order, geo=fields == "geo"))

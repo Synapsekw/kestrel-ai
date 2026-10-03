@@ -200,3 +200,53 @@ def test_huge_version_is_never_a_500(client, base, suffix):
     assert r.status_code in (404, 422)
     r = client.post(f"{base}/{mid}/versions/{2**63}/restore")
     assert r.status_code in (404, 422)
+
+
+def test_asset_model_delete_refused_with_findings(client, base, handle):
+    """Review Focus 4: a model that findings point at is never deleted from under them, closed
+    findings included; once the last one is gone the delete goes through."""
+    from app.db.models import AssetModel, Finding
+
+    m = create(client, base)
+    with handle.session() as s:
+        s.add(
+            Finding(
+                id="f-asset",
+                number=901,
+                type_id="t1",
+                status="closed",
+                anchor_kind="asset",
+                asset_model_id=m["id"],
+                data_type="asset_model",
+                data_id=m["id"],
+            )
+        )
+    r = client.delete(f"{base}/{m['id']}")
+    assert r.status_code == 409, r.text
+    error = r.json()["error"]
+    assert (error["code"], error["details"]) == ("has_findings", {"count": 1})
+    assert error["message"].startswith("1 finding is placed on this model.")
+    with handle.session() as s:
+        assert s.get(AssetModel, m["id"]) is not None
+        s.delete(s.get(Finding, "f-asset"))
+    assert client.delete(f"{base}/{m['id']}").status_code == 204
+
+
+def test_asset_model_delete_refused_with_ungrouped_sightings(client, base, handle):
+    """A sighting not yet grouped into a finding holds the model too (J4 plan, Index notes N5)."""
+    from findings_helpers import insert_box
+
+    from app.db.models import FindingSighting
+
+    m = create(client, base)
+    image_id, box_id = insert_box(handle, "t1")
+    with handle.session() as s:
+        s.add(FindingSighting(id="sg", asset_model_id=m["id"], image_id=image_id, annotation_id=box_id))
+    r = client.delete(f"{base}/{m['id']}")
+    assert r.status_code == 409, r.text
+    error = r.json()["error"]
+    assert (error["code"], error["details"]) == ("has_findings", {"count": 1})
+    assert error["message"].startswith("1 ungrouped sighting is placed on this model.")
+    with handle.session() as s:
+        s.delete(s.get(FindingSighting, "sg"))
+    assert client.delete(f"{base}/{m['id']}").status_code == 204

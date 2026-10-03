@@ -1,10 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { NoWebGlError } from "@/clouds/viewer/engine";
 import { Alert, Button, Skeleton } from "@/ui";
-import { createModelEngine, type ModelEngine, type ModelPart, type ModelView } from "./engine";
+import type { CameraPose } from "./cameras";
+import { createModelEngine, type ModelEngine, type ModelPart, type ModelView, type PickHit } from "./engine";
+import type { FocusSettings } from "./focus";
+import type { GroundTile } from "./ground";
+import type { FetchPatch, PlacementItem } from "./placements";
 
 export type ModelViewState = "loading" | "running" | "no-webgl" | "load-error";
-export type ModelViewerHandle = Omit<ModelEngine, "load" | "dispose">;
+export type ModelViewerHandle = Omit<ModelEngine, "load" | "dispose" | "onPick">;
 
 export interface ModelViewerProps {
   glbUrl: string | null;
@@ -14,6 +18,8 @@ export interface ModelViewerProps {
   onState?(s: ModelViewState): void;
   /** Where the notices go (px from the viewer's edges), so the workspace's panels never cover them. */
   noticeInset?: { left: number; right: number; top: number };
+  /** A click on a finding, a camera or a part (the part also arrives through `onSelect`). */
+  onPick?(hit: PickHit): void;
 }
 
 /** What the workspace last asked for; replayed onto each new engine (a reload, a new GLB). */
@@ -24,6 +30,13 @@ interface Wanted {
   headOff: boolean;
   overlay: Float32Array | null;
   selected: string | null;
+  placements: { items: PlacementItem[]; fetchPatch: FetchPatch } | null;
+  cameras: { poses: CameraPose[]; colourOf: (p: CameraPose) => string } | null;
+  selectedCamera: { id: string | null; cone: boolean };
+  ghost: boolean;
+  autoRotate: { on: boolean; speed?: number };
+  ground: GroundTile[] | null;
+  pose: CameraPose | null;
 }
 
 /** The React shell around `engine.ts`: the canvas, the notices, and the handle the workspace drives. */
@@ -40,6 +53,13 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
     headOff: false,
     overlay: null,
     selected: null,
+    placements: null,
+    cameras: null,
+    selectedCamera: { id: null, cone: false },
+    ghost: false,
+    autoRotate: { on: false },
+    ground: null,
+    pose: null,
   });
   const [generation, setGeneration] = useState(0);
   const sceneKey = `${glbUrl ?? ""}#${generation}`;
@@ -95,6 +115,7 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         return;
       }
       engine.current = eng;
+      eng.onPick((hit) => cbs.current.onPick?.(hit));
       framed.current = false;
     }
     const live = eng;
@@ -109,6 +130,13 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         live.setLevels(w.levels);
         live.setHeadOff(w.headOff);
         live.setOverlay(w.overlay);
+        if (w.placements) live.setPlacements(w.placements.items, w.placements.fetchPatch);
+        if (w.cameras) live.setCameras(w.cameras.poses, w.cameras.colourOf);
+        live.setSelectedCamera(w.selectedCamera.id, w.selectedCamera.cone);
+        live.setGhost(w.ghost);
+        live.setAutoRotate(w.autoRotate.on, w.autoRotate.speed);
+        live.setGround(w.ground);
+        if (w.pose) live.viewFromPose(w.pose);
         if (w.selected) selectQuietly(live, w.selected);
         setStatus({ key: sceneKey, state: "running" });
         cbs.current.onParts(parts);
@@ -151,7 +179,41 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         engine.current?.setOverlay(points);
       },
       setView(view: ModelView) {
+        // a preset view leaves the pose view, so a fresh engine must not replay it
+        wanted.current.pose = null;
         engine.current?.setView(view);
+      },
+      setPlacements(items, fetchPatch) {
+        wanted.current.placements = { items, fetchPatch };
+        engine.current?.setPlacements(items, fetchPatch);
+      },
+      setCameras(poses, colourOf) {
+        wanted.current.cameras = { poses, colourOf };
+        engine.current?.setCameras(poses, colourOf);
+      },
+      setSelectedCamera(id, cone) {
+        wanted.current.selectedCamera = { id, cone };
+        engine.current?.setSelectedCamera(id, cone);
+      },
+      focusFinding(id: string, settings?: FocusSettings) {
+        wanted.current.pose = null;
+        return engine.current?.focusFinding(id, settings) ?? false;
+      },
+      setGhost(on) {
+        wanted.current.ghost = on;
+        engine.current?.setGhost(on);
+      },
+      setAutoRotate(on, speed) {
+        wanted.current.autoRotate = { on, speed };
+        engine.current?.setAutoRotate(on, speed);
+      },
+      setGround(tiles) {
+        wanted.current.ground = tiles;
+        engine.current?.setGround(tiles);
+      },
+      viewFromPose(pose) {
+        wanted.current.pose = pose;
+        engine.current?.viewFromPose(pose);
       },
     }),
     [],

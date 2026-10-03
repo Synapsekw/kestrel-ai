@@ -16,6 +16,7 @@ import type { ToolApi } from "./types";
 const api = (): ToolApi => ({
   store: useImagesWorkspace,
   createShape: vi.fn(),
+  holdShape: vi.fn(),
   createMeasurement: vi.fn(),
   openPicker: vi.fn(),
   notify: vi.fn(),

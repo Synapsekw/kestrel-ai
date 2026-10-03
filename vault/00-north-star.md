@@ -91,7 +91,11 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Cleanup pass** (2026-10-03, `fe56752d` on `main`, **not pushed**). `frontend/tsconfig.json` no longer trips TS5069 (`tsBuildInfoFile` without `incremental`; seen only on TypeScript < 5.6, because `tsc -b` implies incremental) and drops `baseUrl` (deprecated in TS 6, removed in TS 7). Frontend lint is down from 22 warnings to 0. Gate: pytest 5462, vitest 4283, e2e 189/8 skipped, build ok. No user-observable change. The installer was rebuilt from `d94aa249` (reusing the `914c4d5b` sidecar; no backend diff since) and **installed** on 2026-10-03; it also carries multi-page PDF drawing import (`2a5c4523`). The app and backend start. See [[2026-10-03-1107-cleanup-pass]].
+**Shipped last:** **Scan overlay stays smooth while orbiting** (2026-10-03, `1ce7ad64` on `task/overlay-smooth`, pushed, **not merged, not installed**). The asset-model viewer draws at most 32,000 scan points from the cells in frame, and paints once per frame. Installer written (`Kestrel AI_0.1.0_x64-setup.exe` in the overlay-smooth worktree, 15:39); the install was aborted and then deferred because other edges are running. The installed app is still the 11:28 build. Touched-file vitest and eslint passed; the full gate was not run. See [[2026-10-03-1705-scan-overlay-smooth]].
+
+Before that: **Name an anomaly while marking** (2026-10-03, `26a3b90a` on `main`, **not pushed**). A box, polygon or point on a photo, a finding or label on a map, and a pin on a point cloud can create their defect type on the spot. It no longer has to exist from project setup. Video is not covered (no video annotation surface). Touched-file eslint, prettier and vitest passed; the full gate was not re-run, and it is not in an installed build. See [[2026-10-03-1531-anomaly-on-the-fly]].
+
+Before that: **Cleanup pass** (2026-10-03, `fe56752d` on `main`, **not pushed**). `frontend/tsconfig.json` no longer trips TS5069 (`tsBuildInfoFile` without `incremental`; seen only on TypeScript < 5.6, because `tsc -b` implies incremental) and drops `baseUrl` (deprecated in TS 6, removed in TS 7). Frontend lint is down from 22 warnings to 0. Gate: pytest 5462, vitest 4283, e2e 189/8 skipped, build ok. No user-observable change. The installer was rebuilt from `d94aa249` (reusing the `914c4d5b` sidecar; no backend diff since) and **installed** on 2026-10-03; it also carries multi-page PDF drawing import (`2a5c4523`). The app and backend start. See [[2026-10-03-1107-cleanup-pass]].
 
 Before that: **Workspace rail for Maps and Point clouds** (2026-10-03, `e9317f74..f2671c28`, merged as `8340215a` on `main`, **not pushed**). Both workspaces share one left rail: Layers · Findings · Measure, then AI · Drawings (map) or Clip · Photos (cloud). One topic panel is open at a time (`\` toggles it), and the inspector shows only the selection. Each concept has one home; there is one "All surveys" switch on the timeline. Merged-tree gate: lint 0, vitest 4283, build ok, e2e 189/8 skipped (backend and contract unchanged; the branch gate had pytest 5306). The installer was rebuilt from `8340215a` and **installed**; it carries M1 am-u1..u7 and the basemap (the frozen sidecar from `914c4d5b` has no backend diff to it). Known bug: after `\` opens the panel, Space/Enter press the panel's eye (§5). See [[2026-10-03-1016-workspace-rail]].
 
@@ -139,6 +143,8 @@ Before that: **Foundation of the inspection platform, complete on `main` and ins
 **In flight (M1):** the installer from `8340215a` (2026-10-03) contains M1; the HCl acceptance is what remains (§5 Owed). The other session's artifact-port plan treats M1 as P0.
 
 **In flight:** nothing for Overview v2: the operator checked it on the installed `8aead7b` (2026-10-02, "all good, all working"). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
+
+**Next:** Try the 4-step walkthrough in [[2026-10-03-1531-anomaly-on-the-fly]] on a project with no anomaly types. Naming a type on a video waits until S4 exists.
 
 **Next (S1):** The operator runs `docs/evidence/setup/walkthrough.md` on a real delivery. Then brainstorm S4 (video import, which unblocks the Confined template) or S2 (AI Describe it plus severity pre-fill).
 
@@ -282,6 +288,19 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Scan overlay smoothness (opened 2026-10-03)
+
+- **Not merged, not installed.** `1ce7ad64` is on `origin/task/overlay-smooth` only. The setup exe is already built; do not rebuild. Install it only after the other in-flight edges are done and Kestrel AI is closed. Walkthrough: [[2026-10-03-1705-scan-overlay-smooth]].
+- **Operator check:** rotate and zoom an asset model with **Show scan overlay** on. Nobody has done that on this build.
+- **Gate:** touched vitest files and eslint only. The full frontend, backend, contract and e2e gates were not run.
+- **Budget:** 32,000 drawn points. Raise `OVERLAY_BUDGET` if the overlay looks too thin.
+
+### Name an anomaly while marking (opened 2026-10-03)
+
+- **Operator check:** the 4-step walkthrough in [[2026-10-03-1531-anomaly-on-the-fly]]. Not tried in the app, and not in an installed build.
+- **Video:** naming a type while marking a video was asked for and not built. There is no video annotation surface; S4 video import is still unbuilt.
+- **Gate:** only the touched vitest files, eslint and prettier ran. The full frontend, backend, contract and e2e gates were not re-run for `26a3b90a`.
 
 ### Cleanup pass (opened 2026-10-03)
 

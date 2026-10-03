@@ -15,6 +15,7 @@ beforeEach(() => {
   api = {
     store: useImagesWorkspace,
     createShape: vi.fn(),
+    holdShape: vi.fn(),
     createMeasurement: vi.fn(),
     openPicker: vi.fn(),
     notify: vi.fn(),
@@ -32,7 +33,7 @@ describe("point marker (FC-R6)", () => {
     useImagesWorkspace.setState({ activeTypeId: "o" });
     POINT_TOOL.onDown!(press, api);
     expect(api.createShape).not.toHaveBeenCalled();
-    expect(api.openPicker).toHaveBeenCalledWith("active");
-    expect(api.notify).toHaveBeenCalledWith("Point markers need a defect type. Pick one.");
+    expect(api.holdShape).toHaveBeenCalledWith({ shape: "point", x: 10, y: 20.1 });
+    expect(api.notify).toHaveBeenCalledWith("Point markers need a defect. Pick one, or name a new anomaly.");
   });
 });

@@ -56,6 +56,17 @@ export const PRINT_THEME = {
     height_mm: 70,
     palette: ["#6A5CFF", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"],
   },
+  brand: {
+    colours: {
+      ink: "ink",
+      rule: "line",
+      head_fill: "pale",
+      violet: "accent",
+      violet_print: "accent_dark",
+    },
+    cover_gradient: ["navy", "navy", "accent_dark"],
+    chart_lead: "accent",
+  },
 } as const;
 
 const C = PRINT_THEME.colours;
@@ -150,4 +161,48 @@ export function textStyle(sizePt: number, colour: string = PRINT.ink): CSSProper
 /** `F-0042` (DESIGN.md Copy); a string number is printed as given. */
 export function findingLabel(n: number | string): string {
   return typeof n === "number" ? `F-${String(n).padStart(4, "0")}` : n;
+}
+
+/** The six brand colours (contract `BrandColors`). */
+export type BrandColourKey = "accent" | "accent_dark" | "navy" | "ink" | "pale" | "line";
+
+/** What the overlay reads from a brand; the contract's `Brand` satisfies it. */
+export interface BrandOverlayInput {
+  colors: Record<BrandColourKey, string>;
+  font_text: string | null;
+  font_numerals: string | null;
+}
+
+type Widen<T> = T extends string
+  ? string
+  : T extends number
+    ? number
+    : T extends readonly (infer U)[]
+      ? readonly Widen<U>[]
+      : { -readonly [K in keyof T]: Widen<T[K]> };
+
+/** PRINT_THEME's shape with its literals widened, so a branded copy type-checks. */
+export type PrintThemeData = Widen<typeof PRINT_THEME>;
+
+export type BrandedTheme = PrintThemeData & {
+  fonts: PrintThemeData["fonts"] & { numerals?: string };
+};
+
+/**
+ * The print theme with a brand laid over it (spec 2026-10-02-asset-findings §5.8): the twin of
+ * backend `app.reports.theme.with_brand`, pinned to it by contract/fixtures/report-brand-overlay.json.
+ * Returns a new object; `theme` is never changed. No brand: an equal copy.
+ */
+export function withBrand(theme: PrintThemeData, brand: BrandOverlayInput | null): BrandedTheme {
+  const out = JSON.parse(JSON.stringify(theme)) as BrandedTheme;
+  if (!brand) return out;
+  const rules = theme.brand;
+  const hex = (key: string) => brand.colors[key as BrandColourKey].toUpperCase();
+  const colours = out.colours as Record<string, string>;
+  for (const [key, source] of Object.entries(rules.colours)) colours[key] = hex(source);
+  out.cover.gradient = rules.cover_gradient.map((k) => hex(k));
+  out.chart.palette = [hex(rules.chart_lead), ...theme.chart.palette.slice(1)];
+  const sans = brand.font_text ?? theme.fonts.sans;
+  out.fonts = { ...theme.fonts, sans, numerals: brand.font_numerals ?? sans };
+  return out;
 }

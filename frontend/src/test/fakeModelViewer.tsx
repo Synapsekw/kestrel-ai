@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- a test double and its controls */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import type { ModelPart } from "@/assetmodels/viewer/engine";
+import type { ModelPart, PickHit } from "@/assetmodels/viewer/engine";
 import type { ModelViewerHandle, ModelViewerProps, ModelViewState } from "@/assetmodels/viewer/ModelViewer";
 
 interface FakeState {
@@ -36,6 +36,11 @@ export function emitState(state: ModelViewState): void {
   fake.props?.onState?.(state);
 }
 
+/** The user clicks a finding, camera or part in the 3D view; wrap it in act(). */
+export function emitPick(hit: PickHit): void {
+  fake.props?.onPick?.(hit);
+}
+
 export const FakeModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
   function FakeModelViewer(props, ref) {
     const latest = useRef(props);
@@ -57,6 +62,17 @@ export const FakeModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(
         setHeadOff: rec("setHeadOff"),
         setOverlay: rec("setOverlay"),
         setView: rec("setView"),
+        setPlacements: rec("setPlacements"),
+        setCameras: rec("setCameras"),
+        setSelectedCamera: rec("setSelectedCamera"),
+        focusFinding: (...args: unknown[]) => {
+          fake.calls.push({ name: "focusFinding", args });
+          return true;
+        },
+        setGhost: rec("setGhost"),
+        setAutoRotate: rec("setAutoRotate"),
+        setGround: rec("setGround"),
+        viewFromPose: rec("viewFromPose"),
       } as ModelViewerHandle;
     }, []);
     return <div data-testid="fake-model-viewer" />;

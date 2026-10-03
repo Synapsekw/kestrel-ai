@@ -1,10 +1,14 @@
 """The print theme (spec 2026-09-26-reports §10.1): one source, contract/fixtures/report-theme.json,
 pinned here for the backend and by R6's printTheme test for the preview."""
 
+import copy
 import json
 import re
 from pathlib import Path
 
+import pytest
+
+from app.brands.store import BrandRow
 from app.reports import theme
 
 FIXTURE = Path(__file__).resolve().parents[2] / "contract" / "fixtures" / "report-theme.json"
@@ -49,3 +53,59 @@ def test_every_colour_is_an_uppercase_hex():
 
 def test_theme_module_does_not_import_reportlab():
     assert "reportlab" not in Path(theme.__file__).read_text("utf-8")
+
+
+VECTORS = Path(__file__).resolve().parents[2] / "contract" / "fixtures" / "report-brand-overlay.json"
+CASES = json.loads(VECTORS.read_text("utf-8"))["cases"]
+
+
+def _row(brand: dict) -> BrandRow:
+    return BrandRow(
+        id="vector",
+        name="vector",
+        colors=brand["colors"],
+        font_text=brand["font_text"],
+        font_numerals=brand["font_numerals"],
+        logo_on_light=None,
+        logo_on_dark=None,
+        logo_flat=None,
+        website="",
+        owner="",
+        confidentiality="",
+        pdf_author="",
+        builtin=False,
+    )
+
+
+def test_the_theme_carries_the_brand_overlay_rules():
+    assert theme.THEME["brand"] == {
+        "colours": {
+            "ink": "ink",
+            "rule": "line",
+            "head_fill": "pale",
+            "violet": "accent",
+            "violet_print": "accent_dark",
+        },
+        "cover_gradient": ["navy", "navy", "accent_dark"],
+        "chart_lead": "accent",
+    }
+
+
+@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
+def test_with_brand_meets_the_shared_vectors(case):
+    before = copy.deepcopy(theme.THEME)
+    out = theme.with_brand(theme.THEME, _row(case["brand"]) if case["brand"] else None)
+    assert theme.THEME == before  # never mutated
+    if case["expected"] is None:
+        assert out == theme.THEME and out is not theme.THEME
+        return
+    got = {
+        "colours": out["colours"],
+        "cover_gradient": out["cover"]["gradient"],
+        "chart_palette": out["chart"]["palette"],
+        "fonts": out["fonts"],
+    }
+    assert got == case["expected"]
+    assert {k: v for k, v in out.items() if k not in ("colours", "cover", "chart", "fonts")} == {
+        k: v for k, v in theme.THEME.items() if k not in ("colours", "cover", "chart", "fonts")
+    }
