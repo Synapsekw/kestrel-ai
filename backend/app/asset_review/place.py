@@ -19,11 +19,18 @@ Pure: no database, and no files except `write_patch` and `write_index`.
 
 from __future__ import annotations
 
+import io
+import json
 import math
+import os
+import struct
 from dataclasses import dataclass
+from pathlib import Path
+from uuid import uuid4
 
 import numpy as np
 from PIL import Image as PILImage
+from PIL import ImageDraw
 
 from app.asset_review import raycast
 from app.asset_review.derive import Derived, component_name, derive
@@ -32,6 +39,15 @@ from app.geometry import aabb_of, corners_of
 PREVIEW_SIDE = 2048  # photos are read at this long side, never the original (Global Constraints)
 POINT_GRID = 5
 DEFAULT_PATCH_GRID = 48  # the kit's default when a profile sets none
+EDGE_FACTOR = 4.0
+OFFSET_FRACTION = 0.00025  # of the asset height, toward the camera
+TEXTURE_MAX = 512
+LABEL_MAX = 128
+FILL_MIX = 0.55  # share of the severity colour over the photo inside the polygon
+FILL_ALPHA = 230
+TINT_ALPHA = 110  # the kit's tinted box
+PATCH_FORMAT = 1  # the index.json format
+INDEX_NAME = "index.json"
 
 
 @dataclass(frozen=True)
@@ -149,6 +165,20 @@ def _central_grid(bbox: tuple[float, float, float, float]) -> tuple[np.ndarray, 
     return gx.ravel(), gy.ravel()
 
 
+def _grid_size(grid: int, bbox: tuple[float, float, float, float]) -> tuple[int, int]:
+    """The kit's patch grid: `grid` columns, and rows by the box's aspect, from 2 to 2 x grid."""
+    x0, y0, x1, y1 = bbox
+    gh = max(2, int(round(grid * (y1 - y0) / max(1.0, x1 - x0))))
+    return grid, min(gh, grid * 2)
+
+
+def _patch_grid(bbox: tuple[float, float, float, float], gw: int, gh: int) -> tuple[np.ndarray, np.ndarray]:
+    """gw x gh image points over the whole box, row-major from the top-left corner."""
+    x0, y0, x1, y1 = bbox
+    U, V = np.meshgrid(np.linspace(0, 1, gw), np.linspace(0, 1, gh))
+    return (x0 + U * (x1 - x0)).ravel(), (y0 + V * (y1 - y0)).ravel()
+
+
 def _pin(mesh, hits: np.ndarray, tri: np.ndarray, origins: np.ndarray, fwd: np.ndarray):
     """The median-distance hit, its face and that face's normal turned toward the camera; None
     when no ray hit."""
@@ -192,14 +222,209 @@ def place_sighting(
     *,
     frame,
 ) -> Placement:
-    """One sighting onto the mesh (module docstring). Pins and misses; Task 3 adds patches."""
+    """One sighting onto the mesh (module docstring). `photo` is the preview-size photo (only read
+    for a polygon patch); `colour` is the severity colour as `#rrggbb`. Every ray of the sighting,
+    the pin grid and the patch grid, goes to the mesh in one `cast`."""
     W, H = image_size
     bbox = shape.bbox(image_size)
     coverage = shape.area() / (W * H)
     px, py = _central_grid(bbox)
+    patch = wants_patch(shape, review.placement)
+    gw = gh = 0
+    if patch:
+        gw, gh = _grid_size(int(review.patch_grid or DEFAULT_PATCH_GRID), bbox)
+        qx, qy = _patch_grid(bbox, gw, gh)
+        px, py = np.concatenate([px, qx]), np.concatenate([py, qy])
     origins, dirs, fwd = camera_rays(pose, px, py, image_size)
     hits, tri = cast(mesh, origins, dirs)
-    pin = _pin(mesh, hits, tri, origins, fwd)
+    n0 = POINT_GRID * POINT_GRID
+    pin = _pin(mesh, hits[:n0], tri[:n0], origins[:n0], fwd)
     if pin is None:
         return Placement(kind="none", coverage=coverage)
-    return Placement(kind="point", **_common(mesh, pin, face_node, review, frame, coverage))
+    common = _common(mesh, pin, face_node, review, frame, coverage)
+    if not patch:
+        return Placement(kind="point", **common)
+    data = _patch(hits[n0:].reshape(gh, gw, 3), gw, gh, fwd, pin[2], frame.height_m)
+    if data is None:  # the kit leaves a patch with no surviving quad unmapped
+        return Placement(kind="none", coverage=coverage)
+    positions, uvs, direction, size = data
+    texture, labels = patch_texture(shape, image_size, photo, colour)
+    return Placement(
+        kind="patch", patch=PatchData(positions, uvs, texture, labels, bbox, direction, size), **common
+    )
+
+
+def _patch(P3: np.ndarray, gw: int, gh: int, fwd: np.ndarray, n: np.ndarray, height_m: float):
+    """Quads from adjacent grid hits (kit `project.run`), as triangles; None when none survive."""
+    steps = np.linalg.norm(np.diff(P3, axis=1), axis=2)
+    steps = steps[np.isfinite(steps)]
+    if steps.size == 0:
+        return None
+    thr = max(float(np.median(steps)) * EDGE_FACTOR, 1e-3)
+    q = np.stack([P3[:-1, :-1], P3[:-1, 1:], P3[1:, 1:], P3[1:, :-1]], axis=2)  # (gh-1, gw-1, 4, 3)
+    finite = np.isfinite(q).all(axis=(2, 3))
+    with np.errstate(invalid="ignore"):
+        edges = np.linalg.norm(q - np.roll(q, -1, axis=2), axis=3).max(axis=2)
+        keep = finite & (edges <= thr)
+    if not keep.any():
+        return None
+    us, vs = np.linspace(0, 1, gw), np.linspace(0, 1, gh)
+    j, i = np.nonzero(keep)  # row-major: the kit's loop order
+    quv = np.stack(
+        [
+            np.stack([us[i], 1 - vs[j]], axis=1),
+            np.stack([us[i + 1], 1 - vs[j]], axis=1),
+            np.stack([us[i + 1], 1 - vs[j + 1]], axis=1),
+            np.stack([us[i], 1 - vs[j + 1]], axis=1),
+        ],
+        axis=1,
+    )  # (k, 4, 2)
+    order = [0, 1, 2, 0, 2, 3]  # two triangles per quad
+    off = -fwd * height_m * OFFSET_FRACTION
+    positions = (q[keep][:, order, :] + off).reshape(-1, 3).astype(np.float32)
+    uvs = quv[:, order, :].reshape(-1, 2).astype(np.float32)
+    ext = positions.max(0) - positions.min(0)
+    d = n - fwd
+    direction = tuple(float(v) for v in d / np.linalg.norm(d))
+    size = (float(np.hypot(ext[0], ext[2])), float(ext[1]))
+    return positions, uvs, direction, size
+
+
+def _rgb(colour: str) -> tuple[int, int, int]:
+    h = colour.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _fit(w: float, h: float, limit: int) -> tuple[int, int]:
+    s = min(1.0, limit / max(w, h, 1.0))
+    return max(1, int(round(w * s))), max(1, int(round(h * s)))
+
+
+def _mask(outline, bbox, size: tuple[int, int]) -> np.ndarray:
+    x0, y0, x1, y1 = bbox
+    w, h = size
+    sx, sy = w / max(x1 - x0, 1e-9), h / max(y1 - y0, 1e-9)
+    im = PILImage.new("L", size, 0)
+    ImageDraw.Draw(im).polygon([((px - x0) * sx, (py - y0) * sy) for px, py in outline], fill=1)
+    return np.asarray(im, dtype=np.uint8)
+
+
+def patch_texture(
+    shape: SightingShape, image_size: tuple[int, int], photo: PILImage.Image | None, colour: str
+) -> tuple[PILImage.Image, np.ndarray]:
+    """The texture (RGBA, at most 512 px) and label grid (uint8, at most 128 px) for the box crop.
+
+    With an outline: inside it, the photo crop with the colour mixed over it (plain colour without
+    a photo), alpha 230; outside, transparent. Without one: the kit's tinted box, alpha 110, with a
+    solid border. Sizes follow the crop at preview resolution, so a small box is never blown up."""
+    W, H = image_size
+    bbox = x0, y0, x1, y1 = shape.bbox(image_size)
+    s = min(1.0, PREVIEW_SIDE / max(W, H))
+    cw, ch = max(1.0, (x1 - x0) * s), max(1.0, (y1 - y0) * s)
+    tw, th = _fit(cw, ch, TEXTURE_MAX)
+    lw, lh = _fit(cw, ch, LABEL_MAX)
+    rgb = np.array(_rgb(colour), np.float32)
+    outline = shape.outline()
+    if outline is None:
+        a = np.zeros((th, tw, 4), np.uint8)
+        a[..., :3] = rgb.astype(np.uint8)
+        a[..., 3] = TINT_ALPHA
+        bw = max(2, min(tw, th) // 20)
+        a[:bw, :, 3] = a[-bw:, :, 3] = a[:, :bw, 3] = a[:, -bw:, 3] = 255
+        return PILImage.fromarray(a, "RGBA"), np.ones((lh, lw), np.uint8)
+    inside = _mask(outline, bbox, (tw, th))
+    if photo is not None:
+        px, py = photo.width / W, photo.height / H
+        crop = photo.crop((x0 * px, y0 * py, x1 * px, y1 * py)).convert("RGB")
+        base = np.asarray(crop.resize((tw, th), PILImage.BILINEAR), np.float32)
+    else:
+        base = np.broadcast_to(rgb, (th, tw, 3))
+    fill = base * (1 - FILL_MIX) + rgb * FILL_MIX
+    a = np.zeros((th, tw, 4), np.uint8)
+    a[..., :3] = np.where(inside[..., None] == 1, fill, 0).astype(np.uint8)
+    a[..., 3] = inside * FILL_ALPHA
+    return PILImage.fromarray(a, "RGBA"), _mask(outline, bbox, (lw, lh))
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    tmp = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def encode_patch(positions: np.ndarray, uvs: np.ndarray) -> bytes:
+    """`<sighting>.bin` (U1's format), little-endian: uint32 vertex count n, then n x 3 float32
+    positions, then n x 2 float32 uvs. 4 + 20 n bytes."""
+    n = int(len(positions))
+    if len(uvs) != n:
+        raise ValueError("a patch needs one uv per vertex")
+    return (
+        struct.pack("<I", n)
+        + np.ascontiguousarray(positions, "<f4").tobytes()
+        + np.ascontiguousarray(uvs, "<f4").tobytes()
+    )
+
+
+def decode_patch(data: bytes) -> tuple[np.ndarray, np.ndarray]:
+    (n,) = struct.unpack_from("<I", data, 0)
+    if len(data) != 4 + 20 * n:
+        raise ValueError("not a Kestrel patch file")
+    pos = np.frombuffer(data, "<f4", n * 3, 4).reshape(n, 3)
+    uv = np.frombuffer(data, "<f4", n * 2, 4 + 12 * n).reshape(n, 2)
+    return pos, uv
+
+
+def encode_labels(labels: np.ndarray) -> bytes:
+    """`<sighting>.lbl` (U1's format), little-endian: uint16 width, uint16 height, then width x
+    height uint8 (0 or 1), row-major, row 0 = the top of the crop (uv v = 1). 4 + w h bytes."""
+    h, w = labels.shape
+    return struct.pack("<HH", w, h) + np.ascontiguousarray(labels, np.uint8).tobytes()
+
+
+def decode_labels(data: bytes) -> np.ndarray:
+    w, h = struct.unpack_from("<HH", data, 0)
+    if len(data) != 4 + w * h:
+        raise ValueError("not a Kestrel label file")
+    return np.frombuffer(data, np.uint8, w * h, 4).reshape(h, w)
+
+
+def write_patch(dir: Path, sighting_id: str, patch: PatchData) -> str:
+    """Write `<sighting>.bin`, `.png` and `.lbl` into `dir`, each atomically; returns the `.bin`
+    path. The `.bin` goes last: when it is there, all three are."""
+    d = Path(dir)
+    d.mkdir(parents=True, exist_ok=True)
+    png = io.BytesIO()
+    patch.texture.save(png, "PNG")
+    _atomic_write(d / f"{sighting_id}.png", png.getvalue())
+    _atomic_write(d / f"{sighting_id}.lbl", encode_labels(patch.labels))
+    bin_path = d / f"{sighting_id}.bin"
+    _atomic_write(bin_path, encode_patch(patch.positions, patch.uvs))
+    return str(bin_path)
+
+
+def index_entry(patch: PatchData) -> dict:
+    return {
+        "vertex_count": int(len(patch.positions)),
+        "texture_size": [patch.texture.width, patch.texture.height],
+        "label_size": [int(patch.labels.shape[1]), int(patch.labels.shape[0])],
+        "crop": [round(v, 2) for v in patch.crop],
+        "direction": [round(v, 5) for v in patch.direction],
+        "size": [round(v, 4) for v in patch.size],
+    }
+
+
+def read_index(dir: Path) -> dict:
+    """`index.json`'s `items` (sighting id -> entry); {} when absent or unreadable (it is derived)."""
+    try:
+        data = json.loads((Path(dir) / INDEX_NAME).read_text("utf-8"))
+        return dict(data.get("items") or {})
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def write_index(dir: Path, asset_model_id: str, version: int, items: dict) -> None:
+    body = {"format": PATCH_FORMAT, "asset_model_id": asset_model_id, "version": int(version), "items": items}
+    _atomic_write(Path(dir) / INDEX_NAME, json.dumps(body, separators=(",", ":"), sort_keys=True).encode())
