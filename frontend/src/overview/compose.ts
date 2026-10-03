@@ -3,7 +3,7 @@
  * facts. A pane with nothing to show is left out and its neighbours close the gap, so the page never
  * shows an empty container. Placement values apply at ≥ lg; below that the grid is one column.
  */
-export type HeroKind = "map" | "point_cloud" | "images" | "drawing";
+export type HeroKind = "map" | "point_cloud" | "images" | "drawing" | "asset_model";
 
 export interface OverviewFacts {
   heroKind: HeroKind | null;

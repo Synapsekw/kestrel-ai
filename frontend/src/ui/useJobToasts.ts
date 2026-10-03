@@ -42,6 +42,11 @@ const TYPE_NAME: Record<Job["type"], string> = {
   setup_inspect: "Sort dropped files",
   asset_model_glb: "Build asset model",
   asset_model_run: "Run asset model agent",
+  asset_glb_import: "GLB import",
+  asset_pose: "Photo poses",
+  asset_place: "Sighting placement",
+  asset_group: "Sighting grouping",
+  review_kit_import: "Review import",
 };
 
 function num(v: unknown): number | null {
@@ -151,6 +156,16 @@ export function jobToastText(job: Job): string {
       return "Asset model built";
     case "asset_model_run":
       return "Asset model run finished";
+    case "asset_glb_import":
+      return "GLB imported";
+    case "asset_pose":
+      return "Photo poses estimated";
+    case "asset_place":
+      return "Sightings placed";
+    case "asset_group":
+      return "Sightings grouped into findings";
+    case "review_kit_import":
+      return job.params?.dry_run === true ? "Review checked" : "Review imported";
   }
 }
 

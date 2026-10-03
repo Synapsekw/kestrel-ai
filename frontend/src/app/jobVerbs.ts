@@ -40,4 +40,9 @@ export const JOB_VERB: Record<Job["type"], string> = {
   setup_inspect: "Sorting files",
   asset_model_glb: "Building asset model",
   asset_model_run: "Building asset model",
+  asset_glb_import: "Importing a GLB",
+  asset_pose: "Estimating photo poses",
+  asset_place: "Placing sightings",
+  asset_group: "Grouping sightings",
+  review_kit_import: "Importing a review",
 };

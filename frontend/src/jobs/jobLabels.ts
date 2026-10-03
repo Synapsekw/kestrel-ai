@@ -39,6 +39,11 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   setup_inspect: "Sort dropped files",
   asset_model_glb: "Build asset model",
   asset_model_run: "Run asset model agent",
+  asset_glb_import: "GLB import",
+  asset_pose: "Photo poses",
+  asset_place: "Sighting placement",
+  asset_group: "Sighting grouping",
+  review_kit_import: "Review import",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -173,6 +178,16 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "asset_model_run": {
       const id = str(job.params, "model_id") ?? str(job.result, "model_id");
       // The models route arrives with U6.
+      return { label: "Open asset model", to: id ? `${p}/models/${id}` : `${p}/models` };
+    }
+    case "asset_glb_import":
+    case "asset_pose":
+    case "asset_place":
+    case "asset_group":
+    case "review_kit_import": {
+      // A dry run writes nothing: its preview is read by the import dialog that started it.
+      if (job.type === "review_kit_import" && job.params?.dry_run === true) return null;
+      const id = str(job.params, "asset_model_id") ?? str(job.result, "asset_model_id");
       return { label: "Open asset model", to: id ? `${p}/models/${id}` : `${p}/models` };
     }
   }

@@ -1,10 +1,22 @@
 import type { Finding } from "@/api/findings";
 import type { IconName } from "@/ui";
-import type { SourceKind } from "./filters";
 
-const SOURCE_ICON: Record<SourceKind, IconName> = { image: "images", map: "map", cloud: "cloud" };
+/** Keyed by the anchor kind, so a new kind fails to compile here rather than render blank. */
+type AnchorKind = Finding["anchor"]["kind"];
 
-export const SOURCE_LABEL: Record<SourceKind, string> = { image: "Images", map: "Map", cloud: "Point cloud" };
+const SOURCE_ICON: Record<AnchorKind, IconName> = {
+  image: "images",
+  map: "map",
+  cloud: "cloud",
+  asset: "cube",
+};
+
+export const SOURCE_LABEL: Record<AnchorKind, string> = {
+  image: "Images",
+  map: "Map",
+  cloud: "Point cloud",
+  asset: "Asset model",
+};
 
 export interface FindingLocation {
   icon: IconName;
