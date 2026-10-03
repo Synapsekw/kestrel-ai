@@ -1,17 +1,38 @@
+import type { AssetModel } from "@contract/client";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApi } from "@/api/client";
+import { useAssetModelList } from "@/assetmodels/useAssetModels";
 import { messageOf } from "@/api/errors";
 import type { BulkSet, Finding } from "@/api/findings";
 import { useNow } from "@/jobs/useNow";
 import { ownFindingsWrite } from "@/store/changesOwnWrite";
-import { Alert, Button, DataTable, EmptyState, InspectorLayout, toast, useSeverityScale } from "@/ui";
+import {
+  Alert,
+  Button,
+  DataTable,
+  EmptyState,
+  InspectorLayout,
+  Segmented,
+  toast,
+  useSeverityScale,
+} from "@/ui";
 import { applyBulk, bulkMessage } from "./bulk";
 import { BulkBar } from "./BulkBar";
 import { findingColumns } from "./columns";
+import { assetZoneLabels } from "./assetLookups";
+import { FindingGallery } from "./FindingGallery";
+import { PhotoOutcomeChips } from "./PhotoOutcomeChips";
 import { FindingInspector } from "./FindingInspector";
 import { FindingFiltersBar } from "./FindingFilters";
-import { DEFAULT_FILTERS, filtersToSearch, isFiltered, parseFilters, type FindingFilters } from "./filters";
+import {
+  clearedFilters,
+  filtersToSearch,
+  isFiltered,
+  parseFilters,
+  type FindingFilters,
+  type FindingView,
+} from "./filters";
 import { useInspectorCommands } from "./inspectorStore";
 import { findingPath, findingsTabPath } from "./links";
 import { STATUS_LABEL } from "./status";
@@ -21,10 +42,13 @@ import { useFindingsList } from "./useFindingsList";
 import { useFindingSummary } from "./useFindingSummary";
 import { useProjectTypes } from "./useProjectTypes";
 
-/** The project's one Findings list (F §8.6): filters in the URL, a virtualised table, the inspector route. */
-/** Task 6 replaces this with the real zone labels of the asset models. */
-const NO_ZONE_LABELS: ReadonlyMap<string, string> = new Map();
+const NO_MODELS: readonly AssetModel[] = [];
+const VIEW_OPTIONS: { value: FindingView; label: string }[] = [
+  { value: "table", label: "Table" },
+  { value: "gallery", label: "Gallery" },
+];
 
+/** The project's one Findings list (F §8.6): filters in the URL, a virtualised table, the inspector route. */
 export function FindingsScreen() {
   const { projectId = "", findingId } = useParams();
   const [search, setSearch] = useSearchParams();
@@ -36,6 +60,13 @@ export function FindingsScreen() {
   const { types, all } = useProjectTypes(projectId);
   const labels = useDataLabels(projectId);
   const nowMs = useNow(60_000);
+  // One bounded read (tens of rows): the asset filter row, zone labels and the outcome chips.
+  const assetModels = useAssetModelList(projectId).models ?? NO_MODELS;
+  const zoneLabels = useMemo(() => assetZoneLabels(assetModels), [assetModels]);
+  const showAsset =
+    filters.source.includes("asset") ||
+    filters.assetModelId !== null ||
+    list.items.some((f) => f.anchor.kind === "asset");
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   // A refresh can drop checked rows (Shift+C under "Open"): prune them so the bar's count and the
   // next key act only on rows still shown. Pruned, not cleared, so "Shift+R then 3" still works.
@@ -113,8 +144,8 @@ export function FindingsScreen() {
   });
 
   const columns = useMemo(
-    () => findingColumns({ projectId, types, labels, nowMs, asset: false, zoneLabels: NO_ZONE_LABELS }),
-    [projectId, types, labels, nowMs],
+    () => findingColumns({ projectId, types, labels, nowMs, asset: showAsset, zoneLabels }),
+    [projectId, types, labels, nowMs, showAsset, zoneLabels],
   );
   const empty = list.status === "ready" && list.items.length === 0;
   // A failed first load shows only the Alert, not an empty table under it.
@@ -123,14 +154,33 @@ export function FindingsScreen() {
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-4" aria-label="Findings">
-      <header>
-        <h1 className="text-xl font-semibold">Findings</h1>
-        <p className="text-sm text-muted">
-          Every defect in this project, from photos, maps and point clouds. Grade, comment and close them
-          here.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Findings</h1>
+          <p className="text-sm text-muted">
+            Every defect in this project, from photos, maps and point clouds. Grade, comment and close them
+            here.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {assetModels.length > 0 && <PhotoOutcomeChips projectId={projectId} />}
+          <Segmented<FindingView>
+            label="View"
+            size="sm"
+            value={filters.view}
+            onChange={(v) => onFilters({ ...filters, view: v })}
+            options={VIEW_OPTIONS}
+          />
+        </div>
       </header>
-      <FindingFiltersBar filters={filters} summary={summary} scale={scale} types={all} onChange={onFilters} />
+      <FindingFiltersBar
+        filters={filters}
+        summary={summary}
+        scale={scale}
+        types={all}
+        assetModels={assetModels}
+        onChange={onFilters}
+      />
       {list.status === "error" && (
         <Alert
           tone="danger"
@@ -160,11 +210,7 @@ export function FindingsScreen() {
             <EmptyState
               icon="findings"
               title="No findings match these filters"
-              action={
-                <Button onClick={() => onFilters({ ...DEFAULT_FILTERS, sort: filters.sort })}>
-                  Clear filters
-                </Button>
-              }
+              action={<Button onClick={() => onFilters(clearedFilters(filters))}>Clear filters</Button>}
             />
           ) : (
             <EmptyState icon="findings" title="No findings yet">
@@ -174,20 +220,34 @@ export function FindingsScreen() {
           )
         ) : (
           <div className="relative h-full">
-            <DataTable
-              label="Findings"
-              className="h-full"
-              columns={columns}
-              rows={list.items}
-              rowKey={(f) => f.id}
-              loading={list.status === "loading"}
-              selected={selected}
-              onSelectionChange={setSelected}
-              activeKey={findingId ?? null}
-              onOpen={openFinding}
-              onEndReached={list.hasMore ? list.loadMore : undefined}
-            />
-            {selected.size > 0 && (
+            {filters.view === "gallery" ? (
+              <FindingGallery
+                projectId={projectId}
+                items={list.items}
+                types={types}
+                labels={labels}
+                zoneLabels={zoneLabels}
+                activeKey={findingId ?? null}
+                loading={list.status === "loading"}
+                onOpen={openFinding}
+                onEndReached={list.hasMore ? list.loadMore : undefined}
+              />
+            ) : (
+              <DataTable
+                label="Findings"
+                className="h-full"
+                columns={columns}
+                rows={list.items}
+                rowKey={(f) => f.id}
+                loading={list.status === "loading"}
+                selected={selected}
+                onSelectionChange={setSelected}
+                activeKey={findingId ?? null}
+                onOpen={openFinding}
+                onEndReached={list.hasMore ? list.loadMore : undefined}
+              />
+            )}
+            {filters.view === "table" && selected.size > 0 && (
               <BulkBar
                 projectId={projectId}
                 ids={[...selected]}
