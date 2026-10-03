@@ -20,6 +20,7 @@ from app.asset_review.kit_children import InlineRunner
 from app.asset_review.kit_format import STATUSES, UNCLASSIFIED, Kit, KitError, preview_size, read_kit
 from app.asset_review.kit_match import Match, load_candidates, match_photos
 from app.asset_review.kit_records import write_frame, write_poses, write_statuses
+from app.asset_review.kit_sightings import Written, plan_sightings, undo_records, write_sightings
 from app.db.models import AssetModel, AssetModelVersion, FindingSighting, Job, ProjectType, Source
 from app.errors import AppError, not_found
 from app.jobs.cancellation import JobFailure
@@ -309,15 +310,31 @@ def _result(kit: Kit, prep: Prepared, asset_model_id: str, version: int, **parts
 
 def _import(ctx, kit: Kit, prep: Prepared) -> dict:
     handle, params = ctx.project, ctx.params
-    _validate(handle, kit, prep, params)
+    class_map = _validate(handle, kit, prep, params)
     mid = _target_model(handle, params, kit)
     version = _ensure_version(ctx, mid, kit)
     ctx.progress(0.12, "Writing the asset frame and review profile")
     write_frame(handle, mid, kit)
     ctx.publish("asset_models.changed", {"asset_model_ids": [mid]})
     pose_ids: list[str] = []
-    poses = write_poses(handle, ctx, mid, kit, prep.matches, pose_ids)
+    written: list[Written] = []
     skipped: list[dict] = []
-    statuses = write_statuses(handle, ctx, kit, prep.matches, skipped)
-    ctx.progress(1, f"Imported {len(prep.matches):,} photos")
-    return _result(kit, prep, mid, version, poses=poses, statuses=statuses, skipped=skipped[:MAX_LISTED])
+    try:
+        poses = write_poses(handle, ctx, mid, kit, prep.matches, pose_ids)
+        planned = plan_sightings(ctx, kit, prep.matches, prep.previews, class_map, skipped)
+        write_sightings(handle, ctx, mid, planned, written, skipped)
+        statuses = write_statuses(handle, ctx, kit, prep.matches, skipped)
+    except Exception:
+        undo_records(handle, mid, written, pose_ids)  # cancel included: JobCancelled is an Exception
+        raise
+    ctx.progress(1, f"Imported {len(written):,} sightings")
+    return _result(
+        kit,
+        prep,
+        mid,
+        version,
+        poses=poses,
+        statuses=statuses,
+        sightings=len(written),
+        skipped=skipped[:MAX_LISTED],
+    )
