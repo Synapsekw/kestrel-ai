@@ -152,6 +152,10 @@ for _module in (
     "app.volumes.router",
     "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
     "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
+    # Plant model (spec 2026-10-03-plant-model-generator §10, plan pm-f0): the live catalogue, then the
+    # 501 stubs until A1, R1 and S1 land. A unit deletes its tuples in app/asset_models/stubs_plant.py.
+    "app.asset_models.catalogue_router",
+    "app.asset_models.stubs_plant",
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
     # A unit inserts its own router module above its stubs module and deletes its tuples there.
     "app.asset_review.review_router",
@@ -169,6 +173,9 @@ for _module in (
 # (tests/test_api_maps_guard.py). Each M unit inserts one line, its router module, before
 # "app.workspace.stubs" and deletes its tuples from app/workspace/stubs.py.
 for _module in (
+    # Plant model I1's 501 stubs, before app.drawings.router so that GET /drawings/unimported never
+    # reaches /drawings/{drawingId}. I1 deletes this line when it routes the real operations.
+    "app.asset_models.stubs_plant:drawings_router",
     # each M unit inserts its router module on its own line above this one
     "app.drawings.router",
     "app.mapmeasure.router",
@@ -179,6 +186,7 @@ for _module in (
     try:
         if "maps_router" not in globals():
             raise ImportError("the maps router did not load")
-        api_router.include_router(importlib.import_module(_module).router)
+        _path, _, _attr = _module.partition(":")
+        api_router.include_router(getattr(importlib.import_module(_path), _attr or "router"))
     except Exception:
         log.exception("%s failed to load; its endpoints will be unavailable", _module)

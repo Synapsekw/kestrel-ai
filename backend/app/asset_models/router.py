@@ -46,7 +46,9 @@ def create_asset_model(
     body: AssetModelCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ):
     with handle.session() as s:
-        row = AssetModel(name=body.name, asset_type=body.asset_type, tag=body.tag, status="empty")
+        row = AssetModel(
+            name=body.name, asset_type=body.asset_type, tag=body.tag, kind=body.kind, status="empty"
+        )
         s.add(row)
         s.flush()
         out = AssetModelOut.of(row)
