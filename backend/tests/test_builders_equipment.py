@@ -389,6 +389,45 @@ CASES: dict[str, Case] = {
         tris=(36, 2000),
         parts=frozenset({"pad", "water_bath", "blower", "air_duct", "bath_top_posts"}),
     ),
+    "stack": Case(  # Cowork 50-F-0001A-stack: D 3.22, 15 m
+        "stack",
+        circle(3.22),
+        15.0,
+        margin=1.2,
+        tris=(192, 2500),
+        parts=frozenset({"shell", "bands", "platform_deck", "ladder_rungs"}),
+    ),
+    "flare": Case(  # Cowork 60-A-0001 flare package: circle R 2.25, 50 m on the flare platform
+        "flare",
+        circle(4.5),
+        50.0,
+        margin=3.0,
+        tris=(404, 5000),
+        parts=frozenset({"foundation", "riser", "seal", "tip", "derrick", "leg_footings", "platform_0_deck"}),
+    ),
+    "package": Case(  # Cowork 20-DCP-001 dry chemical skid: 5.9 x 2.5, 2 m
+        "package",
+        rect(5.9, 2.5),
+        2.0,
+        tris=(36, 800),
+        parts=frozenset({"skid_frame", "skid_vessel", "skid_module", "piping"}),
+    ),
+    "package_enclosure": Case(
+        "package",
+        rect(6.0, 4.0, 45.0),
+        3.5,
+        params={"colour": "red"},
+        tris=(36, 800),
+        parts=frozenset({"pad", "enclosure", "roof", "door"}),
+    ),
+    "package_cabinet": Case(
+        "package",
+        rect(1.5, 1.0),
+        2.0,
+        tris=(36, 800),
+        parts=frozenset({"plinth", "cabinet", "canopy"}),
+        golden=(),
+    ),
     # --- jetty (Task 11)
 }
 FIRST: dict[str, str] = {}
@@ -849,3 +888,75 @@ def test_scv_ladder_on_the_pad_and_duct_below_the_bath_top(fp, h, end):
     lad = p["ladder_stiles"].bounds
     assert lad[0][0] >= -half - 1e-6 and lad[1][0] <= half + 1e-6
     assert p["air_duct"].bounds[1][1] <= p["water_bath"].bounds[1][1] + 1e-6
+
+
+def test_package_style_auto_and_colour():
+    assert built("package")[0].extras["derived"]["style"] == "skid"
+    assert built("package_enclosure")[0].extras["derived"]["style"] == "enclosure"
+    assert built("package_cabinet")[0].extras["derived"]["style"] == "cabinet"
+    assert next(n for n in built("package_enclosure") if n.name == "enclosure").material == "Safety_Red"
+
+
+@pytest.mark.parametrize("support", ["guyed", "self"])
+def test_flare_other_supports_build(support):
+    it = make_item("flare", circle(4.5), h=50.0, params={"support": support})
+    names = {n.name for n in REGISTRY["flare"].fn(it, CTX)}
+    assert {"riser", "tip", "tip_platform_deck"} <= names
+    assert ("guys" in names) == (support == "guyed")
+
+
+def test_stack_lod_lowers_triangles():
+    assert tris(built("stack", 0.25)) < tris(built("stack"))
+
+
+@pytest.mark.parametrize(("d", "h", "ratio"), [(3.22, 15.0, 0.8), (10.0, 40.0, 0.5)])
+def test_stack_ladder_stands_on_grade_follows_the_taper_and_lands_on_the_deck(d, h, ratio):
+    p = _parts("stack", circle(d), h, {"top_d_ratio": ratio})
+    v = p["ladder_stiles"].vertices
+    assert v[:, 1].min() == pytest.approx(0.0, abs=0.05)  # on grade, not hung off the shell
+    r0, rt = d / 2, d / 2 * ratio
+    shell_r = r0 + (rt - r0) * (v[:, 1] - 0.45) / (h - 0.45)
+    gap = np.abs(v[:, 0]) - shell_r
+    assert gap.min() > 0.2 and gap.max() < 0.7  # a steady stand-off from the tapering shell
+    deck = p["platform_deck"].bounds
+    top = v[v[:, 1] > v[:, 1].max() - 0.05]
+    assert (np.abs(top[:, 0]) < deck[1][0] - 0.1).all()  # the climber arrives inside the deck rail
+
+
+def test_stack_base_ring_stays_on_the_plinth():
+    p = _parts("stack", circle(10.0), 30.0)
+    assert p["base_ring"].bounds[1][0] <= p["plinth"].bounds[1][0] + 1e-6
+
+
+def test_flare_derrick_reaches_the_top_platform():
+    p = _parts("flare", circle(4.5), 50.0)
+    assert p["derrick"].bounds[1][1] >= p["platform_0_deck"].bounds[0][1]
+
+
+@pytest.mark.parametrize(
+    ("params", "match"), [({"derrick_base_m": 2.0}, "derrick base"), ({"riser_d_m": 5.0}, "riser")]
+)
+def test_flare_parts_that_would_intersect_are_refused(params, match):
+    with pytest.raises(ValueError, match=match):
+        REGISTRY["flare"].fn(make_item("flare", circle(4.5), h=50.0, params=params), CTX)
+
+
+def test_flare_guys_hang_below_the_tip_platform():
+    p = _parts("flare", circle(4.5), 10.0, {"support": "guyed"})
+    assert p["guys"].bounds[1][1] <= p["tip_platform_deck"].bounds[0][1]
+
+
+@pytest.mark.parametrize(("fp", "h"), [(rect(5.9, 2.5), 2.0), (rect(4.0, 2.5), 1.0), (rect(12.0, 4.0), 2.5)])
+def test_package_skid_vessel_sits_in_saddles_and_the_pipe_rises_from_it(fp, h):
+    p = _parts("package", fp, h)
+    vessel, frame = p["skid_vessel"], p["skid_frame"]
+    assert frame.bounds[1][1] > vessel.bounds[0][1] + 0.05  # saddles reach up into the vessel
+    r = (vessel.bounds[1][1] - vessel.bounds[0][1]) / 2
+    pipe = p["piping"].bounds
+    assert pipe[1][2] <= r  # the riser leaves the vessel within its radius, not beside it
+
+
+def test_package_skid_on_a_tiny_footprint_is_refused():
+    it = make_item("package", rect(0.8, 0.3), h=1.0, params={"style": "skid"})
+    with pytest.raises(ValueError, match="too small"):
+        REGISTRY["package"].fn(it, CTX)

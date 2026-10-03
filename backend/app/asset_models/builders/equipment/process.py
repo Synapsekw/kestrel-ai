@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 import numpy as np
@@ -10,7 +11,7 @@ from pydantic import Field
 from app.asset_models.builders.base import BuildCtx, MeshNode, Params, builder
 from app.asset_models.builders.equipment import _kit as k
 from app.asset_models.builders.equipment.vessels import head_depth
-from app.asset_models.spec import Item
+from app.asset_models.spec import Item, Pos
 
 H_HEATER, H_ORV, H_SCV = 5.0, 8.0, 6.0
 
@@ -246,3 +247,243 @@ def build_vaporizer_scv(item: Item, ctx: BuildCtx) -> list[MeshNode]:
             )
         )
     return k.finish(k.turn(nodes, plan.place()), item, p, {"bath_h_m": bh})
+
+
+H_STACK, H_FLARE, H_PACKAGE = 15.0, 50.0, 3.0
+PACKAGE_COLOUR = {
+    "grey": "Equipment_Grey",
+    "white": "Equipment_White",
+    "red": "Safety_Red",
+    "green": "Machine_Green",
+    "blue": "Pump_Blue",
+}
+
+
+class StackParams(Params):
+    top_d_ratio: float = Field(0.8, gt=0, le=1, description="Top OD / base OD")
+    bands: int = Field(2, ge=0, le=6, description="Red aviation bands at the top")
+    platform: bool | None = Field(None, description="Sampling platform at 0.75 H. Default: H >= 15 m.")
+    ladder: bool | None = Field(None, description="Ladder. Default: H >= 6 m.")
+
+
+class FlareParams(Params):
+    support: Literal["derrick", "guyed", "self"] = "derrick"
+    riser_d_m: Pos | None = Field(None, description="Riser OD. Default 0.3 x footprint d, at most 1.5 m.")
+    tip_d_m: Pos | None = Field(None, description="Flare tip OD. Default 1.3 x riser.")
+    derrick_base_m: Pos | None = Field(
+        None, description="Derrick base width. Default max(footprint d, 0.16 H)."
+    )
+    platforms: int = Field(
+        2, ge=0, le=6, description="Derrick platforms; the top one sits just under the tip"
+    )
+
+
+class PackageParams(Params):
+    style: Literal["auto", "skid", "enclosure", "cabinet"] = Field(
+        "auto", description="auto: plan area < 4 m2 -> cabinet; height <= 2.5 m -> skid; else enclosure"
+    )
+    colour: Literal["grey", "white", "red", "green", "blue"] = Field(
+        "grey", description="Main body colour; red for fire and safety packages"
+    )
+
+
+DOC_STACK = (
+    "Free-standing stack or chimney: plinth, base ring, tapered steel shell, red aviation bands, a sampling "
+    "platform with handrail and a ladder. Footprint: circle = base OD. top_el = stack top."
+)
+DOC_FLARE = (
+    "Elevated flare: riser with molecular seal and red flare tip, supported by a 4-leg lattice derrick with "
+    "platforms (default), guy wires, or self-supported. Footprint: circle = flare base. top_el = tip top."
+)
+DOC_PACKAGE = (
+    "Generic packaged unit. skid: steel skid with a small vessel, a module box and piping. enclosure: walled "
+    "box with roof and door on a pad. cabinet: a small cabinet with a canopy. Use colour red for fire/safety."
+)
+
+
+@builder("stack", family="equipment", params=StackParams, doc=DOC_STACK, default_height_m=H_STACK)
+def build_stack(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = k.params(item, StackParams)
+    plan = k.plan_of(item, ctx)
+    H, _ = k.height(item, ctx, H_STACK)
+    if H < 2.0:
+        raise ValueError("stack: height too small")
+    r0 = min(plan.along, plan.across) / 2
+    rt = r0 * p.top_d_ratio
+
+    def r_at(y: float) -> float:
+        return r0 + (rt - r0) * (y - 0.45) / (H - 0.45)
+
+    nodes = [
+        k.node("plinth", "Concrete", k.vcyl(r0 + 0.3, 0.3, ctx, n=8)),
+        # the base ring stays on the plinth (r0 + 0.3) on a wide stack too
+        k.node("base_ring", "Steel_Dark", k.vcyl(min(r0 * 1.1, r0 + 0.25), 0.15, ctx, y0=0.3)),
+        k.node("shell", "Steel_Dark", k.lathe([(0.0, 0.45), (r0, 0.45), (rt, H), (0.0, H)], ctx, r0)),
+    ]
+    bh = min(0.05 * H, 1.5)
+    bands = []
+    for i in range(p.bands):
+        yt = H - i * 2 * bh
+        yb = yt - bh
+        if yb <= 0.45:
+            break
+        bands.append(k.lathe([(0.0, yb), (r_at(yb) + 0.02, yb), (r_at(yt) + 0.02, yt), (0.0, yt)], ctx, r0))
+    if bands:
+        nodes.append(k.node("bands", "Safety_Red", *bands))
+    want_platform = p.platform if p.platform is not None else H >= 15.0
+    want_ladder = p.ladder if p.ladder is not None else H >= 6.0
+    yp = min(0.75 * H, H - k.RAIL_H - 0.1)
+    if want_platform:
+        rp = r_at(yp)
+        deck = k.lathe(
+            [(rp, yp - k.DECK_T), (rp + 1.0, yp - k.DECK_T), (rp + 1.0, yp), (rp, yp)], ctx, rp + 1.0
+        )
+        nodes.append(k.node("platform_deck", "Grating", deck))
+        nodes += k.ring_handrail("platform", rp + 0.95, yp, ctx)
+    if want_ladder:
+        # from grade beside the plinth, leaning with the taper so it keeps 0.4 m off the shell and lands
+        # inside the platform rail
+        y1 = yp if want_platform else H - 0.5
+        xb, xt = r_at(0.0) + 0.4, r_at(y1) + 0.4
+        lean = math.atan2(xb - xt, y1)
+        tilt = np.eye(4)
+        tilt[0, 0], tilt[0, 1], tilt[1, 0], tilt[1, 1] = (
+            math.cos(lean),
+            math.sin(lean),
+            -math.sin(lean),
+            math.cos(lean),
+        )
+        nodes += k.turn(k.ladder("ladder", 0.0, 0.0, 0.0, math.hypot(xb - xt, y1), 0.0), k.T(-xb) @ tilt)
+    return k.finish(k.turn(nodes, plan.place()), item, p, {"d_m": 2 * r0, "top_d_m": 2 * rt})
+
+
+@builder("flare", family="equipment", params=FlareParams, doc=DOC_FLARE, default_height_m=H_FLARE)
+def build_flare(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = k.params(item, FlareParams)
+    plan = k.plan_of(item, ctx)
+    H, _ = k.height(item, ctx, H_FLARE)
+    d = min(plan.along, plan.across)
+    rd = p.riser_d_m or min(1.5, 0.3 * d)
+    td = p.tip_d_m or 1.3 * rd
+    tip_h = max(2.0, 2.0 * td)
+    y_tip = H - tip_h
+    if y_tip < 3.0:
+        raise ValueError("flare: height too small")
+    riser_r = rd / 2 * (1.3 if p.support == "self" else 1.0)
+    seal_r, seal_h = min(0.9 * rd, d / 2 - 0.05), min(6.0, 0.12 * H)
+    if seal_r <= riser_r + 0.02:
+        raise ValueError("flare: riser too wide for the footprint (the seal drum would vanish inside it)")
+    nodes = [
+        k.node("foundation", "Concrete", k.vcyl(d / 2, 0.3, ctx)),
+        k.node("riser", "Steel_Dark", k.vcyl(riser_r, y_tip - 0.3, ctx, y0=0.3)),
+        k.node("seal", "Steel_Dark", k.vcyl(seal_r, seal_h, ctx, y0=0.3)),
+        k.node(
+            "tip", "Safety_Red", k.lathe([(0.0, y_tip), (td / 2, y_tip), (td / 2, H), (0.0, H)], ctx, td / 2)
+        ),
+    ]
+    derived: dict = {"riser_d_m": rd, "tip_d_m": td}
+    if p.support == "derrick":
+        b = p.derrick_base_m or max(d, 0.16 * H)
+        tw = max(rd + 1.0, 0.25 * b)
+        hd = y_tip - 0.3  # the derrick carries the top platform just under the tip
+
+        def half(y: float) -> float:
+            return b / 2 + (tw / 2 - b / 2) * min(y, hd) / hd
+
+        if half(0.3 + seal_h) - 0.15 <= seal_r + 0.05:
+            raise ValueError("flare: derrick base too narrow for the seal drum")
+
+        corners = ((1, 1), (1, -1), (-1, -1), (-1, 1))
+        legs_y0 = 0.4  # legs stand on the 0.4 m footings
+        nodes.append(k.node("derrick", "Steel_Structure", *k.lattice(b, tw, legs_y0, hd, 0.8 * b, 0.3, 0.12)))
+        nodes.append(
+            MeshNode(
+                "leg_footings",
+                "Concrete",
+                k.inst(k.box(1.2, 0.4, 1.2), [k.T(c[0] * b / 2, 0, c[1] * b / 2) for c in corners]),
+            )
+        )
+        levels = ([hd] + [hd * j / p.platforms for j in range(1, p.platforms)]) if p.platforms else []
+        for i, yl in enumerate(levels):
+            hw = half(yl) + 0.6
+            sq = [(hw, hw), (hw, -hw), (-hw, -hw), (-hw, hw)]
+            nodes.append(k.node(f"platform_{i}_deck", "Grating", k.slab(sq, yl - k.DECK_T, k.DECK_T)))
+            nodes += k.handrail(f"platform_{i}", sq, yl)
+        derived["derrick_base_m"] = b
+    else:
+        yl = y_tip - 0.3
+        deck = k.lathe(
+            [(riser_r, yl - k.DECK_T), (riser_r + 1.0, yl - k.DECK_T), (riser_r + 1.0, yl), (riser_r, yl)],
+            ctx,
+            riser_r + 1.0,
+        )
+        nodes.append(k.node("tip_platform_deck", "Grating", deck))
+        nodes += k.ring_handrail("tip_platform", riser_r + 0.95, yl, ctx)
+        if p.support == "guyed":
+            anchors = [
+                (0.5 * H * math.cos(a), 0.5 * H * math.sin(a)) for a in np.radians([0.0, 120.0, 240.0])
+            ]
+            yg = min(0.7 * H, yl - k.DECK_T - 0.2)  # guys leave the riser below the tip platform
+            guys = [k.bar((0, yg, 0), (ax, 0.3, az), 0.05) for ax, az in anchors]
+            nodes.append(k.node("guys", "Steel_Structure", *guys))
+            pads = k.inst(k.box(1.0, 0.6, 1.0), [k.T(ax, 0, az) for ax, az in anchors])
+            nodes.append(MeshNode("guy_anchors", "Concrete", pads))
+    return k.finish(k.turn(nodes, plan.place()), item, p, derived)
+
+
+@builder("package", family="equipment", params=PackageParams, doc=DOC_PACKAGE, default_height_m=H_PACKAGE)
+def build_package(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = k.params(item, PackageParams)
+    plan = k.plan_of(item, ctx)
+    H, _ = k.height(item, ctx, H_PACKAGE)
+    if H < 0.5:
+        raise ValueError("package: height too small")
+    L, W = plan.along, plan.across
+    style = p.style
+    if style == "auto":
+        style = "cabinet" if L * W < 4.0 else ("skid" if H <= 2.5 else "enclosure")
+    mat = PACKAGE_COLOUR[p.colour]
+    if style == "skid":
+        if min(L, W) < 1.0:
+            raise ValueError("package: footprint too small for a skid")
+        fr = 0.2
+        d = min(0.5 * W, 0.6 * (H - fr))
+        r = d / 2
+        yc = fr + r + 0.05
+        yp = min(yc + r + 0.25, H - 0.05)
+        rp = max(0.03, 0.05 * d)
+        zp = min(0.15 * W, 0.5 * r)  # the riser leaves the vessel's top, not the air beside it
+        frame = [k.box(L, fr, 0.15, z=s * (W / 2 - 0.075)) for s in (-1, 1)]
+        frame += [k.box(0.15, fr, W - 0.3, x=s * (L / 2 - 0.075)) for s in (-1, 1)]
+        # two saddles bridge the side rails and cradle the vessel
+        frame += [k.box(0.15, yc - 0.4 * r - fr, W - 0.15, x=xs_, y0=fr) for xs_ in (-0.32 * L, -0.08 * L)]
+        nodes = [k.node("skid_frame", "Steel_Structure", *frame)]
+        xs = np.arange(-L / 2 + 1.5, L / 2 - 0.5, 1.5)
+        if len(xs):
+            cross = k.inst(k.box(0.12, fr, W - 0.3), [k.T(float(x), 0, 0) for x in xs])
+            nodes.append(MeshNode("skid_cross", "Steel_Structure", cross))
+        nodes += [
+            k.node("skid_vessel", mat, k.rod((-0.42 * L, yc, 0), (0.02 * L, yc, 0), r, ctx)),
+            k.node("skid_module", mat, k.box(0.36 * L, H - fr, 0.7 * W, x=0.26 * L, y0=fr)),
+            k.node(
+                "piping",
+                "Pipe",
+                k.rod((-0.2 * L, yc + 0.8 * r, zp), (-0.2 * L, yp, zp), rp, ctx),
+                k.rod((-0.2 * L, yp, zp), (0.08 * L, yp, zp), rp, ctx),
+            ),
+        ]
+    elif style == "enclosure":
+        door = k.box(0.03, min(2.1, 0.8 * (H - 0.4)), min(1.0, 0.4 * W), x=0.48 * L + 0.015, y0=0.15)
+        nodes = [
+            k.node("pad", "Concrete", k.box(L, 0.15, W)),
+            k.node("enclosure", mat, k.box(0.96 * L, H - 0.4, 0.96 * W, y0=0.15)),
+            k.node("roof", "Equipment_White", k.box(L, 0.25, W, y0=H - 0.25)),
+            k.node("door", "Steel_Dark", door),
+        ]
+    else:
+        nodes = [
+            k.node("plinth", "Concrete", k.box(L, 0.1, W)),
+            k.node("cabinet", mat, k.box(0.9 * L, H - 0.2, 0.9 * W, y0=0.1)),
+            k.node("canopy", "Equipment_White", k.box(L, 0.1, W, y0=H - 0.1)),
+        ]
+    return k.finish(k.turn(nodes, plan.place()), item, p, {"style": style})
