@@ -332,3 +332,34 @@ def test_safe_end_settles_the_row_when_end_raises(handle, app, monkeypatch):
         "asset_models.changed",
         {"asset_model_ids": [ids["model"]], "run_id": ids["run"]},
     )
+
+
+def test_a_main_thread_failure_in_trace_aborts_the_other_sub_runs(handle, app, monkeypatch):
+    """_persist raising on the first finished package must stop the in-flight one at once, not let it
+    bill on to its limits while the pool shuts down."""
+    import time
+
+    ids = seed_plant(handle, app, limits=PlantLimits(parallel=2))
+    seen = {}
+
+    def bad_persist(rc, w, res):
+        seen["rc"] = rc
+        raise RuntimeError("disk full")
+
+    def p2_first():
+        end = time.monotonic() + 5
+        while time.monotonic() < end:  # still mid-call when the main thread fails
+            rc = seen.get("rc")
+            if rc is not None and getattr(rc, "abort", None) is not None and rc.abort.is_set():
+                break
+            time.sleep(0.02)
+        return reply(("items_query", {}))
+
+    monkeypatch.setattr(O, "_persist", bad_persist)
+    fake = FakePlantLlm(
+        survey(ids),
+        {"P1": [finish_pkg()], "P2": [p2_first] + [reply(("items_query", {}))] * 5},
+    )
+    _, _, run, model = run_job(handle, app, ids, fake)
+    assert run.state == "failed" and run.summary == INTERNAL and model.live_run_id is None
+    assert len(fake.of("P2")) == 1  # no model call after the abort

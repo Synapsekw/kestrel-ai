@@ -53,6 +53,8 @@ def _sleep(rc, seconds: float) -> None:
     end = time.monotonic() + seconds
     while True:
         rc.check_cancelled()
+        if getattr(rc, "abort", None) is not None:
+            rc.check_aborted()  # a failed run must not wait out a backoff, then call again
         left = end - time.monotonic()
         if left <= 0:
             return

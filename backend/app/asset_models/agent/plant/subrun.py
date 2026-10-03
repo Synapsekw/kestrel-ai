@@ -4,7 +4,8 @@ the catalogue (cached in the system prompt) and the package tools. It runs until
 - finish_package;
 - its call or token limit;
 - the run's budget wrap-up (ruling R8: at most WRAP_UP_CALLS more calls);
-- two replies without a tool call.
+- two replies without a tool call;
+- the run's abort (the main thread failed): no further call, the package ends `failed`.
 
 A provider error fails only this package."""
 
@@ -14,7 +15,7 @@ import logging
 from dataclasses import dataclass, field
 
 from app.asset_models.agent.plant import prompt_plant as P
-from app.asset_models.agent.plant.context import Scope
+from app.asset_models.agent.plant.context import RunAborted, Scope
 from app.asset_models.agent.plant.model import call_model
 from app.asset_models.agent.plant.packages import PackageWork
 from app.asset_models.agent.plant.tools_plant import catalogue_text, execute, specs_for
@@ -25,6 +26,7 @@ from app.project_agent.history import HistoryEntry, LlmError, ToolResult
 
 log = logging.getLogger(__name__)
 WRAP_UP_CALLS = 3
+ABORTED = "Stopped: the run ended on an error."
 
 
 @dataclass
@@ -68,6 +70,7 @@ def run_package(rc, w: PackageWork) -> PackageResult:
     try:
         while True:
             rc.check_cancelled()
+            rc.check_aborted()
             if not scope.wrap_up and rc.budget.exhausted():
                 scope.wrap_up = True
                 history.append(HistoryEntry(role="user", text=P.WRAP_UP))
@@ -133,6 +136,9 @@ def run_package(rc, w: PackageWork) -> PackageResult:
                 break
     except JobCancelled:
         raise
+    except RunAborted:
+        log.info("plant package %s stopped: the run aborted", scope.name)
+        return _result(w, scope, usage, "failed", ABORTED)
     except LlmError as e:  # fixed, user-safe text
         log.info("plant package %s failed on a provider error", scope.name)
         return _result(w, scope, usage, "failed", e.message)

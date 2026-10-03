@@ -24,6 +24,10 @@ from app.asset_models.spec import AssetSpec, Item, SiteFrame
 from app.db.models import AssetModelRun
 
 
+class RunAborted(Exception):
+    """The run failed on the main thread while sub-runs were in flight: they stop at once."""
+
+
 @dataclass
 class Scope:
     """One conversation: the orchestrator's (`package` None, `items` is the merged store) or one package's."""
@@ -58,6 +62,7 @@ class PlantRunContext:
     store: dict[str, Item] = field(default_factory=dict)
     lock: threading.RLock = field(default_factory=threading.RLock)
     inflight: dict[str, Scope] = field(default_factory=dict)
+    abort: threading.Event = field(default_factory=threading.Event)
     cloud: Any = None
     check: Any = None
     finished: dict | None = None
@@ -72,6 +77,10 @@ class PlantRunContext:
 
     def check_cancelled(self) -> None:
         self.job.check_cancelled()
+
+    def check_aborted(self) -> None:
+        if self.abort.is_set():
+            raise RunAborted
 
     def site(self) -> SiteFrame | None:
         return site_of(self.state)

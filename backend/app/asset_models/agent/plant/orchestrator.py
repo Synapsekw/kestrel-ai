@@ -150,6 +150,12 @@ def _persist(rc: PlantRunContext, w, res: PackageResult) -> None:
     log.info("plant package P%d %s items=%d calls=%d", w.n, res.state, len(res.items), res.calls)
 
 
+def _abort_inflight(rc: PlantRunContext) -> None:
+    rc.abort.set()
+    for scope in list(rc.inflight.values()):
+        scope.wrap_up = True
+
+
 def _trace(rc: PlantRunContext) -> None:
     with rc.handle.session() as s:
         rows = pk.rows(s, rc.run_id)
@@ -175,6 +181,9 @@ def _trace(rc: PlantRunContext) -> None:
                 done += 1
                 rc.recorder.enter("trace", done, total)
             rc.check_cancelled()
+    except BaseException:
+        _abort_inflight(rc)  # before the shutdown below waits on them: no sub-run bills on
+        raise
     finally:
         pool.shutdown(wait=True, cancel_futures=True)
     if pending:
