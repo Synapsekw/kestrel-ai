@@ -11,7 +11,7 @@ import { Alert, Button, Dialog, Field, Input, Select } from "@/ui";
 
 type AssetFrameConversion = components["schemas"]["AssetFrameConversion"];
 
-export const FRAME_CONVERSIONS: readonly { value: AssetFrameConversion; label: string }[] = [
+const FRAME_CONVERSIONS: readonly { value: AssetFrameConversion; label: string }[] = [
   { value: "none", label: "Already in the asset frame: Y up, X north" },
   { value: "x_east_minus_z_north", label: "Y up, X east, minus Z north (most glTF exports)" },
   { value: "enu_z_up", label: "Z up, east and north (ENU)" },

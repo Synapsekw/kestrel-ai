@@ -33,6 +33,14 @@ describe("review import helpers", () => {
     });
   });
 
+  it("ignores a suggested type that is not in the project's types", () => {
+    const stale = [
+      { key: "cracks", label: "Cracks", count: 1, type_id: "t-gone" },
+      { key: "spalling", label: "Other", count: 1, type_id: "t-gone" },
+    ] as never;
+    expect(prefillClassMap(stale, types)).toEqual({ cracks: "t-crack", spalling: null });
+  });
+
   it("lists classes still without a type", () => {
     expect(missingClasses(classes, { cracks: "t-crack", staining: "t-stain", spalling: null })).toEqual([
       "spalling",

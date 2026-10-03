@@ -79,6 +79,9 @@ describe("asset review job toasts", () => {
     expect(jobToastText(done("asset_place", { patch: 715, point: 625, none: 101 }))).toBe(
       "Placements computed: 715 patches, 625 pins, 101 not placed",
     );
+    expect(jobToastText(done("asset_place", { patch: 1, point: 1, none: 0 }))).toBe(
+      "Placements computed: 1 patch, 1 pin",
+    );
     expect(jobToastText(done("asset_place"))).toBe("Placements computed");
     expect(jobToastText(done("asset_group", { created: 4, kept: 650, merged: 2, split: 0 }))).toBe(
       "Findings regrouped: 650 kept, 4 new, 2 merged",

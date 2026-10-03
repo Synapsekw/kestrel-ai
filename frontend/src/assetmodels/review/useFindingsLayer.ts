@@ -18,7 +18,6 @@ export interface FindingsLayer {
   done: boolean;
   error: string | null;
   reload(): void;
-  placedCount: number;
   filter: FindingsFilter;
   setFilter(f: FindingsFilter): void;
   selectedId: string | null;
@@ -103,7 +102,6 @@ export function useFindingsLayer(o: {
       findings.reload();
       placements.reload();
     },
-    placedCount: new Set(items.map((i) => i.findingId)).size,
     filter,
     setFilter,
     selectedId,

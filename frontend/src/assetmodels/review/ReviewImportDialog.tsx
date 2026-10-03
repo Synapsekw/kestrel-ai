@@ -10,7 +10,7 @@ import { fetchAllSources } from "@/api/sources";
 import { useAssetModelList } from "@/assetmodels/useAssetModels";
 import { useProjectTypes } from "@/findings/useProjectTypes";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { useJobsStore } from "@/store/jobs";
+import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Combobox, Dialog, Field, Input, Pill, Progress, Select, claimJobOutcome } from "@/ui";
 import { REASON_TEXT, blockers, matchedByText, missingClasses, prefillClassMap } from "./reviewImport";
 
@@ -60,7 +60,8 @@ export function ReviewImportDialog({
   const dry = tracked.job;
   const preview = dry?.state === "succeeded" ? (dry.result as unknown as ReviewImportPreview | null) : null;
   const dryError = dry?.state === "failed" ? (dry.error ?? "The folder could not be read.") : tracked.error;
-  const checking = dryJobId !== null && !preview && !dryError;
+  const checking = dryJobId !== null && !preview && !dryError && (!dry || isActiveJob(dry));
+  const endedEmpty = dryJobId !== null && !!dry && !isActiveJob(dry) && !preview && !dryError;
 
   // Prefill the mapping once per preview: the server's suggestion, else a name match.
   const prefilledFor = useRef<string | null>(null);
@@ -237,6 +238,7 @@ export function ReviewImportDialog({
         )}
         {checking && <Progress thin running value={dry?.progress ?? undefined} label="Checking the folder" />}
         {dryError && <Alert tone="danger">{dryError}</Alert>}
+        {endedEmpty && <Alert tone="warn">The check ended without a preview. Try again.</Alert>}
         {preview && (
           <section
             aria-label="What this import will do"

@@ -199,6 +199,22 @@ describe("ReviewImportDialog", () => {
     expect(await screen.findByText(/unknown review profile: chimney/i)).toBeInTheDocument();
   });
 
+  it("stops checking and says so when the dry run ends without a preview", async () => {
+    setup([
+      {
+        method: "POST",
+        path: /\/review-imports$/,
+        status: 202,
+        body: { job: job("jc", true, { state: "cancelled", result: null }) },
+      },
+    ]);
+    fireEvent.change(screen.getByLabelText(/review job folder/i), { target: { value: "D:\\k" } });
+    await screen.findByRole("option", { name: /flight 14 sep/i });
+    fireEvent.click(screen.getByRole("button", { name: /check the folder/i }));
+    expect(await screen.findByText(/the check ended without a preview/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /check the folder/i })).toBeEnabled();
+  });
+
   it("picks the folder with the Tauri dialog in the desktop app", async () => {
     setup([], "tauri");
     fireEvent.click(screen.getByRole("button", { name: /^browse$/i }));

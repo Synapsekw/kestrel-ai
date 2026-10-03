@@ -169,7 +169,7 @@ export function jobToastText(job: Job): string {
       const point = num(r.point);
       const none = num(r.none) ?? 0;
       if (patch === null || point === null) return "Placements computed";
-      return `Placements computed: ${patch} patches, ${point} pins${none > 0 ? `, ${none} not placed` : ""}`;
+      return `Placements computed: ${patch} ${patch === 1 ? "patch" : "patches"}, ${point} ${point === 1 ? "pin" : "pins"}${none > 0 ? `, ${none} not placed` : ""}`;
     }
     case "asset_group": {
       const kept = num(r.kept);

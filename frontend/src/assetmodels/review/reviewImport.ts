@@ -13,10 +13,15 @@ export function prefillClassMap(
   classes: Classes,
   types: readonly { id: string; name: string }[],
 ): Record<string, string | null> {
+  const known = new Set(types.map((t) => t.id));
   const byName = new Map(types.map((t) => [normName(t.name), t.id]));
   const out: Record<string, string | null> = {};
   for (const c of classes)
-    out[c.key] = c.type_id ?? byName.get(normName(c.label)) ?? byName.get(normName(c.key)) ?? null;
+    out[c.key] =
+      (c.type_id && known.has(c.type_id) ? c.type_id : null) ??
+      byName.get(normName(c.label)) ??
+      byName.get(normName(c.key)) ??
+      null;
   return out;
 }
 
