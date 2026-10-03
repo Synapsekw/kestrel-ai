@@ -156,15 +156,42 @@ export type TileFetch = (url: string, signal: AbortSignal) => Promise<TileImage 
 /** A 404 or 410: the layer was deleted (siteTileLoader.ts's "gone"). */
 export class GoneError extends Error {}
 
-/** Fetch, not `<img>`, so a 204 reads as an empty tile and a 404/410 as a gone layer (ruling R9). */
-export async function fetchSiteTile(url: string, signal: AbortSignal): Promise<TileImage | null> {
-  const res = await fetch(url, { signal });
-  if (res.status === 204) return null;
-  if (res.status === 404 || res.status === 410) throw new GoneError(url);
-  if (res.status !== 200) throw new Error(`tile answered ${res.status}`);
-  return createImageBitmap(await res.blob());
+/** A tile request that has not answered in this long is abandoned (it fails and is retried). */
+export const TILE_TIMEOUT_MS = 20_000;
+/** A failed (non-gone) tile is fetched again after each of these delays, then given up. */
+export const RETRY_BACKOFF_MS = [2_000, 8_000, 30_000] as const;
+
+/**
+ * Fetch, not `<img>`, so a 204 reads as an empty tile and a 404/410 as a gone layer (ruling R9).
+ * The request is aborted by the caller's signal or after `timeoutMs`, whichever comes first, so a hung
+ * request never holds one of the cache's in-flight slots for the rest of the session.
+ */
+export async function fetchSiteTile(
+  url: string,
+  signal?: AbortSignal,
+  timeoutMs = TILE_TIMEOUT_MS,
+): Promise<TileImage | null> {
+  const ac = new AbortController();
+  const onAbort = () => ac.abort(signal?.reason);
+  if (signal?.aborted) onAbort();
+  else signal?.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => ac.abort(new Error(`tile timed out after ${timeoutMs} ms`)), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ac.signal });
+    if (res.status === 204) return null;
+    if (res.status === 404 || res.status === 410) throw new GoneError(url);
+    if (res.status !== 200) throw new Error(`tile answered ${res.status}`);
+    return await createImageBitmap(await res.blob());
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
 
+/**
+ * The image is closed once three has uploaded it (`onUpdate`), so a ready tile costs its GPU texture
+ * only, not a second decoded copy on the CPU side: the 64 MiB budget is the real footprint.
+ */
 export function makeTexture(image: TileImage): THREE.Texture {
   const t = new THREE.Texture(image as unknown as HTMLImageElement);
   t.flipY = false;
@@ -172,6 +199,7 @@ export function makeTexture(image: TileImage): THREE.Texture {
   t.minFilter = THREE.LinearFilter;
   t.magFilter = THREE.LinearFilter;
   t.colorSpace = THREE.SRGBColorSpace;
+  t.onUpdate = () => image.close?.();
   t.needsUpdate = true;
   return t;
 }
@@ -181,8 +209,12 @@ interface Entry {
   url: string;
   state: State;
   texture: THREE.Texture | null;
+  /** The decoded image until three uploads it (makeTexture closes it then); closed again harmlessly on drop. */
   image: TileImage | null;
   wantedAt: number;
+  /** Failed fetches so far; a failed entry is fetched again at `retryAt` while backoffs remain. */
+  tries: number;
+  retryAt: number | null;
   abort: AbortController | null;
   onGone: (() => void) | null;
 }
@@ -192,6 +224,8 @@ interface Entry {
  * and `peek` calls, `endFrame`. Queued, loading and ready entries count toward `capacity`. A new tile
  * evicts the least recently wanted ready or queued tile that this frame did not want, or is refused
  * (the layer draws an ancestor instead). Empty (204) and failed tiles are remembered without counting.
+ * A failed tile (not a gone layer) is fetched again after each RETRY_BACKOFF_MS delay, then given up;
+ * the cache calls `onChange` when a retry falls due so an idle renderer asks for it again.
  */
 export class TileCache {
   private readonly entries = new Map<string, Entry>();
@@ -199,6 +233,7 @@ export class TileCache {
   private inFlight = 0;
   private frameNo = 0;
   private disposed = false;
+  private readonly retryTimers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly fetchTile: TileFetch,
@@ -225,8 +260,14 @@ export class TileCache {
         wantedAt: this.frameNo,
         abort: null,
         onGone: onGone ?? null,
+        tries: 0,
+        retryAt: null,
       };
       this.entries.set(url, e);
+    }
+    if (e.state === "error" && e.retryAt !== null && Date.now() >= e.retryAt && this.makeRoom()) {
+      e.state = "queued";
+      e.retryAt = null;
     }
     e.wantedAt = this.frameNo;
     if (e.state === "queued" && !this.queue.includes(url)) this.queue.push(url);
@@ -257,7 +298,10 @@ export class TileCache {
 
   endFrame(): void {
     for (const e of [...this.entries.values()]) {
-      if (e.state === "queued" && e.wantedAt < this.frameNo) this.entries.delete(e.url);
+      if (e.state !== "queued" || e.wantedAt >= this.frameNo) continue;
+      // A due retry nobody wanted this frame goes back to waiting, keeping its count of tries.
+      if (e.tries > 0) e.state = "error";
+      else this.entries.delete(e.url);
     }
     const quiet = [...this.entries.values()].filter((e) => e.state === "empty" || e.state === "error");
     if (quiet.length > this.capacity * 4) {
@@ -270,6 +314,8 @@ export class TileCache {
 
   dispose(): void {
     this.disposed = true;
+    for (const t of this.retryTimers) clearTimeout(t);
+    this.retryTimers.clear();
     for (const e of [...this.entries.values()]) this.drop(e);
     this.queue = [];
   }
@@ -292,6 +338,15 @@ export class TileCache {
     e.texture?.dispose();
     e.image?.close?.();
     this.entries.delete(e.url);
+  }
+
+  private scheduleRetry(e: Entry, delay: number): void {
+    e.retryAt = Date.now() + delay;
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(timer);
+      if (!this.disposed) this.onChange();
+    }, delay);
+    this.retryTimers.add(timer);
   }
 
   private pump(): void {
@@ -318,7 +373,9 @@ export class TileCache {
           (err: unknown) => {
             if (this.entries.get(url) !== e) return;
             e.state = "error";
+            e.tries += 1;
             if (err instanceof GoneError) e.onGone?.();
+            else if (e.tries <= RETRY_BACKOFF_MS.length) this.scheduleRetry(e, RETRY_BACKOFF_MS[e.tries - 1]);
           },
         )
         .finally(() => {

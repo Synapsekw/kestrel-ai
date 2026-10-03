@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { tileBounds, type SiteExtent } from "@/mapws/view/siteGrid";
 import type { SiteFrameT } from "./siteTransform";
 import {
   GoneError,
+  RETRY_BACKOFF_MS,
+  TILE_TIMEOUT_MS,
   MAX_TILE_BYTES,
   TILE_BYTES,
   TileCache,
   childTiles,
+  fetchSiteTile,
+  makeTexture,
   fillTemplate,
   minZoomFor,
   parentTile,
@@ -14,6 +18,7 @@ import {
   selectTiles,
   tileQuad,
   tileView,
+  type TileFetch,
   type TileImage,
 } from "./tiles";
 
@@ -196,5 +201,155 @@ describe("TileCache", () => {
     cache.want("a");
     cache.dispose();
     expect(signals[0].aborted).toBe(true);
+  });
+});
+
+describe("TileCache retries (final review fix)", () => {
+  const img = (): TileImage => ({ width: 256, height: 256, close: vi.fn() });
+  afterEach(() => vi.useRealTimers());
+
+  it("retries a failed tile after the backoff, and wakes the renderer for it", async () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const fetchTile = vi
+      .fn<TileFetch>()
+      .mockRejectedValueOnce(new Error("tile answered 500"))
+      .mockResolvedValue(img());
+    const cache = new TileCache(fetchTile, onChange);
+    cache.beginFrame();
+    cache.want("a");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchTile).toHaveBeenCalledTimes(1);
+    cache.beginFrame();
+    cache.want("a"); // inside the backoff: no refetch
+    expect(fetchTile).toHaveBeenCalledTimes(1);
+    onChange.mockClear();
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[0]);
+    expect(onChange).toHaveBeenCalled(); // the renderer is woken to ask again
+    cache.beginFrame();
+    cache.want("a");
+    expect(fetchTile).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(0);
+    cache.beginFrame();
+    expect(cache.want("a")).not.toBeNull();
+  });
+
+  it("gives up after the last backoff", async () => {
+    vi.useFakeTimers();
+    const fetchTile = vi.fn<TileFetch>().mockRejectedValue(new Error("tile answered 500"));
+    const cache = new TileCache(fetchTile, () => {});
+    for (let i = 0; i < 10; i++) {
+      cache.beginFrame();
+      cache.want("a");
+      cache.endFrame();
+      await vi.advanceTimersByTimeAsync(60_000);
+    }
+    expect(fetchTile).toHaveBeenCalledTimes(1 + RETRY_BACKOFF_MS.length);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a gone tile is never retried", async () => {
+    vi.useFakeTimers();
+    const fetchTile = vi.fn<TileFetch>().mockRejectedValue(new GoneError("a"));
+    const cache = new TileCache(fetchTile, () => {});
+    for (let i = 0; i < 4; i++) {
+      cache.beginFrame();
+      cache.want("a");
+      await vi.advanceTimersByTimeAsync(60_000);
+    }
+    expect(fetchTile).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispose cancels a pending retry wake-up", async () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const cache = new TileCache(async () => Promise.reject(new Error("x")), onChange);
+    cache.beginFrame();
+    cache.want("a");
+    await vi.advanceTimersByTimeAsync(0);
+    onChange.mockClear();
+    cache.dispose();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchSiteTile", () => {
+  const stub = (status: number) =>
+    vi.fn(async (_u: string, init?: RequestInit) => {
+      void init;
+      return new Response(status === 200 ? new Blob(["png"]) : null, { status });
+    });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("maps 204 to an empty tile, 404/410 to gone, 500 to an error and 200 to a bitmap", async () => {
+    const bitmap = { width: 256, height: 256, close: vi.fn() };
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => bitmap),
+    );
+    const sig = new AbortController().signal;
+    vi.stubGlobal("fetch", stub(204));
+    await expect(fetchSiteTile("u", sig)).resolves.toBeNull();
+    vi.stubGlobal("fetch", stub(404));
+    await expect(fetchSiteTile("u", sig)).rejects.toBeInstanceOf(GoneError);
+    vi.stubGlobal("fetch", stub(410));
+    await expect(fetchSiteTile("u", sig)).rejects.toBeInstanceOf(GoneError);
+    vi.stubGlobal("fetch", stub(500));
+    const err = await fetchSiteTile("u", sig).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(GoneError);
+    vi.stubGlobal("fetch", stub(200));
+    await expect(fetchSiteTile("u", sig)).resolves.toBe(bitmap);
+  });
+
+  it("times out a hung fetch, so the cache marks it failed", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_u: string, init?: RequestInit) =>
+          new Promise((_res, rej) =>
+            init?.signal?.addEventListener("abort", () => rej(new Error("aborted"))),
+          ),
+      ),
+    );
+    const fetchTile = vi.fn<TileFetch>((u, s) => fetchSiteTile(u, s));
+    const cache = new TileCache(fetchTile, () => {}, 256, 1);
+    cache.beginFrame();
+    cache.want("a");
+    cache.want("b");
+    expect(fetchTile).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(TILE_TIMEOUT_MS);
+    expect(fetchTile).toHaveBeenCalledTimes(2); // the slot freed: "a" failed, "b" started
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+  });
+
+  it("the caller's abort still cancels the request", async () => {
+    let seen: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_u: string, init?: RequestInit) => {
+        seen = init?.signal ?? undefined;
+        return new Promise(() => {});
+      }),
+    );
+    const ac = new AbortController();
+    void fetchSiteTile("u", ac.signal);
+    ac.abort();
+    expect(seen?.aborted).toBe(true);
+  });
+});
+
+describe("makeTexture", () => {
+  it("closes the image once three has uploaded it", () => {
+    const image: TileImage = { width: 256, height: 256, close: vi.fn() };
+    const t = makeTexture(image);
+    expect(image.close).not.toHaveBeenCalled();
+    t.onUpdate?.(t);
+    expect(image.close).toHaveBeenCalledTimes(1);
   });
 });
