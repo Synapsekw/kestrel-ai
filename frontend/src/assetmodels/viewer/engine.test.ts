@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { partsFromScene, viewDirection } from "./engine";
+import {
+  AUTO_ROTATE_SPEED,
+  GHOST_OPACITY,
+  GROUND_RENDER_ORDER,
+  PATCH_ALPHA_TEST,
+  PATCH_POLYGON_OFFSET,
+  PATCH_RENDER_ORDER,
+  partsFromScene,
+  viewDirection,
+} from "./engine";
 
 describe("model engine pure helpers", () => {
   it("views match the backend rasterizer", () => {
@@ -29,5 +38,16 @@ describe("model engine pure helpers", () => {
     expect(partsFromScene(root, (o: { raw: string }) => o.raw)).toEqual([
       { id: "N1.2", name: "Nozzle", group: "Nozzle" },
     ]);
+  });
+});
+
+describe("engine constants follow the kit", () => {
+  it("draws patches, ghost and ground as the kit does", () => {
+    expect(PATCH_ALPHA_TEST).toBe(0.3);
+    expect(PATCH_POLYGON_OFFSET).toBe(-4);
+    expect(PATCH_RENDER_ORDER).toBe(3);
+    expect(GHOST_OPACITY).toBe(0.25);
+    expect(GROUND_RENDER_ORDER).toBe(-10);
+    expect(AUTO_ROTATE_SPEED).toBe(0.6);
   });
 });
