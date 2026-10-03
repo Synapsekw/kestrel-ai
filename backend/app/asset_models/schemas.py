@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.asset_models.spec import AssetSpec
+from app.asset_review.frame import Frame
 from app.jobs.schemas import JobOut
 
 
@@ -26,11 +27,10 @@ class AssetModelOut(BaseModel):
     current_version: int | None
     live_run_id: str | None
     captured_on: date | None
+    frame: dict | None = None  # app.asset_review.frame.Frame, as stored (spec 2026-10-02-asset-findings §5.1)
+    review: dict | None = None  # the resolved review profile (§7)
     created_at: datetime
     updated_at: datetime
-    # Spec 2026-10-02-asset-findings §5.1: read from D1's columns once they exist; None until then.
-    frame: dict[str, Any] | None = None
-    review: dict[str, Any] | None = None
 
     @classmethod
     def of(cls, row) -> AssetModelOut:
@@ -54,6 +54,10 @@ class AssetModelPatch(BaseModel):
     asset_type: str | None = Field(None, max_length=80)
     tag: str | None = Field(None, max_length=80)
     captured_on: date | None = None
+    frame: Frame | None = None
+    # A profile id ({"profile_id": "stack"}) or an edited copy naming its profile; resolved by
+    # app.asset_review.frame_io.resolve_review, which answers the 422s.
+    review: dict[str, Any] | None = None
 
     @field_validator("name")
     @classmethod

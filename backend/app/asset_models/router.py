@@ -25,6 +25,7 @@ from app.asset_models.schemas import (
 from app.asset_models.spec import AssetSpec
 from app.asset_models.store import INT32_MAX
 from app.asset_models.validate import validate
+from app.asset_review import frame_io, glb_import
 from app.db.models import AssetModel, AssetModelVersion, Finding, FindingSighting
 from app.errors import AppError
 from app.events_util import publish_asset_models_changed
@@ -68,10 +69,13 @@ def patch_asset_model(
     request: Request,  # noqa: N803
     handle: ProjectHandle = Depends(get_project),
 ):
+    fields = body.model_dump(exclude_unset=True)
+    framing = {k: fields.pop(k) for k in ("frame", "review") if k in fields}
     with handle.session() as s:
         row = store.get_model(s, assetModelId)
-        for k, v in body.model_dump(exclude_unset=True).items():
+        for k, v in fields.items():
             setattr(row, k, v)
+        frame_io.apply_patch(row, framing)
         s.flush()
         out = AssetModelOut.of(row)
     publish_asset_models_changed(request, handle, [assetModelId])
@@ -193,17 +197,34 @@ def restore_asset_model_version(
 ):
     with handle.session() as s:
         old = store.get_version(s, assetModelId, version)
-        spec = AssetSpec.model_validate(old.spec)
-        sources = list(old.source_ids)
-    row, job = service.add_version(
-        handle,
-        request.app.state.jobs,
-        assetModelId,
-        spec,
-        kind="manual",
-        note=f"Restored from version {version}",
-        source_ids=sources,
-    )
+        kind, meta, sources = old.kind, dict(old.meta or {}), list(old.source_ids)
+        spec = None if kind == "imported" else AssetSpec.model_validate(old.spec)
+    if kind == "imported":
+        # An imported version has no spec to rebuild from: re-import its stored GLB as it is.
+        stored = store.version_glb_path(handle, assetModelId, version)
+        if not stored.is_file():
+            raise AppError("not_ready", "The 3D model for this version is not available.", 409)
+        row, job = glb_import.start_import(
+            handle,
+            request.app.state.jobs,
+            assetModelId,
+            path=stored,
+            conversion="none",
+            origin=None,
+            note=f"Restored from version {version}",
+            source_name=meta.get("source_name"),
+            provenance={k: meta[k] for k in ("frame_conversion", "source_sha256") if meta.get(k)},
+        )
+    else:
+        row, job = service.add_version(
+            handle,
+            request.app.state.jobs,
+            assetModelId,
+            spec,
+            kind="manual",
+            note=f"Restored from version {version}",
+            source_ids=sources,
+        )
     publish_asset_models_changed(request, handle, [assetModelId])
     return AssetModelVersionWithJob(version=AssetModelVersionOut.of(row), job=JobOut.from_row(job, handle.id))
 

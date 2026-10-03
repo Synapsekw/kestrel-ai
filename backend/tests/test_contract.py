@@ -131,7 +131,6 @@ BACKEND_PENDING: dict[str, str] = {
     # deletes its line.
     "createFinding": "J4",
     "listFindings": "J4",
-    "patchAssetModel": "J1",
 }
 
 
@@ -173,6 +172,12 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`invalid_pose`).
     "estimateImagePoses": {409, 422},
     "putImagePose": {422},
+    # asset findings J1: a generated review names no built-in profile (`unknown_profile`), or the
+    # model has no frame yet (`frame_required`), or an override is out of range (`invalid_review`).
+    "patchAssetModel": {422},
+    # asset findings J1: a schema-valid path that is not a readable GLB 2.0 (`glb_invalid`); a model
+    # with a live agent run (`job_running`).
+    "importAssetModelGlb": {409, 422},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
     # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
     # `grid_too_large`, `insufficient_disk`).

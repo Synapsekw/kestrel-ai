@@ -12673,8 +12673,11 @@ export interface components {
             /** @default  */
             datum_note: string;
             line_azimuth_deg?: number | null;
-            /** @description [y, r] pairs, ascending y: the radial outline used by the findings map */
-            silhouette?: number[][];
+            /** @description [y, r] pairs, ascending y: the radial outline used by the findings map; r is not negative */
+            silhouette?: [
+                number,
+                number
+            ][];
             levels?: number[];
             presets?: components["schemas"]["AssetFramePreset"][];
         };
