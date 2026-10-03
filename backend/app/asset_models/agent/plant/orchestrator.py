@@ -217,14 +217,15 @@ def _merge(rc: PlantRunContext, extra: list | None = None) -> None:
     rc.save_store()
 
 
-def _merge_and_check(rc: PlantRunContext) -> None:
-    """The app stages after tracing: merge -> cloud check, each skipped when a resume is past it."""
+def _merge_and_check(rc: PlantRunContext, then: str = "review") -> None:
+    """The app stages after tracing: merge -> cloud check -> `then`, each skipped when a resume is
+    past it. The one place the cloud stage is called (Task 12 amendment)."""
     if rc.state.stage == "merge":
         _merge(rc)
         _advance(rc, "cloud_check")
     if rc.state.stage == "cloud_check":
         cloud_stage(rc)
-        _advance(rc, "review")
+        _advance(rc, then)
 
 
 def build_check(rc: PlantRunContext) -> list[str]:
@@ -370,7 +371,27 @@ def _safe_end(rc: PlantRunContext, state: str, reason: str | None, summary: str,
 
 
 def _package_rerun(rc: PlantRunContext) -> dict:
-    raise NotImplementedError  # Task 12
+    """Ruling R10: re-trace the copied packages over the current version, with no orchestrator
+    conversation. A re-run adds and updates items; it never deletes."""
+    st = rc.state
+    if st.stage == "survey":
+        base = _base_spec(rc)
+        st.site = base.site.model_dump(mode="json") if base.site is not None else None
+        st.environment = [e.model_dump(mode="json") for e in base.environment]
+        _advance(rc, "trace")
+    _sample_m1_clouds(rc)
+    if st.stage == "trace":
+        _trace(rc)  # a budget-out starts no new package; in-flight ones wrap up (R8)
+        _advance(rc, "merge")
+    _merge_and_check(rc, then="build")
+    build_check(rc)
+    with rc.handle.session() as s:
+        labels = [f"P{r.n} {r.label} ({r.state})" for r in pk.rows(s, rc.run_id)]
+    summary = f"Re-ran {len(labels)} package(s) on version {st.base_version}: " + "; ".join(labels) + "."
+    why = rc.budget.exhausted()
+    if why:
+        return _end(rc, "stopped", "budget" if why == "tokens" else "timeout", summary, [], kind="agent")
+    return _end(rc, "finished", None, summary, [], kind="agent")
 
 
 # ------------------------------------------------------------------ the end
