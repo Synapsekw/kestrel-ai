@@ -177,3 +177,29 @@ def test_a_cached_sample_is_reused_until_the_plant_box_grows_past_it(handle, app
     grown = (BBOX[0] - 10, BBOX[1], BBOX[2], BBOX[3])
     C._sample(rc, cc, "cloud-1", grown)
     assert seen["sampled"] == 1 and seen["bbox"] == grown  # the box outgrew the cache: read again
+
+
+def test_a_damaged_plant_sample_cache_is_sampled_again(handle, app, monkeypatch, caplog):
+    from app.asset_models.agent.plant import cloud as C
+
+    seen = fake_c1(monkeypatch)
+    rc = make_rc(handle, app, seed_plant(handle, app, clouds=["cloud-1"]))
+    rc.run_dir.mkdir(parents=True, exist_ok=True)
+    (rc.run_dir / "plant_sample_cloud-1.npz").write_bytes(b"PK\x03\x04 a crash cut this short")
+    got = C._sample(rc, cc, "cloud-1", BBOX)
+    assert seen["sampled"] == 1 and got.cloud_id == "cloud-1"
+    assert "BadZipFile" in caplog.text and "plant_sample_cloud-1" not in caplog.text
+
+
+def test_a_damaged_m1_cloud_sample_cache_is_sampled_again(handle, app, monkeypatch, caplog):
+    from app.asset_models.agent.plant import orchestrator as O
+
+    rc = make_rc(handle, app, seed_plant(handle, app, clouds=["cloud-1"]))
+    rc.run_dir.mkdir(parents=True, exist_ok=True)
+    (rc.run_dir / "cloud_cloud-1.npz").write_bytes(b"PK\x03\x04 a crash cut this short")
+    fresh = NS(save=lambda path: None)
+    monkeypatch.setattr(O, "source_of", lambda handle, cid: "unused")
+    monkeypatch.setattr(O, "sample_cloud", lambda src, check_cancelled: fresh)
+    O._sample_m1_clouds(rc)
+    assert rc.m1.samples["cloud-1"] is fresh
+    assert "BadZipFile" in caplog.text and "cloud_cloud-1" not in caplog.text

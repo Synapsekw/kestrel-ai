@@ -70,8 +70,9 @@ def _sample(rc, cc, cid: str, bbox):
     if path.exists():
         try:
             cached = cc.PlantSample.load(path)
-        except (OSError, ValueError, KeyError):
-            cached = None  # a damaged cache is read again, never trusted
+        except Exception as e:  # noqa: BLE001 - BadZipFile, EOFError, ...: a damaged cache is read again
+            log.warning("plant cloud sample cache unreadable (%s); sampling again", type(e).__name__)
+            cached = None
         if cached is not None and cached.cloud_id == cid and _inside(bbox, cached.bbox):
             return cached
     sample = cc.sample_plant_cloud(

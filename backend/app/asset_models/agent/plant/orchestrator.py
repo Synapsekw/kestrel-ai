@@ -126,10 +126,13 @@ def _sample_m1_clouds(rc: PlantRunContext) -> None:
     becomes a run note, not a failure."""
     for cid in [x["id"] for x in rc.sources if x["type"] == "point_cloud"]:
         path = rc.run_dir / f"cloud_{cid}.npz"
-        try:
-            if path.exists():
+        if path.exists():
+            try:
                 rc.m1.samples[cid] = CloudSample.load(path)
                 continue
+            except Exception as e:  # noqa: BLE001 - BadZipFile, EOFError, ...: sample the cloud again
+                log.warning("plant run cloud sample cache unreadable (%s); sampling again", type(e).__name__)
+        try:
             sample = sample_cloud(source_of(rc.handle, cid), check_cancelled=rc.check_cancelled)
         except LookError as e:
             _note(rc, f"Point cloud {cid}: {e.message}")
