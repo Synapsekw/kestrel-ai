@@ -1,0 +1,272 @@
+{
+  "spec": "docs/superpowers/specs/2026-10-02-asset-findings-design.md section 9 (asset findings map)",
+  "note": "backend/app/asset_review/findings_map.py and frontend/src/assetmodels/findingsMap/geometry.ts both compute `expected` from `review`, `frame` and `dots`. The backend also checks that `review` equals resolve(profile_id, frame.height_m, overrides) restricted to sides and zones. Coordinates are rounded half up to 0.01.",
+  "cases": [
+    {
+      "name": "stack_compass_fraction_zones",
+      "profile_id": "stack",
+      "overrides": null,
+      "frame": {
+        "height_m": 80.0,
+        "north_offset_deg": 0.0,
+        "line_azimuth_deg": null,
+        "silhouette": [[0.0, 2.2], [20.0, 2.2], [23.0, 1.65], [60.0, 1.24], [76.0, 0.87]],
+        "levels": [1.5, 37.9, 75.2]
+      },
+      "dots": [
+        {"id": "f1", "height_m": 76.5, "bearing_deg": 10.0, "severity": 2},
+        {"id": "f2", "height_m": 40.0, "bearing_deg": 200.0, "severity": 1},
+        {"id": "f3", "height_m": 5.0, "bearing_deg": 359.9, "severity": 2},
+        {"id": "f4", "height_m": null, "bearing_deg": null, "severity": 3},
+        {"id": "f5", "height_m": 95.0, "bearing_deg": 90.0, "severity": 3},
+        {"id": "f6", "height_m": -2.0, "bearing_deg": 270.0, "severity": null}
+      ],
+      "review": {
+        "sides": {
+          "type": "compass",
+          "labels": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+          "basis": "position",
+          "title": "Side of the stack (approximate bearing)",
+          "noun": "side"
+        },
+        "zones": [
+          {"id": "head", "label": "Top / head", "min_m": 73.6, "max_m": null},
+          {"id": "shaft", "label": "Shaft / access", "min_m": 15.2, "max_m": 73.6},
+          {"id": "base", "label": "Base / inlet", "min_m": null, "max_m": 15.2}
+        ]
+      },
+      "expected": {
+        "width": 760,
+        "height": 400,
+        "plot": {"x": 110, "y": 10, "w": 512, "h": 352},
+        "sil_cx": 36.0,
+        "zone_label_x": 632,
+        "dot_r": 5.5,
+        "top_m": 80.0,
+        "step_m": 10.0,
+        "silhouette": [
+          [20.6, 362.0],
+          [20.6, 274.0],
+          [24.45, 260.8],
+          [27.32, 98.0],
+          [29.91, 27.6],
+          [42.09, 27.6],
+          [44.68, 98.0],
+          [47.55, 260.8],
+          [51.4, 274.0],
+          [51.4, 362.0]
+        ],
+        "levels": [
+          {"value": 1.5, "y": 355.4, "x1": 17.6, "x2": 54.4},
+          {"value": 37.9, "y": 195.24, "x1": 21.45, "x2": 50.55},
+          {"value": 75.2, "y": 31.12, "x1": 24.32, "x2": 47.68}
+        ],
+        "zones": [
+          {"id": "head", "label": "Top / head", "y": 10.0, "h": 28.16, "label_y": 28.08, "shade": true},
+          {
+            "id": "shaft",
+            "label": "Shaft / access",
+            "y": 38.16,
+            "h": 256.96,
+            "label_y": 170.64,
+            "shade": false
+          },
+          {"id": "base", "label": "Base / inlet", "y": 295.12, "h": 66.88, "label_y": 332.56, "shade": true}
+        ],
+        "y_ticks": [
+          {"value": 0.0, "y": 362.0},
+          {"value": 10.0, "y": 318.0},
+          {"value": 20.0, "y": 274.0},
+          {"value": 30.0, "y": 230.0},
+          {"value": 40.0, "y": 186.0},
+          {"value": 50.0, "y": 142.0},
+          {"value": 60.0, "y": 98.0},
+          {"value": 70.0, "y": 54.0},
+          {"value": 80.0, "y": 10.0}
+        ],
+        "x_ticks": [
+          {"label": "N", "x": 110.0},
+          {"label": "E", "x": 238.0},
+          {"label": "S", "x": 366.0},
+          {"label": "W", "x": 494.0},
+          {"label": "N", "x": 622.0}
+        ],
+        "axis_title": "Side of the stack (approximate bearing)",
+        "dots": [
+          {"id": "f6", "x": 494.0, "y": 362.0, "severity": null},
+          {"id": "f2", "x": 394.44, "y": 186.0, "severity": 1},
+          {"id": "f1", "x": 124.22, "y": 25.4, "severity": 2},
+          {"id": "f3", "x": 621.86, "y": 340.0, "severity": 2},
+          {"id": "f5", "x": 238.0, "y": 10.0, "severity": 3}
+        ],
+        "unplaced": 1
+      }
+    },
+    {
+      "name": "facade_faces_metre_zones",
+      "profile_id": "building_facade",
+      "overrides": {
+        "zones": [
+          {"id": "crown", "label": "Roof and crown", "min": 55},
+          {"id": "L01", "label": "Level 01", "min": 12, "max": 55},
+          {"id": "podium", "label": "Podium", "max": 12}
+        ]
+      },
+      "frame": {
+        "height_m": 60.0,
+        "north_offset_deg": 0.0,
+        "line_azimuth_deg": 340.0,
+        "silhouette": [],
+        "levels": [12.0, 55.0]
+      },
+      "dots": [
+        {"id": "a", "height_m": 30.0, "bearing_deg": 340.0, "severity": 2},
+        {"id": "b", "height_m": 56.2, "bearing_deg": 70.0, "severity": 1},
+        {"id": "c", "height_m": 3.3, "bearing_deg": 160.5, "severity": 2},
+        {"id": "d", "height_m": 12.0, "bearing_deg": 250.0, "severity": 1}
+      ],
+      "review": {
+        "sides": {
+          "type": "faces",
+          "labels": ["North elevation", "East elevation", "South elevation", "West elevation"],
+          "basis": "normal",
+          "title": "Elevation (direction the facade faces)",
+          "noun": "elevation"
+        },
+        "zones": [
+          {"id": "crown", "label": "Roof and crown", "min_m": 55.0, "max_m": null},
+          {"id": "L01", "label": "Level 01", "min_m": 12.0, "max_m": 55.0},
+          {"id": "podium", "label": "Podium", "min_m": null, "max_m": 12.0}
+        ]
+      },
+      "expected": {
+        "width": 760,
+        "height": 400,
+        "plot": {"x": 110, "y": 10, "w": 512, "h": 352},
+        "sil_cx": 36.0,
+        "zone_label_x": 632,
+        "dot_r": 5.5,
+        "top_m": 60.0,
+        "step_m": 10.0,
+        "silhouette": null,
+        "levels": [
+          {"value": 12.0, "y": 291.6, "x1": 26.0, "x2": 46.0},
+          {"value": 55.0, "y": 39.33, "x1": 26.0, "x2": 46.0}
+        ],
+        "zones": [
+          {"id": "crown", "label": "Roof and crown", "y": 10.0, "h": 29.33, "label_y": 28.67, "shade": true},
+          {"id": "L01", "label": "Level 01", "y": 39.33, "h": 252.27, "label_y": 169.47, "shade": false},
+          {"id": "podium", "label": "Podium", "y": 291.6, "h": 70.4, "label_y": 330.8, "shade": true}
+        ],
+        "y_ticks": [
+          {"value": 0.0, "y": 362.0},
+          {"value": 10.0, "y": 303.33},
+          {"value": 20.0, "y": 244.67},
+          {"value": 30.0, "y": 186.0},
+          {"value": 40.0, "y": 127.33},
+          {"value": 50.0, "y": 68.67},
+          {"value": 60.0, "y": 10.0}
+        ],
+        "x_ticks": [
+          {"label": "North elevation", "x": 110.0},
+          {"label": "East elevation", "x": 238.0},
+          {"label": "South elevation", "x": 366.0},
+          {"label": "West elevation", "x": 494.0},
+          {"label": "North elevation", "x": 622.0}
+        ],
+        "axis_title": "Elevation (direction the facade faces)",
+        "dots": [
+          {"id": "b", "x": 238.0, "y": 32.29, "severity": 1},
+          {"id": "d", "x": 494.0, "y": 291.6, "severity": 1},
+          {"id": "a", "x": 110.0, "y": 186.0, "severity": 2},
+          {"id": "c", "x": 366.71, "y": 342.64, "severity": 2}
+        ],
+        "unplaced": 0
+      }
+    },
+    {
+      "name": "tower_compass_north_offset",
+      "profile_id": "telecom_tower",
+      "overrides": null,
+      "frame": {
+        "height_m": 42.0,
+        "north_offset_deg": 10.0,
+        "line_azimuth_deg": null,
+        "silhouette": [[0.0, 4.243], [36.0, 1.273], [42.0, 1.273]],
+        "levels": [30.0, 36.0]
+      },
+      "dots": [
+        {"id": "D1", "height_m": 12.0, "bearing_deg": 45.0, "severity": 2},
+        {"id": "D4", "height_m": 39.2, "bearing_deg": 168.43, "severity": 2},
+        {"id": "D3", "height_m": 30.35, "bearing_deg": 355.0, "severity": 1}
+      ],
+      "review": {
+        "sides": {
+          "type": "compass",
+          "labels": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+          "basis": "position",
+          "title": "Side of the tower (approximate bearing)",
+          "noun": "side"
+        },
+        "zones": [
+          {"id": "antenna", "label": "Antenna zone", "min_m": 33.6, "max_m": null},
+          {"id": "body", "label": "Tower body", "min_m": 4.2, "max_m": 33.6},
+          {"id": "base", "label": "Base / foundation", "min_m": null, "max_m": 4.2}
+        ]
+      },
+      "expected": {
+        "width": 760,
+        "height": 400,
+        "plot": {"x": 110, "y": 10, "w": 512, "h": 352},
+        "sil_cx": 36.0,
+        "zone_label_x": 632,
+        "dot_r": 5.5,
+        "top_m": 45.0,
+        "step_m": 5.0,
+        "silhouette": [[6.3, 362.0], [27.09, 80.4], [27.09, 33.47], [44.91, 33.47], [44.91, 80.4], [65.7, 362.0]],
+        "levels": [
+          {"value": 30.0, "y": 127.33, "x1": 3.3, "x2": 68.7},
+          {"value": 36.0, "y": 80.4, "x1": 24.09, "x2": 47.91}
+        ],
+        "zones": [
+          {"id": "antenna", "label": "Antenna zone", "y": 10.0, "h": 89.17, "label_y": 58.59, "shade": true},
+          {"id": "body", "label": "Tower body", "y": 99.17, "h": 229.97, "label_y": 218.16, "shade": false},
+          {
+            "id": "base",
+            "label": "Base / foundation",
+            "y": 329.15,
+            "h": 32.85,
+            "label_y": 349.57,
+            "shade": true
+          }
+        ],
+        "y_ticks": [
+          {"value": 0.0, "y": 362.0},
+          {"value": 5.0, "y": 322.89},
+          {"value": 10.0, "y": 283.78},
+          {"value": 15.0, "y": 244.67},
+          {"value": 20.0, "y": 205.56},
+          {"value": 25.0, "y": 166.44},
+          {"value": 30.0, "y": 127.33},
+          {"value": 35.0, "y": 88.22},
+          {"value": 40.0, "y": 49.11},
+          {"value": 45.0, "y": 10.0}
+        ],
+        "x_ticks": [
+          {"label": "N", "x": 110.0},
+          {"label": "E", "x": 238.0},
+          {"label": "S", "x": 366.0},
+          {"label": "W", "x": 494.0},
+          {"label": "N", "x": 622.0}
+        ],
+        "axis_title": "Side of the tower (approximate bearing)",
+        "dots": [
+          {"id": "D3", "x": 117.11, "y": 124.6, "severity": 1},
+          {"id": "D1", "x": 188.22, "y": 268.13, "severity": 2},
+          {"id": "D4", "x": 363.77, "y": 55.37, "severity": 2}
+        ],
+        "unplaced": 0
+      }
+    }
+  ]
+}
