@@ -99,6 +99,11 @@ def test_the_seeded_rows_are_the_code_built_ins(tmp_path):
         cat.engine.dispose()
 
 
+# Report config keys added after 0002 (each with a default that a seeded row reads back): the
+# frozen 0002 seed never carries them, and must not be rewritten to. R1 adds its keys here.
+ADDED_AFTER_0002 = {"brand_id"}
+
+
 def test_the_migration_carries_a_frozen_copy():
     """A later edit of builtins.py must not rewrite 0002's history, and the two must agree today."""
     assert "from app" not in PATH.read_text(encoding="utf-8")
@@ -108,7 +113,11 @@ def test_the_migration_carries_a_frozen_copy():
             "id": t.id,
             "name": t.name,
             "description": t.description,
-            "config": t.config.model_dump(mode="json", by_alias=True),
+            "config": {
+                k: v
+                for k, v in t.config.model_dump(mode="json", by_alias=True).items()
+                if k not in ADDED_AFTER_0002
+            },
         }
         for t in BUILTIN_TEMPLATES
     ]

@@ -65,7 +65,8 @@ x-websocket:
     - `map_workspace.changed`: `payload` is `{fields: [...]}` (`frame`, `state`, `planned_surveys`)
       after the site frame or the persisted map workspace changes.
     - `asset_models.changed`: `payload` is `{asset_model_ids: [...]}` after an asset model, version or run
-      is created, changed or deleted.
+      is created, changed or deleted, and after its poses, placements or grouped findings change
+      (asset findings spec 2026-10-02 §6).
   message: "#/components/schemas/Event"
 
 tags:
@@ -96,6 +97,8 @@ tags:
   - name: reports
   - name: setup
   - name: assetmodels
+  - name: assetreview
+  - name: brands
   - name: basemap
 
 paths:
@@ -678,6 +681,7 @@ paths:
         - $ref: "#/components/parameters/imageHasSuggestions"
         - $ref: "#/components/parameters/imageReviewed"
         - $ref: "#/components/parameters/imageUnlabeled"
+        - $ref: "#/components/parameters/imageReviewStatus"
         - { name: search, in: query, description: case-insensitive substring of the image path, schema: { type: string } }
         - name: sort
           in: query
@@ -4143,14 +4147,19 @@ paths:
           in: query
           required: false
           schema: { type: array, items: { $ref: "#/components/schemas/FindingAnchorKind" } }
-        - { name: data_id, in: query, required: false, schema: { type: string }, description: "the anchor's data item (an images source, a map, an elevation or a point cloud)" }
+        - { name: data_id, in: query, required: false, schema: { type: string }, description: "the anchor's data item (an images source, a map, an elevation, a point cloud or an asset model)" }
         - { name: image_id, in: query, required: false, schema: { type: string }, description: "image anchors on this image (image inspection spec §3, an agreed addition to this group)" }
         - { name: created_by, in: query, required: false, schema: { type: string, enum: [human, model] } }
         - { name: q, in: query, required: false, schema: { type: string, maxLength: 200 }, description: "matches the note, the type name, or a number written as `F-0123`" }
         - { name: updated_from, in: query, required: false, schema: { type: string, format: date-time } }
         - { name: updated_to, in: query, required: false, schema: { type: string, format: date-time } }
         - { name: has_location, in: query, required: false, schema: { type: boolean }, description: only findings with (true) or without (false) `lon`/`lat` }
-        - { name: sort, in: query, required: false, schema: { type: string, enum: ["-severity", number, "-updated_at", type] }, description: "`-severity` when absent" }
+        - { name: asset_model_id, in: query, required: false, schema: { type: string }, description: "only `asset` findings on this asset model" }
+        - { name: zone, in: query, required: false, schema: { type: array, maxItems: 200, items: { type: string } }, description: "zone ids of the model's review profile (`AssetReviewZone.id`)" }
+        - { name: side, in: query, required: false, schema: { type: array, maxItems: 64, items: { type: string } }, description: "side labels of the model's review profile" }
+        - { name: component, in: query, required: false, schema: { type: array, maxItems: 200, items: { type: string } } }
+        - { name: placed, in: query, required: false, schema: { type: boolean }, description: "asset findings placed as a point or a patch (true) or not placed (false); other anchor kinds never match" }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: ["-severity", number, "-updated_at", type, "-height", zone] }, description: "`-severity` when absent. `-height`: highest first, findings without a height last, then `-number`. `zone`: zone id ascending, findings without a zone last, then `-height`, then `number`" }
         - $ref: "#/components/parameters/findingsLimit"
         - $ref: "#/components/parameters/cursor"
       responses:
@@ -4167,8 +4176,12 @@ paths:
       summary: |
         Create a finding. An `image` anchor names an existing annotation (`annotation_id`) or
         carries `box` geometry, which creates the annotation in the same transaction. A map anchor
-        should carry `lon`/`lat` (the anchor's WGS84 centroid). `severity` defaults to the type's
-        `default_severity`, `status` to `open`. A type of kind `object` answers 422 `not_a_defect`.
+        should carry `lon`/`lat` (the anchor's WGS84 centroid). An `asset` anchor carries one or
+        more sightings; each creates its annotation (a box, or a polygon from `points`) and a
+        `finding_sighting` with `placement` `pending` in the same transaction, and `lon`/`lat`
+        default to the asset frame's origin. `severity` defaults to the type's `default_severity`
+        (an asset finding: the highest sighting severity when one is given), `status` to `open`.
+        A type of kind `object` answers 422 `not_a_defect`.
       requestBody:
         required: true
         content:
@@ -5487,7 +5500,10 @@ paths:
     patch:
       tags: [assetmodels]
       operationId: patchAssetModel
-      summary: Rename or retag. Publishes `asset_models.changed`.
+      summary: |
+        Rename or retag, or set the asset frame (`frame`, the whole object) and the review profile
+        (`review`: a built-in profile id, resolved against the frame's height, or an edited copy).
+        Publishes `asset_models.changed`.
       requestBody:
         required: true
         content:
@@ -5500,16 +5516,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AssetModel" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "an unknown profile (`code` is `unknown_profile`) or a frame that breaks a rule the schema cannot state, such as zones that overlap or a level above `height_m` (`code` is `invalid_frame`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [assetmodels]
       operationId: deleteAssetModel
-      summary: Delete the model, its versions, runs and files. Refused while a run or GLB job is live.
+      summary: |
+        Delete the model, its versions, runs, poses, placements and files. Refused while a run,
+        GLB, import, pose, placement or grouping job is live, and while any finding or ungrouped
+        sighting references it.
       responses:
         "204": { description: deleted }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: a run or GLB job is live (`code` is `job_running`)
+          description: "a job of this model is live (`code` is `job_running`), or findings or ungrouped sightings reference it (`code` is `has_findings`, details `{count}`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -5728,6 +5752,573 @@ paths:
               schema: { type: string, format: binary }
         "204": { description: no overlay for this cloud }
         "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  # ----- asset findings (spec 2026-10-02-asset-findings §8; plan 2026-10-03-asset-findings-c0)
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/import-glb:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    post:
+      tags: [assetreview]
+      operationId: importAssetModelGlb
+      summary: |
+        Import an existing GLB as the model's next version (`kind` `imported`). An
+        `asset_glb_import` job copies and hashes the file, reads its node names and extras, checks
+        that it loads, converts it to the asset frame once (`frame_conversion`), and fills
+        `frame.height_m` and `frame.silhouette` when the model has no frame yet. Publishes
+        `asset_models.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetGlbImport" }
+      responses:
+        "202":
+          description: the pending version and its import job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelVersionWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a job of this model is live (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the path is not a readable glTF binary (`code` is `glb_invalid`, details `{reason}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/poses:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    get:
+      tags: [assetreview]
+      operationId: listImagePoses
+      summary: |
+        Where each photo was taken from, in this model's asset frame, keyset-paged by image id: the
+        cameras layer and split inspection's view from pose. `outcome` is the photo's review status.
+      parameters:
+        - { name: sequence, in: query, required: false, schema: { type: string, maxLength: 120 }, description: "only poses with this sequence label" }
+        - { name: image_id, in: query, required: false, schema: { type: array, maxItems: 100, items: { type: string } }, description: "only these images" }
+        - $ref: "#/components/parameters/assetPageAfter"
+        - $ref: "#/components/parameters/assetPageLimit"
+      responses:
+        "200":
+          description: one page of poses
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImagePoseList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/poses/estimate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    post:
+      tags: [assetreview]
+      operationId: estimateImagePoses
+      summary: |
+        Start an `asset_pose` job: a pose for each image in scope from its GPS, altitude and gimbal
+        angles (`exif_gimbal`), or aimed at the asset axis when it has no gimbal yaw
+        (`exif_axis_aim`). A pose from a kit or set by hand is never overwritten. An image without
+        GPS is skipped and listed in the job result.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImagePoseEstimate" }
+      responses:
+        "202":
+          description: pose job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a pose job of this model is live (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the model's frame has no geographic origin (`code` is `no_origin`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/poses/{imageId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/imageId"
+    put:
+      tags: [assetreview]
+      operationId: putImagePose
+      summary: Set one photo's pose by hand (`source` `manual`). Publishes `asset_models.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImagePoseIn" }
+      responses:
+        "200":
+          description: the stored pose
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImagePose" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/placements:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    get:
+      tags: [assetreview]
+      operationId: listPlacements
+      summary: |
+        The placed sightings (`point` and `patch`) of the model's current version, keyset-paged by
+        sighting id. Patch files are fetched one by one, only for visible patches.
+      parameters:
+        - $ref: "#/components/parameters/assetPageAfter"
+        - $ref: "#/components/parameters/assetPageLimit"
+      responses:
+        "200":
+          description: one page of placements
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlacementList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/compute:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    post:
+      tags: [assetreview]
+      operationId: computePlacements
+      summary: |
+        Start an `asset_place` job over every sighting of the model, or only the dirty ones
+        (`pending`, or placed on an older version). On success it queues `asset_group` for the same
+        model.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlacementCompute" }
+      responses:
+        "202":
+          description: placement job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a placement or grouping job of this model is live (`code` is `job_running`), or the model has no ready version (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/{sightingId}/mesh:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/sightingId"
+    get:
+      tags: [assetreview]
+      operationId: getPlacementMesh
+      summary: A patch's triangles.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: the ETag from a previous answer; a match answers 304
+          schema: { type: string }
+      responses:
+        "200":
+          description: "a little-endian uint32 vertex count n, then n x 3 Float32 positions (x, y, z in the asset frame, metres), then n x 2 Float32 uvs (u, v); every three vertices are one triangle"
+          headers:
+            ETag:
+              description: the placement's version and sighting; send it back as `If-None-Match`
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "304": { description: "`If-None-Match` matched the ETag" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/{sightingId}/texture:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/sightingId"
+    get:
+      tags: [assetreview]
+      operationId: getPlacementTexture
+      summary: A patch's texture.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: the ETag from a previous answer; a match answers 304
+          schema: { type: string }
+      responses:
+        "200":
+          description: "the finding polygon filled in its severity colour over the photo crop, with alpha; at most 512 px a side"
+          headers:
+            ETag:
+              description: the placement's version and sighting; send it back as `If-None-Match`
+              schema: { type: string }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "304": { description: "`If-None-Match` matched the ETag" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/{sightingId}/labels:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/sightingId"
+    get:
+      tags: [assetreview]
+      operationId: getPlacementLabels
+      summary: A patch's label grid, for pixel-exact picking.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: the ETag from a previous answer; a match answers 304
+          schema: { type: string }
+      responses:
+        "200":
+          description: "4 bytes (width, then height, each a little-endian uint16), then width times height uint8 labels, row by row from the top left; 1 inside the finding polygon, 0 outside; at most 128 px a side"
+          headers:
+            ETag:
+              description: the placement's version and sighting; send it back as `If-None-Match`
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "304": { description: "`If-None-Match` matched the ETag" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/findings/regroup:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    post:
+      tags: [assetreview]
+      operationId: regroupAssetFindings
+      summary: |
+        Start an `asset_group` job. A finding whose sightings are unchanged keeps its number, status,
+        note, comments and attachments. A merged-away finding is closed with a comment naming the
+        survivor (the lowest number), never deleted. A split creates new findings.
+      responses:
+        "202":
+          description: grouping job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a placement or grouping job of this model is live (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/merge:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    post:
+      tags: [assetreview]
+      operationId: mergeFinding
+      summary: |
+        Merge this asset finding into another on the same asset model (`into`). Its sightings move
+        to `into`, and it is closed with a comment naming the survivor; its comments and attachments
+        stay with it. Answers the survivor. Publishes `findings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingMerge" }
+      responses:
+        "200":
+          description: the surviving finding
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the merge is not possible (`code` is `invalid_merge`, details `{reason}`: `not_asset`, `other_model` or `same_finding`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/split:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    post:
+      tags: [assetreview]
+      operationId: splitFinding
+      summary: |
+        Move the named sightings of this asset finding to a new finding of the same type, with the
+        highest severity among them, and answer it. At least one sighting must stay. Publishes
+        `findings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingSplit" }
+      responses:
+        "201":
+          description: the new finding
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the split is not possible (`code` is `invalid_split`, details `{reason}`: `not_asset`, `not_on_finding` or `all_sightings`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/sightings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    get:
+      tags: [assetreview]
+      operationId: listFindingSightings
+      summary: |
+        The finding's sightings, the representative first, then by capture time. An image finding
+        answers its one implicit sighting; map and cloud findings answer none.
+      responses:
+        "200":
+          description: the sightings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingSightingList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/review:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    get:
+      tags: [assetreview]
+      operationId: getImageReview
+      summary: >-
+        The photo's effective review status: the review row's status, else `none` when the photo is
+        marked empty, else `not_assessed` (with `updated_at` null when there is no review row).
+      responses:
+        "200":
+          description: the review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageReview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [assetreview]
+      operationId: putImageReview
+      summary: |
+        Set the photo's review status. `none` also marks the image empty (`Image.marked_empty`) and
+        any other status clears it, in one transaction, so the training data path is unchanged.
+        Publishes `images.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageReviewPut" }
+      responses:
+        "200":
+          description: the stored review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageReview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`none` was requested while the photo has accepted boxes (`code` is `conflict`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/review-imports:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [assetreview]
+      operationId: startReviewImport
+      summary: |
+        Start a `review_kit_import` job on a kit job folder (`job.yaml`, `cameras.json`,
+        `assessment.json`, `masks/`, optional `merged.json`, `surface.json` and GLB) against an
+        image source already imported in the project. With `dry_run` the job writes nothing and its
+        result is a `ReviewImportPreview`: the class mapping to confirm and the photo match. A real
+        run needs exactly one of `asset_model_id` and `new_model_name`, and a type for every kit
+        class.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewImportRequest" }
+      responses:
+        "202":
+          description: import job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "an import into this project is live (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the folder is not a kit job (`code` is `kit_invalid`, details `{missing}`), or the request breaks a rule the schema cannot state (`code` is `invalid_import`, details `{errors: [{path, message}]}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/brands:
+    get:
+      tags: [brands]
+      operationId: listBrands
+      summary: Every brand, built-ins first, then by name. Brands live in the catalogue.
+      responses:
+        "200":
+          description: brands
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrandList" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [brands]
+      operationId: createBrand
+      summary: Create a brand. Fonts are bundled family names.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Brand" }
+        "409":
+          description: "the name is taken after normalising (`code` is `brand_name_taken`, details `{brand_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the name normalises to nothing (`invalid_brand`, details `{errors: [{path, message}]}`) or a font is not bundled (`unknown_font`, details `{path, fonts}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/brands/{brandId}:
+    parameters:
+      - $ref: "#/components/parameters/brandId"
+    patch:
+      tags: [brands]
+      operationId: patchBrand
+      summary: Change a brand. Built-ins are editable; logos go through `setBrandLogo` and `clearBrandLogo`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandPatch" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Brand" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the name is taken after normalising (`code` is `brand_name_taken`, details `{brand_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the name normalises to nothing (`invalid_brand`, details `{errors: [{path, message}]}`) or a font is not bundled (`unknown_font`, details `{path, fonts}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [brands]
+      operationId: deleteBrand
+      summary: Delete a brand. A report that names it renders with the Kestrel theme.
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a built-in brand is never deleted (`code` is `brand_builtin`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/brands/{brandId}/logos/{slot}:
+    parameters:
+      - $ref: "#/components/parameters/brandId"
+      - $ref: "#/components/parameters/brandLogoSlot"
+    get:
+      tags: [brands]
+      operationId: getBrandLogo
+      summary: "The brand's logo for this slot as a PNG. Callers add `?v=<logo id>`, so the answer is cached as immutable."
+      responses:
+        "200":
+          description: the logo
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [brands]
+      operationId: setBrandLogo
+      summary: "Import a local PNG, JPEG or WebP (at most 20 MB) as this slot's logo. A copy, at most 1200 px a side, is kept in the app data folder, never in a project."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandLogoImport" }
+      responses:
+        "200":
+          description: the brand with the new logo id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Brand" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the file is missing, too large or not an image (`code` is `asset_invalid`, details `{reason}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [brands]
+      operationId: clearBrandLogo
+      summary: Remove this slot's logo from the brand. The file stays (another brand may use it).
+      responses:
+        "200":
+          description: the brand without that logo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Brand" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/measurements:
     parameters:
@@ -6509,6 +7100,41 @@ components:
       in: path
       required: true
       schema: { type: string }
+    sightingId:
+      name: sightingId
+      in: path
+      required: true
+      schema: { type: string }
+    brandId:
+      name: brandId
+      in: path
+      required: true
+      schema: { type: string }
+    brandLogoSlot:
+      name: slot
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/BrandLogoSlot" }
+    assetPageAfter:
+      name: after
+      in: query
+      description: "the previous page's `next`: rows after this id (a plain id, never decoded)"
+      schema: { type: string, maxLength: 64 }
+    assetPageLimit:
+      name: limit
+      in: query
+      description: "at most 2000 rows a page; 500 when absent"
+      schema: { type: integer, minimum: 1, maximum: 2000, default: 500 }
+    imageReviewStatus:
+      name: review_status
+      in: query
+      description: >-
+        comma-separated photo review statuses (asset findings spec §5.4), matched against the
+        effective status: the review row's status, else `none` when the photo is marked empty,
+        else `not_assessed`
+      schema:
+        type: string
+        pattern: "^(finding|none|uncertain|not_assessed)(,(finding|none|uncertain|not_assessed))*$"
     sourceId:
       name: sourceId
       in: path
@@ -6966,6 +7592,17 @@ components:
                 `{errors: [{path, message}]}`), invalid_severity_rule (422: a severity rule names a
                 level that is not on the scale; details `{name, severity}`), type_name_blank (422: a
                 type name is empty once normalised; details `{name}`).
+                Asset findings: has_findings (409: findings still reference the asset model;
+                details `{count}`), glb_invalid (422: not a readable glTF binary; details
+                `{reason}`), unknown_profile and invalid_frame (422: an asset model patch),
+                no_origin (422: pose estimation needs the frame's geographic origin), invalid_merge
+                and invalid_split (422: details `{reason}`), kit_invalid (422: the folder is not a
+                review kit job; details `{missing}`), invalid_import (422: details
+                `{errors: [{path, message}]}`), brand_name_taken (409: a brand with that normalised
+                name exists; details `{brand_id}`), brand_builtin (409: a built-in brand is never
+                deleted), invalid_brand (422: details `{errors: [{path, message}]}`), unknown_font
+                (422: not a bundled font family; details `{path, fonts}`). A brand logo that is not
+                a readable image answers asset_invalid.
             message: { type: string }
             details:
               type: object
@@ -10775,7 +11412,7 @@ components:
         accepted_warnings: { type: array, items: { type: string } }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile, report_render, setup_inspect, asset_model_glb, asset_model_run]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile, report_render, setup_inspect, asset_model_glb, asset_model_run, asset_glb_import, asset_pose, asset_place, asset_group, review_kit_import]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -10796,7 +11433,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}); asset_model_glb {model_id, version}; asset_model_run {run_id, version}"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}); asset_model_glb {model_id, version}; asset_model_run {run_id, version}; asset_glb_import {asset_model_id, version} (params {asset_model_id, version, path, frame_conversion}); asset_pose {asset_model_id, estimated, kept, skipped, skipped_images: [{image_id, reason}] at most 200} (params {asset_model_id, image_ids}); asset_place {asset_model_id, version, point, patch, none, group_job_id} (params {asset_model_id, only_dirty}); asset_group {asset_model_id, created, kept, merged, split} (params {asset_model_id}); review_kit_import {asset_model_id, findings, sightings, statuses, unmatched_count, unmatched: [kit photo names] at most 500}, or a ReviewImportPreview when params.dry_run (params ReviewImportRequest)"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
@@ -11067,7 +11704,7 @@ components:
       enum: [open, reviewed, closed]
     FindingAnchorKind:
       type: string
-      enum: [image, map, cloud]
+      enum: [image, map, cloud, asset]
     GeoJsonPoint:
       type: object
       required: [type, coordinates]
@@ -11137,12 +11774,14 @@ components:
         - $ref: "#/components/schemas/FindingImageAnchor"
         - $ref: "#/components/schemas/FindingMapAnchor"
         - $ref: "#/components/schemas/FindingCloudAnchor"
+        - $ref: "#/components/schemas/FindingAssetAnchor"
       discriminator:
         propertyName: kind
         mapping:
           image: "#/components/schemas/FindingImageAnchor"
           map: "#/components/schemas/FindingMapAnchor"
           cloud: "#/components/schemas/FindingCloudAnchor"
+          asset: "#/components/schemas/FindingAssetAnchor"
     FindingImageAnchorInput:
       type: object
       description: exactly one of `annotation_id` (an existing annotation) and `box` (a new one)
@@ -11161,12 +11800,14 @@ components:
         - $ref: "#/components/schemas/FindingImageAnchorInput"
         - $ref: "#/components/schemas/FindingMapAnchor"
         - $ref: "#/components/schemas/FindingCloudAnchor"
+        - $ref: "#/components/schemas/FindingAssetAnchorInput"
       discriminator:
         propertyName: kind
         mapping:
           image: "#/components/schemas/FindingImageAnchorInput"
           map: "#/components/schemas/FindingMapAnchor"
           cloud: "#/components/schemas/FindingCloudAnchor"
+          asset: "#/components/schemas/FindingAssetAnchorInput"
     FindingAnchorPatch:
       type: object
       description: >-
@@ -11182,7 +11823,7 @@ components:
       example: { geometry: { type: Point, coordinates: [583122.0, 3265412.5] } }
     Finding:
       type: object
-      required: [id, number, type_id, severity, status, note, created_by, confidence, anchor, lon, lat, data_type, data_id, created_at, updated_at, reviewed_at, closed_at]
+      required: [id, number, type_id, severity, status, note, created_by, confidence, anchor, lon, lat, data_type, data_id, created_at, updated_at, reviewed_at, closed_at, asset_model_id, height_m, bearing_deg, side, zone, component, placement, sighting_count, representative]
       properties:
         id: { type: string }
         number: { type: integer, minimum: 1, description: "the human number, shown as `F-` plus at least four digits (`F-0217`); never reused" }
@@ -11196,11 +11837,24 @@ components:
         lon: { type: [number, "null"], description: "WGS84, for maps and dashboards" }
         lat: { type: [number, "null"] }
         data_type: { $ref: "#/components/schemas/DataItemType" }
-        data_id: { type: string, description: "the anchor's data item: the image's source, the map or the point cloud" }
+        data_id: { type: string, description: "the anchor's data item: the image's source, the map, the point cloud or the asset model" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         reviewed_at: { type: [string, "null"], format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
+        asset_model_id: { type: [string, "null"], description: "the asset model of an `asset` finding; null for every other kind" }
+        height_m: { type: [number, "null"], description: "metres above the asset's ground datum, from the representative sighting; null when it is not placed or not an asset finding" }
+        bearing_deg: { type: [number, "null"], minimum: 0, exclusiveMaximum: 360, description: "clockwise from plant north" }
+        side: { type: [string, "null"], description: "a side label of the model's review profile" }
+        zone: { type: [string, "null"], description: "a zone id of the model's review profile" }
+        component: { type: [string, "null"], description: "the GLB part hit, through the profile's component map" }
+        placement: { type: [string, "null"], enum: [point, patch, none, null], description: "the representative sighting's placement; null for other anchor kinds, and while an asset finding's representative sighting is still `pending` (not yet placed)" }
+        sighting_count: { type: integer, minimum: 0, description: "an asset finding's `finding_sighting` rows; every other kind has one implicit sighting and answers 1" }
+        representative:
+          description: "the sighting the finding is shown by (an image finding: its own annotation); null for map and cloud findings, or an asset finding with no sighting left"
+          oneOf:
+            - $ref: "#/components/schemas/FindingRepresentative"
+            - type: "null"
       example:
         id: "f0000000-1212-4000-8000-000000000217"
         number: 217
@@ -11219,6 +11873,15 @@ components:
         updated_at: "2026-09-26T10:20:00Z"
         reviewed_at: null
         closed_at: null
+        asset_model_id: null
+        height_m: null
+        bearing_deg: null
+        side: null
+        zone: null
+        component: null
+        placement: null
+        sighting_count: 1
+        representative: { image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
     FindingDetail:
       allOf:
         - $ref: "#/components/schemas/Finding"
@@ -11245,6 +11908,15 @@ components:
         updated_at: "2026-09-26T10:20:00Z"
         reviewed_at: null
         closed_at: null
+        asset_model_id: null
+        height_m: null
+        bearing_deg: null
+        side: null
+        zone: null
+        component: null
+        placement: null
+        sighting_count: 1
+        representative: { image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
         attachment_count: 2
         comment_count: 3
     FindingPage:
@@ -11274,6 +11946,15 @@ components:
             updated_at: "2026-09-26T10:20:00Z"
             reviewed_at: null
             closed_at: null
+            asset_model_id: null
+            height_m: null
+            bearing_deg: null
+            side: null
+            zone: null
+            component: null
+            placement: null
+            sighting_count: 1
+            representative: { image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
           - id: "f0000000-1212-4000-8000-000000000218"
             number: 218
             type_id: "c1a2b3c4-0000-4000-8000-000000000009"
@@ -11291,6 +11972,15 @@ components:
             updated_at: "2026-09-26T10:31:00Z"
             reviewed_at: "2026-09-26T10:31:00Z"
             closed_at: null
+            asset_model_id: null
+            height_m: null
+            bearing_deg: null
+            side: null
+            zone: null
+            component: null
+            placement: null
+            sighting_count: 1
+            representative: null
         next_cursor: null
     FindingCreate:
       type: object
@@ -11602,11 +12292,24 @@ components:
         action: { type: [string, "null"], description: "an in-app path the banner's button opens, or null" }
     OverviewHero:
       type: object
-      description: what the Overview's big pane shows; the first of a ready map, a ready point cloud, the photos, a ready drawing
+      description: >-
+        what the Overview's big pane shows; the first of a ready asset model with a review profile
+        (asset findings spec §9), a ready map, a ready point cloud, the photos, a ready drawing
       required: [kind, id]
       properties:
-        kind: { type: string, enum: [map, point_cloud, images, drawing] }
+        kind: { type: string, enum: [asset_model, map, point_cloud, images, drawing] }
         id: { type: [string, "null"], description: "null for `images`: the client reads the newest frames" }
+    PhotoReviewCounts:
+      type: object
+      description: >-
+        photos by effective review status (asset findings spec §5.4): the review row's status, else
+        `none` when the photo is marked empty, else `not_assessed`
+      required: [finding, none, uncertain, not_assessed]
+      properties:
+        finding: { type: integer, minimum: 0 }
+        none: { type: integer, minimum: 0 }
+        uncertain: { type: integer, minimum: 0 }
+        not_assessed: { type: integer, minimum: 0 }
     OverviewSite:
       type: object
       required: [center, bounds_wgs84, source, area_m2, photo_points, photo_points_total]
@@ -11653,6 +12356,11 @@ components:
             - $ref: "#/components/schemas/OverviewHero"
             - type: "null"
         banners: { type: array, items: { $ref: "#/components/schemas/OverviewBanner" } }
+        photo_review:
+          description: null until a photo has a review status
+          oneOf:
+            - $ref: "#/components/schemas/PhotoReviewCounts"
+            - type: "null"
       example:
         findings:
           by_status: { open: 47, reviewed: 12, closed: 88 }
@@ -11693,6 +12401,15 @@ components:
             updated_at: "2026-09-26T10:20:00Z"
             reviewed_at: null
             closed_at: null
+            asset_model_id: null
+            height_m: null
+            bearing_deg: null
+            side: null
+            zone: null
+            component: null
+            placement: null
+            sighting_count: 1
+            representative: { image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
         data:
           - { id: "a0000000-6666-4000-8000-000000000001", type: map, label: "North parapet ortho", captured_on: "2026-05-02", status: ready, created_at: "2026-09-22T09:00:00Z", summary: { gsd_cm: 2.1, epsg: 32638, width: 24000, height: 18000 } }
     Activity:
@@ -11701,7 +12418,7 @@ components:
       properties:
         id: { type: string }
         at: { type: string, format: date-time }
-        kind: { type: string, description: "`finding.created`, `finding.status`, `finding.severity`, `finding.comment`, `data.imported`, `job.finished` or `detections.accepted`" }
+        kind: { type: string, description: "`finding.created`, `finding.status`, `finding.severity`, `finding.comment`, `finding.merged`, `finding.split`, `findings.grouped`, `data.imported`, `job.finished` or `detections.accepted`" }
         subject_id: { type: [string, "null"], description: the finding or data item it is about }
         summary: { type: string, description: a short human sentence }
         payload: { type: object, additionalProperties: true, description: "small, kind-specific" }
@@ -12980,7 +13697,7 @@ components:
       enum: [empty, building, ready]
     AssetModel:
       type: object
-      required: [id, name, asset_type, tag, status, current_version, live_run_id, captured_on, created_at, updated_at]
+      required: [id, name, asset_type, tag, status, current_version, live_run_id, captured_on, created_at, updated_at, frame, review]
       properties:
         id: { type: string }
         name: { type: string }
@@ -12992,6 +13709,16 @@ components:
         captured_on: { type: [string, "null"], format: date }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        frame:
+          description: "the asset frame (asset findings spec §5.1); null until a GLB import, a kit import or the operator sets it"
+          oneOf:
+            - $ref: "#/components/schemas/AssetFrame"
+            - type: "null"
+        review:
+          description: "the resolved review profile, a copy stored on the model (asset findings spec §7); null until one is chosen"
+          oneOf:
+            - $ref: "#/components/schemas/AssetReviewConfig"
+            - type: "null"
     AssetModelList:
       type: object
       required: [items]
@@ -13013,6 +13740,16 @@ components:
         asset_type: { type: [string, "null"], maxLength: 80 }
         tag: { type: [string, "null"], maxLength: 80 }
         captured_on: { type: [string, "null"], format: date }
+        frame:
+          description: "the whole frame; null clears it"
+          oneOf:
+            - $ref: "#/components/schemas/AssetFrame"
+            - type: "null"
+        review:
+          description: "a built-in profile id (resolved against the frame's height) or an edited copy; null clears it"
+          oneOf:
+            - $ref: "#/components/schemas/AssetReviewChoice"
+            - type: "null"
     AssetPartPlacement:
       type: object
       additionalProperties: false
@@ -13094,7 +13831,7 @@ components:
         id: { type: string }
         model_id: { type: string }
         version: { type: integer }
-        kind: { type: string, enum: [agent, manual, draft] }
+        kind: { type: string, enum: [agent, manual, draft, imported] }
         glb_status: { type: string, enum: [pending, ready, failed] }
         source_ids: { type: array, items: { $ref: "#/components/schemas/AssetSourceRef" } }
         run_id: { type: [string, "null"] }
@@ -13102,7 +13839,7 @@ components:
         part_count: { type: integer }
         meta:
           type: [object, "null"]
-          description: "`build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]"
+          description: "`build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]; an `imported` version: source_name, sha256, bytes, node_count, frame_conversion, parts[{node,name,group,extras}]"
         created_at: { type: string, format: date-time }
     AssetModelVersionList:
       type: object
@@ -13193,6 +13930,561 @@ components:
       properties:
         run: { $ref: "#/components/schemas/AssetModelRun" }
         job: { $ref: "#/components/schemas/Job" }
+    # ----- asset findings (spec 2026-10-02-asset-findings §5, §8; plan 2026-10-03-asset-findings-c0)
+    AssetVec3:
+      type: array
+      description: "x, y, z in the asset frame: metres, Y up, X plant north, Z plant east"
+      items: { type: number }
+      minItems: 3
+      maxItems: 3
+    AssetFrameOrigin:
+      type: object
+      additionalProperties: false
+      description: The asset's base centre (WGS84) and the ground altitude in the photos' altitude datum.
+      required: [lat, lon, ground_alt_m]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lon: { type: number, minimum: -180, maximum: 180 }
+        ground_alt_m: { type: number }
+    AssetFramePreset:
+      type: object
+      additionalProperties: false
+      description: A named close-up view, in the asset frame (metres).
+      required: [id, label, target, camera]
+      properties:
+        id: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1 }
+        target: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        camera: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+    AssetFrame:
+      type: object
+      additionalProperties: false
+      description: >-
+        `asset_model.frame` (spec 2026-10-02-asset-findings §5.1). Metres, Y up, X plant north, Z plant
+        east, origin at the base centre on the ground datum. `north_offset_deg` is the true bearing of
+        plant north; `line_azimuth_deg` is a true bearing. Every field but `height_m` has a default.
+      required: [height_m]
+      properties:
+        origin:
+          oneOf:
+            - $ref: "#/components/schemas/AssetFrameOrigin"
+            - type: "null"
+        north_offset_deg: { type: number, default: 0 }
+        height_m: { type: number, exclusiveMinimum: 0 }
+        datum_label: { type: string, default: Ground }
+        datum_note: { type: string, default: "" }
+        line_azimuth_deg: { type: [number, "null"] }
+        silhouette:
+          type: array
+          description: "[y, r] pairs, ascending y: the radial outline used by the findings map"
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        levels: { type: array, items: { type: number } }
+        presets: { type: array, items: { $ref: "#/components/schemas/AssetFramePreset" } }
+    AssetReviewZone:
+      type: object
+      additionalProperties: false
+      required: [id, label, min_m, max_m]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        min_m: { type: [number, "null"], description: "null: open below" }
+        max_m: { type: [number, "null"], description: "null: open above" }
+    AssetReviewSides:
+      type: object
+      additionalProperties: false
+      required: [type, labels, basis, title, noun]
+      properties:
+        type: { type: string, enum: [compass, faces] }
+        labels: { type: array, items: { type: string }, description: "the eight compass points, or the faces in order from the line azimuth" }
+        basis: { type: string, enum: [position, normal] }
+        title: { type: string }
+        noun: { type: string }
+    AssetReviewFocus:
+      type: object
+      additionalProperties: false
+      required: [frustum, oblique_deg]
+      properties:
+        frustum: { type: array, items: { type: number }, minItems: 2, maxItems: 2, description: "half-height of the focus view as [min, max] fractions of the asset height" }
+        oblique_deg: { type: number }
+    AssetReviewReport:
+      type: object
+      additionalProperties: false
+      required: [pages, min_severity]
+      properties:
+        pages: { type: string, enum: [finding, defect] }
+        min_severity: { type: integer, minimum: 1, maximum: 3 }
+    AssetReviewComponentRule:
+      type: object
+      additionalProperties: false
+      required: [match, label]
+      properties:
+        match: { type: string, description: "a case-insensitive regular expression over the GLB node name" }
+        label: { type: string }
+    AssetReviewLimit:
+      type: object
+      additionalProperties: false
+      required: [title, text]
+      properties:
+        title: { type: string }
+        text: { type: string }
+    AssetReviewConfig:
+      type: object
+      additionalProperties: false
+      description: >-
+        `asset_model.review` (spec 2026-10-02-asset-findings §5.1, §7): a review profile resolved for the
+        asset's height and editable by the operator. Zones are in metres, top first.
+      required:
+        - profile_id
+        - name
+        - asset_noun
+        - finding_noun
+        - assessment_title
+        - finding_unit
+        - placement
+        - patch_grid
+        - cluster_m
+        - zones
+        - sides
+        - focus
+        - report
+        - component_map
+        - facts
+        - limits
+        - breakdowns
+        - footer_disclaimer
+      properties:
+        profile_id: { type: string, description: "the built-in profile it came from: stack, building_facade, tank, telecom_tower or ohtl_tower" }
+        name: { type: string }
+        asset_noun: { type: string }
+        finding_noun: { type: string }
+        assessment_title: { type: string }
+        finding_unit: { type: string, enum: [photo, region] }
+        placement: { type: string, enum: [patch, point, mixed] }
+        patch_grid: { type: integer, minimum: 2, maximum: 128 }
+        cluster_m: { type: number, exclusiveMinimum: 0 }
+        zones: { type: array, items: { $ref: "#/components/schemas/AssetReviewZone" } }
+        sides: { $ref: "#/components/schemas/AssetReviewSides" }
+        focus: { $ref: "#/components/schemas/AssetReviewFocus" }
+        report: { $ref: "#/components/schemas/AssetReviewReport" }
+        component_map: { type: array, items: { $ref: "#/components/schemas/AssetReviewComponentRule" } }
+        facts: { type: array, items: { type: string } }
+        limits: { type: array, items: { $ref: "#/components/schemas/AssetReviewLimit" } }
+        breakdowns: { type: array, items: { type: string } }
+        footer_disclaimer: { type: string }
+    AssetFrameConversion:
+      type: string
+      enum: [none, x_east_minus_z_north, enu_z_up]
+      description: "how an imported GLB maps to the asset frame: `none` (already X north, Y up, Z east), `x_east_minus_z_north` (Y up, X east, minus Z north: the three.js and kit layout), `enu_z_up` (X east, Y north, Z up: most photogrammetry exports)"
+    AssetProfileId:
+      type: string
+      enum: [stack, building_facade, tank, telecom_tower, ohtl_tower]
+    AssetReviewChoice:
+      description: "a built-in profile by id, or an edited copy"
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [profile_id]
+          properties:
+            profile_id: { $ref: "#/components/schemas/AssetProfileId" }
+        - $ref: "#/components/schemas/AssetReviewConfig"
+    AssetGlbImport:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 1024, description: "an absolute path to a .glb picked with the file dialog" }
+        frame_conversion: { $ref: "#/components/schemas/AssetFrameConversion" }
+        origin:
+          description: "sets `frame.origin` when the model has no frame yet"
+          oneOf:
+            - $ref: "#/components/schemas/AssetFrameOrigin"
+            - type: "null"
+        note: { type: [string, "null"], maxLength: 500 }
+    ImagePoseSource:
+      type: string
+      enum: [kit, exif_gimbal, exif_axis_aim, manual]
+    ImageReviewStatus:
+      type: string
+      enum: [finding, none, uncertain, not_assessed]
+    ImagePose:
+      type: object
+      required: [image_id, position, target, up, hfov_deg, vfov_deg, source, accuracy_m, sequence, outcome, updated_at]
+      properties:
+        image_id: { type: string }
+        position: { $ref: "#/components/schemas/AssetVec3" }
+        target: { $ref: "#/components/schemas/AssetVec3" }
+        up: { $ref: "#/components/schemas/AssetVec3" }
+        hfov_deg: { type: number, exclusiveMinimum: 0, maximum: 180 }
+        vfov_deg: { type: number, exclusiveMinimum: 0, maximum: 180 }
+        source: { $ref: "#/components/schemas/ImagePoseSource" }
+        accuracy_m: { type: [number, "null"], minimum: 0, description: "the stated accuracy, shown in the UI" }
+        sequence: { type: [string, "null"], description: "a flight or sequence label for filters and colours" }
+        outcome: { $ref: "#/components/schemas/ImageReviewStatus" }
+        updated_at: { type: string, format: date-time }
+    ImagePoseList:
+      type: object
+      required: [items, next]
+      properties:
+        items: { type: array, maxItems: 2000, items: { $ref: "#/components/schemas/ImagePose" } }
+        next: { type: [string, "null"], description: "pass as `after` for the next page; null on the last" }
+      example:
+        items:
+          - image_id: "10000000-5555-4000-8000-000000000001"
+            position: [42.0, 31.5, -18.2]
+            target: [0.0, 30.0, 0.0]
+            up: [0.0, 1.0, 0.0]
+            hfov_deg: 69.7
+            vfov_deg: 55.8
+            source: exif_gimbal
+            accuracy_m: 2.5
+            sequence: "Flight 1"
+            outcome: finding
+            updated_at: "2026-10-03T09:00:00Z"
+        next: null
+    ImagePoseIn:
+      type: object
+      additionalProperties: false
+      required: [position, target, up, hfov_deg, vfov_deg]
+      properties:
+        position: { $ref: "#/components/schemas/AssetVec3" }
+        target: { $ref: "#/components/schemas/AssetVec3" }
+        up: { $ref: "#/components/schemas/AssetVec3" }
+        hfov_deg: { type: number, exclusiveMinimum: 0, maximum: 180 }
+        vfov_deg: { type: number, exclusiveMinimum: 0, maximum: 180 }
+        accuracy_m: { type: [number, "null"], minimum: 0 }
+        sequence: { type: [string, "null"], maxLength: 120 }
+    ImagePoseEstimate:
+      type: object
+      additionalProperties: false
+      properties:
+        image_ids: { type: array, minItems: 1, maxItems: 100000, items: { type: string }, description: "absent: every image of the project with GPS" }
+    ImageReview:
+      type: object
+      required: [image_id, status, note, coverage, uncertain_coverage, updated_at]
+      properties:
+        image_id: { type: string }
+        status: { $ref: "#/components/schemas/ImageReviewStatus" }
+        note: { type: string }
+        coverage: { type: [number, "null"], minimum: 0, maximum: 1, description: "share of the photo inside finding polygons (computed)" }
+        uncertain_coverage: { type: [number, "null"], minimum: 0, maximum: 1 }
+        updated_at: { type: [string, "null"], format: date-time, description: "null: never reviewed" }
+      example: { image_id: "10000000-5555-4000-8000-000000000001", status: uncertain, note: "Glare on the lower shell.", coverage: null, uncertain_coverage: 0.04, updated_at: "2026-10-03T09:00:00Z" }
+    ImageReviewPut:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/ImageReviewStatus" }
+        note: { type: string, maxLength: 4000, description: "empty when absent" }
+    Placement:
+      type: object
+      required: [sighting_id, finding_id, kind, center, normal, size, severity, type_id, has_patch]
+      properties:
+        sighting_id: { type: string }
+        finding_id: { type: [string, "null"], description: "the sighting's finding; null while the sighting is ungrouped, between `asset_place` and `asset_group`" }
+        kind: { type: string, enum: [point, patch] }
+        center: { $ref: "#/components/schemas/AssetVec3" }
+        normal: { $ref: "#/components/schemas/AssetVec3" }
+        size: { type: number, minimum: 0, description: "a patch's longest bounding edge (m); 0 for a point" }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "the sighting's grade, else its finding's" }
+        type_id: { type: string }
+        has_patch: { type: boolean, description: "true for a patch: its mesh, texture and labels can be fetched" }
+    PlacementList:
+      type: object
+      required: [version, items, next]
+      properties:
+        version: { type: [integer, "null"], description: "the model version the placements were computed on; null when the model has none" }
+        items: { type: array, maxItems: 2000, items: { $ref: "#/components/schemas/Placement" } }
+        next: { type: [string, "null"], description: "pass as `after` for the next page; null on the last" }
+      example:
+        version: 2
+        items:
+          - { sighting_id: "s0000000-8888-4000-8000-000000000001", finding_id: "f0000000-1212-4000-8000-000000000217", kind: patch, center: [1.2, 61.4, -9.8], normal: [0.12, 0.0, -0.99], size: 0.84, severity: 2, type_id: "c1a2b3c4-0000-4000-8000-000000000009", has_patch: true }
+          - { sighting_id: "s0000000-8888-4000-8000-000000000002", finding_id: "f0000000-1212-4000-8000-000000000218", kind: point, center: [-3.1, 12.0, 4.4], normal: [-0.6, 0.0, 0.8], size: 0, severity: 1, type_id: "c1a2b3c4-0000-4000-8000-000000000009", has_patch: false }
+        next: null
+    PlacementCompute:
+      type: object
+      additionalProperties: false
+      properties:
+        only_dirty: { type: boolean, description: "true: only `pending` sightings and those placed on an older version; absent or false: every sighting" }
+    FindingRepresentative:
+      type: object
+      required: [image_id, annotation_id]
+      properties:
+        image_id: { type: string }
+        annotation_id: { type: string }
+    FindingAssetAnchor:
+      type: object
+      required: [kind, asset_model_id, asset_version, point, normal]
+      properties:
+        kind: { type: string, enum: [asset] }
+        asset_model_id: { type: string }
+        asset_version: { type: [integer, "null"], description: "the model version the placement was computed on" }
+        point: { type: [array, "null"], items: { type: number }, minItems: 3, maxItems: 3, description: "the representative sighting's hit point (asset frame, m); null when unplaced" }
+        normal: { type: [array, "null"], items: { type: number }, minItems: 3, maxItems: 3 }
+      example: { kind: asset, asset_model_id: "m0000000-9999-4000-8000-000000000001", asset_version: 2, point: [1.2, 61.4, -9.8], normal: [0.12, 0.0, -0.99] }
+    FindingSightingInput:
+      type: object
+      additionalProperties: false
+      required: [image_id, box]
+      properties:
+        image_id: { type: string }
+        box: { $ref: "#/components/schemas/FindingBox" }
+        points:
+          type: array
+          minItems: 3
+          maxItems: 4096
+          description: "the polygon in image pixels; the annotation is then a polygon whose box is `box`"
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "the sighting's own grade" }
+        group_tag: { type: [string, "null"], maxLength: 80, description: "sightings with the same tag always group together" }
+    FindingAssetAnchorInput:
+      type: object
+      additionalProperties: false
+      required: [kind, asset_model_id, sightings]
+      properties:
+        kind: { type: string, enum: [asset] }
+        asset_model_id: { type: string }
+        sightings: { type: array, minItems: 1, maxItems: 50, items: { $ref: "#/components/schemas/FindingSightingInput" } }
+      example: { kind: asset, asset_model_id: "m0000000-9999-4000-8000-000000000001", sightings: [{ image_id: "10000000-5555-4000-8000-000000000001", box: { x: 812, y: 404, w: 96, h: 40 } }] }
+    FindingSightingPlacement:
+      type: string
+      enum: [point, patch, none, pending]
+    FindingSighting:
+      type: object
+      required: [id, asset_model_id, finding_id, image_id, annotation_id, image_name, captured_at, severity, group_tag, placement, center, normal, part, coverage, placed_version, stale, height_m, bearing_deg, side, zone, created_at]
+      properties:
+        id: { type: string, description: "the sighting id; an image finding's implicit sighting answers its annotation id" }
+        asset_model_id: { type: string, description: "the asset model the sighting belongs to; an image finding's implicit sighting answers an empty string" }
+        finding_id: { type: [string, "null"], description: "null for a sighting not grouped into a finding yet (before `asset_group` runs)" }
+        image_id: { type: string }
+        annotation_id: { type: string, description: "the box, rbox, polygon or point (`Box.id`) that is the sighting's geometry" }
+        image_name: { type: string, description: "the photo's file name" }
+        captured_at: { type: [string, "null"], format: date-time }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9 }
+        group_tag: { type: [string, "null"] }
+        placement: { $ref: "#/components/schemas/FindingSightingPlacement" }
+        center: { type: [array, "null"], items: { type: number }, minItems: 3, maxItems: 3, description: "the hit point (asset frame, m); null unless placed" }
+        normal: { type: [array, "null"], items: { type: number }, minItems: 3, maxItems: 3 }
+        part: { type: [string, "null"], description: "the GLB node hit, through the profile's component map" }
+        coverage: { type: [number, "null"], minimum: 0, maximum: 1, description: "polygon area over the photo area" }
+        placed_version: { type: [integer, "null"] }
+        stale: { type: boolean, description: "placed on an older version than the model's current one" }
+        height_m: { type: [number, "null"], description: "derived from `center` on read; null when unplaced" }
+        bearing_deg: { type: [number, "null"], minimum: 0, exclusiveMaximum: 360 }
+        side: { type: [string, "null"] }
+        zone: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    FindingSightingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/FindingSighting" } }
+      example:
+        items:
+          - id: "s0000000-8888-4000-8000-000000000001"
+            asset_model_id: "m0000000-9999-4000-8000-000000000001"
+            finding_id: "f0000000-1212-4000-8000-000000000217"
+            image_id: "10000000-5555-4000-8000-000000000001"
+            annotation_id: "b0000000-6666-4000-8000-000000000003"
+            image_name: "DJI_0412.JPG"
+            captured_at: "2026-09-14T09:12:00Z"
+            severity: 2
+            group_tag: null
+            placement: patch
+            center: [1.2, 61.4, -9.8]
+            normal: [0.12, 0.0, -0.99]
+            part: "Shaft"
+            coverage: 0.012
+            placed_version: 2
+            stale: false
+            height_m: 61.4
+            bearing_deg: 277.0
+            side: "W"
+            zone: "shaft"
+            created_at: "2026-10-03T09:00:00Z"
+    FindingMerge:
+      type: object
+      additionalProperties: false
+      required: [into]
+      properties:
+        into: { type: string, description: "the finding that survives" }
+    FindingSplit:
+      type: object
+      additionalProperties: false
+      required: [sighting_ids]
+      properties:
+        sighting_ids: { type: array, minItems: 1, maxItems: 500, uniqueItems: true, items: { type: string } }
+    ReviewImportRequest:
+      type: object
+      additionalProperties: false
+      required: [folder, image_source_id, dry_run]
+      properties:
+        folder: { type: string, minLength: 1, maxLength: 1024, description: "an absolute path to the kit job folder" }
+        image_source_id: { type: string, description: "the image source holding the kit's photos" }
+        asset_model_id: { type: [string, "null"], description: "fill this model; or give `new_model_name`" }
+        new_model_name: { type: [string, "null"], minLength: 1, maxLength: 120 }
+        class_map: { type: object, maxProperties: 200, additionalProperties: { type: string }, description: "kit class key to catalogue type id, as confirmed after the dry run" }
+        dry_run: { type: boolean }
+    ReviewImportClass:
+      type: object
+      required: [key, label, count, type_id]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        count: { type: integer, minimum: 0 }
+        type_id: { type: [string, "null"], description: "from `class_map`, else the catalogue type with the same normalised name, else null" }
+    ReviewImportPreview:
+      type: object
+      description: "the `result` of a `review_kit_import` dry run (read through `GET /projects/{projectId}/jobs/{jobId}`)"
+      required: [unit, profile, profile_id, photos, matched, unmatched_count, unmatched, classes, statuses, has_surface, has_glb, has_merged]
+      properties:
+        unit: { type: string, enum: [region, photo] }
+        profile: { type: string, description: "the profile name in job.yaml" }
+        profile_id:
+          description: "the built-in it maps to; null when Kestrel has no such profile (a real run refuses with `kit_invalid`)"
+          oneOf:
+            - $ref: "#/components/schemas/AssetProfileId"
+            - type: "null"
+        photos: { type: integer, minimum: 0 }
+        matched: { type: integer, minimum: 0 }
+        unmatched_count: { type: integer, minimum: 0 }
+        unmatched: { type: array, maxItems: 500, items: { type: string }, description: "kit photo names with no project image" }
+        classes: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/ReviewImportClass" } }
+        statuses:
+          type: object
+          required: [finding, none, uncertain, not_assessed]
+          properties:
+            finding: { type: integer, minimum: 0 }
+            none: { type: integer, minimum: 0 }
+            uncertain: { type: integer, minimum: 0 }
+            not_assessed: { type: integer, minimum: 0 }
+        has_surface: { type: boolean, description: "surface.json is present: placements replay" }
+        has_glb: { type: boolean }
+        has_merged: { type: boolean, description: "merged.json is present: region polygons" }
+      example:
+        unit: region
+        profile: building_facade
+        profile_id: building_facade
+        photos: 3
+        matched: 2
+        unmatched_count: 1
+        unmatched: ["DJI_0099.JPG"]
+        classes: [{ key: crack, label: "Crack", count: 4, type_id: "c1a2b3c4-0000-4000-8000-000000000009" }]
+        statuses: { finding: 2, none: 0, uncertain: 1, not_assessed: 0 }
+        has_surface: false
+        has_glb: true
+        has_merged: true
+    BrandColors:
+      type: object
+      additionalProperties: false
+      required: [accent, accent_dark, navy, ink, pale, line]
+      description: Hex colours (`#RRGGBB`). Stored upper case.
+      properties:
+        accent: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        accent_dark: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        navy: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        ink: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        pale: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        line: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+    Brand:
+      type: object
+      required: [id, name, colors, font_text, font_numerals, logo_on_light, logo_on_dark, logo_flat, website, owner, confidentiality, pdf_author, builtin, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        colors: { $ref: "#/components/schemas/BrandColors" }
+        font_text:
+          type: [string, "null"]
+          description: A bundled font family (`Nunito Sans`, `Poppins`, `Inter`); null prints in the report theme's font.
+        font_numerals:
+          type: [string, "null"]
+          description: The family for numbers and headings; null falls back to `font_text`.
+        logo_on_light: { type: [string, "null"], description: "A brand logo id (`logo-<16 hex>`); read it with getBrandLogo." }
+        logo_on_dark: { type: [string, "null"] }
+        logo_flat: { type: [string, "null"] }
+        website: { type: string }
+        owner: { type: string }
+        confidentiality:
+          type: string
+          description: The footer line. `{year}` and `{customer}` are filled in when the report renders.
+        pdf_author: { type: string }
+        builtin: { type: boolean, description: Seeded by the app; editable, never deleted. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      example:
+        id: "builtin-white-label"
+        name: "White label"
+        colors: { accent: "#2F6FED", accent_dark: "#1E4FB8", navy: "#1B2A41", ink: "#1F2328", pale: "#F4F6F8", line: "#D0D7DE" }
+        font_text: Inter
+        font_numerals: Inter
+        logo_on_light: null
+        logo_on_dark: null
+        logo_flat: null
+        website: ""
+        owner: ""
+        confidentiality: "Confidential. Prepared for {customer}, {year}."
+        pdf_author: ""
+        builtin: true
+        created_at: "2026-10-03T00:00:00Z"
+        updated_at: "2026-10-03T00:00:00Z"
+    BrandList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Brand" } }
+      example:
+        items:
+          - id: "builtin-white-label"
+            name: "White label"
+            colors: { accent: "#2F6FED", accent_dark: "#1E4FB8", navy: "#1B2A41", ink: "#1F2328", pale: "#F4F6F8", line: "#D0D7DE" }
+            font_text: Inter
+            font_numerals: Inter
+            logo_on_light: null
+            logo_on_dark: null
+            logo_flat: null
+            website: ""
+            owner: ""
+            confidentiality: "Confidential. Prepared for {customer}, {year}."
+            pdf_author: ""
+            builtin: true
+            created_at: "2026-10-03T00:00:00Z"
+            updated_at: "2026-10-03T00:00:00Z"
+    BrandCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        colors: { $ref: "#/components/schemas/BrandColors" }
+        font_text: { type: [string, "null"], maxLength: 80 }
+        font_numerals: { type: [string, "null"], maxLength: 80 }
+        website: { type: string, maxLength: 200 }
+        owner: { type: string, maxLength: 120 }
+        confidentiality: { type: string, maxLength: 1000 }
+        pdf_author: { type: string, maxLength: 120 }
+    BrandPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        colors: { $ref: "#/components/schemas/BrandColors" }
+        font_text: { type: [string, "null"], maxLength: 80 }
+        font_numerals: { type: [string, "null"], maxLength: 80 }
+        website: { type: string, maxLength: 200 }
+        owner: { type: string, maxLength: 120 }
+        confidentiality: { type: string, maxLength: 1000 }
+        pdf_author: { type: string, maxLength: 120 }
+    BrandLogoSlot:
+      type: string
+      enum: [on_light, on_dark, flat]
+      description: "`on_light` for white bars, `on_dark` for the cover band, `flat` (no alpha) for the PDF running header."
+    BrandLogoImport:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 1024, description: An absolute path to a PNG, JPEG or WebP of at most 20 MB. }
     DrawingPatch:
       type: object
       minProperties: 1
@@ -13962,7 +15254,7 @@ components:
       type: object
       additionalProperties: false
       description: "a report's configuration (spec §7.1); PATCH sends it whole. Each section key appears exactly once (a repeat is `invalid_report` / `invalid_template`); an enabled cover prints first"
-      required: [cover, paper, filters, sections]
+      required: [cover, paper, filters, sections, brand_id]
       properties:
         cover: { $ref: "#/components/schemas/ReportCover" }
         paper: { $ref: "#/components/schemas/ReportPaper" }
@@ -13972,6 +15264,7 @@ components:
           minItems: 8
           maxItems: 8
           items: { $ref: "#/components/schemas/ReportSection" }
+        brand_id: { type: [string, "null"], maxLength: 64, description: "a `Brand` id; null, or a brand since deleted, prints with the Kestrel theme" }
       example:
         cover: { title: "Harbour wall inspection", subtitle: "September survey", site: "North quay", client: "Port authority", author: "D. Operator", logo_asset_id: null, report_date: null }
         paper: { size: A4, orientation: portrait }
@@ -13982,6 +15275,7 @@ components:
           type_ids: null
           data_item_ids: null
           date: { rule: all, from: null, to: null, days: null }
+        brand_id: null
         sections:
           - { key: cover, enabled: true, options: { show_locator: true } }
           - { key: summary, enabled: true, options: { narrative: "", show_deltas: true } }

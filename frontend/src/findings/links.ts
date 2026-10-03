@@ -19,6 +19,8 @@ export function findingHref(projectId: string, finding: Pick<Finding, "id" | "an
       return `/p/${projectId}/maps?map=${a.map_id}&finding=${fid}`;
     case "cloud":
       return `/p/${projectId}/clouds/${a.cloud_id}?finding=${fid}`;
+    case "asset":
+      return `/p/${projectId}/models/${a.asset_model_id}?finding=${fid}`;
   }
 }
 

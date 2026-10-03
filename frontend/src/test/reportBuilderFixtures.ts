@@ -40,6 +40,7 @@ export function reportConfig(over: Partial<ReportConfig> = {}): ReportConfig {
       logo_asset_id: null,
       report_date: null,
     },
+    brand_id: null,
     paper: { size: "A4", orientation: "portrait" },
     filters: {
       severity_min: null,

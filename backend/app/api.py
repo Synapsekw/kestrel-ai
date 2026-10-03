@@ -152,6 +152,10 @@ for _module in (
     "app.volumes.router",
     "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
     "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
+    # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
+    # A unit inserts its own router module above its stubs module and deletes its tuples there.
+    "app.asset_review.stubs",
+    "app.brands.stubs",
 ):
     try:
         api_router.include_router(importlib.import_module(_module).router)

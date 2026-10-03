@@ -161,6 +161,45 @@ export type AssetSourceRef = Schemas["AssetSourceRef"];
 export type AssetModelRun = Schemas["AssetModelRun"];
 export type AssetModelRunStep = Schemas["AssetModelRunStep"];
 export type AssetModelRunStart = Schemas["AssetModelRunStart"];
+export type AssetVec3 = Schemas["AssetVec3"];
+export type AssetFrame = Schemas["AssetFrame"];
+export type AssetFrameOrigin = Schemas["AssetFrameOrigin"];
+export type AssetFramePreset = Schemas["AssetFramePreset"];
+export type AssetFrameConversion = Schemas["AssetFrameConversion"];
+export type AssetProfileId = Schemas["AssetProfileId"];
+export type AssetReviewConfig = Schemas["AssetReviewConfig"];
+export type AssetReviewZone = Schemas["AssetReviewZone"];
+export type AssetReviewChoice = Schemas["AssetReviewChoice"];
+export type AssetGlbImport = Schemas["AssetGlbImport"];
+export type ImagePose = Schemas["ImagePose"];
+export type ImagePoseIn = Schemas["ImagePoseIn"];
+export type ImagePoseList = Schemas["ImagePoseList"];
+export type ImagePoseSource = Schemas["ImagePoseSource"];
+export type ImagePoseEstimate = Schemas["ImagePoseEstimate"];
+export type ImageReview = Schemas["ImageReview"];
+export type ImageReviewPut = Schemas["ImageReviewPut"];
+export type ImageReviewStatus = Schemas["ImageReviewStatus"];
+export type Placement = Schemas["Placement"];
+export type PlacementList = Schemas["PlacementList"];
+export type PlacementCompute = Schemas["PlacementCompute"];
+export type FindingAssetAnchor = Schemas["FindingAssetAnchor"];
+export type FindingAssetAnchorInput = Schemas["FindingAssetAnchorInput"];
+export type FindingSightingInput = Schemas["FindingSightingInput"];
+export type FindingSighting = Schemas["FindingSighting"];
+export type FindingSightingList = Schemas["FindingSightingList"];
+export type FindingSightingPlacement = Schemas["FindingSightingPlacement"];
+export type FindingRepresentative = Schemas["FindingRepresentative"];
+export type FindingMerge = Schemas["FindingMerge"];
+export type FindingSplit = Schemas["FindingSplit"];
+export type ReviewImportRequest = Schemas["ReviewImportRequest"];
+export type ReviewImportPreview = Schemas["ReviewImportPreview"];
+export type Brand = Schemas["Brand"];
+export type BrandList = Schemas["BrandList"];
+export type BrandCreate = Schemas["BrandCreate"];
+export type BrandPatch = Schemas["BrandPatch"];
+export type BrandColors = Schemas["BrandColors"];
+export type BrandLogoSlot = Schemas["BrandLogoSlot"];
+export type BrandLogoImport = Schemas["BrandLogoImport"];
 export type DrawingInspection = Schemas["DrawingInspection"];
 export type DrawingGeoref = Schemas["DrawingGeoref"];
 export type DrawingVectorTile = Schemas["DrawingVectorTile"];
@@ -218,6 +257,47 @@ export function assetModelOverlayUrl(
   const base = baseUrl.replace(/\/$/, "");
   const q = new URLSearchParams({ token });
   return `${base}/api/v1/projects/${projectId}/asset-models/${assetModelId}/runs/${runId}/overlay/${cloudId}?${q}`;
+}
+
+function placementFileUrl(
+  part: "mesh" | "texture" | "labels",
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  assetModelId: string,
+  sightingId: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/asset-models/${assetModelId}/placements/${sightingId}/${part}?${q}`;
+}
+
+/** A patch's triangles: a little-endian uint32 vertex count n, then n x 3 Float32 positions, then n x 2 Float32 uvs (contract `getPlacementMesh`). */
+export function placementMeshUrl(
+  baseUrl: string, token: string, projectId: string, assetModelId: string, sightingId: string,
+): string {
+  return placementFileUrl("mesh", baseUrl, token, projectId, assetModelId, sightingId);
+}
+
+/** A patch's PNG texture with alpha (contract `getPlacementTexture`). */
+export function placementTextureUrl(
+  baseUrl: string, token: string, projectId: string, assetModelId: string, sightingId: string,
+): string {
+  return placementFileUrl("texture", baseUrl, token, projectId, assetModelId, sightingId);
+}
+
+/** A patch's uint8 label grid for pixel-exact picking (contract `getPlacementLabels`). */
+export function placementLabelsUrl(
+  baseUrl: string, token: string, projectId: string, assetModelId: string, sightingId: string,
+): string {
+  return placementFileUrl("labels", baseUrl, token, projectId, assetModelId, sightingId);
+}
+
+/** A brand's logo in one slot (contract `getBrandLogo`); brands are app-wide, not per project. */
+export function brandLogoUrl(baseUrl: string, token: string, brandId: string, slot: BrandLogoSlot): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/brands/${brandId}/logos/${slot}?${q}`;
 }
 
 export function thumbnailUrl(baseUrl: string, token: string, projectId: string, imageId: string): string {

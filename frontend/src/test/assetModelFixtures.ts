@@ -12,6 +12,8 @@ export const MODEL: AssetModel = {
   captured_on: null,
   created_at: "2026-10-01T09:00:00Z",
   updated_at: "2026-10-02T09:00:00Z",
+  frame: null,
+  review: null,
 };
 
 const SHELL = {

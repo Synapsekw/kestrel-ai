@@ -34,6 +34,7 @@ const saved: Finding = {
   },
   data_type: "point_cloud",
   data_id: CLOUD_ID,
+  representative: null,
 };
 const PICK: CloudPick = {
   x: at(0, 0, 0)[0],

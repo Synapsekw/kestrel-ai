@@ -49,6 +49,11 @@ const JOB_NAME: Record<Job["type"], string> = {
   setup_inspect: "Sort dropped files",
   asset_model_glb: "Build asset model",
   asset_model_run: "Run asset model agent",
+  asset_glb_import: "GLB import",
+  asset_pose: "Photo poses",
+  asset_place: "Sighting placement",
+  asset_group: "Sighting grouping",
+  review_kit_import: "Review import",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

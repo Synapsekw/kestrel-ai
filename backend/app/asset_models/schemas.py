@@ -28,6 +28,9 @@ class AssetModelOut(BaseModel):
     captured_on: date | None
     created_at: datetime
     updated_at: datetime
+    # Spec 2026-10-02-asset-findings §5.1: read from D1's columns once they exist; None until then.
+    frame: dict[str, Any] | None = None
+    review: dict[str, Any] | None = None
 
     @classmethod
     def of(cls, row) -> AssetModelOut:
@@ -70,7 +73,7 @@ class AssetModelVersionOut(BaseModel):
     id: str
     model_id: str
     version: int
-    kind: Literal["agent", "manual", "draft"]
+    kind: Literal["agent", "manual", "draft", "imported"]
     glb_status: Literal["pending", "ready", "failed"]
     source_ids: list[AssetSourceRef]
     run_id: str | None

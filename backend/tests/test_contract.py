@@ -18,6 +18,8 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.asset_review.stubs import stub_operation_ids as asset_review_stub_operation_ids
+from app.brands.stubs import stub_operation_ids as brands_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -105,6 +107,12 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
+# Asset findings (plan 2026-10-03-asset-findings-c0): the unit lists of app/asset_review/stubs.py
+# (D1, J1 to J5) and app/brands/stubs.py (D2). An owner deletes its tuples; nothing here changes.
+# The last owner of each module deletes the module, its line in app/api.py and its line here.
+EXPECTED_STUBS |= asset_review_stub_operation_ids()
+EXPECTED_STUBS |= brands_stub_operation_ids()
+
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
 # app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
@@ -119,6 +127,13 @@ BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
     # preannotateImage (I-FW): deleted from openapi.yaml, so no longer pending here.
+    # Asset findings C0 (plan 2026-10-03-asset-findings-c0): kept operations whose requests gained
+    # values the backend refuses until the named unit lands (an `asset` anchor; the asset filters,
+    # `anchor_kind=asset` and the `-height`/`zone` sorts; `frame`/`review` on a patch). That unit
+    # deletes its line.
+    "createFinding": "J4",
+    "listFindings": "J4",
+    "patchAssetModel": "J1",
 }
 
 

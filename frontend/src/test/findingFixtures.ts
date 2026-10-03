@@ -84,6 +84,15 @@ export const exampleFinding: Finding = {
   updated_at: "2026-09-14T11:06:00Z",
   reviewed_at: null,
   closed_at: null,
+  asset_model_id: null,
+  height_m: null,
+  bearing_deg: null,
+  side: null,
+  zone: null,
+  component: null,
+  placement: null,
+  sighting_count: 1,
+  representative: { image_id: IMAGE_ID, annotation_id: ANNOTATION_ID },
 };
 
 export const exampleFinding2: Finding = {
@@ -99,6 +108,7 @@ export const exampleFinding2: Finding = {
   data_type: "map",
   data_id: MAP_ID,
   closed_at: "2026-09-20T08:00:00Z",
+  representative: null,
 };
 
 export const exampleFindingDetail: FindingDetail = {

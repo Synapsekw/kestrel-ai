@@ -57,6 +57,11 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   setup_inspect: "folder",
   asset_model_glb: "cube",
   asset_model_run: "cube",
+  asset_glb_import: "cube",
+  asset_pose: "camera",
+  asset_place: "pin",
+  asset_group: "findings",
+  review_kit_import: "import",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

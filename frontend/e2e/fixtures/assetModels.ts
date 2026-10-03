@@ -56,6 +56,8 @@ export const modelJson = (currentVersion: number) => ({
   captured_on: null,
   created_at: T,
   updated_at: T,
+  frame: null,
+  review: null,
 });
 
 export const versionJson = (n: number, kind: "agent" | "manual", note: string | null) => ({
