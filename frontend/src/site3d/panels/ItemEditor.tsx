@@ -11,7 +11,9 @@ import {
   draftOf,
   editNote,
   effectiveHeightSource,
+  elEdited,
   fieldsFromSchema,
+  itemIn,
   sameDraft,
   validateDraft,
   withItem,
@@ -179,7 +181,8 @@ export function ItemEditor(p: ItemEditorProps) {
   const errors = validateDraft(draft, fields, kind);
   const dirty = !sameDraft(draft, initial);
   const heightSource = effectiveHeightSource(p.item, draft);
-  const setByHand = heightSource !== draft.height_source;
+  // R-S3-24: a hand-typed EL over a scan or indicative height is always saved as a drawing height.
+  const setByHand = p.item.height_source !== "drawing" && elEdited(p.item, draft);
   const onDirty = useRef(p.onDirty);
   useEffect(() => {
     onDirty.current = p.onDirty;
@@ -203,13 +206,15 @@ export function ItemEditor(p: ItemEditorProps) {
     try {
       // The base version's spec, read once per save (budget): the edit replaces one item in it.
       const base = await getVersion(api, p.projectId, p.modelId, p.baseVersion);
-      const next = applyDraft(p.item, draft, fields);
+      // The draft lands on the base version's copy of the item, so only the edited fields change.
+      const original = itemIn(base.spec, p.item.id, p.item.tag ?? p.item.id);
+      const next = applyDraft(original, draft, fields);
       const { version, job } = await createVersion(
         api,
         p.projectId,
         p.modelId,
         withItem(base.spec, next),
-        editNote(p.item, next, p.baseVersion),
+        editNote(original, next, p.baseVersion),
       );
       useJobsStore.getState().upsert(job);
       toast("ok", `Saved version ${version.version}`);
@@ -241,7 +246,9 @@ export function ItemEditor(p: ItemEditorProps) {
         htmlFor={`${ids}-type`}
         label="Type"
         hint={
-          typeChanged ? "The params start from the new type's defaults; the old ones are dropped." : undefined
+          typeChanged
+            ? "The old type's params are dropped. Any left empty use the new type's defaults."
+            : undefined
         }
       >
         <Select id={`${ids}-type`} dense value={draft.type} onChange={(e) => setType(e.target.value)}>

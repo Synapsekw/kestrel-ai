@@ -213,21 +213,21 @@ export function applyDraft(item: AssetItem, d: ItemDraft, fields: readonly Field
         : fp.kind === "line"
           ? { ...fp, width: n(d.fp.width) }
           : fp;
-  let params: Record<string, unknown> = {};
-  if (d.type === item.type) {
-    params = { ...paramsOf(item) };
-    for (const f of fields) {
-      const v = d.params[f.key];
-      if (v === undefined) continue;
-      if (typeof v === "boolean") {
-        // A switch left at the builder's default on an item that never set it stays unset.
-        if (!(f.key in paramsOf(item)) && v === Boolean(f.defaultValue ?? false)) continue;
-        params[f.key] = v;
-      } else if (v.trim() === "") delete params[f.key];
-      else if (f.kind === "number" || f.kind === "integer") params[f.key] = Number(v);
-      else if (f.kind === "json") params[f.key] = JSON.parse(v);
-      else params[f.key] = v;
-    }
+  // Same type: the item's params, edited. A new type (R-S3-28): the old type's params are dropped
+  // and only the values the operator set for the new type are written; its defaults apply to the rest.
+  const kept = d.type === item.type ? paramsOf(item) : {};
+  const params: Record<string, unknown> = { ...kept };
+  for (const f of fields) {
+    const v = d.params[f.key];
+    if (v === undefined) continue;
+    if (typeof v === "boolean") {
+      // A switch left at the builder's default that was never set stays unset.
+      if (!(f.key in kept) && v === Boolean(f.defaultValue ?? false)) continue;
+      params[f.key] = v;
+    } else if (v.trim() === "") delete params[f.key];
+    else if (f.kind === "number" || f.kind === "integer") params[f.key] = Number(v);
+    else if (f.kind === "json") params[f.key] = JSON.parse(v);
+    else params[f.key] = v;
   }
   const next = {
     ...item,
@@ -244,8 +244,36 @@ export function applyDraft(item: AssetItem, d: ItemDraft, fields: readonly Field
   return next;
 }
 
+/** A typed figure compares by value ("135.0" is "135"); anything else as typed. */
+const canon = (v: string | boolean): string | number | boolean => {
+  if (typeof v !== "string") return v;
+  const t = v.trim();
+  const n = t === "" ? NaN : Number(t);
+  return Number.isFinite(n) ? n : t;
+};
+const canonMap = (m: Record<string, string | boolean>) =>
+  Object.fromEntries(Object.entries(m).map(([k, v]) => [k, canon(v)]));
+
+/** Whether two drafts would save the same item (figures compared by value, not by spelling). */
 export function sameDraft(a: ItemDraft, b: ItemDraft): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  const key = (d: ItemDraft) =>
+    JSON.stringify([
+      d.type,
+      canon(d.base_el),
+      canon(d.top_el),
+      d.height_source,
+      canonMap(d.fp),
+      canonMap(d.params),
+    ]);
+  return key(a) === key(b);
+}
+
+/** The item with `id` in a version's spec; an error when that version does not have it. */
+export function itemIn(spec: AssetSpec, id: string, label = id): AssetItem {
+  const items = ((spec as unknown as { items?: AssetItem[] }).items ?? []) as AssetItem[];
+  const found = items.find((x) => x.id === id);
+  if (!found) throw new Error(`${label} is not in this version.`);
+  return found;
 }
 
 /** The base spec with `item` replacing the item of the same id (never an add). */

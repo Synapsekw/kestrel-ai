@@ -7,6 +7,7 @@ import {
   editNote,
   effectiveHeightSource,
   fieldsFromSchema,
+  itemIn,
   sameDraft,
   validateDraft,
   withItem,
@@ -61,6 +62,17 @@ describe("drafts", () => {
     const d = draftOf(ITEM, tankFields);
     expect(applyDraft(ITEM, { ...d, type: "other" }, []).params).toEqual({});
   });
+  it("a new type writes only the params set for it (R-S3-28)", () => {
+    const d = { ...draftOf(PUMP, []), type: "tank_lng" };
+    const blank = draftOf({ ...PUMP, type: "tank_lng", params: {} } as AssetItem, tankFields).params;
+    expect(applyDraft(PUMP, { ...d, params: blank }, tankFields).params).toEqual({});
+    const set = { ...blank, d_m: "30", roof: "flat", platforms: false };
+    expect(applyDraft(PUMP, { ...d, params: set }, tankFields).params).toEqual({
+      d_m: 30,
+      roof: "flat",
+      platforms: false,
+    });
+  });
   it("an item without params drafts from the defaults and round-trips", () => {
     const bare = { ...ITEM } as Record<string, unknown>;
     delete bare.params;
@@ -102,6 +114,16 @@ describe("drafts", () => {
   it("knows an untouched draft", () => {
     expect(sameDraft(draftOf(ITEM, tankFields), draftOf(ITEM, tankFields))).toBe(true);
     expect(sameDraft(draftOf(ITEM, tankFields), { ...draftOf(ITEM, tankFields), base_el: "99" })).toBe(false);
+    const d = draftOf(ITEM, tankFields);
+    expect(
+      sameDraft(d, {
+        ...d,
+        top_el: "135.0",
+        fp: { ...d.fp, d: " 80 " },
+        params: { ...d.params, d_m: "80.00" },
+      }),
+    ).toBe(true);
+    expect(sameDraft(d, { ...d, top_el: "" })).toBe(false);
   });
 });
 
@@ -144,6 +166,8 @@ describe("saving", () => {
   });
   it("an item missing from the base spec is an error, never a silent add", () => {
     expect(() => withItem(plantSpec([PUMP]), ITEM)).toThrow(/20-T-0001 is not in this version/);
+    expect(() => itemIn(plantSpec([PUMP]), ITEM.id)).toThrow(/20-T-0001 is not in this version/);
+    expect(itemIn(plantSpec(), PUMP.id)).toBe(PUMP);
   });
   it("names the base version and every change in the note", () => {
     expect(editNote(ITEM, { ...ITEM, top_el: 140 } as never, 3)).toBe(

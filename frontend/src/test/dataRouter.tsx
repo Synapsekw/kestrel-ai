@@ -46,7 +46,7 @@ export function renderWithDataRouter(
     ],
     { initialEntries: [opts.route ?? "/"] },
   );
-  const tree = <RouterProvider router={router} />;
+  const tree = <RouterProvider router={router} future={{ v7_startTransition: true }} />;
   return {
     router,
     ...render(

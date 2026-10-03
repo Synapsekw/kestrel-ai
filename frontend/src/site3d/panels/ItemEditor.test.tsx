@@ -4,7 +4,7 @@ import type { AssetItem } from "@/api/plantItems";
 import { renderWithDataRouter } from "@/test/dataRouter";
 import { errorBody, fakeClient } from "@/test/fixtures";
 import { VERSION_2 } from "@/test/assetModelFixtures";
-import { CATALOGUE, ITEM, plantSpec } from "@/test/plantFixtures";
+import { CATALOGUE, ITEM, PUMP, plantSpec } from "@/test/plantFixtures";
 import { useJobsStore } from "@/store/jobs";
 import { ItemEditor } from "./ItemEditor";
 
@@ -29,12 +29,13 @@ function setup(
     body: { version: { ...VERSION_2, version: 4 }, job: JOB },
   },
   item: AssetItem = ITEM,
+  baseItems: AssetItem[] = [item],
 ) {
   const client = fakeClient([
     {
       method: "GET",
       path: /\/asset-models\/m1\/versions\/3$/,
-      body: { ...VERSION_2, version: 3, spec: plantSpec([item]), warnings: [] },
+      body: { ...VERSION_2, version: 3, spec: plantSpec(baseItems), warnings: [] },
     },
     { method: "POST", path: /\/asset-models\/m1\/versions$/, status: post.status, body: post.body },
   ] as never);
@@ -94,7 +95,7 @@ describe("ItemEditor", () => {
   it("a new type says the old params go", () => {
     setup();
     fireEvent.change(screen.getByLabelText(/^type/i), { target: { value: "other" } });
-    expect(screen.getByText(/start from the new type's defaults/i)).toBeInTheDocument();
+    expect(screen.getByText(/the old type's params are dropped/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^roof/i)).toBeNull();
   });
 
@@ -113,6 +114,57 @@ describe("ItemEditor", () => {
     };
     expect(post.spec.items[0].height_source).toBe("drawing");
     expect(post.note).toBe("Edited 20-T-0001 from v3: top EL 135 → 140 m, height source cloud → drawing");
+  });
+
+  it("params set for a new type are saved; the old type's are not", async () => {
+    const { requests, onSaved } = setup(undefined, PUMP);
+    fireEvent.change(screen.getByLabelText(/^type/i), { target: { value: "tank_lng" } });
+    expect(screen.getByLabelText(/^d m$/i)).toHaveValue(null);
+    fireEvent.change(screen.getByLabelText(/^d m$/i), { target: { value: "30" } });
+    fireEvent.change(screen.getByLabelText(/^roof/i), { target: { value: "flat" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const post = requests.find((r) => r.method === "POST")!.body as {
+      spec: { items: { id: string; type: string; params: Record<string, unknown> }[] };
+      note: string;
+    };
+    const saved = post.spec.items.find((i) => i.id === PUMP.id)!;
+    expect(saved.type).toBe("tank_lng");
+    expect(saved.params).toEqual({ d_m: 30, roof: "flat" });
+    expect(post.note).toBe("Edited 30-P-0001 from v3: type other → tank_lng, params");
+  });
+
+  it("saves onto the base version's copy of the item, keeping fields the caller had stale", async () => {
+    const { requests, onSaved } = setup(undefined, { ...ITEM, name: "Stale name" } as AssetItem, [
+      ITEM,
+      PUMP,
+    ]);
+    fireEvent.change(screen.getByLabelText(/^top el/i), { target: { value: "140" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const post = requests.find((r) => r.method === "POST")!.body as {
+      spec: { items: { id: string; name: string; top_el: number }[] };
+    };
+    expect(post.spec.items.map((i) => [i.id, i.name, i.top_el])).toEqual([
+      ["20-T-0001", "LNG tank 1", 140],
+      ["30-P-0001", "Send-out pump 1", 103],
+    ]);
+  });
+
+  it("the same figure spelt differently is not an edit", () => {
+    const { onDirty } = setup();
+    fireEvent.change(screen.getByLabelText(/^top el/i), { target: { value: "135.0" } });
+    expect(onDirty).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole("button", { name: "Save as new version" })).toBeDisabled();
+  });
+
+  it("picking drawing first does not get round the hand-typed EL rule", () => {
+    setup(undefined, { ...ITEM, height_source: "indicative" } as AssetItem);
+    fireEvent.change(screen.getByLabelText(/^height source/i), { target: { value: "drawing" } });
+    expect(screen.queryByText("Set by hand. The scan check will keep it.")).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^top el/i), { target: { value: "140" } });
+    expect(screen.getByLabelText(/^height source/i)).toBeDisabled();
+    expect(screen.getByText("Set by hand. The scan check will keep it.")).toBeInTheDocument();
   });
 
   it("a failed save says why and keeps the edit", async () => {
