@@ -26,7 +26,7 @@ from app.asset_models.agent.tools import TOOLS as M1_TOOLS
 from app.asset_models.agent.tools import run_tool as run_m1_tool
 from app.asset_models.builders.base import PLANNED_TYPES, REGISTRY, catalogue, load_all
 from app.asset_models.look import LookError
-from app.asset_models.siteframe import fit_plant_grid, footprint_ref
+from app.asset_models.siteframe import GridError, fit_plant_grid, footprint_ref
 from app.asset_models.spec import Datum, EnvFeature, Item, ItemFlag, SiteCrs, SiteFrame, Source
 from app.project_agent.history import ToolResult, ToolSpec
 from app.project_agent.tools import clean_schema
@@ -548,7 +548,10 @@ class SetSite:
                 placed_from = placed_from or gp.drawing_id
         lines, rms = [], None
         if len(pairs) >= 2:
-            origin, theta, rms = fit_plant_grid(pairs)
+            try:
+                origin, theta, rms = fit_plant_grid(pairs)
+            except GridError as e:
+                raise LookError(str(e)) from None
             source = Source(kind="drawing", id=placed_from, note=a.note)
             if a.origin_crs is not None and a.plant_north_deg is not None:
                 d = math.dist(origin, a.origin_crs)

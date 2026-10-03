@@ -112,6 +112,14 @@ def test_no_frame_without_a_placed_page_or_explicit_numbers(rc):
     assert not out.ok and "origin_crs" in out.text and rc.site() is None
 
 
+def test_coincident_grid_points_are_refused_with_the_reason(rc, handle):
+    d0 = rc.test_ids["drawings"][0]
+    _georef(handle, d0)
+    gp = {"drawing_id": d0, "page_xy": [0.5, 0.5], "plant_E": 10, "plant_N": 10}
+    out = T.run_plant_tool(rc, orch(rc), "set_site", {"grid_points": [gp, dict(gp)]})
+    assert not out.ok and "plant points coincide" in out.text and rc.site() is None
+
+
 def test_an_unplaced_page_is_georeferenced_from_the_grid(client, project_id, wait_job, tmp_path, handle, rc):
     png = write_png(tmp_path / "area.png", 3000, 2000)
     insp = inspect_ready(client, project_id, wait_job, png)
