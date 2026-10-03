@@ -25007,7 +25007,7 @@ export interface operations {
     listAssetModelItems: {
         parameters: {
             query?: {
-                /** @description matches the tag or the name, case-insensitive */
+                /** @description matches the tag, the name or the item id (node), case-insensitive */
                 q?: string;
                 type?: string;
                 area?: string;
