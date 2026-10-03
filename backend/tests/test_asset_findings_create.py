@@ -146,6 +146,21 @@ def test_sightings_route_lists_the_representative_first(client, handle, ctx):
     assert [i["image_name"] for i in items] == [names[ctx["photos"][1]], names[ctx["photos"][0]]]
 
 
+def test_sightings_route_is_capped_with_the_representative_kept(client, handle, ctx, monkeypatch):
+    """The contract's `FindingSightingList.items` holds at most 500; merge or Regroup can grow a
+    finding past that. Shown with a cap of 2."""
+    from app.findings import sightings
+
+    monkeypatch.setattr(sightings, "MAX_LISTED", 2)
+    f = post_asset(client, ctx["pid"], ctx["crack"], ctx["model"], ctx["photos"])
+    s = by_photo(handle, f["id"])
+    update_sighting(handle, s[ctx["photos"][2]].id, severity=3)
+    refresh_finding(handle, f["id"])
+    items = client.get(f"{ctx['base']}/findings/{f['id']}/sightings").json()["items"]
+    assert len(items) == 2 and items[0]["id"] == s[ctx["photos"][2]].id
+    assert sightings.MAX_LISTED == 2 and finding_row(handle, f["id"]).sighting_count == 3
+
+
 def test_a_placed_sighting_derives_its_fields_on_read(client, handle, ctx):
     f = post_asset(client, ctx["pid"], ctx["crack"], ctx["model"], ctx["photos"][:2])
     s = by_photo(handle, f["id"])

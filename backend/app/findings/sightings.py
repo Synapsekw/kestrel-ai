@@ -21,6 +21,7 @@ from app.findings import comments, events, service
 
 PLACED = ("point", "patch")
 SYSTEM_AUTHOR = "Kestrel"
+MAX_LISTED = 500  # the contract's FindingSightingList.items maxItems
 BOX_GONE = "Closed by Kestrel: the last photo box behind this finding was deleted."
 NOT_A_SIGHTING = "Closed by Kestrel: its last photo box is no longer a defect sighting."
 PHOTOS_GONE = "Closed by Kestrel: the photos behind this finding were deleted."
@@ -172,7 +173,8 @@ def listing(s: Session, finding: Finding) -> list[dict]:
     """`GET /findings/{findingId}/sightings` as contract `FindingSighting` dicts: the representative
     first, then by the photo's capture time (none last), then created_at and id. An image finding is
     its one implicit sighting (decision A2); a map or cloud finding has none. One read of the
-    finding's sightings, one of their photos and one of their models (bounded by one finding)."""
+    finding's sightings, one of their photos and one of their models (bounded by one finding); the
+    answer holds at most `MAX_LISTED`, the representative first."""
     if finding.anchor_kind == "image":
         if not finding.annotation_id:
             return []
@@ -214,7 +216,7 @@ def listing(s: Session, finding: Finding) -> list[dict]:
         taken = images[r.image_id].capture_time if r.image_id in images else None
         return (taken is None, taken.timestamp() if taken else 0.0, r.created_at, r.id)
 
-    ordered = [rep, *sorted((r for r in rows if r is not rep), key=by_capture)]
+    ordered = [rep, *sorted((r for r in rows if r is not rep), key=by_capture)][:MAX_LISTED]
     out = []
     for r in ordered:
         image, model = images.get(r.image_id), models.get(r.asset_model_id)

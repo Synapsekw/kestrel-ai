@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models import Activity, Finding
 
@@ -274,6 +274,27 @@ class FindingSightingOut(BaseModel):
 
 class FindingSightingList(BaseModel):
     items: list[FindingSightingOut]
+
+
+class FindingMergeIn(BaseModel):
+    """The contract's `FindingMerge` (additionalProperties false)."""
+
+    model_config = ConfigDict(extra="forbid")
+    into: str
+
+
+class FindingSplitIn(BaseModel):
+    """The contract's `FindingSplit` (additionalProperties false; ids unique, 1 to 500)."""
+
+    model_config = ConfigDict(extra="forbid")
+    sighting_ids: list[str] = Field(min_length=1, max_length=500)
+
+    @field_validator("sighting_ids")
+    @classmethod
+    def _unique(cls, ids: list[str]) -> list[str]:
+        if len(set(ids)) != len(ids):
+            raise ValueError("sighting_ids must not repeat an id")
+        return ids
 
 
 class TypeCount(BaseModel):

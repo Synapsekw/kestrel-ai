@@ -7,6 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
 
+from app.asset_review import group
 from app.catalogue import service as catalogue_service
 from app.data_items import search
 from app.errors import AppError
@@ -25,11 +26,13 @@ from app.findings.schemas import (
     FindingCommentPage,
     FindingCreate,
     FindingDetail,
+    FindingMergeIn,
     FindingOut,
     FindingPage,
     FindingPatch,
     FindingSightingList,
     FindingSightingOut,
+    FindingSplitIn,
     FindingSummary,
 )
 from app.jobs.schemas import JobOut
@@ -163,6 +166,34 @@ def patch_finding(
 def delete_finding(findingId: str, handle: ProjectHandle = Depends(get_project)) -> Response:  # noqa: N803
     service.delete_finding(handle, findingId)
     return Response(status_code=204)
+
+
+@router.post("/findings/{findingId}/merge", response_model=FindingOut)
+def merge_finding(
+    findingId: str,  # noqa: N803
+    body: FindingMergeIn,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingOut:
+    """Merge this asset finding into `into`; the source is closed with a comment, never deleted."""
+    author = comments.author_name(request.app.state.settings.data_dir)
+    with handle.session() as s:
+        row = group.merge(s, handle, findingId, body.into, author=author)
+        rep = sightings.representatives(s, [row.id]).get(row.id)
+        return FindingOut.from_row(row, representative=rep)
+
+
+@router.post("/findings/{findingId}/split", response_model=FindingOut, status_code=201)
+def split_finding(
+    findingId: str,  # noqa: N803
+    body: FindingSplitIn,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingOut:
+    """A new finding from some of this asset finding's sightings."""
+    with handle.session() as s:
+        row = group.split(s, handle, findingId, body.sighting_ids)
+        rep = sightings.representatives(s, [row.id]).get(row.id)
+        return FindingOut.from_row(row, representative=rep)
 
 
 @router.get("/activity", response_model=ActivityPage)

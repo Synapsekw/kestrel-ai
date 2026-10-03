@@ -49,11 +49,7 @@ J3_STUBS: list[Stub] = [
 ]
 
 # J4: grouping, merge, split and sightings (spec §6.4).
-J4_STUBS: list[Stub] = [
-    ("POST", M + "/findings/regroup", "regroupAssetFindings"),
-    ("POST", "/findings/{findingId}/merge", "mergeFinding"),
-    ("POST", "/findings/{findingId}/split", "splitFinding"),
-]
+J4_STUBS: list[Stub] = []
 
 # J5: the kit import (spec §6.5).
 J5_STUBS: list[Stub] = [

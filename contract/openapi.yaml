@@ -6052,7 +6052,7 @@ paths:
               schema: { $ref: "#/components/schemas/Finding" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
-          description: "the merge is not possible (`code` is `invalid_merge`, details `{reason}`: `not_asset`, `other_model` or `same_finding`)"
+          description: "the merge is not possible (`code` is `invalid_merge`, details `{reason}`: `not_asset`, `other_model`, `other_type` or `same_finding`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

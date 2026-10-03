@@ -24316,7 +24316,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the merge is not possible (`code` is `invalid_merge`, details `{reason}`: `not_asset`, `other_model` or `same_finding`) */
+            /** @description the merge is not possible (`code` is `invalid_merge`, details `{reason}`: `not_asset`, `other_model`, `other_type` or `same_finding`) */
             422: {
                 headers: {
                     [name: string]: unknown;
