@@ -189,7 +189,7 @@ describe("the cloud panel (spec §6)", () => {
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
     const dialog = screen.getByRole("dialog", { name: "Are you sure?" });
     expect(dialog).toHaveTextContent("The 3D view copy and the measurements go");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(onDeleted).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: /^Point cloud:/ }));
     await userEvent.click(screen.getByRole("button", { name: "Delete Tower" }));

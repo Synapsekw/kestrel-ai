@@ -89,7 +89,7 @@ export function DeleteCloudDialog({
       onClose={close}
       footer={
         <>
-          <Button onClick={close}>Keep it</Button>
+          <Button onClick={close}>Cancel</Button>
           <Button variant="danger" loading={busy} onClick={() => run(false)}>
             Yes
           </Button>
