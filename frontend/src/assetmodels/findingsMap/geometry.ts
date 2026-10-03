@@ -98,6 +98,8 @@ export function niceStep(heightM: number): number {
 }
 
 export function geometry(review: MapReview, frame: MapFrame, dots: MapDot[]): MapGeometry {
+  // The frame arrives as a `Frame` dump (already sorted: silhouette by y, levels ascending), so no
+  // sorting here, unlike the Python Frame validator.
   const frameSil = frame.silhouette ?? [];
   const frameLevels = frame.levels ?? [];
   const step = niceStep(frame.height_m);

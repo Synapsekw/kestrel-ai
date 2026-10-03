@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { components } from "@contract/client";
 import { describe, expect, it } from "vitest";
 import {
   geometry,
@@ -20,6 +21,13 @@ interface Case {
   dots: MapDot[];
   expected: MapGeometry;
 }
+
+/** Compile-time check: the generated contract types are assignable to the map's input types, no cast. */
+type Schemas = components["schemas"];
+export const contractAssignable: { review: MapReview; frame: MapFrame } = {} as {
+  review: Schemas["AssetReviewConfig"];
+  frame: Schemas["AssetFrame"];
+};
 
 const FIXTURE = resolve(__dirname, "../../../../contract/fixtures/asset-findings-map.json");
 const CASES = (JSON.parse(readFileSync(FIXTURE, "utf8")) as { cases: Case[] }).cases;

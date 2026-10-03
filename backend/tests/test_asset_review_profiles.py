@@ -15,7 +15,7 @@ from app.asset_review.profiles import (
     resolve,
 )
 
-DASHES = re.compile("[–—]")
+DASHES = re.compile("[\u2013\u2014]")
 
 
 def _zones(cfg: ReviewConfig) -> list[tuple]:
