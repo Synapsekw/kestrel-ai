@@ -68,6 +68,17 @@ SPECS["pipe_sleeper"] = TypeSpec(
     line([[0, 0], [0, 30]], 4), 100.0, 100.6, rect(30, 4), {"sleepers"}, pad_y=0.65, piped=True
 )
 # -- access (task 5)
+SPECS["catwalk"] = TypeSpec(
+    line([[0, 0], [0, 20]], 1.6), 103.0, 104.5, rect(20, 1.6),
+    {"deck", "chords", "verticals", "diagonals", "handrail_posts", "handrail_rails"},
+)  # fmt: skip
+SPECS["walkway"] = TypeSpec(
+    line([[0, 0], [0, 20]], 1.2), 100.0, 100.3, rect(20, 1.2), {"deck", "bearers"}, pad_y=0.05
+)
+SPECS["gangway"] = TypeSpec(
+    rect(12, 2.6), 104.5, 110.5, rect(12, 2.6),
+    {"tower_columns", "tower_bracing", "tower_platform", "boom", "treads", "counterweight"},
+)  # fmt: skip
 # -- platforms (task 6)
 TYPES = list(SPECS)
 
@@ -384,3 +395,30 @@ def test_a_three_km_polyline_builds_quickly():
         nodes = build(it)
         assert time.perf_counter() - t0 < 5.0, type_
         assert k.triangles(nodes) < 200_000, type_
+
+
+# ---------------------------------------------------------------- access (task 5)
+def test_catwalk_trusses_and_handrails_on_both_sides():
+    nodes = build(case("catwalk"))
+    assert instances(nodes, "verticals") == 2 * 7  # 20 m at 3.5 m panels, both trusses
+    posts = node(nodes, "handrail_posts").geometry.transforms[:, 2, 3]
+    assert (posts > 0).any() and (posts < 0).any()
+    assert "handrail_posts" not in {n.name for n in build(case("catwalk", params={"handrail": False}))}
+
+
+def test_walkway_panels_and_optional_handrail():
+    nodes = build(case("walkway"))
+    assert len(node(nodes, "deck").geometry.faces) == 4 * 12  # 20 m in 4 panels of <= 6 m
+    assert "handrail_posts" not in {n.name for n in nodes}
+    assert "handrail_posts" in {n.name for n in build(case("walkway", params={"handrail": True}))}
+    flat = build(case("walkway", top=100.05))
+    assert "bearers" not in {n.name for n in flat}  # the deck lies on the surface
+
+
+def test_gangway_tower_at_the_start_and_boom_sloping_down():
+    nodes = build(case("gangway"))
+    assert instances(nodes, "tower_columns") == 4
+    cols = node(nodes, "tower_columns").geometry.transforms[:, 0, 3]
+    assert cols.max() < -6 + 1.8 + 1e-6  # tower in the first 1.8 m of the 12 m footprint (x from -6)
+    treads = node(nodes, "treads").geometry.transforms
+    assert treads[0, 1, 3] > treads[-1, 1, 3]  # the boom slopes down away from the tower

@@ -464,3 +464,199 @@ def build_pipe_sleeper(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     sl = k.block((width, h, p.sleeper_width_m))
     nodes = [MeshNode("sleepers", "Concrete", Instanced(sl, np.array(xf)))] + k.pipe_nodes(lines, ctx)
     return _stamp(nodes, p, dflt)
+
+
+# ---------------------------------------------------------------- catwalk, walkway, gangway
+class CatwalkParams(_P):
+    panel_m: float = Field(3.5, gt=0.5, le=10, description="truss panel length")
+    chord_m: float = Field(0.2, gt=0.05, le=1)
+    grating_m: float = Field(0.08, gt=0.01, le=0.5)
+    handrail: bool = True
+    post_spacing_m: float = Field(3.0, gt=0.5, le=10)
+
+
+CATWALK_DOC = (
+    "Steel truss catwalk spanning between structures (dolphins, platforms): two side trusses (chords, "
+    "verticals, diagonals), cross beams, grating deck on top, handrails both sides. Footprint: line "
+    "(centreline + walkway width). base_el = truss bottom chord; top_el = walking level (truss depth "
+    "= top_el - base_el, default 1.5 m)."
+)
+
+
+@builder("catwalk", family="structure", params=CatwalkParams, doc=CATWALK_DOC, default_height_m=1.5)
+def build_catwalk(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = CatwalkParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 1.5)
+    h = top_el - base
+    ring = k.outline(item, ctx)
+    nodes = [MeshNode("deck", "Grating", k.slab(ring, h - p.grating_m, h))]
+    chords, diag, verts, cross, rails = [], [], [], [], []
+    yt, yb = h - p.grating_m - p.chord_m / 2, p.chord_m / 2
+    for run in k.runs(item, ctx):
+        ts = k.stations(run.length, p.panel_m)
+        for s in (-run.width / 2 + p.chord_m / 2, run.width / 2 - p.chord_m / 2):
+            for y in (yt, yb):
+                chords.append(k.member(k.xz(run.at(0, s), y), k.xz(run.at(run.length, s), y), p.chord_m))
+            verts += [(k.xz(run.at(t, s), yb), run.u) for t in ts]
+            for i, (t0, t1) in enumerate(zip(ts[:-1], ts[1:], strict=True)):
+                a, b = (yb, yt) if i % 2 == 0 else (yt, yb)
+                diag.append(k.member(k.xz(run.at(t0, s), a), k.xz(run.at(t1, s), b), p.chord_m * 0.6))
+        for t in ts:
+            cross.append(
+                k.member(
+                    k.xz(run.at(t, -run.width / 2), yt), k.xz(run.at(t, run.width / 2), yt), p.chord_m * 0.8
+                )
+            )
+        if p.handrail:
+            for s in (-run.width / 2 + 0.05, run.width / 2 - 0.05):
+                rails += k.handrail(
+                    np.array([run.at(0, s), run.at(run.length, s)]),
+                    h,
+                    height=RAIL_H,
+                    spacing=p.post_spacing_m,
+                    closed=False,
+                    lod=ctx.lod,
+                )
+    vert = k.column_mesh(max(yt - yb, 0.05), p.chord_m * 0.6)
+    nodes += [
+        MeshNode("chords", "Steel_Structure", k.merge(chords + cross)),
+        MeshNode(
+            "verticals",
+            "Steel_Structure",
+            Instanced(vert, np.concatenate([k.posed(q[None], u) for q, u in verts])),
+        ),
+        MeshNode("diagonals", "Steel_Structure", k.merge(diag)),
+    ]
+    nodes += _merge_rails(rails)
+    return _stamp(nodes, p, dflt)
+
+
+class WalkwayParams(_P):
+    deck_thickness_m: float = Field(0.05, gt=0.01, le=0.5)
+    panel_m: float = Field(6.0, gt=0.5, le=20, description="grating panel length along the walkway")
+    handrail: bool = False
+    post_spacing_m: float = Field(3.0, gt=0.5, le=10)
+
+
+WALKWAY_DOC = (
+    "Grating walkway at grade or on a roof: grating panels on two bearers, optional handrails. "
+    "Footprint: line (centreline + width), rect or polygon. base_el = the surface it stands on; top_el = "
+    "walking level (default 0.3 m above)."
+)
+
+
+@builder("walkway", family="structure", params=WalkwayParams, doc=WALKWAY_DOC, default_height_m=0.3)
+def build_walkway(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = WalkwayParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 0.3)
+    h = top_el - base
+    ring = k.outline(item, ctx)
+    poly = Polygon(ring)
+    y0 = max(h - p.deck_thickness_m, 0.0)
+    panels, stools, rails = [], [], []
+    for run in k.runs(item, ctx):
+        ts = k.stations(run.length, p.panel_m)
+        for t0, t1 in zip(ts[:-1], ts[1:], strict=True):
+            strip = Polygon(
+                [
+                    run.at(t0 + 0.025, -run.width),
+                    run.at(t1 - 0.025, -run.width),
+                    run.at(t1 - 0.025, run.width),
+                    run.at(t0 + 0.025, run.width),
+                ]
+            )
+            piece = poly.intersection(strip)
+            for g in getattr(piece, "geoms", [piece]):
+                if isinstance(g, Polygon) and g.area > 0.01:
+                    panels.append(
+                        k.slab(np.asarray(g.exterior.coords)[:-1], y0, max(h, y0 + p.deck_thickness_m))
+                    )
+        if y0 > 0.02:
+            for s in (-run.width / 2 + 0.15, run.width / 2 - 0.15):
+                stools.append(
+                    k.member(k.xz(run.at(0, s), y0 / 2), k.xz(run.at(run.length, s), y0 / 2), 0.1, y0)
+                )
+        if p.handrail:
+            for s in (-run.width / 2 + 0.05, run.width / 2 - 0.05):
+                rails += k.handrail(
+                    np.array([run.at(0, s), run.at(run.length, s)]),
+                    h,
+                    height=RAIL_H,
+                    spacing=p.post_spacing_m,
+                    closed=False,
+                    lod=ctx.lod,
+                )
+    if not panels:
+        panels = [k.slab(ring, y0, max(h, y0 + p.deck_thickness_m))]
+    nodes = [MeshNode("deck", "Grating", k.merge(panels))]
+    if stools:
+        nodes.append(MeshNode("bearers", "Steel_Structure", k.merge(stools)))
+    nodes += _merge_rails(rails)
+    return _stamp(nodes, p, dflt)
+
+
+class GangwayParams(_P):
+    tower_size_m: float = Field(1.8, gt=0.5, le=6)
+    boom_width_m: float = Field(1.0, gt=0.4, le=3)
+    boom_slope_deg: float = Field(15.0, ge=0, le=45)
+    rung_spacing_m: float = Field(0.5, gt=0.2, le=2)
+    counterweight: bool = True
+
+
+GANGWAY_DOC = (
+    "Shore gangway / gangway tower: braced steel tower with a top platform at the footprint's start, a "
+    "boom (stringers, treads, handrails) sloping down along the footprint, a counterweight. Footprint: "
+    "rect (along = boom direction, tower at the low-along end) or line (tower at the first point). "
+    "base_el = deck the tower stands on; top_el = tower top platform."
+)
+
+
+@builder("gangway", family="structure", params=GangwayParams, doc=GANGWAY_DOC, default_height_m=6.0)
+def build_gangway(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = GangwayParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 6.0)
+    h = top_el - base
+    run = k.runs(item, ctx)[0]
+    ts = min(p.tower_size_m, run.length / 3, run.width)
+    c = 0.2
+    corners = [run.at(t, s) for t in (c / 2, ts - c / 2) for s in (-ts / 2 + c / 2, ts / 2 - c / 2)]
+    nodes = [
+        MeshNode(
+            "tower_columns",
+            "Steel_Structure",
+            Instanced(k.column_mesh(h, c), k.posed(np.array([k.xz(q, 0.0) for q in corners]), run.u)),
+        )
+    ]
+    braces = []
+    order = [0, 1, 3, 2, 0]
+    n_pan = max(1, round(h / 3))
+    for a, b in zip(order[:-1], order[1:], strict=True):
+        for j in range(n_pan):
+            y0, y1 = h * j / n_pan, h * (j + 1) / n_pan
+            pa, pb = (corners[a], corners[b]) if j % 2 == 0 else (corners[b], corners[a])
+            braces.append(k.member(k.xz(pa, max(y0, FOOT)), k.xz(pb, y1), 0.1))
+    nodes.append(MeshNode("tower_bracing", "Steel_Structure", k.merge(braces)))
+    top_ring = np.array([run.at(0, -ts / 2), run.at(ts, -ts / 2), run.at(ts, ts / 2), run.at(0, ts / 2)])
+    nodes.append(MeshNode("tower_platform", "Grating", k.slab(top_ring, h - 0.05, h)))
+    nodes += k.handrail(top_ring, h, height=RAIL_H, spacing=2.5, closed=True, lod=ctx.lod)
+    span = max(run.length - ts, 0.5)
+    drop = min(span * math.tan(math.radians(p.boom_slope_deg)), max(h - 0.5, 0.0))
+    t0, t1 = ts, ts + span
+    y0, y1 = h, h - drop
+    bw = p.boom_width_m
+    boom = []
+    for s in (-bw / 2, bw / 2):
+        boom.append(k.member(k.xz(run.at(t0, s), y0 - 0.15), k.xz(run.at(t1, s), y1 - 0.15), 0.12, 0.3))
+        boom.append(k.member(k.xz(run.at(t0, s), y0 + RAIL_H), k.xz(run.at(t1, s), y1 + RAIL_H), 0.05))
+        for t in k.stations(span, 2.5):
+            yy = y0 + (y1 - y0) * t / span
+            boom.append(k.member(k.xz(run.at(t0 + t, s), yy), k.xz(run.at(t0 + t, s), yy + RAIL_H), 0.05))
+    nodes.append(MeshNode("boom", "Steel_Structure", k.merge(boom)))
+    n_r = max(2, int(span / p.rung_spacing_m))
+    tr = [k.xz(run.at(t0 + span * (i + 0.5) / n_r), y0 + (y1 - y0) * (i + 0.5) / n_r) for i in range(n_r)]
+    rung = k.block((0.25, 0.04, bw))
+    nodes.append(MeshNode("treads", "Grating", Instanced(rung, k.posed(np.array(tr), run.u))))
+    if p.counterweight:
+        cw = k.placed_block(k.xz(run.at(ts * 0.25), h + 0.5), (ts * 0.4, 1.0, ts * 0.8), run.u)
+        nodes.append(MeshNode("counterweight", "Steel_Dark", cw))
+    return _stamp(nodes, p, dflt)
