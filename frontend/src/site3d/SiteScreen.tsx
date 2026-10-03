@@ -1,11 +1,15 @@
 import { useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useBackend } from "@/api/client";
 import { absUrl, toFrameT, useSiteScene } from "@/api/siteScene";
+import { findingPath } from "@/findings/links";
 import { Alert, Button, EmptyState, GlassPanel, Pill, Skeleton, buttonClass } from "@/ui";
+import type { SiteEngine } from "./engine/SiteEngine";
 import { sceneLayerRows, type ModelState } from "./layerRows";
+import { ExtraLayerStatus } from "./layers/ExtraLayerStatus";
 import type { PickHit } from "./layers/types";
 import { LayersPlaceholder } from "./panels/LayersPlaceholder";
+import { useExtraLayerClicks, useSiteExtraLayers } from "./layers/useSiteExtraLayers";
 import { SelectionPlaceholder } from "./panels/SelectionPlaceholder";
 import { SiteView, type LayerGroup, type ModelStatus, type SiteViewHandle } from "./SiteView";
 
@@ -33,6 +37,14 @@ export function SiteScreen() {
   // Ruling R-S1-15: without a running view the model never loads, so it is "Not shown", not "Loading".
   const modelState: ModelState = !modelUrl ? "none" : viewFailed && reported === "loading" ? "off" : reported;
   const items = model?.url === modelUrl ? (model?.info?.items ?? 0) : 0;
+  const navigate = useNavigate();
+  const [engine, setEngine] = useState<SiteEngine | null>(null);
+  const modelRoot = model?.url === modelUrl && model?.state === "ready" ? model.root : null;
+  const extra = useSiteExtraLayers({ engine, scene, frame, projectId, modelRoot });
+  useExtraLayerClicks(engine, extra, {
+    photo: (imageId) => navigate(`/p/${projectId}/images/${encodeURIComponent(imageId)}`),
+    finding: (findingId) => navigate(findingPath(projectId, findingId)),
+  });
 
   const toggle = (id: string, visible: boolean) =>
     setHidden((prev) => {
@@ -104,7 +116,9 @@ export function SiteScreen() {
           onSelect={setSelected}
           onModel={setModel}
           onFailure={(kind) => setViewFailed(kind !== null)}
+          onEngine={setEngine}
         />
+        <ExtraLayerStatus rows={extra.rows} />
         <div className="absolute left-[64px] top-3 z-10">
           <LayersPlaceholder
             rows={sceneLayerRows(scene, modelState, items)}

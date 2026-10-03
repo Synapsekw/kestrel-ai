@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import type * as THREE from "three";
 import { useBackend } from "@/api/client";
 import { absUrl, type SiteScene } from "@/api/siteScene";
 import { NoWebGlError } from "@/clouds/viewer/engine";
@@ -18,6 +19,8 @@ export interface ModelStatus {
   url: string;
   state: "ready" | "error";
   info: ModelLoadInfo | null;
+  /** The loaded GLB scene (`ModelLayer.scene`), a new object per load; null on error. */
+  root: THREE.Object3D | null;
 }
 export interface SiteViewHandle {
   clearSelection(): void;
@@ -33,6 +36,8 @@ export interface SiteViewProps {
   onModel(s: ModelStatus): void;
   /** The 3D view could not start (null once a reload starts it). */
   onFailure?(kind: "no-webgl" | "failed" | null): void;
+  /** The running engine, and null when it goes (S2's layers attach to it). */
+  onEngine?(e: SiteEngine | null): void;
 }
 
 /** The canvas, the engine's lifecycle, the layers from the manifest, and the view tools. */
@@ -70,6 +75,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     }
     cbs.current.onFailure?.(null);
     engine.current = eng;
+    cbs.current.onEngine?.(eng);
     const off = eng.onSelect((hit) => cbs.current.onSelect(hit));
     const map = layers.current;
     return () => {
@@ -79,6 +85,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
       eng.dispose();
       if (engine.current === eng) engine.current = null;
       map.clear();
+      cbs.current.onEngine?.(null);
     };
   }, [frameKey, engineKey]);
 
@@ -89,9 +96,9 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
       url: modelUrl,
       onLoad: (info) => {
         setAreas({ url: modelUrl, list: info.areas });
-        cbs.current.onModel({ url: modelUrl, state: "ready", info });
+        cbs.current.onModel({ url: modelUrl, state: "ready", info, root: layer.scene ?? null });
       },
-      onError: () => cbs.current.onModel({ url: modelUrl, state: "error", info: null }),
+      onError: () => cbs.current.onModel({ url: modelUrl, state: "error", info: null, root: null }),
     });
     layer.setVisible(!cbs.current.hidden.has("model"));
     layers.current.set(layer.id, { group: "model", layer });
