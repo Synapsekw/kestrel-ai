@@ -19,6 +19,19 @@ const CLICK_SLOP_PX = 4;
 const FLY_ENTER_AHEAD_M = 10;
 const IDLE_MS = 1000;
 
+/** Layer failures name the layer and the error's class only: no message payload reaches the log. */
+function logLayerError(what: string, id: string, err: unknown): void {
+  console.error(`Site 3D layer ${what} failed`, id, err instanceof Error ? err.name : typeof err);
+}
+
+function safeDetach(l: SiteLayer): void {
+  try {
+    l.detach();
+  } catch (err) {
+    logLayerError("detach", l.id, err);
+  }
+}
+
 const vec = (v: THREE.Vector3) => ({ x: v.x, y: v.y, z: v.z });
 
 /**
@@ -69,39 +82,55 @@ export class SiteEngine {
     } catch (err) {
       throw new NoWebGlError(err instanceof Error ? err.message : String(err));
     }
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.localClippingEnabled = true;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.setClearColor(tokenColor(tokenRgb("bg")));
-    this.camera.up.set(0, 1, 0);
-    this.camera.position.set(-400, 360, -400);
-    this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2f3a, 0.9));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-    sun.position.set(-300, 600, 200);
-    this.scene.add(sun);
-    this.tiles = new TileCache(fetchSiteTile, () => this.requestRender());
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.enableDamping = !isReducedMotion();
-    this.controls.zoomToCursor = true;
-    this.controls.screenSpacePanning = false; // pan along the ground
-    this.controls.addEventListener("change", this.requestRender);
-    this.ro = new ResizeObserver(this.resize);
-    this.ro.observe(this.host);
-    this.resize();
-    this.listen(canvas, "pointerdown", (e) => {
-      const p = e as PointerEvent;
-      if (p.button === 0) this.downAt = [p.clientX, p.clientY];
-    });
-    this.listen(canvas, "pointerup", (e) => {
-      const p = e as PointerEvent;
-      const d = this.downAt;
-      this.downAt = null;
-      if (!d || Math.hypot(p.clientX - d[0], p.clientY - d[1]) > CLICK_SLOP_PX) return;
-      this.select(this.pick(p.clientX, p.clientY));
-    });
-    this.listen(window, "keydown", (e) => this.onKey(e as KeyboardEvent, true));
-    this.listen(window, "keyup", (e) => this.onKey(e as KeyboardEvent, false));
-    this.listen(window, "blur", () => this.held.clear());
+    try {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      this.renderer.localClippingEnabled = true;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.setClearColor(tokenColor(tokenRgb("bg")));
+      this.camera.up.set(0, 1, 0);
+      this.camera.position.set(-400, 360, -400);
+      this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2f3a, 0.9));
+      const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+      sun.position.set(-300, 600, 200);
+      this.scene.add(sun);
+      this.tiles = new TileCache(fetchSiteTile, () => this.requestRender());
+      this.controls = new OrbitControls(this.camera, canvas);
+      this.controls.enableDamping = !isReducedMotion();
+      this.controls.zoomToCursor = true;
+      this.controls.screenSpacePanning = false; // pan along the ground
+      this.controls.addEventListener("change", this.requestRender);
+      this.ro = new ResizeObserver(this.resize);
+      this.ro.observe(this.host);
+      this.resize();
+      this.listen(canvas, "pointerdown", (e) => {
+        const p = e as PointerEvent;
+        if (p.button === 0) this.downAt = [p.clientX, p.clientY];
+      });
+      this.listen(canvas, "pointerup", (e) => {
+        const p = e as PointerEvent;
+        const d = this.downAt;
+        this.downAt = null;
+        if (!d || Math.hypot(p.clientX - d[0], p.clientY - d[1]) > CLICK_SLOP_PX) return;
+        this.select(this.pick(p.clientX, p.clientY));
+      });
+      this.listen(window, "keydown", (e) => this.onKey(e as KeyboardEvent, true));
+      this.listen(window, "keyup", (e) => this.onKey(e as KeyboardEvent, false));
+      this.listen(window, "blur", () => this.held.clear());
+    } catch (err) {
+      // a half-built engine must not hold the GL context, an observer or a listener
+      this.disposed = true;
+      this.unlisten.forEach((u) => u());
+      const built = this as unknown as Partial<{
+        ro: ResizeObserver;
+        controls: OrbitControls;
+        tiles: TileCache;
+      }>;
+      built.ro?.disconnect();
+      built.controls?.dispose();
+      built.tiles?.dispose();
+      this.renderer.dispose();
+      throw err;
+    }
     this.requestRender();
   }
 
@@ -135,9 +164,9 @@ export class SiteEngine {
     this.layers.set(l.id, l);
     try {
       const pending = l.attach(this);
-      if (pending) void pending.catch(() => {}); // a layer reports its own failure (onError)
-    } catch {
-      // as above: the layer's own callback says what failed
+      if (pending) void pending.catch((err: unknown) => logLayerError("attach", l.id, err));
+    } catch (err) {
+      logLayerError("attach", l.id, err);
     }
     this.requestRender();
   }
@@ -147,7 +176,7 @@ export class SiteEngine {
     const l = this.layers.get(id);
     if (!l) return;
     this.layers.delete(id);
-    l.detach();
+    safeDetach(l);
     this.pickables.delete(id);
     this.content.delete(id);
     this.clearPresets(id);
@@ -251,7 +280,7 @@ export class SiteEngine {
 
   dispose(): void {
     if (this.disposed) return;
-    for (const l of [...this.layers.values()]) l.detach();
+    for (const l of [...this.layers.values()]) safeDetach(l);
     this.layers.clear();
     this.pickables.clear();
     this.content.clear();
@@ -269,35 +298,44 @@ export class SiteEngine {
     this.renderer.dispose();
   }
 
+  // `raf` stays set while a frame runs, so a requestRender from inside it (controls "change", a
+  // layer update, a tile load) only extends the idle tail; the frame re-arms itself once, at the end.
   private readonly loop = (now: number): void => {
-    this.raf = 0;
-    if (this.disposed) return;
-    const dt = this.lastTick === null ? 0 : Math.min((now - this.lastTick) / 1000, 0.1);
-    this.lastTick = now;
-    let busy = false;
-    if (this.tween) {
-      const { view, done } = tweenAt(this.tween, now);
-      this.applyView(view);
-      if (done) this.tween = null;
-      else busy = true;
+    if (this.disposed) {
+      this.raf = 0;
+      return;
     }
-    if (this.nav === "fly" && this.held.size > 0) {
-      busy = true;
-      if (dt > 0) {
-        const forward = this.controls.target.clone().sub(this.camera.position);
-        const diag = this.contentBox()?.getSize(new THREE.Vector3()).length() ?? 1000;
-        const step = flyDelta(this.held, forward, flySpeed(forward.length(), diag, this.shift), dt);
-        this.camera.position.add(step);
-        this.controls.target.add(step);
+    let again = false;
+    try {
+      const dt = this.lastTick === null ? 0 : Math.min((now - this.lastTick) / 1000, 0.1);
+      this.lastTick = now;
+      let busy = false;
+      if (this.tween) {
+        const { view, done } = tweenAt(this.tween, now);
+        this.applyView(view);
+        if (done) this.tween = null;
+        else busy = true;
       }
+      if (this.nav === "fly" && this.held.size > 0) {
+        busy = true;
+        if (dt > 0) {
+          const forward = this.controls.target.clone().sub(this.camera.position);
+          const diag = this.contentBox()?.getSize(new THREE.Vector3()).length() ?? 1000;
+          const step = flyDelta(this.held, forward, flySpeed(forward.length(), diag, this.shift), dt);
+          this.camera.position.add(step);
+          this.controls.target.add(step);
+        }
+      }
+      this.controls.update();
+      this.tiles.beginFrame();
+      for (const l of this.layers.values()) l.update?.(dt, this.camera);
+      this.tiles.endFrame();
+      this.renderer.render(this.scene, this.camera);
+      again = busy || now < this.idleUntil;
+      if (!again) this.lastTick = null;
+    } finally {
+      this.raf = again && !this.disposed ? requestAnimationFrame(this.loop) : 0;
     }
-    this.controls.update();
-    this.tiles.beginFrame();
-    for (const l of this.layers.values()) l.update?.(dt, this.camera);
-    this.tiles.endFrame();
-    this.renderer.render(this.scene, this.camera);
-    if (busy || now < this.idleUntil) this.raf = requestAnimationFrame(this.loop);
-    else this.lastTick = null;
   };
 
   private readonly resize = (): void => {
@@ -334,6 +372,7 @@ export class SiteEngine {
   private onKey(e: KeyboardEvent, down: boolean): void {
     this.shift = e.shiftKey;
     if (!FLY_KEYS.has(e.code)) return;
+    if (down && (e.ctrlKey || e.metaKey || e.altKey)) return; // a chord is a shortcut, not flight
     if (!down) {
       this.held.delete(e.code);
       return;

@@ -8,9 +8,10 @@ describe("SiteEngine", () => {
 
   it("no WebGL is a NoWebGlError, never a half-built engine", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-    vi.spyOn(console, "error").mockImplementation(() => {}); // three logs the failed context
+    const err = vi.spyOn(console, "error").mockImplementation(() => {}); // three logs the failed context
     const canvas = document.createElement("canvas");
     expect(() => new SiteEngine(canvas, null)).toThrow(NoWebGlError);
     expect(() => createSiteEngine(canvas, null)).toThrow(NoWebGlError);
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/WebGL/));
   });
 });
