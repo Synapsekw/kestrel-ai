@@ -509,5 +509,13 @@ def test_storage_tank_small_roof_posts_are_instanced():
     assert isinstance(posts, Instanced) and len(posts.transforms) >= 20
 
 
+def test_storage_tank_small_horizontal_vent_protrudes_above_the_shell():
+    nodes = {n.name: n for n in built("storage_tank_small_horizontal")}
+    shell_top = expanded(nodes["shell"].geometry).bounds[1][1]
+    vent_top = expanded(nodes["nozzles"].geometry).bounds[1][1]
+    assert vent_top > shell_top + 0.1
+    assert vent_top == pytest.approx(CASES["storage_tank_small_horizontal"].h, abs=0.01)
+
+
 def test_storage_tank_small_lod_lowers_triangles():
     assert tris(built("storage_tank_small", 0.25)) < tris(built("storage_tank_small"))

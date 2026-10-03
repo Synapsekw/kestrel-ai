@@ -80,11 +80,12 @@ def _vertical(p: StorageTankSmallParams, plan: k.Plan, H: float, ctx: BuildCtx):
 
 def _horizontal(p: StorageTankSmallParams, plan: k.Plan, H: float, ctx: BuildCtx):
     L, W = plan.along, plan.across
-    d = min(W - 0.6, H - 0.5)
+    nh = min(0.4, 0.1 * H)  # vent stub above the shell crown
+    d = min(W - 0.6, H - 0.5 - nh)
     if d < 0.2:
         raise ValueError("storage_tank_small: footprint or height too small for a horizontal tank")
     r, hd = d / 2, head_depth("ellipsoidal", d)
-    yc = H - r
+    yc = H - nh - r
     shell_len = L - 1.0 - 2 * hd
     if shell_len < 0.2:
         raise ValueError("storage_tank_small: footprint too short for a horizontal tank")
@@ -114,7 +115,6 @@ def _horizontal(p: StorageTankSmallParams, plan: k.Plan, H: float, ctx: BuildCtx
             k.placed(cap, k.T(x0, yc, 0) @ k.S(-1, 1, 1) @ k.Y_TO_X),
         ),
     ]
-    if H - (yc + r) <= 0.05:  # vent nozzle sits inside the shell's top band
-        xn, rn = 0.2 * shell_len, max(0.04, 0.05 * d)
-        nodes.append(k.node("nozzles", "Pipe", k.rod((xn, yc + 0.7 * r, 0), (xn, H, 0), rn, ctx)))
+    xn, rn = 0.2 * shell_len, max(0.04, 0.05 * d)  # vent: from inside the shell up through the crown
+    nodes.append(k.node("nozzles", "Pipe", k.rod((xn, yc + 0.7 * r, 0), (xn, H, 0), rn, ctx)))
     return nodes, {"d_m": d, "shell_len_m": shell_len}
