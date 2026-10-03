@@ -426,3 +426,17 @@ def test_unknown_tool_name_is_not_logged_or_recorded_verbatim(handle, app, seede
     )
     assert [s["tool"] for s in run.steps] == ["unknown", "finish"]
     assert "SECRETNAME" not in caplog.text and "asset model tool unknown ok=False" in caplog.text
+
+
+def test_m1_sweep_leaves_plant_runs_alone(handle, app, seeded, monkeypatch):
+    from app.asset_models.agent.plant import resume
+
+    mid, rid = seeded
+    with handle.session() as s:
+        s.get(AssetModelRun, rid).mode = "plant"
+    monkeypatch.setattr(resume, "sweep_plant_runs", lambda handle, runner: [])
+    startup._sweep_runs(handle, app.state.jobs)
+    with handle.session() as s:
+        run = s.get(AssetModelRun, rid)
+        assert run.state == "running" and run.stop_reason is None
+        assert s.get(AssetModel, mid).live_run_id == rid
