@@ -2,8 +2,8 @@
 9.2), from pre-aggregated rows only: `finding_count`, `finding_daily`, the type snapshots, small-table
 COUNTs and SUM(source.image_count). Nothing here reads `finding`, `box` or `image` (a statement
 counter in tests/test_overview.py pins it), except `project_summary`'s cover, which takes the newest
-image by rowid: one row, no scan. `photo_review` groups `image_review`, at most one row per reviewed
-photo."""
+image by rowid: one row, no scan, and `photo_review`'s one grouped aggregate over `image` (the
+effective review status, a bounded read of one column set; a named exception in the same test)."""
 
 import logging
 from collections.abc import Callable
@@ -11,12 +11,13 @@ from collections.abc import Callable
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.asset_review.effective import effective_status
 from app.catalogue import service as catalogue_service
 from app.db.models import (
     AssetModel,
     Drawing,
     GeoMap,
-    ImageReview,
+    Image,
     PointCloud,
     Source,
     Surface,
@@ -98,16 +99,18 @@ def hero_asset_model_id(s: Session) -> str | None:
     ).scalar_one_or_none()
 
 
-def photo_review(s: Session, images: int) -> dict | None:
-    """Photos by review status; None until any photo has one (spec section 5.4). A photo with no
-    review row is not assessed, so the project's image count tops that bucket up (no extra read)."""
-    rows = s.execute(select(ImageReview.status, func.count()).group_by(ImageReview.status)).all()
-    if not rows:
-        return None
+def photo_review(s: Session) -> dict | None:
+    """Photos by effective review status (spec section 5.4): the one rule `effective_status` holds,
+    so a count here equals what the image index's `review_status` filter returns. One aggregate over
+    `image`, grouped by that status. None until some photo has a review status (finding, none or
+    uncertain), so an empty project and one with only unreviewed, unmarked photos stay null."""
+    status = effective_status()
+    rows = s.execute(select(status, func.count()).select_from(Image).group_by(status)).all()
     out = dict.fromkeys(REVIEW_STATUSES, 0)
-    for status, n in rows:
-        out[status] = n
-    out["not_assessed"] += max(0, images - sum(n for _, n in rows))
+    for name, n in rows:
+        out[name] = n
+    if out["finding"] + out["none"] + out["uncertain"] == 0:
+        return None
     return out
 
 
@@ -218,7 +221,7 @@ def build(handle) -> dict:
             "latest_volume": latest_volume(s),
             "hero_map_id": map_id,
             "hero": hero(s, data, map_id),
-            "photo_review": photo_review(s, data["images"]),
+            "photo_review": photo_review(s),
         }
     banners: list[dict] = []
     for provider in BANNER_PROVIDERS:

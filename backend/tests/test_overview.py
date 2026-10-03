@@ -21,6 +21,23 @@ API = "/api/v1"
 FORBIDDEN = re.compile(r"\b(FROM|JOIN)\s+\"?(finding|box|image)\"?(\s|$)", re.IGNORECASE)
 # The one bounded read of `image` the summary may make: the newest image as the cover, one row.
 COVER_READ = "SELECT id FROM image ORDER BY rowid DESC LIMIT 1"
+# photo_review: the one aggregate over `image` (effective status, grouped), the named exception.
+_STATUS = (
+    "coalesce((SELECT image_review.status FROM image_review WHERE image_review.image_id = image.id), "
+    "CASE WHEN image.marked_empty THEN ? ELSE ? END)"
+)
+PHOTO_REVIEW_READ = f"SELECT {_STATUS} AS coalesce_1, count(*) AS count_1 FROM image GROUP BY {_STATUS}"
+
+
+def _is_photo_review_read(statement: str) -> bool:
+    return " ".join(statement.split()) == PHOTO_REVIEW_READ
+
+
+def _only_photo_review_read(seen: list[str]) -> list[str]:
+    """The forbidden image/box/finding reads left once the one photo_review aggregate is allowed,
+    which must run exactly once per overview call."""
+    assert len([st for st in seen if _is_photo_review_read(st)]) == 1, seen
+    return [st for st in seen if FORBIDDEN.search(st) and not _is_photo_review_read(st)]
 
 
 def _overview(client, project) -> dict:
@@ -83,7 +100,7 @@ def test_the_overview_costs_the_same_whatever_the_project_holds(client, project,
     insert_box(handle, project["classes"][0]["id"])
     seen, out = _counted(handle.engine, lambda: _overview(client, project))
     assert len(seen) == len(empty), (empty, seen)
-    assert [st for st in seen if FORBIDDEN.search(st)] == []
+    assert _only_photo_review_read(seen) == []
     assert out["findings"]["by_status"]["open"] == 30
 
 
@@ -290,5 +307,61 @@ def test_the_asset_reads_keep_the_overview_cost_flat(client, project, handle):
         set_status(s, image, "none")
     seen, out = _counted(handle.engine, lambda: _overview(client, project))
     assert len(seen) == len(empty), (empty, seen)
-    assert [st for st in seen if FORBIDDEN.search(st)] == []
+    assert _only_photo_review_read(seen) == []
     assert out["hero"]["kind"] == "asset_model"
+
+
+def test_a_marked_empty_photo_without_a_review_row_counts_as_none(client, project, handle):
+    from image_summary_helpers import new_image
+    from sqlalchemy import select
+
+    from app.asset_review.review_status import set_status
+    from app.db.models import Image, Source
+
+    first = new_image(handle)
+    with handle.session() as s:
+        src_id = s.execute(select(Source.id)).scalar_one()
+    ids = [first, *(new_image(handle, source_id=src_id) for _ in range(3))]
+    with handle.session() as s:
+        s.get(Image, ids[0]).marked_empty = True  # no image_review row: effective status `none`
+        set_status(s, ids[1], "finding")
+        set_status(s, ids[2], "uncertain")
+    assert _overview(client, project)["photo_review"] == {
+        "finding": 1,
+        "none": 1,
+        "uncertain": 1,
+        "not_assessed": 1,
+    }
+
+
+def test_unreviewed_unmarked_photos_keep_photo_review_null(client, project, handle):
+    from image_summary_helpers import new_image
+
+    new_image(handle)
+    assert _overview(client, project)["photo_review"] is None
+
+
+def test_each_overview_count_equals_the_image_index_filter(client, project, handle):
+    from image_summary_helpers import new_image
+    from sqlalchemy import select
+
+    from app.asset_review.review_status import set_status
+    from app.db.models import Image, Source
+
+    first = new_image(handle)
+    with handle.session() as s:
+        src_id = s.execute(select(Source.id)).scalar_one()
+    ids = [first, *(new_image(handle, source_id=src_id) for _ in range(6))]
+    with handle.session() as s:
+        s.get(Image, ids[0]).marked_empty = True  # none, by the empty mark
+        s.get(Image, ids[1]).marked_empty = True
+        set_status(s, ids[1], "uncertain")  # a row beats the mark
+        set_status(s, ids[2], "finding")
+        set_status(s, ids[3], "none")
+        set_status(s, ids[4], "not_assessed")  # ids[5], ids[6]: no row, unmarked
+    counts = _overview(client, project)["photo_review"]
+    assert sum(counts.values()) == 7
+    for status, n in counts.items():
+        r = client.get(f"{API}/projects/{project['id']}/images/index", params={"review_status": status})
+        assert r.status_code == 200, r.text
+        assert len(r.json()["ids"]) == n, status
