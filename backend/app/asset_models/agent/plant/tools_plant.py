@@ -16,6 +16,7 @@ from pydantic import Field, ValidationError
 from shapely.geometry import LineString, Polygon
 
 from app.asset_models.agent.plant import packages as pk
+from app.asset_models.agent.plant import views
 from app.asset_models.agent.plant.merge import with_flag
 from app.asset_models.agent.tools import _A, FinishArgs, Region, ToolOut, _short
 from app.asset_models.agent.tools import TOOLS as M1_TOOLS
@@ -432,6 +433,41 @@ class FinishPackage:
         return ToolOut("Package finished.", "Finished the package", phase="done")
 
 
+class ZoomArgs(_A):
+    drawing_id: str
+    region: Region = Field(description="[x0, y0, x1, y1] page fractions, (0,0) top-left")
+    dpi: int = Field(300, ge=36, le=1200, description="source resolution; at most 600 dpi is rendered")
+    grid: bool = Field(
+        True,
+        description="page-fraction ticks, and plant E/N grid lines once the frame is known",
+    )
+
+
+class DrawingZoom:
+    name, Args = "drawing_zoom", ZoomArgs
+    description = (
+        "Zoom into a region of a drawing page at a chosen resolution (up to 600 dpi; the image is at "
+        "most 1 600 px, and a region too large for the dpi is rendered at the largest dpi that fits, "
+        "with a note). Use it to read small tags, leaders and grid labels on scanned plot plans. The "
+        "image carries page-fraction ticks on its top and left edges (use them for set_site grid "
+        "points) and plant E/N grid lines once the frame is known."
+    )
+
+    def run(self, rc, scope, a):
+        if a.drawing_id not in rc.drawing_ids():
+            raise LookError("That drawing is not one of this run's sources.")
+        mapper = _page_to_plant(rc, a.drawing_id) if a.grid else None
+        z = views.drawing_zoom(rc.handle, a.drawing_id, a.region, a.dpi, grid=a.grid, page_to_plant=mapper)
+        at = f" at {z.dpi} dpi" if z.dpi else ""
+        grid = f" Plant grid lines every {z.grid_step_m:g} m." if z.grid_step_m else ""
+        text = f"Drawing zoom {z.width}x{z.height}{at}.{grid} {z.note}".strip()
+        return ToolOut(text, f"Zoomed into a drawing{at}", image=z.jpeg, phase="reading")
+
+
+def _page_to_plant(rc, drawing_id):
+    return None  # Task 7 replaces this with sitefit.page_to_plant_fn
+
+
 # ------------------------------------------------------------------ registry and dispatch
 _TOOLS = [
     UpsertItems(),
@@ -443,12 +479,14 @@ _TOOLS = [
     NextStage(),
     PlantFinish(),
     FinishPackage(),
+    DrawingZoom(),
 ]
 PLANT_TOOLS = {t.name: t for t in _TOOLS}
 ORCH_NAMES = (
     "list_sources",
     "drawing_view",
     "drawing_text",
+    "drawing_zoom",
     "catalogue",
     "plan_packages",
     "items_query",
@@ -458,7 +496,15 @@ ORCH_NAMES = (
     "next_stage",
     "finish",
 )
-SUB_NAMES = (*LOOK, "catalogue", "items_query", "upsert_items", "remove_items", "finish_package")
+SUB_NAMES = (
+    *LOOK,
+    "drawing_zoom",
+    "catalogue",
+    "items_query",
+    "upsert_items",
+    "remove_items",
+    "finish_package",
+)
 
 
 def _names(scope) -> tuple[str, ...]:
