@@ -179,4 +179,26 @@ describe("useExtraLayerClicks", () => {
     canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 60, clientY: 10, button: 0 }));
     expect(on.finding).toHaveBeenCalledTimes(1);
   });
+
+  it("a pin or glyph wins the click: the model pick on the same canvas never hears it (S3-9 minor 5)", () => {
+    const { hook, engine, canvas, wrapper } = setup();
+    // S1's engine picks the model on the canvas's own (bubble) pointerup listener, added first.
+    const modelPick = vi.fn();
+    canvas.addEventListener("pointerup", modelPick);
+    const hit = vi.spyOn(hook.result.current.findings!, "hit").mockReturnValue({ findingId: "f1" });
+    const on = { photo: vi.fn(), finding: vi.fn() };
+    renderHook(() => useExtraLayerClicks(engine, hook.result.current, on), { wrapper });
+    const click = () => {
+      canvas.dispatchEvent(new PointerEvent("pointerdown", { clientX: 10, clientY: 10, button: 0 }));
+      canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 10, clientY: 10, button: 0 }));
+    };
+    click();
+    expect(on.finding).toHaveBeenCalledWith("f1");
+    expect(modelPick).not.toHaveBeenCalled();
+    // Nothing of S2's under the pointer: the model pick runs as before.
+    hit.mockReturnValue(null);
+    click();
+    expect(modelPick).toHaveBeenCalledTimes(1);
+    canvas.removeEventListener("pointerup", modelPick);
+  });
 });

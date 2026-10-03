@@ -428,6 +428,29 @@ describe("ModelLayer swap and select (S3 Task 1b)", () => {
     expect(layer.helpers.children.length).toBeGreaterThan(0);
   });
 
+  it("a swap that drops the selected item tells every listener the selection is gone (S3-9 minor 1)", async () => {
+    const e = engine();
+    const scenes: Record<string, () => THREE.Object3D> = { "v1.glb": plant, "v2.glb": () => single("p-9") };
+    const layer = createModelLayer({ url: "v1.glb", loader: async (u) => scenes[u]() });
+    await layer.attach(e);
+    layer.select("rack.1");
+    e.select.mockClear();
+    await layer.load("v2.glb");
+    expect(e.select).toHaveBeenCalledWith(null);
+    expect(layer.helpers.children).toHaveLength(0);
+  });
+
+  it("a swap that keeps the selected item does not clear the selection", async () => {
+    const e = engine();
+    const layer = createModelLayer({ url: "v1.glb", loader: async () => plant() });
+    await layer.attach(e);
+    layer.select("rack.1");
+    e.select.mockClear();
+    await layer.load("v2.glb");
+    expect(e.select).not.toHaveBeenCalled();
+    expect(layer.helpers.children.length).toBeGreaterThan(0);
+  });
+
   it("select(id) broadcasts a model hit at the item's centre with its extras; null clears", async () => {
     const { e, layer } = await loaded();
     layer.select("rack.1");

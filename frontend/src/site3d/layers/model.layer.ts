@@ -277,7 +277,13 @@ export class ModelLayer implements SiteLayer {
       for (const mat of materialsOf(m)) mat.side = THREE.DoubleSide;
     });
     this.applyColour();
-    if (this.selectedId) this.highlight(this.byId.has(this.selectedId) ? this.selectedId : null);
+    if (this.selectedId) {
+      // An item the new version lacks: every listener (the panels too) hears the selection is gone,
+      // not only this outline (S3-9 minor 1).
+      if (this.byId.has(this.selectedId)) this.highlight(this.selectedId);
+      else if (this.engine) this.engine.select(null);
+      else this.highlight(null);
+    }
     const areas = new Map<string, THREE.Box3>();
     for (const it of this.items) {
       const a = str(it.extras.area);

@@ -139,7 +139,12 @@ export function useSiteExtraLayers(o: {
   };
 }
 
-/** A click (at most `CLICK_SLOP_PX` of travel) on a pin opens its finding, else on a glyph opens its photo. */
+/**
+ * A click (at most `CLICK_SLOP_PX` of travel) on a pin opens its finding, else on a glyph opens its photo.
+ * Priority contract (S3-9 minor 5): a pin or glyph wins the click. The pointerup listener runs in the
+ * capture phase, so it runs before S1's model pick on the same canvas, and a hit stops that pick
+ * (`stopImmediatePropagation`): the model is not selected by a click that opened a finding or photo.
+ */
 export function useExtraLayerClicks(
   engine: SiteEngine | null,
   extra: Pick<ExtraLayers, "photos" | "findings">,
@@ -162,15 +167,17 @@ export function useExtraLayerClicks(
       down = null;
       if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_SLOP_PX) return;
       const f = findings?.hit(e.clientX, e.clientY);
-      if (f) return onRef.current.finding(f.findingId);
-      const p = photos?.hit(e.clientX, e.clientY);
-      if (p) onRef.current.photo(p.imageId);
+      const p = f ? null : photos?.hit(e.clientX, e.clientY);
+      if (!f && !p) return;
+      e.stopImmediatePropagation();
+      if (f) onRef.current.finding(f.findingId);
+      else if (p) onRef.current.photo(p.imageId);
     };
     canvas.addEventListener("pointerdown", pd);
-    canvas.addEventListener("pointerup", pu);
+    canvas.addEventListener("pointerup", pu, true);
     return () => {
       canvas.removeEventListener("pointerdown", pd);
-      canvas.removeEventListener("pointerup", pu);
+      canvas.removeEventListener("pointerup", pu, true);
     };
   }, [engine, photos, findings]);
 }
