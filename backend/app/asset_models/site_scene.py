@@ -147,7 +147,7 @@ def frame_from_site(site: object) -> SceneFrame | None:
             plant_north_deg=float(site["plant_north_deg"]),
             datum=SceneDatum(label=str(datum.get("label") or "EL"), el_m=float(datum.get("el_m") or 0.0)),
         )
-    except (KeyError, TypeError, ValueError):
+    except (AttributeError, KeyError, TypeError, ValueError):
         log.warning("site scene: a model's site frame is malformed; using the map workspace frame")
         return None
 

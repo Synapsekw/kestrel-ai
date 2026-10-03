@@ -303,5 +303,8 @@ def test_min_zoom_for(bounds, max_z, want):
 def test_frame_from_site_tolerates_a_malformed_site():
     assert site_scene.frame_from_site(None) is None
     assert site_scene.frame_from_site({"crs": {}}) is None
+    # a non-dict crs or datum is malformed too, not an AttributeError (final review fix)
+    assert site_scene.frame_from_site({**SITE, "crs": "EPSG:32639"}) is None
+    assert site_scene.frame_from_site({**SITE, "datum": ["EL", 0]}) is None
     f = site_scene.frame_from_site(SITE)
     assert f is not None and f.origin_crs == (244338.089, 3179515.69)
