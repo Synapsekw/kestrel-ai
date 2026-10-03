@@ -11,6 +11,7 @@ import {
   glbLoader,
   isFlagged,
   itemIdOf,
+  itemNodeOf,
   type ModelLayer,
 } from "./model.layer";
 import type { PickHit, Pickable } from "./types";
@@ -88,6 +89,43 @@ describe("model layer helpers", () => {
     expect(itemIdOf(n)).toBe("only.node");
     n.userData = { node: "no-type" };
     expect(itemIdOf(n)).toBeNull();
+  });
+
+  it("A1's GLB: the item id is the node name from `node` (no `id`), children resolve to the item (R8)", () => {
+    // assemble.py: item node named by its id with the CSV-cased register row as extras; children
+    // `<id>/<name>` carry builder extras only; area groups and env nodes carry no `type`.
+    const root = new THREE.Group();
+    const area = new THREE.Group();
+    area.name = "area:30";
+    const item = new THREE.Group();
+    item.name = "30-P-0001";
+    item.userData = {
+      node: "30-P-0001",
+      tag: "30-P-0001",
+      type: "other",
+      area: "30",
+      plant_E: 260,
+      plant_N: 180,
+      base_EL: 100,
+      top_EL: 103,
+      height_source: "drawing",
+      flags: [],
+      confidence: "high",
+    };
+    const child = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+    child.name = "30-P-0001/body";
+    child.userData = { shape: "box", params: { w: 6 } };
+    item.add(child);
+    const sea = new THREE.Group();
+    sea.name = "Sea";
+    sea.userData = { env: "sea", node: "sea" };
+    area.add(item);
+    root.add(area, sea);
+    const items = collectItems(root);
+    expect(items.map((i) => i.id)).toEqual(["30-P-0001"]);
+    expect(items[0].node).toBe(item);
+    expect(itemIdOf(child)).toBeNull();
+    expect(itemNodeOf(child, root)).toBe(item);
   });
 
   it("colour keys per mode", () => {
