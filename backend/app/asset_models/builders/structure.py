@@ -115,7 +115,8 @@ def _piled_deck(item: Item, ctx: BuildCtx, p, base: float, h: float, *, rail: Li
     bents: list[np.ndarray] = []
     for run in rs:
         bents += k.grid_rows(ring, run, p.bay_spacing_m, p.pile_spacing_m, p.pile_inset_m)
-    piles = k.dedupe(np.vstack(bents), p.bay_spacing_m * 0.45)
+    # tolerance below the smaller spacing, so only piles shared by two runs merge, never a bent's own
+    piles = k.dedupe(np.vstack(bents), min(p.bay_spacing_m, p.pile_spacing_m) * 0.45)
     pile = k.pile_mesh(p.pile_d_m / 2, pile_top, ctx)
     xf = k.translate(np.c_[piles[:, 0], np.zeros(len(piles)), piles[:, 1]])
     nodes.append(MeshNode("piles", "Steel_Dark", Instanced(pile, xf)))

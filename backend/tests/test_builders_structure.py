@@ -224,6 +224,13 @@ def test_trestle_pile_bents_and_rack_band():
     assert not any(n.name.startswith("pipes_") or n.name == "rack_sleepers" for n in no_rack)
 
 
+def test_close_pile_spacing_keeps_every_pile():
+    # jetty 30 x 20: 5 rows (30 m at 7.5 m) x 11 piles (20 m at 2 m) = 55, none lost to dedupe
+    assert instances(build(case("jetty_platform", params={"pile_spacing_m": 2.0})), "piles") == 55
+    # trestle 40 x 12: 7 bents (40 m at 7.5 m) x 7 piles (12 m at 2 m) = 49
+    assert instances(build(case("trestle", params={"pile_spacing_m": 2.0})), "piles") == 49
+
+
 def test_trestle_rack_band_sits_on_the_chosen_side():
     right = node(build(case("trestle")), "rack_sleepers").geometry.transforms[:, 2, 3]
     left = node(build(case("trestle", params={"rack_side": "left"})), "rack_sleepers").geometry.transforms[
