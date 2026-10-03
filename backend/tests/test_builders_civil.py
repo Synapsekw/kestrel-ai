@@ -22,7 +22,7 @@ from plant_b3_helpers import (
 from shapely.geometry import Point, Polygon
 
 from app.asset_models.builders import civil
-from app.asset_models.builders.base import BuildCtx, Instanced
+from app.asset_models.builders.base import REGISTRY, BuildCtx, Instanced
 from app.asset_models.builders.palette import PALETTE
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
 
@@ -338,3 +338,53 @@ def test_very_long_fence_posts_stay_within_max_instances():
 @pytest.mark.parametrize("type_", ["wall", "fence"])
 def test_wall_fence_goldens(type_):
     assert_golden(build_ok(sample(type_)), type_)
+
+
+# ------------------------------------------------------------------ trenches, channels, basins
+def test_trench_is_an_open_u_with_its_invert_at_base():
+    item = sample("trench")
+    nodes = by_name(build_ok(item))
+    assert set(nodes) == {"walls", "floor"}
+    assert bounds(list(nodes.values()))[:, 1].tolist() == pytest.approx([0.0, 1.0])
+    assert nodes["walls"].geometry.is_watertight
+    covered = by_name(
+        build_ok(make_item("trench", item.footprint.model_dump(), top_el=101.0, params={"covered": True}))
+    )
+    assert covered["cover"].material == "Grating"
+
+
+def test_channel_holds_water_at_half_depth():
+    nodes = by_name(build_ok(sample("channel")))
+    water = nodes["water"].geometry
+    assert nodes["water"].material == "Water_Pit"
+    assert water.bounds[:, 1].tolist() == pytest.approx([1.0, 1.0])
+    assert materials(list(nodes.values())) == {"Concrete", "Water_Pit"}
+
+
+def test_narrow_channel_becomes_a_solid_body():
+    fp = {"kind": "line", "pts": [[E0, N0], [E0 + 10, N0]], "width": 0.3}
+    nodes = by_name(build_ok(make_item("channel", fp, top_el=102.0)))
+    assert set(nodes) == {"body"}
+
+
+def test_basin_on_a_concave_footprint():
+    nodes = by_name(build_ok(sample("basin")))
+    assert nodes["walls"].geometry.is_watertight
+    assert bounds([nodes["walls"]])[:, 1].tolist() == pytest.approx([0.0, 3.3])  # kerb 0.3 above grade
+    assert nodes["water"].geometry.bounds[:, 1].tolist() == pytest.approx([2.4, 2.4])
+    inner = civil.largest_polygon(
+        Polygon(np.asarray(CTX.local(sample("basin"), *np.asarray(L_POLY["pts"]).T)))
+    )
+    inner = inner.buffer(-0.3, join_style="mitre", mitre_limit=2.0)
+    assert nodes["water"].geometry.area == pytest.approx(inner.area)
+
+
+@pytest.mark.parametrize("type_", ["trench", "channel", "basin"])
+def test_open_box_goldens(type_):
+    assert_golden(build_ok(sample(type_)), type_)
+
+
+def test_civil_types_are_registered():
+    for t in CIVIL:
+        assert REGISTRY[t].family == "civil"
+    assert REGISTRY["fence"].default_height_m == 2.5

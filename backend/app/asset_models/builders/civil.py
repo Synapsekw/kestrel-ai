@@ -400,3 +400,95 @@ def build_fence(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     else:
         pts = np.asarray(outline(item, ctx).exterior.coords)  # closed ring: first point repeated last
     return record(fence_like(pts, h, p, ctx.lod), p, defaulted)
+
+
+# ------------------------------------------------------------------ trenches, channels, basins
+class TrenchParams(B3Params):
+    wall_t: float = Field(0.15, gt=0.02, le=2)
+    floor_t: float = Field(0.15, gt=0.02, le=2)
+    covered: bool = False
+
+
+class ChannelParams(B3Params):
+    wall_t: float = Field(0.25, gt=0.02, le=2)
+    floor_t: float = Field(0.25, gt=0.02, le=2)
+    water: float = Field(0.5, ge=0, le=1)  # water surface as a fraction of the depth
+
+
+class BasinParams(B3Params):
+    wall_t: float = Field(0.3, gt=0.02, le=2)
+    floor_t: float = Field(0.3, gt=0.02, le=2)
+    kerb_h: float = Field(0.3, ge=0, le=2)
+    freeboard: float = Field(0.6, ge=0, le=10)
+
+
+def open_box(poly: Polygon, h: float, wall_t: float, floor_t: float, wall_mat: str):
+    """Walls (outline minus its inset) from 0 to h and a floor slab; returns (nodes, inner)."""
+    inner = poly.buffer(-wall_t, join_style="mitre", mitre_limit=2.0)
+    if inner.is_empty or inner.area < 1e-3:
+        return [MeshNode("body", wall_mat, prism(poly, 0.0, h))], None
+    inner = largest_polygon(inner)
+    ring = poly.difference(inner)
+    walls = [
+        prism(g, 0.0, h) for g in getattr(ring, "geoms", [ring]) if isinstance(g, Polygon) and g.area > 1e-6
+    ]
+    nodes = [
+        MeshNode("walls", wall_mat, merge(walls)),
+        MeshNode("floor", wall_mat, prism(inner, 0.0, min(floor_t, h / 2))),
+    ]
+    return nodes, inner
+
+
+def _depth(item: Item, ctx: BuildCtx, default: float) -> tuple[float, bool]:
+    base, top, defaulted = ctx.height(item, default)
+    if not top - base > 0:
+        raise ValueError("needs a depth (top_el above base_el)")
+    return top - base, defaulted
+
+
+@builder(
+    "trench",
+    family="civil",
+    params=TrenchParams,
+    default_height_m=1.0,
+    doc="Trench or ditch: an open concrete U along a line (base_el = invert), optional grating.",
+)
+def build_trench(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = TrenchParams.model_validate(item.params)
+    h, defaulted = _depth(item, ctx, 1.0)
+    nodes, inner = open_box(outline(item, ctx), h, p.wall_t, p.floor_t, "Concrete_Dark")
+    if p.covered and inner is not None:
+        nodes.append(MeshNode("cover", "Grating", prism(inner, h - 0.05, h)))
+    return record(nodes, p, defaulted)
+
+
+@builder(
+    "channel",
+    family="civil",
+    params=ChannelParams,
+    default_height_m=2.0,
+    doc="Open water channel or culvert: a concrete U with a water surface at a fraction of depth.",
+)
+def build_channel(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = ChannelParams.model_validate(item.params)
+    h, defaulted = _depth(item, ctx, 2.0)
+    nodes, inner = open_box(outline(item, ctx), h, p.wall_t, p.floor_t, "Concrete")
+    if inner is not None and p.water > 0:
+        nodes.append(MeshNode("water", "Water_Pit", surface(inner, max(p.floor_t, h * p.water))))
+    return record(nodes, p, defaulted)
+
+
+@builder(
+    "basin",
+    family="civil",
+    params=BasinParams,
+    default_height_m=3.0,
+    doc="Basin or pit: concrete walls with a kerb above grade, floor, and water below freeboard.",
+)
+def build_basin(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = BasinParams.model_validate(item.params)
+    h, defaulted = _depth(item, ctx, 3.0)
+    nodes, inner = open_box(outline(item, ctx), h + p.kerb_h, p.wall_t, p.floor_t, "Concrete")
+    if inner is not None:
+        nodes.append(MeshNode("water", "Water_Pit", surface(inner, max(p.floor_t, h - p.freeboard))))
+    return record(nodes, p, defaulted)
