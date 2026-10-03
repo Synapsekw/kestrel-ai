@@ -6,6 +6,7 @@ import {
   getDrawingInspection,
   pageThumbUrl,
   type Drawing,
+  type DrawingCreate,
   type DrawingInspection,
 } from "@/api/drawings";
 import { messageOf } from "@/api/errors";
@@ -19,7 +20,7 @@ import {
   drawingNameField,
   familyOf,
   initialDrawingForm,
-  toDrawingRequests,
+  toDrawingRequest,
   type DrawingForm,
 } from "./drawingImport";
 import { takeImportPrefill } from "./importPrefill";
@@ -115,7 +116,8 @@ export function ImportDrawingDialog({
   async function startImport(all: boolean) {
     if (inFlight.current || !inspection || inspection.state !== "ready" || !form) return;
     const draft = all ? { ...form, pages: allPdfPages(inspection), page: 1 } : form;
-    const built = toDrawingRequests(inspection, draft);
+    // Interim (Task 8 moves this to createDrawingPages): one request per chosen page.
+    const built = perPageRequests(inspection, draft);
     if (!built.ok) return setError(built.error);
     const pending = built.bodies.filter((body) => body.page == null || !importedPages.current.has(body.page));
     if (pending.length === 0) {
@@ -304,4 +306,28 @@ export function ImportDrawingDialog({
       </div>
     </Dialog>
   );
+}
+
+/** Interim shim until Task 8: the removed toDrawingRequests, one build request per chosen PDF page. */
+function perPageRequests(
+  insp: DrawingInspection,
+  f: DrawingForm,
+): { ok: true; bodies: DrawingCreate[] } | { ok: false; error: string } {
+  if (familyOf(insp.format) !== "pdf") {
+    const one = toDrawingRequest(insp, f);
+    return one.ok ? { ok: true, bodies: [one.body] } : one;
+  }
+  const pages = [...new Set(f.pages)].sort((a, b) => a - b);
+  if (pages.length === 0) return { ok: false, error: "Choose at least one page." };
+  const bodies: DrawingCreate[] = [];
+  for (const page of pages) {
+    const one = toDrawingRequest(insp, {
+      ...f,
+      page,
+      name: pages.length > 1 && f.name != null ? `${f.name.replace(/ · p\d+$/, "")} · p${page}` : f.name,
+    });
+    if (!one.ok) return one;
+    bodies.push(one.body);
+  }
+  return { ok: true, bodies };
 }

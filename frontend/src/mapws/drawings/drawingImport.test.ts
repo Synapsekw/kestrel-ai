@@ -8,8 +8,10 @@ import {
   placementChoices,
   renderSize,
   toDrawingRequest,
-  toDrawingRequests,
+  toDrawingPagesRequest,
+  autoImportRequest,
 } from "./drawingImport";
+import type { DrawingInspection } from "@/api/drawings";
 import { bigPdfInspection, dxfInspection, pdfInspection, pngWorldFileInspection } from "./testFixtures";
 
 describe("families", () => {
@@ -109,32 +111,6 @@ describe("toDrawingRequest", () => {
     expect(defaultDrawingName(pdfInspection, 2)).toBe("foundation-plan · p2");
   });
 
-  it("builds one request per selected page, and one per page when importing the whole file", () => {
-    const selected = toDrawingRequests(pdfInspection, {
-      ...initialDrawingForm(pdfInspection),
-      pages: [2, 1, 1],
-    });
-    expect(selected).toMatchObject({
-      ok: true,
-      bodies: [
-        { name: "foundation-plan · p1", page: 1, dpi: 150 },
-        { name: "foundation-plan · p2", page: 2, dpi: 150 },
-      ],
-    });
-    const named = toDrawingRequests(pdfInspection, {
-      ...initialDrawingForm(pdfInspection),
-      pages: [1, 2],
-      name: "Foundation",
-    });
-    expect(named).toMatchObject({
-      ok: true,
-      bodies: [
-        { name: "Foundation · p1", page: 1 },
-        { name: "Foundation · p2", page: 2 },
-      ],
-    });
-  });
-
   it("requires the EPSG of a world file", () => {
     const f = initialDrawingForm(pngWorldFileInspection);
     expect(toDrawingRequest(pngWorldFileInspection, f)).toEqual({
@@ -209,6 +185,74 @@ describe("toDrawingRequest", () => {
     expect(toDrawingRequest(insp, { ...f, name: "y".repeat(201) })).toEqual({
       ok: false,
       error: "Keep the name under 200 characters.",
+    });
+  });
+});
+
+const threePages: DrawingInspection = {
+  ...pdfInspection,
+  page_count: 3,
+  pages: [...pdfInspection.pages, { page: 3, width_pt: 2384, height_pt: 1684 }],
+};
+
+describe("toDrawingPagesRequest (plant-model spec §8.1: all pages, one job)", () => {
+  it("selects every page of a multi-page PDF by default and sends 'all'", () => {
+    const f = initialDrawingForm(threePages);
+    expect(f.pages).toEqual([1, 2, 3]);
+    expect(toDrawingPagesRequest(threePages, f)).toEqual({
+      ok: true,
+      body: {
+        inspection_id: threePages.id,
+        name: "foundation-plan",
+        pages: "all",
+        dpi: 150,
+        placement: { method: "none" },
+      },
+    });
+  });
+
+  it("sends the chosen pages in order and a custom name without its page suffix", () => {
+    expect(
+      toDrawingPagesRequest(threePages, {
+        ...initialDrawingForm(threePages),
+        pages: [3, 1, 3],
+        name: " Plot plan · p3 ",
+      }),
+    ).toMatchObject({ ok: true, body: { name: "Plot plan", pages: [1, 3] } });
+  });
+
+  it("refuses no pages, a page out of range and an empty name", () => {
+    const f = initialDrawingForm(threePages);
+    expect(toDrawingPagesRequest(threePages, { ...f, pages: [] })).toEqual({
+      ok: false,
+      error: "Choose at least one page.",
+    });
+    expect(toDrawingPagesRequest(threePages, { ...f, pages: [1, 4] })).toEqual({
+      ok: false,
+      error: "Choose a page between 1 and 3.",
+    });
+    expect(toDrawingPagesRequest(threePages, { ...f, name: "  " })).toEqual({
+      ok: false,
+      error: "Give the drawing a name.",
+    });
+  });
+});
+
+describe("autoImportRequest (setup and Import and include)", () => {
+  it("imports every page of a multi-page PDF", () => {
+    expect(autoImportRequest(pdfInspection)).toMatchObject({ kind: "pages", body: { pages: "all" } });
+  });
+  it("imports a one-page PDF and a DXF as one drawing", () => {
+    expect(autoImportRequest(bigPdfInspection)).toMatchObject({ kind: "one", body: { page: 1 } });
+    expect(autoImportRequest(dxfInspection)).toMatchObject({
+      kind: "one",
+      body: { layers: ["WALLS", "TEXT"] },
+    });
+  });
+  it("names what the operator must choose", () => {
+    expect(autoImportRequest(pngWorldFileInspection)).toMatchObject({
+      kind: "error",
+      error: expect.stringContaining("A world file has no CRS"),
     });
   });
 });
