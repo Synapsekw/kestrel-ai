@@ -68,7 +68,9 @@ export function DeleteCloudDialog({
         onClose={close}
         footer={
           <>
-            <Button onClick={close}>Keep them</Button>
+            <Button onClick={close} disabled={busy}>
+              Keep them
+            </Button>
             <Button variant="danger" loading={busy} onClick={() => run(true)}>
               {`Delete cloud and ${plural(findings)}`}
             </Button>
@@ -89,7 +91,9 @@ export function DeleteCloudDialog({
       onClose={close}
       footer={
         <>
-          <Button onClick={close}>Cancel</Button>
+          <Button onClick={close} disabled={busy}>
+            Cancel
+          </Button>
           <Button variant="danger" loading={busy} onClick={() => run(false)}>
             Yes
           </Button>

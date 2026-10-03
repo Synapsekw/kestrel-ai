@@ -1,6 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { createApiClient } from "@contract/client";
 import { exampleCloud, CLOUD_ID } from "@/test/cloudFixtures";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
@@ -76,5 +77,27 @@ describe("DeleteCloudDialog (spec C14)", () => {
     expect(await screen.findByText("an export of this cloud is running")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Are you sure?" })).toBeInTheDocument();
     expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it("disables Cancel while the delete is in flight", async () => {
+    const hung = new Promise<Response>(() => {});
+    const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      if (req.method === "DELETE") return hung;
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
+    renderWithProviders(
+      <DeleteCloudDialog
+        open
+        projectId={PROJECT_ID}
+        cloud={exampleCloud}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+      { api },
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled());
   });
 });

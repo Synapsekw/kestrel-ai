@@ -361,6 +361,7 @@ export function CloudWorkspace() {
     const rest = (clouds ?? []).filter((c) => c.id !== id);
     remove(id);
     reload();
+    if (id !== cloudId) return;
     navigate(`/p/${projectId}/clouds${rest.length ? `/${defaultCloud(rest).id}` : ""}`, { replace: true });
   };
 

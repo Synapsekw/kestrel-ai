@@ -442,6 +442,35 @@ describe("CloudWorkspace (spec §6)", () => {
     expect(missingSeen()).toBe(false);
   });
 
+  it("deleting a different cloud from the picker stays on the open one", async () => {
+    const tower = { ...exampleCloud, id: "c-2", name: "Tower" };
+    const west = { ...exampleCloud, id: "c-3", name: "West" };
+    let deleted = false;
+    const { requests } = open([], `/p/${PROJECT_ID}/clouds/c-2`, [
+      {
+        method: "DELETE",
+        path: new RegExp(`/pointclouds/c-3$`),
+        status: 204,
+        body: () => ((deleted = true), null),
+      },
+      {
+        method: "GET",
+        path: /\/pointclouds$/,
+        body: () => ({ items: deleted ? [exampleCloud, tower] : [exampleCloud, tower, west] }),
+      },
+    ]);
+    await screen.findByRole("toolbar", { name: "Point cloud" });
+    await openTopic("Layers");
+    await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete West" }));
+    const confirm = await screen.findByRole("dialog", { name: "Are you sure?" });
+    await userEvent.click(within(confirm).getByRole("button", { name: "Yes" }));
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "DELETE" && r.url.includes("/pointclouds/c-3"))).toBe(true),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`);
+  });
+
   it("deleting the last cloud lands on the page-layout empty state at /clouds", async () => {
     let deleted = false;
     open([], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, [
