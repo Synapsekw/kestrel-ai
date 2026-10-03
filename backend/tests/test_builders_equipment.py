@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
+import functools
 import inspect
+import json
 import math
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pytest
 import trimesh
+from PIL import Image
 from pydantic import BaseModel
+from shapely.geometry import Polygon
 
 from app.asset_models.builders import geom
-from app.asset_models.builders.base import BuildCtx, Instanced, MeshNode, builder
+from app.asset_models.builders.base import (
+    REGISTRY,
+    BuildCtx,
+    Instanced,
+    MeshNode,
+    build_item,
+    builder,
+    load_all,
+)
 from app.asset_models.builders.palette import PALETTE
+from app.asset_models.raster import View, render
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
 from app.asset_models.spec import Item
 
@@ -193,3 +209,215 @@ def test_kit_finish_records_defaults_and_derived():
     assert nodes[0].extras == {"defaults": ["b"], "derived": {"d_m": 1.235, "kind": "x"}}
     with pytest.raises(ValueError, match="no geometry"):
         k.finish([], it, P(), {})
+
+
+# ------------------------------------------------------------------ harness
+load_all()
+DATA = Path(__file__).parent / "data" / "plant"
+GOLDEN = DATA / "golden" / "equipment"
+COWORK = json.loads((DATA / "cowork_nodes" / "equipment.json").read_text(encoding="utf-8"))["types"]
+UPDATE = os.environ.get("KESTREL_UPDATE_GOLDENS") == "1"
+CTX = BuildCtx(grid=None)
+RASTER_GROUP = {  # palette material -> M1 raster colour group, for readable goldens
+    "Concrete": "Bottom",
+    "Concrete_Tank": "Bottom",
+    "Concrete_Dark": "Lining",
+    "Steel_Dark": "Lining",
+    "Steel_Structure": "Support",
+    "Pump_Blue": "Support",
+    "Grating": "Access",
+    "Machine_Green": "Access",
+    "Handrail": "Nozzle",
+    "Safety_Red": "Manway",
+    "Pipe": "Internal",
+    "Pipe_Insulated": "Internal",
+}
+
+
+@dataclass(frozen=True)
+class Case:
+    type: str
+    footprint: dict
+    h: float
+    params: dict = field(default_factory=dict)
+    margin: float = 0.3  # m allowed outside the footprint's local bounding box
+    tris: tuple[int, int] = (1, 4000)
+    parts: frozenset[str] = frozenset()  # node names that must be present
+    golden: tuple[str, ...] = ("iso",)
+
+
+CASES: dict[str, Case] = {
+    # --- vessels (Task 4)
+    # --- tanks (Tasks 5, 6)
+    # --- rotating (Tasks 7, 8)
+    # --- power (Task 8)
+    # --- process (Tasks 9, 10)
+    # --- jetty (Task 11)
+}
+FIRST: dict[str, str] = {}
+for _cid, _case in CASES.items():
+    FIRST.setdefault(_case.type, _cid)
+IDS = list(CASES)
+TYPES_BUILT = sorted(FIRST)
+
+
+def make(c: Case) -> Item:
+    return make_item(c.type, c.footprint, h=c.h, params=c.params)
+
+
+@functools.cache
+def built(cid: str, lod: float = 1.0) -> tuple:
+    c = CASES[cid]
+    return tuple(REGISTRY[c.type].fn(make(c), BuildCtx(grid=None, lod=lod)))
+
+
+def expanded(g) -> trimesh.Trimesh:
+    if isinstance(g, Instanced):
+        return trimesh.util.concatenate([g.mesh.copy().apply_transform(t) for t in g.transforms])
+    return g
+
+
+def tris(nodes) -> int:
+    return sum(
+        len(n.geometry.mesh.faces) * len(n.geometry.transforms)
+        if isinstance(n.geometry, Instanced)
+        else len(n.geometry.faces)
+        for n in nodes
+    )
+
+
+def bounds(nodes) -> tuple[np.ndarray, np.ndarray]:
+    b = np.array([expanded(n.geometry).bounds for n in nodes])
+    return b[:, 0].min(axis=0), b[:, 1].max(axis=0)
+
+
+def footprint_box(fp: dict) -> tuple[tuple[float, float], tuple[float, float]]:
+    """The footprint's bounding box in item-local [x north, z east], origin at footprint_ref."""
+    if fp["kind"] == "circle":
+        r = fp["d"] / 2
+        return (-r, -r), (r, r)
+    if fp["kind"] == "rect":
+        a = math.radians(fp["rot_deg"])
+        u, v = np.array([math.cos(a), math.sin(a)]), np.array([-math.sin(a), math.cos(a)])
+        al, ac = fp["size"]
+        pts = [su * al / 2 * u + sv * ac / 2 * v for su in (-1, 1) for sv in (-1, 1)]
+    else:
+        en = np.asarray(fp["pts"], dtype=float)
+        ref = Polygon(en).centroid
+        pts = [np.array([n_ - ref.y, e_ - ref.x]) for e_, n_ in en]
+    p = np.array(pts)
+    return tuple(p.min(axis=0)), tuple(p.max(axis=0))
+
+
+def principal_bearing(nodes, name: str) -> float:
+    """Plan bearing (0..180, clockwise from north) of a node's long axis."""
+    v = expanded(next(n for n in nodes if n.name == name).geometry).vertices
+    xz = v[:, [0, 2]] - v[:, [0, 2]].mean(axis=0)
+    _, vec = np.linalg.eigh(np.cov(xz.T))
+    a = vec[:, -1]
+    return math.degrees(math.atan2(a[1], a[0])) % 180.0
+
+
+def render_nodes(nodes, view: str) -> Image.Image:
+    meshes = {n.name: expanded(n.geometry) for n in nodes}
+    groups = {n.name: RASTER_GROUP.get(n.material, "Shell") for n in nodes}
+    return render(meshes, View(view), size=256, groups=groups)
+
+
+def test_harness_types_are_cowork_types():
+    assert set(FIRST) <= set(COWORK)
+
+
+@pytest.mark.parametrize("cid", IDS)
+def test_builds_clean_nodes(cid):
+    nodes = built(cid)
+    assert nodes
+    names = [n.name for n in nodes]
+    assert len(set(names)) == len(names), "node names repeat"
+    for n in nodes:
+        assert n.material in PALETTE, (n.name, n.material)
+        m = expanded(n.geometry)
+        assert len(m.faces) > 0 and np.isfinite(m.vertices).all(), n.name
+    missing = CASES[cid].parts - set(names)
+    assert not missing, missing
+
+
+@pytest.mark.parametrize("cid", IDS)
+def test_bounds(cid):
+    c = CASES[cid]
+    lo, hi = bounds(built(cid))
+    (x0, z0), (x1, z1) = footprint_box(c.footprint)
+    assert lo[0] >= x0 - c.margin and hi[0] <= x1 + c.margin, (lo, hi, (x0, x1))
+    assert lo[2] >= z0 - c.margin and hi[2] <= z1 + c.margin, (lo, hi, (z0, z1))
+    assert lo[1] >= -0.01
+    assert abs(hi[1] - c.h) <= max(0.05 * c.h, 0.5), (hi[1], c.h)
+
+
+@pytest.mark.parametrize("cid", IDS)
+def test_triangle_range(cid):
+    lo, hi = CASES[cid].tris
+    assert lo <= tris(built(cid)) <= hi, tris(built(cid))
+
+
+@pytest.mark.parametrize("type_", TYPES_BUILT)
+def test_realism_floor_vs_cowork(type_):
+    nodes = built(FIRST[type_])
+    ref = COWORK[type_]
+    floor = int(0.8 * ref["tris_median"]) if type_ == "tank_lng" else ref["tris_median"]
+    assert tris(nodes) >= floor
+    assert len(nodes) >= ref["submeshes_max"]
+    assert len({n.material for n in nodes}) >= min(len(ref["materials"]), 2)
+
+
+@pytest.mark.parametrize("type_", TYPES_BUILT)
+def test_registered_with_catalogue_fields(type_):
+    d = REGISTRY[type_]
+    assert d.family == "equipment"
+    assert d.default_height_m > 0
+    assert 40 <= len(d.doc) <= 600
+    d.params.model_validate({})  # every top-level param has a default
+    assert d.params.model_json_schema()["properties"]
+
+
+@pytest.mark.parametrize("type_", TYPES_BUILT)
+def test_defaults_recorded(type_):
+    c = CASES[FIRST[type_]]
+    nodes = built(FIRST[type_])
+    fields = REGISTRY[type_].params.model_fields
+    assert nodes[0].extras["defaults"] == sorted(f for f in fields if f not in c.params)
+    assert nodes[0].extras["derived"], "derived values missing"
+
+
+@pytest.mark.parametrize("cid", IDS)
+def test_deterministic(cid):
+    c = CASES[cid]
+    a = REGISTRY[c.type].fn(make(c), CTX)
+    b = REGISTRY[c.type].fn(make(c), CTX)
+    assert [n.name for n in a] == [n.name for n in b]
+    for x, y in zip(a, b, strict=True):
+        gx, gy = x.geometry, y.geometry
+        if isinstance(gx, Instanced):
+            assert np.array_equal(gx.transforms, gy.transforms)
+            gx, gy = gx.mesh, gy.mesh
+        assert np.array_equal(gx.vertices, gy.vertices) and np.array_equal(gx.faces, gy.faces)
+
+
+@pytest.mark.parametrize("cid", IDS)
+def test_build_item_uses_the_builder(cid):
+    nodes, flags = build_item(make(CASES[cid]), CTX)
+    assert not [f for f in flags if f.code == "builder_fallback"]
+    assert CASES[cid].parts <= {n.name for n in nodes}
+
+
+@pytest.mark.parametrize(("cid", "view"), [(cid, v) for cid, c in CASES.items() for v in c.golden])
+def test_golden_render(cid, view):
+    img = render_nodes(built(cid), view)
+    path = GOLDEN / f"{cid}_{view}.png"
+    if UPDATE:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        img.save(path)
+        return
+    assert path.exists(), f"missing golden {path.name}: run with KESTREL_UPDATE_GOLDENS=1 and review it"
+    golden = np.asarray(Image.open(path).convert("RGB"), dtype=np.int16)
+    diff = np.abs(np.asarray(img, dtype=np.int16) - golden)
+    assert (diff > 40).mean() < 0.01  # under 1 % of pixels differ visibly
