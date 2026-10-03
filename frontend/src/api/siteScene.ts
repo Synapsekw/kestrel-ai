@@ -3,7 +3,7 @@ import type { ApiClient, paths, Schemas } from "@contract/client";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import type { SiteFrameT } from "@/site3d/engine/siteTransform";
 import { useApi } from "./client";
-import { unwrap } from "./errors";
+import { codeOf, unwrap } from "./errors";
 
 export type SiteScene = Schemas["SiteScene"];
 export type SceneOrtho = SiteScene["orthos"][number];
@@ -74,20 +74,35 @@ export async function getAssetItem(
 export function useSiteScene(projectId: string, modelId?: string | null) {
   const api = useApi();
   const key = `${projectId}/${modelId ?? ""}`;
-  const [loaded, setLoaded] = useState<{ key: string; scene: SiteScene | null; error: string | null } | null>(
-    null,
-  );
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    scene: SiteScene | null;
+    error: string | null;
+    code?: string | null;
+  } | null>(null);
   const reload = useCallback(() => {
     void getSiteScene(api, projectId, modelId).then(
       (scene) => setLoaded({ key, scene, error: null }),
       (e: unknown) =>
-        setLoaded((prev) => ({ key, scene: prev?.key === key ? prev.scene : null, error: message(e) })),
+        setLoaded((prev) => ({
+          key,
+          scene: prev?.key === key ? prev.scene : null,
+          error: message(e),
+          code: codeOf(e),
+        })),
     );
   }, [api, projectId, modelId, key]);
   useEffect(reload, [reload]);
   useOnJobsFinished("asset_model_glb", reload);
   const current = loaded?.key === key ? loaded : null;
-  return { scene: current?.scene ?? null, error: current?.error ?? null, loading: current === null, reload };
+  return {
+    scene: current?.scene ?? null,
+    error: current?.error ?? null,
+    /** The API error code (`not_found` for an unknown model id), null without an error. */
+    errorCode: current?.code ?? null,
+    loading: current === null,
+    reload,
+  };
 }
 
 /** The register rows of one version, ≤ 500 per page (index Global Constraints), appended by cursor. */

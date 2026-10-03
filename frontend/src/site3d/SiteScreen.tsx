@@ -21,7 +21,7 @@ function BuildLink({ projectId }: { projectId: string }) {
 export function SiteScreen() {
   const { projectId = "", modelId } = useParams();
   const backend = useBackend();
-  const { scene, error, loading, reload } = useSiteScene(projectId, modelId ?? null);
+  const { scene, error, errorCode, loading, reload } = useSiteScene(projectId, modelId ?? null);
   const view = useRef<SiteViewHandle>(null);
   const [hidden, setHidden] = useState<ReadonlySet<LayerGroup>>(() => new Set());
   const [selected, setSelected] = useState<PickHit | null>(null);
@@ -47,6 +47,22 @@ export function SiteScreen() {
     body = (
       <div role="status" aria-label="Loading site" className="grid h-full place-items-center">
         <Skeleton className="h-40 w-40 rounded-panel" />
+      </div>
+    );
+  } else if (!scene && modelId && errorCode === "not_found") {
+    body = (
+      <div className="grid h-full place-items-center p-6">
+        <Alert
+          tone="warn"
+          title="This plant model is not in the project."
+          actions={
+            <Link to={`/p/${projectId}/site`} className={buttonClass("secondary", "sm")}>
+              Open the project&apos;s site
+            </Link>
+          }
+        >
+          It may have been deleted. The project&apos;s site shows its newest plant model.
+        </Alert>
       </div>
     );
   } else if (!scene) {
@@ -98,7 +114,13 @@ export function SiteScreen() {
         </div>
         {selected && (
           <div className="absolute right-3 top-3 z-10">
-            <SelectionPlaceholder hit={selected} onClear={() => view.current?.clearSelection()} />
+            <SelectionPlaceholder
+              hit={selected}
+              onClear={() => {
+                view.current?.clearSelection();
+                view.current?.focus();
+              }}
+            />
           </div>
         )}
         {modelState === "none" && (
@@ -128,7 +150,15 @@ export function SiteScreen() {
             <Alert
               tone="danger"
               actions={
-                <Button size="sm" icon="refresh" onClick={() => view.current?.reload()}>
+                <Button
+                  size="sm"
+                  icon="refresh"
+                  onClick={() => {
+                    // Forget the failed load so the retry shows the loading pill (ruling R-S1-24).
+                    setModel(null);
+                    view.current?.reload();
+                  }}
+                >
                   Reload view
                 </Button>
               }

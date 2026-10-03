@@ -22,6 +22,8 @@ export interface ModelStatus {
 export interface SiteViewHandle {
   clearSelection(): void;
   reload(): void;
+  /** Moves focus to the view (after a card over it closes). */
+  focus(): void;
 }
 export interface SiteViewProps {
   scene: SiteScene;
@@ -38,6 +40,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
   const { scene, frame, hidden } = props;
   const backend = useBackend();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const engine = useRef<SiteEngine | null>(null);
   const layers = useRef(new Map<string, { group: LayerGroup; layer: SiteLayer }>());
   const cbs = useRef(props);
@@ -71,6 +74,8 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     const map = layers.current;
     return () => {
       off();
+      // dispose() drops listeners without emitting, so say the selection is gone.
+      cbs.current.onSelect(null);
       eng.dispose();
       if (engine.current === eng) engine.current = null;
       map.clear();
@@ -95,6 +100,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     return () => {
       eng.removeLayer(layer.id);
       map.delete(layer.id);
+      cbs.current.onSelect(null);
     };
   }, [modelUrl, engineKey]);
 
@@ -132,7 +138,8 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isTypingTarget(e.target)) engine.current?.select(null);
+      if (e.key === "Escape" && !e.defaultPrevented && !isTypingTarget(e.target))
+        engine.current?.select(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -143,6 +150,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     (): SiteViewHandle => ({
       clearSelection: () => engine.current?.select(null),
       reload: () => setGeneration((g) => g + 1),
+      focus: () => rootRef.current?.focus(),
     }),
     [],
   );
@@ -154,7 +162,14 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
   const doPreset = (id: PresetId) => engine.current?.setPreset(id);
 
   return (
-    <div className="absolute inset-0" data-testid="site-view">
+    <div
+      ref={rootRef}
+      role="region"
+      aria-label="3D view"
+      tabIndex={-1}
+      className="absolute inset-0 outline-none"
+      data-testid="site-view"
+    >
       <canvas
         key={generation}
         ref={canvasRef}

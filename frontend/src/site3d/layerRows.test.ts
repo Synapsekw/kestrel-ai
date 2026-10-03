@@ -30,5 +30,8 @@ describe("sceneLayerRows", () => {
     expect(sceneLayerRows(MODEL_SCENE, "loading", 0)[0].detail).toBe("Loading");
     expect(sceneLayerRows(MODEL_SCENE, "error", 0)[0].detail).toBe("Could not load");
     expect(sceneLayerRows(MODEL_SCENE, "ready", 1)[0].detail).toBe("1 item");
+    // Ruling R-S1-15: the view could not start, so the model is not shown (not "Loading" forever).
+    const off = sceneLayerRows(MODEL_SCENE, "off", 0)[0];
+    expect([off.detail, off.available, off.toggleable]).toEqual(["Not shown", true, false]);
   });
 });

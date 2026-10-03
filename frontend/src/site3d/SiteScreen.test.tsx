@@ -153,6 +153,60 @@ describe("SiteScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Reload view" }));
     expect(h.engines.length).toBe(2);
     expect(h.engines[0].dispose).toHaveBeenCalled();
+    // The retry shows: the alert goes, the loading pill comes back (ruling R-S1-24).
+    expect(screen.queryByText("The plant model could not load.")).toBeNull();
+    expect(screen.getByText(/loading the plant model/i)).toBeInTheDocument();
+    // A second failure shows the alert again.
+    act(() => h.models[1].opts.onError?.(new Error("409")));
+    expect(await screen.findByText("The plant model could not load.")).toBeInTheDocument();
+  });
+
+  it("a reloaded view drops the stale selection", async () => {
+    open(MODEL_SCENE);
+    await screen.findByTestId("site-canvas");
+    act(() => h.models[0].opts.onError?.(new Error("409")));
+    act(() => h.engines[0].select(TANK));
+    expect(await screen.findByTestId("site-selection")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Reload view" }));
+    expect(screen.queryByTestId("site-selection")).toBeNull();
+  });
+
+  it("Escape clears the selection unless something else handled it; clearing returns focus to the view", async () => {
+    open(MODEL_SCENE);
+    await screen.findByTestId("site-canvas");
+    act(() => h.engines[0].select(TANK));
+    await screen.findByTestId("site-selection");
+    const handled = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+    handled.preventDefault();
+    act(() => void window.dispatchEvent(handled));
+    expect(screen.getByTestId("site-selection")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("site-selection")).toBeNull();
+    act(() => h.engines[0].select(TANK));
+    const card = await screen.findByTestId("site-selection");
+    await userEvent.click(within(card).getByRole("button", { name: "Clear selection" }));
+    expect(document.activeElement).toBe(screen.getByTestId("site-view"));
+  });
+
+  it("an unknown model id links back to the project's site", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/site-scene/,
+        status: 404,
+        body: { error: { code: "not_found", message: "No such plant model", details: {} } },
+      },
+    ]);
+    renderWithProviders(<SiteScreen />, {
+      api,
+      route: "/p/p1/site/zz",
+      path: "/p/:projectId/site/:modelId?",
+    });
+    expect(await screen.findByText("This plant model is not in the project.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the project's site" })).toHaveAttribute(
+      "href",
+      "/p/p1/site",
+    );
   });
 
   it("no WebGL: a notice, the layers list stays, no loading pill", async () => {
@@ -161,6 +215,8 @@ describe("SiteScreen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/3D view is off/i);
     expect(screen.getByTestId("site-layers")).toBeInTheDocument();
     expect(screen.queryByText(/loading the plant model/i)).toBeNull();
+    const modelRow = within(screen.getByTestId("site-layers")).getByText("Plant model").closest("li")!;
+    expect(modelRow).toHaveTextContent("Not shown");
   });
 
   it("a failed manifest says what happened and offers to try again", async () => {
