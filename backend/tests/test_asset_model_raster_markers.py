@@ -1,6 +1,7 @@
 """The rasterizer's framing window and markers (spec 2026-10-02-asset-findings §10, decision A9)."""
 
 import numpy as np
+import pytest
 import trimesh
 
 from app.asset_models.raster import BG, Marker, View, render
@@ -55,3 +56,15 @@ def test_a_window_with_nothing_in_it_is_background_and_markers():
 def test_a_framed_render_is_deterministic():
     kw = dict(size=200, window=((1.0, 0.2, 0.1), 1.5), markers=[Marker("pin", ((1.0, 0.2, 0.1),), RED)])
     assert np.array_equal(np.asarray(render(BOX, LOOK, **kw)), np.asarray(render(BOX, LOOK, **kw)))
+
+
+def test_a_window_on_a_huge_face_is_still_filled():
+    huge = {"asset": trimesh.creation.box(extents=(2.0, 100.0, 100.0))}
+    img = np.asarray(render(huge, LOOK, size=256, window=((1.0, 0.0, 0.0), 1.0)))
+    assert (img != np.array(BG)).any(axis=2).mean() > 0.5
+
+
+def test_a_bad_window_half_width_is_refused():
+    for half in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            render(BOX, LOOK, size=128, window=((1.0, 0.0, 0.0), half))

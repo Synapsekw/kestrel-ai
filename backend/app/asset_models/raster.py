@@ -21,6 +21,7 @@ MAX_SIZE = 1024
 SAMPLES_PER_PX = 5.0
 MAX_SAMPLES = 6_000_000
 MARGIN = 0.06
+MAX_SPLIT_PASSES = 16
 SEED = 11
 BG = (20, 26, 36)
 OUTLINE = (12, 14, 18)
@@ -145,6 +146,8 @@ def render(
     if window is not None:
         c = np.asarray(window[0], dtype=float)
         half = float(window[1])
+        if not np.isfinite(half) or half <= 0:
+            raise ValueError("window half-width must be a positive finite number")
         cx, cy = float(c @ right), float(c @ up)
         lo = np.array([cx - half, cy - half])
         hi = np.array([cx + half, cy + half])
@@ -169,6 +172,30 @@ def render(
             float(size - ((p @ up - lo[1]) * scale + off[1])),
         )
 
+    if window is not None:
+        # a triangle far larger than the frame would spend its samples outside it: split those first
+        frame_m = size / scale  # the frame's side in metres
+        for _ in range(MAX_SPLIT_PASSES):
+            big = (np.ptp(sx, axis=1) > frame_m) | (np.ptp(sy, axis=1) > frame_m)
+            if not big.any():
+                break
+            a, b, c3 = (tris[big][:, k] for k in range(3))
+            ab, bc, ca = (a + b) / 2, (b + c3) / 2, (c3 + a) / 2
+            parts = np.concatenate(
+                [np.stack(t, axis=1) for t in ((a, ab, ca), (ab, b, bc), (ca, bc, c3), (ab, bc, ca))]
+            )
+            tris = np.concatenate([tris[~big], parts])
+            owner = np.concatenate([owner[~big], np.tile(owner[big], 4)])
+            normals = np.concatenate([normals[~big], np.tile(normals[big], (4, 1))])
+            sx, sy, sd = tris @ right, tris @ up, tris @ f
+            keep = (
+                (sx.max(axis=1) >= lo[0])
+                & (sx.min(axis=1) <= hi[0])
+                & (sy.max(axis=1) >= lo[1])
+                & (sy.min(axis=1) <= hi[1])
+            )
+            tris, owner, normals = tris[keep], owner[keep], normals[keep]
+            sx, sy, sd = sx[keep], sy[keep], sd[keep]
     if len(tris) == 0:
         return _draw_markers(Image.new("RGB", (size, size), BG), markers, project, size)
     px = (sx - lo[0]) * scale + off[0]
