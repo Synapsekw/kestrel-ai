@@ -21,6 +21,7 @@ from app.training.schemas import JobRef
 router = APIRouter(prefix="/projects/{projectId}", tags=["assetreview"])
 P = "/asset-models/{assetModelId}/placements"
 MAX_PAGE = 2000
+DEFAULT_PAGE = 500
 BINARY_HEADERS = {"Cache-Control": "private, no-cache"}
 KINDS = {
     "mesh": (".bin", "application/octet-stream"),
@@ -40,7 +41,7 @@ def _model(s, asset_model_id: str) -> AssetModel:
 def list_placements(
     assetModelId: str,  # noqa: N803
     after: str | None = None,
-    limit: int = Query(MAX_PAGE, ge=1, le=MAX_PAGE),
+    limit: int = Query(DEFAULT_PAGE, ge=1, le=MAX_PAGE),
     handle: ProjectHandle = Depends(get_project),
 ) -> PlacementList:
     with handle.session() as s:

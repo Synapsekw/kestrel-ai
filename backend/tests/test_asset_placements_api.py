@@ -108,3 +108,11 @@ def test_compute_queues_the_job_and_refuses_a_second(
     grouping = client.post(url, json={})
     assert grouping.status_code == 409 and grouping.json()["error"]["code"] == "job_running"
     assert client.post(f"{API}/{project_id}/asset-models/nope/placements/compute", json={}).status_code == 404
+
+
+def test_limit_defaults_to_500_and_caps_at_2000(client):
+    op = client.app.openapi()["paths"]["/api/v1/projects/{projectId}/asset-models/{assetModelId}/placements"][
+        "get"
+    ]
+    limit = next(p for p in op["parameters"] if p["name"] == "limit")["schema"]
+    assert limit["default"] == 500 and limit["maximum"] == 2000 and limit["minimum"] == 1
