@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.asset_models.spec import AssetSpec
 from app.asset_review.frame import Frame
@@ -31,6 +31,7 @@ class AssetModelOut(BaseModel):
     review: dict | None = None  # the resolved review profile (§7)
     created_at: datetime
     updated_at: datetime
+    kind: Literal["asset", "plant"] = "asset"  # plant model spec §9 (migration 0017)
 
     @classmethod
     def of(cls, row) -> AssetModelOut:
@@ -46,6 +47,7 @@ class AssetModelCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     asset_type: str | None = Field(None, max_length=80)
     tag: str | None = Field(None, max_length=80)
+    kind: Literal["asset", "plant"] = "asset"
 
 
 class AssetModelPatch(BaseModel):
@@ -113,6 +115,27 @@ class AssetModelVersionWithJob(BaseModel):
     job: JobOut
 
 
+class AssetModelRunPackagesOut(BaseModel):
+    total: int
+    done: int
+    failed: int
+    running: int
+
+
+class AssetModelRunStageUsageOut(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    images: int = 0
+    calls: int = 0
+
+
+class AssetModelRunUsageByStageOut(BaseModel):
+    current: str
+    stages: dict[str, AssetModelRunStageUsageOut]
+    cost_estimate_usd: float | None
+    cost_label: str
+
+
 class AssetModelRunStepOut(BaseModel):
     n: int
     tool: str
@@ -127,7 +150,7 @@ class AssetModelRunOut(BaseModel):
     job_id: str
     provider: Literal["openai", "anthropic", "gemini"]
     model_name: str
-    mode: Literal["build", "refine"]
+    mode: Literal["build", "refine", "plant", "plant_package"]
     notes: str | None
     state: Literal["running", "finished", "stopped", "failed"]
     stop_reason: Literal["budget", "timeout", "user", "provider_error", "interrupted"] | None
@@ -141,23 +164,43 @@ class AssetModelRunOut(BaseModel):
     comparison: dict | None
     started_at: datetime
     ended_at: datetime | None
+    # Plant runs (spec 2026-10-03-plant-model-generator §8). 0017 adds no run columns: R1 keeps the
+    # stage usage in the run's `usage` JSON under "by_stage" and passes the package counts in.
+    packages: AssetModelRunPackagesOut | None = None
+    usage_by_stage: AssetModelRunUsageByStageOut | None = None
 
     @classmethod
-    def of(cls, row) -> AssetModelRunOut:
-        return cls.model_validate(row, from_attributes=True)
+    def of(cls, row, packages: AssetModelRunPackagesOut | None = None) -> AssetModelRunOut:
+        out = cls.model_validate(row, from_attributes=True)
+        usage = row.usage if isinstance(row.usage, dict) else {}
+        try:
+            by_stage = AssetModelRunUsageByStageOut.model_validate(usage.get("by_stage"))
+        except ValidationError:  # absent (build and refine runs) or not R1's shape
+            by_stage = None
+        return out.model_copy(update={"usage_by_stage": by_stage, "packages": packages})
 
 
 class AssetModelRunList(BaseModel):
     items: list[AssetModelRunOut]
 
 
+class AssetModelRunLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    max_tokens: int | None = Field(None, ge=100_000, le=200_000_000)
+    max_images: int | None = Field(None, ge=1, le=5000)
+    max_seconds: int | None = Field(None, ge=60, le=86_400)
+    parallel: int | None = Field(None, ge=1, le=8)
+
+
 class AssetModelRunStart(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    mode: Literal["build", "refine"]
-    sources: list[AssetSourceRef] = Field(min_length=1, max_length=50)
+    mode: Literal["build", "refine", "plant", "plant_package"]
+    sources: list[AssetSourceRef] = Field(min_length=1, max_length=200)  # a plant run takes every page
     provider: Literal["openai", "anthropic", "gemini"]
     model_name: str | None = Field(None, max_length=120)
     notes: str | None = Field(None, max_length=4000)
+    package_ids: list[Annotated[str, Field(max_length=64)]] = Field(default_factory=list, max_length=64)
+    limits: AssetModelRunLimits | None = None
 
 
 class AssetModelRunWithJob(BaseModel):

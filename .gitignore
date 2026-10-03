@@ -52,3 +52,5 @@ dist/
 
 # Operator client drawings for the live asset-model acceptance test
 backend/tests/data/asset_models/*.pdf
+# The Cowork plant GLB (26 MB) for the plant model tests; fetched locally, never committed
+backend/tests/data/plant/*.glb

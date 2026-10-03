@@ -4527,6 +4527,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        /** The version's register, read from the index the GLB job writes (`asset_item`): at most 500 rows a page, ordered by node. Empty until the version's GLB is built. */
+        get: operations["listAssetModelItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+                itemId: components["parameters"]["assetItemId"];
+            };
+            cookie?: never;
+        };
+        /** One item of the version's spec, in full. */
+        get: operations["getAssetModelItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        /** The version's register as CSV: Cowork's 17 columns in their order, then `flags` and `confidence` (`utm39_E`/`utm39_N` are `site_E`/`site_N` when the site CRS is not UTM 39). */
+        get: operations["getAssetModelCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+            };
+            cookie?: never;
+        };
+        /** A plant run's packages, in order (at most 64). Empty for build and refine runs. */
+        get: operations["listAssetModelRunPackages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import several pages of one inspected PDF (or "all") as one Drawing each, named "<name> · p<k>", built in order by one `drawing_import` job. */
+        post: operations["createDrawingPages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/unimported": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Drawing files in the project folder (three levels deep, Kestrel's own folders skipped) whose content matches no imported drawing (by sha256). At most 500. */
+        get: operations["listUnimportedDrawings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-scene": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** The Site 3D view's manifest: the plant frame (from the chosen model, else the map workspace) and the layers there are to show, each list at most 200. */
+        get: operations["getSiteScene"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset-models/catalogue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The plant item builder types, by family, with their param schemas (for the item editor). */
+        get: operations["getAssetModelCatalogue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brands": {
         parameters: {
             query?: never;
@@ -12482,6 +12641,7 @@ export interface components {
             frame: components["schemas"]["AssetFrame"] | null;
             /** @description the resolved review profile, a copy stored on the model (asset findings spec §7); null until one is chosen */
             review: components["schemas"]["AssetReviewConfig"] | null;
+            kind: components["schemas"]["AssetModelKind"];
         };
         AssetModelList: {
             items: components["schemas"]["AssetModel"][];
@@ -12490,6 +12650,8 @@ export interface components {
             name: string;
             asset_type?: string | null;
             tag?: string | null;
+            /** @description `plant` for a plant model; `asset` when absent */
+            kind?: components["schemas"]["AssetModelKind"];
         };
         AssetModelPatch: {
             name?: string;
@@ -12512,9 +12674,14 @@ export interface components {
             n_mm?: number | null;
         };
         AssetPartSource: {
-            /** @enum {string} */
-            kind: "drawing" | "cloud" | "photo" | "assumed";
+            /**
+             * @description `operator`: set by hand (a plant frame or an edited item); needs no id
+             * @enum {string}
+             */
+            kind: "drawing" | "cloud" | "photo" | "assumed" | "operator";
             id?: string | null;
+            /** @description the drawing's page, when it has several */
+            page?: number | null;
             region?: number[] | null;
             note?: string | null;
         };
@@ -12550,6 +12717,10 @@ export interface components {
         AssetSpec: {
             asset?: components["schemas"]["AssetInfo"];
             parts?: components["schemas"]["AssetPart"][];
+            /** @description the plant grid; null for a single asset (M1) */
+            site?: components["schemas"]["PlantFrame"] | null;
+            items?: components["schemas"]["AssetItem"][];
+            environment?: components["schemas"]["EnvFeature"][];
         };
         SpecIssue: {
             code: string;
@@ -12573,7 +12744,7 @@ export interface components {
             run_id: string | null;
             note: string | null;
             part_count: number;
-            /** @description `build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]; an `imported` version: source_name, sha256, bytes, node_count, frame_conversion, parts[{node,name,group,extras}] */
+            /** @description `build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]; an `imported` version: source_name, sha256, bytes, node_count, frame_conversion, parts[{node,name,group,extras}]; a spec of over 200 items and environment features adds `validation` {errors, error_count, warnings, warning_count} from the GLB job */
             meta: Record<string, never> | null;
             /** Format: date-time */
             created_at: string;
@@ -12607,7 +12778,7 @@ export interface components {
             provider: components["schemas"]["KeyedProviderName"];
             model_name: string;
             /** @enum {string} */
-            mode: "build" | "refine";
+            mode: "build" | "refine" | "plant" | "plant_package";
             notes: string | null;
             /** @enum {string} */
             state: "running" | "finished" | "stopped" | "failed";
@@ -12631,14 +12802,22 @@ export interface components {
             started_at: string;
             /** Format: date-time */
             ended_at: string | null;
+            /** @description a plant run's package counts; null for build and refine runs */
+            packages?: components["schemas"]["AssetModelRunPackages"] | null;
+            /** @description a plant run's current stage and its use per stage; null for build and refine runs */
+            usage_by_stage?: components["schemas"]["AssetModelRunUsageByStage"] | null;
         };
         AssetModelRunList: {
             items: components["schemas"]["AssetModelRun"][];
         };
         AssetModelRunStart: {
             /** @enum {string} */
-            mode: "build" | "refine";
+            mode: "build" | "refine" | "plant" | "plant_package";
+            /** @description a plant run takes every page, so up to 200 */
             sources: components["schemas"]["AssetSourceRef"][];
+            /** @description `plant_package`: the packages of the model's last plant run to redo */
+            package_ids?: string[];
+            limits?: components["schemas"]["AssetModelRunLimits"];
             provider: components["schemas"]["KeyedProviderName"];
             model_name?: string | null;
             notes?: string | null;
@@ -12646,6 +12825,318 @@ export interface components {
         AssetModelRunWithJob: {
             run: components["schemas"]["AssetModelRun"];
             job: components["schemas"]["Job"];
+        };
+        /**
+         * @description `asset`: one asset made of parts (M1); `plant`: a site of typed items (the plant generator)
+         * @enum {string}
+         */
+        AssetModelKind: "asset" | "plant";
+        PlantCrs: {
+            epsg?: number | null;
+            wkt?: string | null;
+        };
+        /** @description the plant elevation at scene Y = 0 (for example HPFS, EL 100.0) */
+        PlantDatum: {
+            /** @default EL */
+            label: string;
+            /** @default 0 */
+            el_m: number;
+        };
+        /** @description plant EL = cloud z + offset_m (+ tilt · [dx, dy]) */
+        PlantCloudDatum: {
+            cloud_id: string;
+            offset_m: number;
+            tilt?: number[] | null;
+        };
+        /** @description A plant spec's grid (`AssetSpec.site`; `spec.SiteFrame` in the backend). Site CRS from plant: [X, Y] = origin_crs + R(plant_north_deg)·[E, N] with R(θ) = [[cos θ, sin θ], [-sin θ, cos θ]]. Scene and GLB: x = plant N, y = EL - datum.el_m, z = plant E (metres, Y up). */
+        PlantFrame: {
+            crs: components["schemas"]["PlantCrs"];
+            origin_crs: number[];
+            /** @description plant north */
+            plant_north_deg: number;
+            datum?: components["schemas"]["PlantDatum"];
+            cloud_z_to_el?: components["schemas"]["PlantCloudDatum"] | null;
+            source: components["schemas"]["AssetPartSource"];
+        };
+        /** @description [E, N], plant metres */
+        PlantPoint: number[];
+        ItemFootprintRect: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rect";
+            center: components["schemas"]["PlantPoint"];
+            /** @description [along, across] metres; `along` points rot_deg clockwise from plant north */
+            size: number[];
+            /** @default 0 */
+            rot_deg: number;
+        };
+        ItemFootprintCircle: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "circle";
+            center: components["schemas"]["PlantPoint"];
+            d: number;
+        };
+        ItemFootprintPolygon: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "polygon";
+            pts: components["schemas"]["PlantPoint"][];
+        };
+        ItemFootprintLine: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "line";
+            pts: components["schemas"]["PlantPoint"][];
+            width: number;
+        };
+        /** @description an item's plan outline, plant metres */
+        ItemFootprint: components["schemas"]["ItemFootprintRect"] | components["schemas"]["ItemFootprintCircle"] | components["schemas"]["ItemFootprintPolygon"] | components["schemas"]["ItemFootprintLine"];
+        /** @enum {string} */
+        ItemFlagCode: "plan_offset" | "height_mismatch" | "missing_in_cloud" | "unregistered" | "builder_fallback" | "straddles_package";
+        ItemFlag: {
+            code: components["schemas"]["ItemFlagCode"];
+            value?: number | null;
+            note?: string | null;
+        };
+        /** @description One item of a plant spec. Plant metres; `parts` are M1 parts in item-local millimetres (origin at the footprint's reference point at base_el). */
+        AssetItem: {
+            id: string;
+            tag?: string | null;
+            name: string;
+            /** @description a builder type (`getAssetModelCatalogue`), checked by the spec validation, not by this schema */
+            type: string;
+            area?: string | null;
+            footprint: components["schemas"]["ItemFootprint"];
+            base_el?: number | null;
+            top_el?: number | null;
+            levels?: number[];
+            /** @description the type's params, validated by its builder's schema */
+            params?: {
+                [key: string]: unknown;
+            };
+            /**
+             * @default indicative
+             * @enum {string}
+             */
+            height_source: "drawing" | "cloud" | "indicative";
+            source: components["schemas"]["AssetPartSource"];
+            /**
+             * @default medium
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+            flags?: components["schemas"]["ItemFlag"][];
+            parts?: components["schemas"]["AssetPart"][];
+            notes?: string | null;
+        };
+        /** @description a traced piece of the site's environment (land, sea, roads, paving), plant metres */
+        EnvFeature: {
+            id: string;
+            /** @enum {string} */
+            kind: "land" | "sea" | "road" | "paved" | "laydown" | "slope" | "revetment";
+            pts: components["schemas"]["PlantPoint"][];
+            el: number;
+            source: components["schemas"]["AssetPartSource"];
+            /**
+             * @default medium
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+        };
+        /** @description one row of a version's register index; `node` is the item id */
+        AssetItemRow: {
+            node: string;
+            tag: string | null;
+            name: string;
+            type: string;
+            area: string | null;
+            plant_e: number | null;
+            plant_n: number | null;
+            site_x: number | null;
+            site_y: number | null;
+            lon: number | null;
+            lat: number | null;
+            base_el: number | null;
+            top_el: number | null;
+            /** @enum {string} */
+            height_source: "drawing" | "cloud" | "indicative";
+            /** @enum {string} */
+            confidence: "high" | "medium" | "low";
+            flags: components["schemas"]["ItemFlag"][];
+            source_sheet: string | null;
+            has_geometry: boolean;
+        };
+        AssetItemPage: {
+            items: components["schemas"]["AssetItemRow"][];
+            /** @description null on the last page */
+            next_cursor: string | null;
+        };
+        AssetBuilderType: {
+            type: string;
+            /** @enum {string} */
+            family: "structure" | "equipment" | "building" | "civil" | "environment" | "fallback";
+            doc: string;
+            default_height_m: number;
+            /** @description the JSON Schema of the type's params; every param has a default */
+            params_schema: {
+                [key: string]: unknown;
+            };
+        };
+        AssetModelCatalogue: {
+            types: components["schemas"]["AssetBuilderType"][];
+        };
+        /** @description one package of a plant run, a page region traced by one sub-run */
+        SiteModelPackage: {
+            id: string;
+            run_id: string;
+            n: number;
+            label: string;
+            drawing_id: string | null;
+            /** @description [x0, y0, x1, y1] page fractions */
+            region: number[] | null;
+            area: string | null;
+            /** @description tags the equipment list promises here */
+            expected: string[];
+            /** @enum {string} */
+            state: "queued" | "running" | "done" | "failed" | "skipped";
+            attempts: number;
+            usage: {
+                input_tokens: number;
+                output_tokens: number;
+            };
+            item_count: number;
+            summary: string | null;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            ended_at: string | null;
+        };
+        SiteModelPackageList: {
+            items: components["schemas"]["SiteModelPackage"][];
+        };
+        /** @description a plant run's package counts */
+        AssetModelRunPackages: {
+            total: number;
+            done: number;
+            failed: number;
+            running: number;
+        };
+        AssetModelRunStageUsage: {
+            input_tokens: number;
+            output_tokens: number;
+            images: number;
+            calls: number;
+        };
+        /** @description a plant run's stage and use per stage (spec §8.4), summed over the orchestrator and every sub-run */
+        AssetModelRunUsageByStage: {
+            /** @description the stage running now: survey, trace, merge, cloud_check, environment, build or finish */
+            current: string;
+            stages: {
+                [key: string]: components["schemas"]["AssetModelRunStageUsage"];
+            };
+            /** @description from a price table in app code; null when the model has no price */
+            cost_estimate_usd: number | null;
+            /** @description says that the cost is an estimate */
+            cost_label: string;
+        };
+        /** @description a plant run's budget, overriding App settings for this run */
+        AssetModelRunLimits: {
+            max_tokens?: number;
+            max_images?: number;
+            max_seconds?: number;
+            parallel?: number;
+        };
+        DrawingPagesCreate: {
+            inspection_id: string;
+            name: string;
+            /** @description "all", or the 1-based page numbers to import */
+            pages: "all" | number[];
+            /**
+             * @description 150 when absent
+             * @enum {integer}
+             */
+            dpi?: 100 | 150 | 200 | 300;
+            placement: components["schemas"]["DrawingPlacementInput"];
+            /** Format: date */
+            captured_on?: string | null;
+        };
+        DrawingPagesWithJob: {
+            drawings: components["schemas"]["Drawing"][];
+            job: components["schemas"]["Job"];
+        };
+        UnimportedDrawing: {
+            /** @description absolute path */
+            path: string;
+            name: string;
+            /** @enum {string} */
+            format: "pdf" | "dxf" | "tif" | "png" | "jpg" | "landxml";
+            size: number;
+            /** @description a PDF's page count; null for other formats */
+            pages: number | null;
+        };
+        UnimportedDrawingList: {
+            files: components["schemas"]["UnimportedDrawing"][];
+        };
+        SiteSceneFrame: {
+            crs: components["schemas"]["PlantCrs"];
+            origin_crs: number[];
+            plant_north_deg: number;
+            datum: components["schemas"]["PlantDatum"];
+        };
+        SiteSceneModel: {
+            id: string;
+            version: number;
+            glb_url: string;
+            csv_url: string;
+            kind: components["schemas"]["AssetModelKind"];
+        };
+        SiteSceneOrtho: {
+            id: string;
+            name: string;
+            /** @description with {z}, {x} and {y} */
+            tile_url_template: string;
+            bounds_site: number[];
+            min_z: number;
+            max_z: number;
+        };
+        SiteSceneCloud: {
+            id: string;
+            name: string;
+            octree_url: string;
+            crs_epsg: number | null;
+            /** @description false when the cloud cannot be placed in the plant frame */
+            same_crs: boolean;
+            /** @description plant EL - cloud z (the plant's cloud_z_to_el), 0 when unknown */
+            z_offset_m: number;
+        };
+        SiteSceneDrawing: {
+            id: string;
+            name: string;
+            tile_url_template: string;
+            bounds_site: number[];
+        };
+        SiteSceneCount: {
+            count: number;
+            /** @description the paged list to read them from */
+            url: string;
+        };
+        SiteScene: {
+            frame: components["schemas"]["SiteSceneFrame"] | null;
+            model: components["schemas"]["SiteSceneModel"] | null;
+            orthos: components["schemas"]["SiteSceneOrtho"][];
+            clouds: components["schemas"]["SiteSceneCloud"][];
+            drawings: components["schemas"]["SiteSceneDrawing"][];
+            photos: components["schemas"]["SiteSceneCount"];
+            findings: components["schemas"]["SiteSceneCount"];
         };
         /** @description x, y, z in the asset frame: metres, Y up, X plant north, Z plant east */
         AssetVec3: number[];
@@ -15100,6 +15591,7 @@ export interface components {
         assetModelId: string;
         assetModelVersion: number;
         assetModelRunId: string;
+        assetItemId: string;
         sightingId: string;
         brandId: string;
         brandLogoSlot: components["schemas"]["BrandLogoSlot"];
@@ -24507,6 +24999,267 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssetModelItems: {
+        parameters: {
+            query?: {
+                /** @description matches the tag or the name, case-insensitive */
+                q?: string;
+                type?: string;
+                area?: string;
+                /** @description only rows carrying this flag */
+                flag?: components["schemas"]["ItemFlagCode"];
+                /** @description plant metres `e0,n0,e1,n1`: only rows whose plant point is inside */
+                bbox?: string;
+                /** @description the previous page's `next_cursor` */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description one page of the register */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetItemPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a malformed cursor (`code` is `invalid_cursor`) or a box with e1 < e0 or n1 < n0 (`invalid_bbox`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+                itemId: components["parameters"]["assetItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelCsv: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the CSV file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the version's GLB and CSV are still building or failed (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssetModelRunPackages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the packages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteModelPackageList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDrawingPages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingPagesCreate"];
+            };
+        };
+        responses: {
+            /** @description the drawings, queued; the job builds them in page order */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingPagesWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a build from this inspection is already queued (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a page the file does not have, a file that is not a PDF, or PDF support missing (`code` is `invalid_pages` or `pdf_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listUnimportedDrawings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnimportedDrawingList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSiteScene: {
+        parameters: {
+            query?: {
+                /** @description the asset model to open; the newest plant model with a ready GLB when absent */
+                modelId?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the scene manifest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteScene"];
+                };
+            };
+            /** @description the project, or the asset model named by `modelId`, does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelCatalogue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the catalogue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelCatalogue"];
                 };
             };
             default: components["responses"]["Error"];

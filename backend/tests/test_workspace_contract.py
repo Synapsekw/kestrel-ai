@@ -47,6 +47,9 @@ WORKSPACE_OPERATIONS: dict[str, tuple[str, str, str]] = {
     "clearDrawingGeoref": ("delete", DR + "/georef", "M-B3"),
     "getDrawingVectorTile": ("get", DR + "/vtiles/{z}/{x}/{y}", "M-B3"),
     "getDrawingThumbnail": ("get", DR + "/thumbnail", "M-B3"),
+    # I1: G1 plant-model drawing intake (stubs in app/asset_models/stubs_plant.py I1_STUBS)
+    "createDrawingPages": ("post", P + "/drawings/pages", "I1"),
+    "listUnimportedDrawings": ("get", P + "/drawings/unimported", "I1"),
     # M-B4: map measurements and the measurements union (Task 4)
     "listMeasurements": ("get", P + "/measurements", "M-B4"),
     "listMapMeasurements": ("get", P + "/map-measurements", "M-B4"),

@@ -62,6 +62,9 @@ def start_asset_model_run(
     jobs, keys = request.app.state.jobs, request.app.state.keys
     with handle.session() as s:
         model = store.get_model(s, assetModelId)
+        if body.mode in ("plant", "plant_package"):
+            # Plant model F0: the contract has the plant modes; R1 replaces this refusal with the run.
+            raise AppError("plant_run_unavailable", "Plant runs are not available in this build yet.", 422)
         if model.live_run_id:
             live = s.get(AssetModelRun, model.live_run_id)
             if live is not None and jobs.is_live(live.job_id):

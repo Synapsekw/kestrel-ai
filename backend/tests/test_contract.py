@@ -18,6 +18,7 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.asset_models.stubs_plant import stub_operation_ids as plant_stub_operation_ids
 from app.asset_review.stubs import stub_operation_ids as asset_review_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
@@ -110,6 +111,10 @@ EXPECTED_STUBS |= setup_stub_operation_ids()
 # (D1, J1 to J5); D2's module is gone. An owner deletes its tuples; nothing here changes. The last
 # owner of a module deletes the module, its line in app/api.py and its line here.
 EXPECTED_STUBS |= asset_review_stub_operation_ids()
+
+# Plant model (plan 2026-10-03-plant-model-f0): the unit lists of app/asset_models/stubs_plant.py (A1,
+# R1, S1, I1). An owner deletes its tuples; the last one deletes the module, its api.py lines and this.
+EXPECTED_STUBS |= plant_stub_operation_ids()
 
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of

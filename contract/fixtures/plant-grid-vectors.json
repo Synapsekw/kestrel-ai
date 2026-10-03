@@ -1,0 +1,415 @@
+{
+  "source": "KIPIC Al-Zour asset register (Cowork), backend/tests/data/plant/kipic_register.csv",
+  "formula": "X = ox + cos(t)*E + sin(t)*N; Y = oy - sin(t)*E + cos(t)*N; t = plant_north_deg",
+  "scene_formula": "x = N; y = EL - datum.el_m; z = E",
+  "tolerance_m": 0.05,
+  "frame": {
+    "crs": {
+      "epsg": 32639,
+      "wkt": null
+    },
+    "origin_crs": [
+      244338.089,
+      3179515.69
+    ],
+    "plant_north_deg": 17.9991,
+    "datum": {
+      "label": "HPFS",
+      "el_m": 100.0
+    }
+  },
+  "rows": [
+    {
+      "node": "10-A-0003-G-01",
+      "plant_E": 2256.34,
+      "plant_N": 519.32,
+      "site_X": 246644.48,
+      "site_Y": 3179312.38
+    },
+    {
+      "node": "10-LOP-10RCM001",
+      "plant_E": 2358.7,
+      "plant_N": 804.8,
+      "site_X": 246830.04,
+      "site_Y": 3179552.26
+    },
+    {
+      "node": "10-MH-11B11",
+      "plant_E": 2394.2,
+      "plant_N": 666.3,
+      "site_X": 246821.01,
+      "site_Y": 3179409.57
+    },
+    {
+      "node": "10-P-0002",
+      "plant_E": 2434.12,
+      "plant_N": 220.1,
+      "site_X": 246721.1,
+      "site_Y": 3178972.87
+    },
+    {
+      "node": "10-Z-0003A",
+      "plant_E": 2465.37,
+      "plant_N": 283.21,
+      "site_X": 246770.32,
+      "site_Y": 3179023.24
+    },
+    {
+      "node": "catwalk-jetty2-bd1-md4",
+      "plant_E": 2459.54,
+      "plant_N": 196.13,
+      "site_X": 246737.87,
+      "site_Y": 3178942.22
+    },
+    {
+      "node": "jetty1-manifold-structure",
+      "plant_E": 2398.35,
+      "plant_N": 839.67,
+      "site_X": 246878.53,
+      "site_Y": 3179573.17
+    },
+    {
+      "node": "jetty2-md2",
+      "plant_E": 2453.55,
+      "plant_N": 101.01,
+      "site_X": 246702.78,
+      "site_Y": 3178853.6
+    },
+    {
+      "node": "20-A-0009-L-01",
+      "plant_E": 1872.75,
+      "plant_N": 668.9,
+      "site_X": 246325.88,
+      "site_Y": 3179573.17
+    },
+    {
+      "node": "20-A-0062",
+      "plant_E": 1437.2,
+      "plant_N": 324.5,
+      "site_X": 245805.23,
+      "site_Y": 3179380.21
+    },
+    {
+      "node": "20-HEF-003",
+      "plant_E": 1399.4,
+      "plant_N": 422.3,
+      "site_X": 245799.5,
+      "site_Y": 3179484.91
+    },
+    {
+      "node": "20-P-0004-future",
+      "plant_E": 1777.51,
+      "plant_N": 535.76,
+      "site_X": 246194.16,
+      "site_Y": 3179475.98
+    },
+    {
+      "node": "20-P-0008B",
+      "plant_E": 1707.09,
+      "plant_N": 395.99,
+      "site_X": 246084.0,
+      "site_Y": 3179364.81
+    },
+    {
+      "node": "20-TC-05",
+      "plant_E": 1373.4,
+      "plant_N": 504.6,
+      "site_X": 245800.2,
+      "site_Y": 3179571.21
+    },
+    {
+      "node": "20-t-0003-pump-platform",
+      "plant_E": 1617.55,
+      "plant_N": 531.69,
+      "site_X": 246040.77,
+      "site_Y": 3179521.54
+    },
+    {
+      "node": "20-t-0006-instrument-platform",
+      "plant_E": 1404.46,
+      "plant_N": 366.81,
+      "site_X": 245787.16,
+      "site_Y": 3179430.57
+    },
+    {
+      "node": "overbridge-a",
+      "plant_E": 1311.1,
+      "plant_N": 488.7,
+      "site_X": 245736.03,
+      "site_Y": 3179575.34
+    },
+    {
+      "node": "30-HEG-001",
+      "plant_E": 1171.4,
+      "plant_N": 367.5,
+      "site_X": 245565.72,
+      "site_Y": 3179503.24
+    },
+    {
+      "node": "30-PR-001",
+      "plant_E": 1119.25,
+      "plant_N": 393.5,
+      "site_X": 245524.16,
+      "site_Y": 3179544.08
+    },
+    {
+      "node": "30-V-0002J",
+      "plant_E": 1118.29,
+      "plant_N": 436.35,
+      "site_X": 245536.48,
+      "site_Y": 3179585.13
+    },
+    {
+      "node": "40-DCP-003",
+      "plant_E": 1168.75,
+      "plant_N": 504.45,
+      "site_X": 245605.52,
+      "site_Y": 3179634.31
+    },
+    {
+      "node": "40-V-0001",
+      "plant_E": 1109.75,
+      "plant_N": 481.6,
+      "site_X": 245542.34,
+      "site_Y": 3179630.81
+    },
+    {
+      "node": "50-A-0002-A-06B",
+      "plant_E": 909.08,
+      "plant_N": 599.7,
+      "site_X": 245387.99,
+      "site_Y": 3179805.13
+    },
+    {
+      "node": "50-AC-002",
+      "plant_E": 1149.2,
+      "plant_N": 315.25,
+      "site_X": 245528.46,
+      "site_Y": 3179460.41
+    },
+    {
+      "node": "50-F-0001A-plat",
+      "plant_E": 1090.45,
+      "plant_N": 321.5,
+      "site_X": 245474.52,
+      "site_Y": 3179484.5
+    },
+    {
+      "node": "50-P-0001D",
+      "plant_E": 922.33,
+      "plant_N": 562.9,
+      "site_X": 245389.22,
+      "site_Y": 3179766.04
+    },
+    {
+      "node": "50-T-0002H",
+      "plant_E": 954.95,
+      "plant_N": 471.5,
+      "site_X": 245392.0,
+      "site_Y": 3179669.03
+    },
+    {
+      "node": "orv-ps-1",
+      "plant_E": 1060.05,
+      "plant_N": 344.4,
+      "site_X": 245452.68,
+      "site_Y": 3179515.68
+    },
+    {
+      "node": "70-A-0002",
+      "plant_E": 933.25,
+      "plant_N": 418.65,
+      "site_X": 245355.03,
+      "site_Y": 3179625.48
+    },
+    {
+      "node": "70-A-0016",
+      "plant_E": 930.75,
+      "plant_N": 428.5,
+      "site_X": 245355.7,
+      "site_Y": 3179635.62
+    },
+    {
+      "node": "70-P-0005C-V-01",
+      "plant_E": 876.98,
+      "plant_N": 571.5,
+      "site_X": 245348.75,
+      "site_Y": 3179788.23
+    },
+    {
+      "node": "70-SS-01-tx-n1",
+      "plant_E": 878.15,
+      "plant_N": 366.45,
+      "site_X": 245286.5,
+      "site_Y": 3179592.86
+    },
+    {
+      "node": "70-V-0001",
+      "plant_E": 929.75,
+      "plant_N": 450.3,
+      "site_X": 245361.48,
+      "site_Y": 3179656.66
+    },
+    {
+      "node": "vessel-util-hz",
+      "plant_E": 931.9,
+      "plant_N": 439.75,
+      "site_X": 245360.27,
+      "site_Y": 3179645.96
+    },
+    {
+      "node": "rack-loop-j1-2",
+      "plant_E": 2355.84,
+      "plant_N": 714.55,
+      "site_X": 246799.43,
+      "site_Y": 3179467.31
+    },
+    {
+      "node": "sleeper-n-c-1",
+      "plant_E": 1015.25,
+      "plant_N": 689.05,
+      "site_X": 245516.57,
+      "site_Y": 3179857.3
+    },
+    {
+      "node": "20-t-0001-ring-road",
+      "plant_E": 1301.1,
+      "plant_N": 555.4,
+      "site_X": 245747.13,
+      "site_Y": 3179641.87
+    },
+    {
+      "node": "20-t-0005-laydown-crane",
+      "plant_E": 1288.43,
+      "plant_N": 315.63,
+      "site_X": 245660.99,
+      "site_Y": 3179417.75
+    },
+    {
+      "node": "40-V-pad",
+      "plant_E": 1112.9,
+      "plant_N": 480.8,
+      "site_X": 245545.09,
+      "site_Y": 3179629.07
+    },
+    {
+      "node": "access-n594",
+      "plant_E": 1098.0,
+      "plant_N": 594.55,
+      "site_X": 245566.07,
+      "site_Y": 3179741.86
+    },
+    {
+      "node": "breakwater-sw",
+      "plant_E": 866.6,
+      "plant_N": 185.26,
+      "site_X": 245219.52,
+      "site_Y": 3179424.11
+    },
+    {
+      "node": "fence-n-outer",
+      "plant_E": 1101.5,
+      "plant_N": 663.7,
+      "site_X": 245590.77,
+      "site_Y": 3179806.54
+    },
+    {
+      "node": "jetty2-ditch",
+      "plant_E": 2447.1,
+      "plant_N": 236.95,
+      "site_X": 246738.65,
+      "site_Y": 3178984.89
+    },
+    {
+      "node": "overbridge-c-pad",
+      "plant_E": 1598.8,
+      "plant_N": 485.0,
+      "site_X": 246008.51,
+      "site_Y": 3179482.92
+    },
+    {
+      "node": "paved-intake-e",
+      "plant_E": 976.0,
+      "plant_N": 571.25,
+      "site_X": 245442.84,
+      "site_Y": 3179757.4
+    },
+    {
+      "node": "road-e660",
+      "plant_E": 691.3,
+      "plant_N": 453.01,
+      "site_X": 245135.54,
+      "site_Y": 3179732.92
+    },
+    {
+      "node": "road-n536",
+      "plant_E": 925.5,
+      "plant_N": 535.75,
+      "site_X": 245383.84,
+      "site_Y": 3179739.24
+    },
+    {
+      "node": "slope-south",
+      "plant_E": 1568.96,
+      "plant_N": 250.93,
+      "site_X": 245907.8,
+      "site_Y": 3179269.52
+    },
+    {
+      "node": "trench-tc05",
+      "plant_E": 1364.61,
+      "plant_N": 493.79,
+      "site_X": 245788.5,
+      "site_Y": 3179563.64
+    },
+    {
+      "node": "wwt-paving",
+      "plant_E": 911.5,
+      "plant_N": 275.25,
+      "site_X": 245290.03,
+      "site_Y": 3179495.81
+    }
+  ],
+  "scene": [
+    {
+      "plant_E": 2256.34,
+      "plant_N": 519.32,
+      "el": 104.5,
+      "x": 519.32,
+      "y": 4.5,
+      "z": 2256.34
+    },
+    {
+      "plant_E": 2358.7,
+      "plant_N": 804.8,
+      "el": 104.5,
+      "x": 804.8,
+      "y": 4.5,
+      "z": 2358.7
+    },
+    {
+      "plant_E": 2394.2,
+      "plant_N": 666.3,
+      "el": 104.5,
+      "x": 666.3,
+      "y": 4.5,
+      "z": 2394.2
+    },
+    {
+      "plant_E": 2434.12,
+      "plant_N": 220.1,
+      "el": 104.5,
+      "x": 220.1,
+      "y": 4.5,
+      "z": 2434.12
+    },
+    {
+      "plant_E": 2465.37,
+      "plant_N": 283.21,
+      "el": 104.5,
+      "x": 283.21,
+      "y": 4.5,
+      "z": 2465.37
+    }
+  ]
+}

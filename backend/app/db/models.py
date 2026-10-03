@@ -909,6 +909,8 @@ class AssetModel(Base):
     # app.asset_review.frame.Frame and app.asset_review.profiles.ReviewConfig, stored as their dumps.
     frame: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     review: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    # Plant model (spec 2026-10-03-plant-model-generator §9, migration 0017): asset | plant, no CHECK.
+    kind: Mapped[str] = mapped_column(String, default="asset", server_default="asset")
     __table_args__ = (Index("ix_asset_model_created", "created_at", "id"),)
 
 
@@ -1047,6 +1049,71 @@ class FindingSighting(Base):
         Index("ix_finding_sighting_finding", "finding_id", "created_at"),
         Index("ix_finding_sighting_image", "image_id"),
         Index("ix_finding_sighting_model", "asset_model_id", "finding_id"),
+    )
+
+
+class AssetItem(Base):
+    """One row of a plant version's register (spec 2026-10-03-plant-model-generator §9, migration
+    0017). Written by the GLB job from the spec, so it is an index: the spec stays the source. `node`
+    is the item id (the GLB node name)."""
+
+    __tablename__ = "asset_item"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    model_id: Mapped[str] = mapped_column(String(36), ForeignKey("asset_model.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    node: Mapped[str] = mapped_column(String)
+    tag: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String)
+    type: Mapped[str] = mapped_column(String)
+    area: Mapped[str | None] = mapped_column(String, nullable=True)
+    plant_e: Mapped[float | None] = mapped_column(Float, nullable=True)
+    plant_n: Mapped[float | None] = mapped_column(Float, nullable=True)
+    site_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    site_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    base_el: Mapped[float | None] = mapped_column(Float, nullable=True)
+    top_el: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height_source: Mapped[str] = mapped_column(String)  # drawing | cloud | indicative
+    confidence: Mapped[str] = mapped_column(String)  # high | medium | low
+    flags: Mapped[list] = mapped_column(JSON, default=list)  # [{code, value, note}]
+    source_sheet: Mapped[str | None] = mapped_column(String, nullable=True)
+    has_geometry: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (
+        Index("ix_asset_item_version", "model_id", "version"),
+        Index("ix_asset_item_tag", "model_id", "version", "tag"),
+        Index("ix_asset_item_type", "model_id", "version", "type"),
+    )
+
+
+SITE_MODEL_PACKAGE_STATE_CHECK = "state IN ('queued', 'running', 'done', 'failed', 'skipped')"
+
+
+class SiteModelPackage(Base):
+    """One package of a plant run: a page region traced by one sub-run (spec §8.2, migration 0017).
+    `items` holds the package's draft items (Item dumps) once it is done, so a restarted run resumes
+    after the last done package; `attempts` counts starts, so a package interrupted twice is failed."""
+
+    __tablename__ = "site_model_package"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("asset_model_run.id", ondelete="CASCADE"))
+    n: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String)
+    drawing_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # no FK: drawings come and go
+    region: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [x0, y0, x1, y1] page fractions
+    area: Mapped[str | None] = mapped_column(String, nullable=True)
+    expected: Mapped[list] = mapped_column(JSON, default=list)  # tags from the equipment list
+    state: Mapped[str] = mapped_column(String, default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    usage: Mapped[dict] = mapped_column(JSON, default=lambda: {"input_tokens": 0, "output_tokens": 0})
+    item_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    items: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    summary: Mapped[str | None] = mapped_column(String, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    __table_args__ = (
+        CheckConstraint(SITE_MODEL_PACKAGE_STATE_CHECK, name="ck_site_model_package_state"),
+        Index("ux_site_model_package_run_n", "run_id", "n", unique=True),
     )
 
 
