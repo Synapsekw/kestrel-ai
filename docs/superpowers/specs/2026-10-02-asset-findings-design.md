@@ -573,3 +573,22 @@ New report tests cover:
   fast path.
 - **Grouping with operator edits** is the subtlest rule in the spec (§6.4). It gets its own review
   focus at close-out.
+
+## 14. Amendments made while planning (2026-10-03)
+
+The implementation plan index (`docs/superpowers/plans/2026-10-03-asset-findings.md`, "Spec amendments made while planning") is authoritative where it differs from this spec.
+
+**Paths, data model and import**
+- Action paths are slash verbs (`/findings/{id}/merge`), not `:verb`.
+- **`finding_sighting` has its own `asset_model_id`, and `finding_id` is nullable.** Ungrouped sightings exist until grouping runs.
+- **Migration 0016 rebuilds `finding` with foreign keys off,** behind a guard, and writes its own backup.
+- The GLB is rewritten once, on import, to add the frame root node; it is never rewritten after that (§5.2).
+- **Brand logos are app-level files,** not report assets (§5.8). Fonts are the bundled families only.
+
+**Photo review status and grouping**
+- **Photo review status has one effective rule:** the review row's status, else `none` when the photo is marked empty, else `not_assessed`. The GET and the filter share it.
+- **The photo unit groups by photo and defect type,** never by distance. EBSM masks give one sighting per region (at least 0.02% of the photo, at most 50 per photo).
+
+**Placement and acceptance**
+- **Ray casting is a numpy caster** (`app.asset_review.raycast`). `rtree` is not installed, so trimesh's ray engine is not used (§6.3, §13).
+- **Synthetic placement accuracy is judged per finding:** the median of its pins must be within 0.25 m of the truth (§12).
