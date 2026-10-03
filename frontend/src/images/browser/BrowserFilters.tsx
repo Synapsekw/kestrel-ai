@@ -24,11 +24,13 @@ import {
 } from "@/ui";
 import {
   moreFilterCount,
+  REVIEW_LABEL,
   SORT_LABEL,
   toggleSeverity,
   type BrowserFilterState,
   type BrowserSort,
   type FindingStatusFilter,
+  type ReviewStatusFilter,
   type TriState,
 } from "./filters";
 import type { ImageIndexState } from "./useImageIndex";
@@ -125,6 +127,8 @@ function SearchField({ value, onCommit }: { value: string; onCommit: (v: string)
 }
 
 /** Spec §6.1: flight, has findings + status, severity chips, and "More". */
+const REVIEW_OPTIONS = Object.keys(REVIEW_LABEL) as ReviewStatusFilter[];
+
 export function BrowserFilters({ projectId, value, onChange, index }: BrowserFiltersProps) {
   const sources = useSources(projectId);
   const { all: types } = useProjectTypes(projectId);
@@ -229,6 +233,18 @@ export function BrowserFilters({ projectId, value, onChange, index }: BrowserFil
             ]}
           />
           <Switch label="Unlabeled" checked={value.unlabeled} onChange={(v) => set({ unlabeled: v })} />
+          <Select
+            dense
+            aria-label="Photo review"
+            value={value.reviewStatus}
+            onChange={(e) => set({ reviewStatus: e.target.value as ReviewStatusFilter })}
+          >
+            {REVIEW_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {REVIEW_LABEL[r]}
+              </option>
+            ))}
+          </Select>
           {types.length > 0 && (
             <fieldset className="flex max-h-40 flex-col gap-1 overflow-auto">
               <legend className="mb-1 text-2xs text-muted">Types</legend>

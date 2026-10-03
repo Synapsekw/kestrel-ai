@@ -55,6 +55,13 @@ describe("BrowserFilters", () => {
     expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_BROWSER_FILTERS, sourceId: SOURCE_ID });
   });
 
+  it("filters by photo review status from More", () => {
+    const { onChange } = renderFilters();
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Photo review" }), { target: { value: "uncertain" } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_BROWSER_FILTERS, reviewStatus: "uncertain" });
+  });
+
   it("has findings and the finding status", () => {
     const { onChange } = renderFilters();
     fireEvent.click(screen.getByRole("switch", { name: "Has findings" }));

@@ -253,6 +253,12 @@ describe("ImagesWorkspace", () => {
     expect(h.lastFilters).toHaveBeenLastCalledWith(expect.objectContaining({ sourceId: "s1" }));
   });
 
+  it("?review= (the register's outcome chips) becomes the photo review filter and is dropped", async () => {
+    mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}?review=uncertain`);
+    await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+    expect(h.lastFilters).toHaveBeenLastCalledWith(expect.objectContaining({ reviewStatus: "uncertain" }));
+  });
+
   it("next-image moves without remounting the panes", async () => {
     mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
     const pane = screen.getByRole("region", { name: "Image browser" });
