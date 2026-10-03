@@ -111,6 +111,27 @@ export async function loadGlb(url: string): Promise<THREE.Object3D> {
   return (await glbLoader().loadAsync(url)).scene;
 }
 
+/** Disposes a material's textures (map, normalMap, ...), which `Material.dispose` leaves alone. */
+function disposeTextures(mat: THREE.Material): void {
+  for (const v of Object.values(mat))
+    if ((v as THREE.Texture | null)?.isTexture) (v as THREE.Texture).dispose();
+}
+
+/** Removes `o` from its parent and releases its geometries, materials and their textures. */
+function disposeTree(o: THREE.Object3D): void {
+  o.removeFromParent();
+  const mats = new Set<THREE.Material>();
+  o.traverse((c) => {
+    const d = c as THREE.Mesh;
+    if (d.geometry) d.geometry.dispose();
+    if (d.material) materialsOf(d).forEach((m) => mats.add(m));
+  });
+  for (const m of mats) {
+    disposeTextures(m);
+    m.dispose();
+  }
+}
+
 function meshesOf(node: THREE.Object3D): THREE.Mesh[] {
   const out: THREE.Mesh[] = [];
   node.traverse((c) => {
@@ -166,22 +187,26 @@ export class ModelLayer implements SiteLayer {
       resolve: (o) => this.resolve(o),
       accepts: (p) => this.cutY === null || p.y <= this.cutY + 1e-6,
     });
+    this.offSelect?.();
     this.offSelect = e.onSelect((hit: PickHit | null) =>
       this.highlight(hit && hit.layerId === this.id ? hit.itemId : null),
     );
     const seq = ++this.seq;
+    let info: ModelLoadInfo;
     try {
       const scene = await (this.opts.loader ?? loadGlb)(this.opts.url);
       if (seq !== this.seq || this.engine !== e) {
-        const orphan = new THREE.Group();
-        orphan.add(scene);
-        disposeChildren(orphan);
+        disposeTree(scene);
         return;
       }
-      this.opts.onLoad?.(this.adopt(scene));
+      // Not `onLoad?.(this.adopt(scene))`: an optional call skips its arguments, so without onLoad
+      // the model would never be adopted.
+      info = this.adopt(scene);
     } catch (err) {
       if (seq === this.seq) this.opts.onError?.(err);
+      return;
     }
+    this.opts.onLoad?.(info); // outside the try: a consumer's exception is not a load error
   }
 
   /** Takes a parsed scene as the model (the load path, and tests). */
@@ -258,6 +283,7 @@ export class ModelLayer implements SiteLayer {
     this.cutY = y;
     if (y !== null) this.cutPlane.constant = y;
     this.applyMaterialState();
+    this.applyHelperCut();
   }
 
   setColourBy(mode: ColourBy): void {
@@ -341,19 +367,32 @@ export class ModelLayer implements SiteLayer {
         ms.some((m) => (m as THREE.InstancedMesh).isInstancedMesh) ||
         ms.reduce((n, m) => n + triangles(m), 0) > OUTLINE_MAX_TRIANGLES;
       if (heavy) {
-        this.addHelper(new THREE.Box3Helper(new THREE.Box3().setFromObject(it.node), colour));
+        const box = new THREE.Box3Helper(new THREE.Box3().setFromObject(it.node), colour);
+        box.raycast = () => {};
+        this.addHelper(box);
       } else {
         for (const m of ms) {
           const line = new THREE.LineSegments(
             new THREE.EdgesGeometry(m.geometry, 30),
             new THREE.LineBasicMaterial({ color: colour, depthTest: false, transparent: true }),
           );
+          line.raycast = () => {};
           line.matrixAutoUpdate = false;
           line.matrix.copy(m.matrixWorld);
           this.addHelper(line);
         }
       }
     }
+    this.applyHelperCut();
+    this.engine?.requestRender();
+  }
+
+  /** The outline is cut with the model, so it never draws what the cut hides. */
+  private applyHelperCut(): void {
+    this.helpers.traverse((c) => {
+      const mat = (c as THREE.LineSegments).material as THREE.Material | undefined;
+      if (mat && !Array.isArray(mat)) mat.clippingPlanes = this.cutY === null ? null : [this.cutPlane];
+    });
     this.engine?.requestRender();
   }
 
@@ -366,7 +405,7 @@ export class ModelLayer implements SiteLayer {
   private clearModel(): void {
     for (const [mesh, original] of this.originals) mesh.material = original; // dispose the real ones
     disposeChildren(this.helpers);
-    disposeChildren(this.root);
+    for (const child of [...this.root.children]) disposeTree(child);
     for (const m of this.colourMats.values()) m.dispose();
     this.colourMats.clear();
     this.items = [];

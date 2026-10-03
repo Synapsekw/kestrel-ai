@@ -53,7 +53,9 @@ function engine() {
     clearPresets: vi.fn(),
     onSelect: vi.fn((cb: (h: PickHit | null) => void) => {
       listener = cb;
-      return () => (listener = null);
+      return () => {
+        listener = null;
+      };
     }),
     emit: (h: PickHit | null) => listener?.(h),
     pickable: () => pickable!,
@@ -212,5 +214,102 @@ describe("ModelLayer", () => {
     layer.setVisible(false);
     expect(layer.root.visible).toBe(false);
     expect(layer.helpers.visible).toBe(false);
+  });
+});
+
+describe("ModelLayer lifecycle (fix round 1)", () => {
+  it("detach disposes geometry, material and the material's textures", async () => {
+    const scene = plant();
+    const mesh = meshes({ root: scene } as unknown as ModelLayer)[0];
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    mat.map = new THREE.Texture();
+    mat.normalMap = new THREE.Texture();
+    const spies = [
+      vi.spyOn(mesh.geometry, "dispose"),
+      vi.spyOn(mat, "dispose"),
+      vi.spyOn(mat.map, "dispose"),
+      vi.spyOn(mat.normalMap, "dispose"),
+    ];
+    const { layer } = await loaded(scene);
+    layer.setColourBy("type"); // the originals must still be the ones disposed
+    layer.detach();
+    for (const s of spies) expect(s).toHaveBeenCalled();
+  });
+
+  it("a load that ends after detach disposes the orphan's textures", async () => {
+    let finish: (o: THREE.Object3D) => void = () => {};
+    const slow = createModelLayer({ url: "x", loader: () => new Promise((r) => (finish = r)) });
+    const pending = slow.attach(engine());
+    slow.detach();
+    const scene = plant();
+    const mat = meshes({ root: scene } as unknown as ModelLayer)[0].material as THREE.MeshStandardMaterial;
+    mat.map = new THREE.Texture();
+    const spy = vi.spyOn(mat.map, "dispose");
+    finish(scene);
+    await pending;
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("emitting null clears the outline", async () => {
+    const { e, layer } = await loaded();
+    e.emit({ layerId: "model", itemId: "rack.1", point: [0, 0, 0], extras: {} });
+    expect(layer.helpers.children.length).toBeGreaterThan(0);
+    e.emit(null);
+    expect(layer.helpers.children).toHaveLength(0);
+  });
+
+  it("an item with an instanced mesh is outlined by its bounding box", async () => {
+    const scene = plant();
+    const node = scene.children[1]; // b-1
+    node.add(new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial(), 4));
+    const { e, layer } = await loaded(scene);
+    e.emit({ layerId: "model", itemId: "b-1", point: [0, 0, 0], extras: {} });
+    expect(layer.helpers.children).toHaveLength(1);
+    expect(layer.helpers.children[0]).toBeInstanceOf(THREE.Box3Helper);
+  });
+
+  it("the outline follows the cut", async () => {
+    const { e, layer } = await loaded();
+    e.emit({ layerId: "model", itemId: "rack.1", point: [0, 0, 0], extras: {} });
+    layer.setCut(1.5);
+    const lineMats = () =>
+      layer.helpers.children.map((c) => (c as THREE.LineSegments).material as THREE.Material);
+    expect(lineMats().length).toBeGreaterThan(0);
+    for (const m of lineMats()) expect(m.clippingPlanes?.[0].constant).toBe(1.5);
+    layer.setCut(null);
+    for (const m of lineMats()) expect(m.clippingPlanes ?? null).toBeNull();
+  });
+
+  it("a second attach keeps one select listener", async () => {
+    const e = engine();
+    const live = new Set<unknown>();
+    e.onSelect.mockImplementation((cb: (h: PickHit | null) => void) => {
+      live.add(cb);
+      return () => {
+        live.delete(cb);
+      };
+    });
+    const layer = createModelLayer({ url: "x", loader: async () => plant() });
+    await layer.attach(e);
+    await layer.attach(e);
+    expect(e.onSelect).toHaveBeenCalledTimes(2);
+    expect(live.size).toBe(1);
+    expect(layer.itemIds()).toEqual(["20-t-0001", "rack.1", "b-1"]); // adopted without an onLoad
+    layer.detach();
+    expect(live.size).toBe(0);
+  });
+
+  it("an onLoad exception is not reported as a load error", async () => {
+    const onError = vi.fn();
+    const layer = createModelLayer({
+      url: "x",
+      loader: async () => plant(),
+      onLoad: () => {
+        throw new Error("consumer");
+      },
+      onError,
+    });
+    await expect(layer.attach(engine())).rejects.toThrow("consumer");
+    expect(onError).not.toHaveBeenCalled();
   });
 });
