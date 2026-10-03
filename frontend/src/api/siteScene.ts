@@ -58,6 +58,10 @@ export async function getSiteScene(
   );
 }
 
+/** Register page size: well under the contract's 500-row cap, a few screens of 44 px rows. */
+export const ITEMS_PAGE = 200;
+
+/** One cursor page of a version's register; blank filters are left out, `limit` defaults to ITEMS_PAGE. */
 export async function listAssetItems(
   api: ApiClient,
   projectId: string,
@@ -65,9 +69,19 @@ export async function listAssetItems(
   version: number,
   filters: ItemFilters = {},
   cursor?: string | null,
+  signal?: AbortSignal,
 ): Promise<AssetItemPage> {
-  const query: ItemsQuery = { ...filters, ...(cursor ? { cursor } : {}) };
-  return unwrap(api.GET(ITEMS, { params: { path: { projectId, assetModelId, version }, query } }));
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(filters)) {
+    const t = typeof v === "string" ? v.trim() : v;
+    if (t !== undefined && t !== null && t !== "") clean[k] = t;
+  }
+  const query = {
+    ...clean,
+    limit: filters.limit ?? ITEMS_PAGE,
+    ...(cursor ? { cursor } : {}),
+  } as ItemsQuery;
+  return unwrap(api.GET(ITEMS, { params: { path: { projectId, assetModelId, version }, query }, signal }));
 }
 
 export async function getAssetItem(

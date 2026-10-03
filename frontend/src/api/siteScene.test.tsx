@@ -125,7 +125,7 @@ describe("siteScene api", () => {
     act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.items?.map((i) => i.node)).toEqual(["a", "b"]));
     expect(result.current.hasMore).toBe(false);
-    expect(requests[0].url).toBe("/api/v1/projects/p1/asset-models/m1/versions/2/items?q=tank");
+    expect(requests[0].url).toBe("/api/v1/projects/p1/asset-models/m1/versions/2/items?q=tank&limit=200");
   });
 
   it("useAssetItems fetches the new filters when they change while a request is pending", async () => {
