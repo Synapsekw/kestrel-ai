@@ -55,7 +55,14 @@ def largest_polygon(geom) -> Polygon:
     """The biggest polygon of a (possibly invalid) geometry, exterior counter-clockwise in (x, z)."""
     if not geom.is_valid:
         geom = make_valid(geom)
-    polys = [g for g in getattr(geom, "geoms", [geom]) if isinstance(g, Polygon) and g.area > 1e-6]
+    polys, todo = [], [geom]
+    while todo:  # make_valid can nest: GeometryCollection[MultiPolygon, LineString, ...]
+        g = todo.pop()
+        if isinstance(g, Polygon):
+            if g.area > 1e-6:
+                polys.append(g)
+        else:
+            todo.extend(getattr(g, "geoms", []))
     if not polys:
         raise ValueError("footprint has no area")
     best = max(polys, key=lambda p: (p.area, p.bounds))

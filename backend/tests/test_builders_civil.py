@@ -180,3 +180,9 @@ def test_outline_of_a_line_is_buffered_by_its_width_with_flat_ends():
     )
     assert poly.area == pytest.approx(40.0)
     assert poly.bounds == pytest.approx((-2.0, -5.0, 2.0, 5.0))  # (x=N, z=E) around the line's centroid
+
+
+def test_largest_polygon_repairs_a_bow_tie_with_a_spike():
+    # make_valid gives GeometryCollection[MultiPolygon, LineString]: the polygons are one level down
+    poly = civil.largest_polygon(Polygon([(0, 0), (10, 10), (10, 0), (0, 10), (0, 5), (-5, 5), (0, 5)]))
+    assert poly.is_valid and poly.area == pytest.approx(25.0)
