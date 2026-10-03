@@ -4486,7 +4486,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The photo's review status. An image never reviewed answers `not_assessed` with `updated_at` null. */
+        /** The photo's effective review status: the review row's status, else `none` when the photo is marked empty, else `not_assessed` (with `updated_at` null when there is no review row). */
         get: operations["getImageReview"];
         /**
          * Set the photo's review status. `none` also marks the image empty (`Image.marked_empty`) and
@@ -11020,7 +11020,7 @@ export interface components {
             /** @description null for `images`: the client reads the newest frames */
             id: string | null;
         };
-        /** @description photos by review status (asset findings spec §5.4); a photo never reviewed is not counted */
+        /** @description photos by effective review status (asset findings spec §5.4): the review row's status, else `none` when the photo is marked empty, else `not_assessed` */
         PhotoReviewCounts: {
             finding: number;
             none: number;
@@ -15104,7 +15104,7 @@ export interface components {
         assetPageAfter: string;
         /** @description at most 2000 rows a page; 500 when absent */
         assetPageLimit: number;
-        /** @description comma-separated photo review statuses (asset findings spec §5.4); `not_assessed` also matches a photo with no review status yet */
+        /** @description comma-separated photo review statuses (asset findings spec §5.4), matched against the effective status: the review row's status, else `none` when the photo is marked empty, else `not_assessed` */
         imageReviewStatus: string;
         sourceId: string;
         imageId: string;
@@ -16054,7 +16054,7 @@ export interface operations {
                 reviewed?: components["parameters"]["imageReviewed"];
                 /** @description true = no ground truth and not marked empty (the same test as `labeled=false`) */
                 unlabeled?: components["parameters"]["imageUnlabeled"];
-                /** @description comma-separated photo review statuses (asset findings spec §5.4); `not_assessed` also matches a photo with no review status yet */
+                /** @description comma-separated photo review statuses (asset findings spec §5.4), matched against the effective status: the review row's status, else `none` when the photo is marked empty, else `not_assessed` */
                 review_status?: components["parameters"]["imageReviewStatus"];
                 /** @description case-insensitive substring of the image path */
                 search?: string;
@@ -24145,7 +24145,10 @@ export interface operations {
     getPlacementMesh: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description the ETag from a previous answer; a match answers 304 */
+                "If-None-Match"?: string;
+            };
             path: {
                 projectId: components["parameters"]["projectId"];
                 assetModelId: components["parameters"]["assetModelId"];
@@ -24155,7 +24158,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description little-endian Float32: n positions (x, y, z in the asset frame, metres), then n uvs (u, v); n is the byte length over 20; every three vertices are one triangle */
+            /** @description a little-endian uint32 vertex count n, then n x 3 Float32 positions (x, y, z in the asset frame, metres), then n x 2 Float32 uvs (u, v); every three vertices are one triangle */
             200: {
                 headers: {
                     /** @description the placement's version and sighting; send it back as `If-None-Match` */
@@ -24180,7 +24183,10 @@ export interface operations {
     getPlacementTexture: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description the ETag from a previous answer; a match answers 304 */
+                "If-None-Match"?: string;
+            };
             path: {
                 projectId: components["parameters"]["projectId"];
                 assetModelId: components["parameters"]["assetModelId"];
@@ -24215,7 +24221,10 @@ export interface operations {
     getPlacementLabels: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description the ETag from a previous answer; a match answers 304 */
+                "If-None-Match"?: string;
+            };
             path: {
                 projectId: components["parameters"]["projectId"];
                 assetModelId: components["parameters"]["assetModelId"];
@@ -24433,6 +24442,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description `none` was requested while the photo has accepted boxes (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

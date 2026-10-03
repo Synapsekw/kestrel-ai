@@ -168,7 +168,9 @@ def test_the_two_tags_hold_exactly_these_operations(spec):
 )
 def test_long_work_answers_a_job_and_refuses_a_second_one(spec, op_id, schema):
     responses = _operations(spec)[op_id][2]["responses"]
-    assert responses["202"]["content"]["application/json"]["schema"] == {"$ref": f"#/components/schemas/{schema}"}
+    assert responses["202"]["content"]["application/json"]["schema"] == {
+        "$ref": f"#/components/schemas/{schema}"
+    }
     assert "job_running" in responses["409"]["description"], op_id
 
 
@@ -221,7 +223,9 @@ def test_the_review_import_preview_is_a_job_result_spectral_allows(spec):
 def test_a_finding_anchor_takes_the_asset_kind(spec):
     s = _schemas(spec)
     assert s["FindingAnchorKind"]["enum"] == ["image", "map", "cloud", "asset"]
-    assert s["FindingAnchor"]["discriminator"]["mapping"]["asset"] == "#/components/schemas/FindingAssetAnchor"
+    assert (
+        s["FindingAnchor"]["discriminator"]["mapping"]["asset"] == "#/components/schemas/FindingAssetAnchor"
+    )
     assert (
         s["FindingAnchorInput"]["discriminator"]["mapping"]["asset"]
         == "#/components/schemas/FindingAssetAnchorInput"
@@ -285,7 +289,13 @@ def test_the_image_index_filters_by_review_status(spec):
 
 def test_the_overview_hero_can_be_an_asset_model_and_counts_photo_reviews(spec):
     s = _schemas(spec)
-    assert s["OverviewHero"]["properties"]["kind"]["enum"] == ["asset_model", "map", "point_cloud", "images", "drawing"]
+    assert s["OverviewHero"]["properties"]["kind"]["enum"] == [
+        "asset_model",
+        "map",
+        "point_cloud",
+        "images",
+        "drawing",
+    ]
     assert "photo_review" in s["ProjectOverview"]["properties"]
     assert "photo_review" not in s["ProjectOverview"]["required"]
     assert s["PhotoReviewCounts"]["required"] == ["finding", "none", "uncertain", "not_assessed"]

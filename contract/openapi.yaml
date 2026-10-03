@@ -5929,9 +5929,15 @@ paths:
       tags: [assetreview]
       operationId: getPlacementMesh
       summary: A patch's triangles.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: the ETag from a previous answer; a match answers 304
+          schema: { type: string }
       responses:
         "200":
-          description: "little-endian Float32: n positions (x, y, z in the asset frame, metres), then n uvs (u, v); n is the byte length over 20; every three vertices are one triangle"
+          description: "a little-endian uint32 vertex count n, then n x 3 Float32 positions (x, y, z in the asset frame, metres), then n x 2 Float32 uvs (u, v); every three vertices are one triangle"
           headers:
             ETag:
               description: the placement's version and sighting; send it back as `If-None-Match`
@@ -5951,6 +5957,12 @@ paths:
       tags: [assetreview]
       operationId: getPlacementTexture
       summary: A patch's texture.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: the ETag from a previous answer; a match answers 304
+          schema: { type: string }
       responses:
         "200":
           description: "the finding polygon filled in its severity colour over the photo crop, with alpha; at most 512 px a side"
@@ -5973,6 +5985,12 @@ paths:
       tags: [assetreview]
       operationId: getPlacementLabels
       summary: A patch's label grid, for pixel-exact picking.
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: the ETag from a previous answer; a match answers 304
+          schema: { type: string }
       responses:
         "200":
           description: "4 bytes (width, then height, each a little-endian uint16), then width times height uint8 labels, row by row from the top left; 1 inside the finding polygon, 0 outside; at most 128 px a side"
@@ -6093,7 +6111,9 @@ paths:
     get:
       tags: [assetreview]
       operationId: getImageReview
-      summary: The photo's review status. An image never reviewed answers `not_assessed` with `updated_at` null.
+      summary: >-
+        The photo's effective review status: the review row's status, else `none` when the photo is
+        marked empty, else `not_assessed` (with `updated_at` null when there is no review row).
       responses:
         "200":
           description: the review
@@ -6121,6 +6141,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ImageReview" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`none` was requested while the photo has accepted boxes (`code` is `conflict`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/review-imports:
     parameters:
@@ -7104,8 +7129,9 @@ components:
       name: review_status
       in: query
       description: >-
-        comma-separated photo review statuses (asset findings spec §5.4); `not_assessed` also
-        matches a photo with no review status yet
+        comma-separated photo review statuses (asset findings spec §5.4), matched against the
+        effective status: the review row's status, else `none` when the photo is marked empty,
+        else `not_assessed`
       schema:
         type: string
         pattern: "^(finding|none|uncertain|not_assessed)(,(finding|none|uncertain|not_assessed))*$"
@@ -12275,7 +12301,9 @@ components:
         id: { type: [string, "null"], description: "null for `images`: the client reads the newest frames" }
     PhotoReviewCounts:
       type: object
-      description: photos by review status (asset findings spec §5.4); a photo never reviewed is not counted
+      description: >-
+        photos by effective review status (asset findings spec §5.4): the review row's status, else
+        `none` when the photo is marked empty, else `not_assessed`
       required: [finding, none, uncertain, not_assessed]
       properties:
         finding: { type: integer, minimum: 0 }

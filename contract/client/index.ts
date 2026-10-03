@@ -272,7 +272,7 @@ function placementFileUrl(
   return `${base}/api/v1/projects/${projectId}/asset-models/${assetModelId}/placements/${sightingId}/${part}?${q}`;
 }
 
-/** A patch's triangles: little-endian Float32 positions then uvs (contract `getPlacementMesh`). */
+/** A patch's triangles: a little-endian uint32 vertex count n, then n x 3 Float32 positions, then n x 2 Float32 uvs (contract `getPlacementMesh`). */
 export function placementMeshUrl(
   baseUrl: string, token: string, projectId: string, assetModelId: string, sightingId: string,
 ): string {
