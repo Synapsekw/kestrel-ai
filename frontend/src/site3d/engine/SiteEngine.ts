@@ -110,6 +110,8 @@ export class SiteEngine {
         const d = this.downAt;
         this.downAt = null;
         if (!d || Math.hypot(p.clientX - d[0], p.clientY - d[1]) > CLICK_SLOP_PX) return;
+        // A pin or glyph already took this click (S2's layers, ruling R-S3-31).
+        if (p.defaultPrevented) return;
         this.select(this.pick(p.clientX, p.clientY));
       });
       this.listen(window, "keydown", (e) => this.onKey(e as KeyboardEvent, true));
