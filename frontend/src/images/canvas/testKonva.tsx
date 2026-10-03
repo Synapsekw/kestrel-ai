@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components --
+   a test-only stand-in for react-konva that also exports its spies; never hot-reloaded. */
 import { forwardRef, useImperativeHandle, type ReactNode } from "react";
 
 type P = Record<string, unknown> & { children?: ReactNode };

@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+   The vertex helpers are pure functions exported next to the component so its test can pin them; not a
+   fast-refresh boundary. */
 import { memo, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Circle, Layer, Line, Transformer } from "react-konva";
 import type Konva from "konva";

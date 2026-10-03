@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+   severityHistogram is a pure helper exported next to the component so its test can pin it; not a
+   fast-refresh boundary. */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Source } from "@contract/client";
 import { useApi } from "@/api/client";

@@ -3,7 +3,7 @@ import { Button, GlassPanel } from "@/ui";
 
 const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
-export function infoChipText(d: ImageDetail): { parts: string[]; gsd: string | null } {
+function infoChipText(d: ImageDetail): { parts: string[]; gsd: string | null } {
   const parts = [d.file_name];
   if (d.capture_time) parts.push(`Captured ${dateTime.format(new Date(d.capture_time))}`);
   if (d.lat != null && d.lon != null) parts.push(`${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}`);

@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+   filmstripWindow is a pure helper exported next to the component so its test can pin it; not a
+   fast-refresh boundary. */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { thumbnailUrl } from "@contract/client";
 import { useBackend } from "@/api/client";

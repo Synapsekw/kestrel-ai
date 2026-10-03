@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+   dragPatch is a pure helper exported next to the component so its test can pin it; not a
+   fast-refresh boundary. */
 import { memo, useCallback, useMemo } from "react";
 import { Circle, Layer, Line, Rect, Text } from "react-konva";
 import type Konva from "konva";

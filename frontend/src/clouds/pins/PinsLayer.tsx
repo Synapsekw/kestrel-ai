@@ -34,7 +34,7 @@ const v3 = (a: readonly number[]): Vec3 => [a[0], a[1], a[2]];
  * `CloudClipBox` → `ClipBox` shape conversion is a small local copy of the one W1 already has in
  * `workspace/clipEngine.ts` (private there); not worth exporting for one call site (ruling T5-4).
  */
-export function toPinClip(c: CloudClipBox | null): PinClip | null {
+function toPinClip(c: CloudClipBox | null): PinClip | null {
   if (!c) return null;
   const box: ClipBox = { centre: v3(c.centre), size: v3(c.size), yawDeg: c.yaw_deg };
   return { mode: c.mode, contains: (p) => insideClipBox(p as Vec3, box) };
@@ -45,7 +45,7 @@ export function toPinClip(c: CloudClipBox | null): PinClip | null {
  * moving, while no engine exists yet, or while a C-V2 view capture is running; in every case the
  * flags are left alone (ruling T5-5).
  */
-export function runOcclusion(viewer: Pick<CloudViewerHandle, "occlusion">, ctl: PinsLayerController): void {
+function runOcclusion(viewer: Pick<CloudViewerHandle, "occlusion">, ctl: PinsLayerController): void {
   const t = ctl.occlusionTargets();
   if (t.ids.length === 0) return;
   const res = viewer.occlusion(t.points, t.tol);
