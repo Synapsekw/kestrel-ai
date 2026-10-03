@@ -290,6 +290,9 @@ class ReportConfig(_Strict):
     paper: ReportPaper = Field(default_factory=ReportPaper)
     filters: ReportFilters = Field(default_factory=ReportFilters)
     sections: list[ReportSection] = Field(default_factory=default_sections, min_length=8, max_length=8)
+    # Spec 2026-10-02-asset-findings §5.8: a `Brand` id; None (or a brand since deleted) is the
+    # Kestrel theme. Configs saved before it existed read None.
+    brand_id: str | None = Field(None, max_length=64)
 
 
 # ------------------------------------------------------------------------------ snapshots (spec 9.1)
