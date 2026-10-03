@@ -172,6 +172,8 @@ def resume_message(rc) -> str:
         [
             "This run was interrupted (the app closed) and has resumed. Earlier conversation is not available.",
             f"Stage reached: {rc.state.stage}. {_frame_line(rc)} The register has {len(rc.store)} items.",
+            "Sources (drawing pages grouped by file):",
+            *_source_lines(rc),  # all of them: the resumed run must not depend on a truncated list
             _budget_line(rc),
         ]
     )

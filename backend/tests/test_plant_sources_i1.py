@@ -36,3 +36,11 @@ def test_truncated_opening_says_how_many_and_points_to_list_sources(handle, app)
     rc = make_rc(handle, app, ids)
     first = P.first_message(rc)
     assert "11 more" in first and "list_sources" in first.split("more")[1]
+
+
+def test_the_resume_brief_carries_the_whole_grouped_source_list(handle, app):
+    ids = seed_plant(handle, app, pages=80, clouds=[f"cloud-{k}" for k in range(70)])
+    rc = make_rc(handle, app, ids)
+    msg = P.resume_message(rc)
+    assert msg.count("plot.pdf") == 1 and all(d in msg for d in ids["drawings"])
+    assert all(f"cloud-{k}" in msg for k in range(70)) and "C:/plans" not in msg
