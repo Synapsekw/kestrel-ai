@@ -65,7 +65,7 @@ export function SidebarLink({
     </Link>
   );
   return (
-    <Tooltip label={label} side="right" disabled={!collapsed}>
+    <Tooltip label={label} side="right" disabled={!collapsed} className={collapsed ? undefined : "w-full"}>
       {link}
     </Tooltip>
   );

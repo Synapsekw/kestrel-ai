@@ -69,6 +69,18 @@ describe("SidebarProjectTree", () => {
     );
   });
 
+  it("nested rows fill their width when expanded", () => {
+    const tree = renderTree();
+    const imagesLink = within(tree).getByRole("link", { name: "Images 1,284" });
+    expect(imagesLink.parentElement).toHaveClass("w-full");
+  });
+
+  it("nested rows do not fill their width when collapsed", () => {
+    const tree = renderTree({ collapsed: true });
+    const imagesLink = within(tree).getByRole("link", { name: "Images 1,284" });
+    expect(imagesLink.parentElement).not.toHaveClass("w-full");
+  });
+
   it("names pages without counts while the counts are unavailable", () => {
     const tree = renderTree({ counts: null });
     expect(within(tree).getByRole("link", { name: "Images" })).toBeInTheDocument();
