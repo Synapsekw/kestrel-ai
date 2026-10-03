@@ -25,6 +25,7 @@ from app.asset_models.schemas import (
 from app.asset_models.spec import AssetSpec
 from app.asset_models.store import INT32_MAX
 from app.asset_models.validate import validate
+from app.asset_review import frame_io
 from app.db.models import AssetModel, AssetModelVersion, Finding, FindingSighting
 from app.errors import AppError
 from app.events_util import publish_asset_models_changed
@@ -68,10 +69,13 @@ def patch_asset_model(
     request: Request,  # noqa: N803
     handle: ProjectHandle = Depends(get_project),
 ):
+    fields = body.model_dump(exclude_unset=True)
+    framing = {k: fields.pop(k) for k in ("frame", "review") if k in fields}
     with handle.session() as s:
         row = store.get_model(s, assetModelId)
-        for k, v in body.model_dump(exclude_unset=True).items():
+        for k, v in fields.items():
             setattr(row, k, v)
+        frame_io.apply_patch(row, framing)
         s.flush()
         out = AssetModelOut.of(row)
     publish_asset_models_changed(request, handle, [assetModelId])

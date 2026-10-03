@@ -13976,8 +13976,13 @@ components:
         line_azimuth_deg: { type: [number, "null"] }
         silhouette:
           type: array
-          description: "[y, r] pairs, ascending y: the radial outline used by the findings map"
-          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+          description: "[y, r] pairs, ascending y: the radial outline used by the findings map; r is not negative"
+          items:
+            type: array
+            prefixItems: [{ type: number }, { type: number, minimum: 0 }]
+            items: { type: number }
+            minItems: 2
+            maxItems: 2
         levels: { type: array, items: { type: number } }
         presets: { type: array, items: { $ref: "#/components/schemas/AssetFramePreset" } }
     AssetReviewZone:
