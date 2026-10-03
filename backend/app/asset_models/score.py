@@ -11,12 +11,14 @@ CLI: python -m app.asset_models.score <gen.csv> <ref.csv> [--gen-land x.json --r
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import math
 import re
+import sys
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -278,3 +280,123 @@ def read_land(path: Path) -> list[list[list[float]]]:
 
 def land_from_environment(environment: list[dict]) -> list[list[list[float]]]:
     return [f["pts"] for f in environment if f.get("kind") == "land" and len(f.get("pts", [])) >= 3]
+
+
+def footprint_size_m(fp: dict) -> float | None:
+    """The longest side of a spec footprint's extent, metres."""
+    kind = fp.get("kind")
+    if kind == "rect":
+        return float(max(fp["size"]))
+    if kind == "circle":
+        return float(fp["d"])
+    if kind in ("polygon", "line") and fp.get("pts"):
+        ext = float(np.ptp(np.asarray(fp["pts"], dtype=float), axis=0).max())
+        return ext + (float(fp.get("width") or 0.0) if kind == "line" else 0.0)
+    return None
+
+
+def with_footprint_sizes(rows: list[dict], spec: dict) -> list[dict]:
+    """Copies of the generated rows with `footprint_m` from the spec's items (by node = item id, else
+    by tag), so `tolerance_m` can use the 2 m rule."""
+    by_id: dict[str, float] = {}
+    by_tag: dict[str, float] = {}
+    for it in spec.get("items", []):
+        size = footprint_size_m(it.get("footprint") or {})
+        if size is None:
+            continue
+        by_id[str(it.get("id"))] = size
+        if normalise_tag(it.get("tag")):
+            by_tag[normalise_tag(it.get("tag"))] = size
+    out = []
+    for r in rows:
+        size = by_id.get(str(r.get("node")), by_tag.get(normalise_tag(r.get("tag"))))
+        out.append({**r, "footprint_m": size} if size is not None else dict(r))
+    return out
+
+
+def _finite(v):
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_finite(x) for x in v]
+    return v
+
+
+def report_dict(rep: ScoreReport) -> dict:
+    """JSON-ready: NaN and infinity become null."""
+    return _finite(asdict(rep))
+
+
+def _pct(x: float) -> str:
+    return f"{100 * x:.1f} %"
+
+
+def _m(x: float | None) -> str:
+    return "n/a" if x is None or not math.isfinite(x) else f"{x:.2f} m"
+
+
+def report_markdown(rep: ScoreReport) -> str:
+    lines = [
+        "# Plant model score",
+        "",
+        "| Measure | Value |",
+        "| --- | --- |",
+        f"| Tagged items found | {rep.tagged_found} of {rep.tagged_ref} ({_pct(rep.recall)}) |",
+        f"| Found with a matching type | {rep.type_match} ({_pct(rep.type_accuracy)}) |",
+        f"| Position error p50 / p95 | {_m(rep.pos_err_p50_m)} / {_m(rep.pos_err_p95_m)} |",
+        f"| Within position tolerance | {_pct(rep.within_tol)} |",
+        f"| Land outline Hausdorff | {_m(rep.landmask_hausdorff_m)} |",
+        "",
+        "## By area",
+        "",
+        "| Area | Reference | Found | Type match | Recall |",
+        "| --- | --- | --- | --- | --- |",
+        *(
+            f"| {k} | {a['ref']} | {a['found']} | {a['type_match']} | {_pct(a['recall'])} |"
+            for k, a in rep.by_area.items()
+        ),
+        "",
+        "## Must-haves",
+        "",
+        *(f"- {k}: {'present' if v else 'MISSING'}" for k, v in rep.required_present.items()),
+        "",
+        f"## Missing tags ({len(rep.missing)})",
+        "",
+        ", ".join(rep.missing[:200]) or "none",
+        "",
+        f"## Extra tags ({len(rep.extra)})",
+        "",
+        ", ".join(rep.extra[:200]) or "none",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="python -m app.asset_models.score", description=__doc__.splitlines()[0])
+    p.add_argument("gen", type=Path, help="generated register CSV")
+    p.add_argument("ref", type=Path, help="reference register CSV")
+    p.add_argument("--gen-land", type=Path, help="generated land: a landmask or spec JSON")
+    p.add_argument("--ref-land", type=Path, help="reference land: a landmask JSON")
+    p.add_argument("--gen-spec", type=Path, help="the generated version's spec JSON (footprint sizes)")
+    p.add_argument("--json", type=Path, help="write the report as JSON here")
+    a = p.parse_args(argv)
+    gen = read_register(a.gen)
+    if a.gen_spec:
+        gen = with_footprint_sizes(gen, json.loads(a.gen_spec.read_text(encoding="utf-8")))
+    rep = score(
+        gen,
+        read_register(a.ref),
+        gen_land=read_land(a.gen_land) if a.gen_land else None,
+        ref_land=read_land(a.ref_land) if a.ref_land else None,
+    )
+    sys.stdout.write(report_markdown(rep))
+    if a.json:
+        a.json.write_text(json.dumps(report_dict(rep), indent=2), encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

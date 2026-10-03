@@ -2,6 +2,7 @@
 """The plant register scorer against Cowork's KIPIC register (spec 2026-10-03 §13, K1)."""
 
 import copy
+import json
 import math
 from pathlib import Path
 
@@ -179,3 +180,35 @@ def test_land_from_a_spec_environment():
         {"id": "s1", "kind": "sea", "pts": [[0, 0], [5, 0], [5, 5]], "el": 100.0},
     ]
     assert sc.land_from_environment(env) == [[[0, 0], [10, 0], [10, 10]]]
+
+
+def test_footprint_sizes_come_from_the_spec():
+    spec = {
+        "items": [
+            {"id": "tank-1", "tag": "20-T-0001", "footprint": {"kind": "circle", "center": [0, 0], "d": 90}},
+            {"id": "p1", "tag": None, "footprint": {"kind": "rect", "center": [0, 0], "size": [3, 2]}},
+            {"id": "r1", "footprint": {"kind": "line", "pts": [[0, 0], [30, 40]], "width": 6}},
+        ]
+    }
+    rows = [{"node": "tank-1", "tag": "20-T-0001"}, {"node": "p1", "tag": ""}, {"node": "zz", "tag": ""}]
+    sized = sc.with_footprint_sizes(rows, spec)
+    assert [r.get("footprint_m") for r in sized] == [90.0, 3.0, None]
+    assert sc.footprint_size_m(spec["items"][2]["footprint"]) == 46.0
+
+
+def test_report_json_has_no_nan_and_markdown_names_the_measures():
+    rep = sc.score([], [{"tag": "A-1", "type": "pump", "plant_E": "", "plant_N": ""}])
+    d = sc.report_dict(rep)
+    assert d["pos_err_p50_m"] is None
+    json.dumps(d, allow_nan=False)
+    md = sc.report_markdown(rep)
+    assert "Tagged items found | 0 of 1" in md and "A-1" in md
+
+
+def test_cli_writes_json_and_prints_markdown(ref, tmp_path, capsys):
+    out = tmp_path / "score.json"
+    assert sc.main([str(REGISTER), str(REGISTER), "--ref-land", str(LANDMASK), "--gen-land", str(LANDMASK),
+                    "--json", str(out)]) == 0  # fmt: skip
+    d = json.loads(out.read_text(encoding="utf-8"))
+    assert d["recall"] == 1.0 and d["landmask_hausdorff_m"] == 0.0
+    assert "# Plant model score" in capsys.readouterr().out
