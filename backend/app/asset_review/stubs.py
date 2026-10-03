@@ -25,10 +25,7 @@ Stub = tuple[str, str, str]
 M = "/asset-models/{assetModelId}"
 
 # D1: the photo review status (spec §5.4).
-D1_STUBS: list[Stub] = [
-    ("GET", "/images/{imageId}/review", "getImageReview"),
-    ("PUT", "/images/{imageId}/review", "putImageReview"),
-]
+D1_STUBS: list[Stub] = []
 
 # J1: GLB import (spec §6.1).
 J1_STUBS: list[Stub] = [

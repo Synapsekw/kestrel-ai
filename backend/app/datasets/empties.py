@@ -3,6 +3,10 @@
 Marking an image empty rejects its unreviewed proposals in the same transaction (there is nothing
 left for a person to review) and is refused while the image has ground-truth boxes. Unmarking only
 flips the flag back: it never resurrects the proposals a mark rejected.
+
+A photo's review status (`image_review`, asset findings spec §5.4) follows the mark: every path here
+that sets or clears it moves an existing review row with `follow_review`, and
+`app.asset_review.review_status.set_status` sets the mark through `apply_mark`.
 """
 
 from __future__ import annotations
@@ -14,7 +18,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.datasets.images import ImageRow, get_image
-from app.db.models import Box, Image, QueryRun
+from app.db.base import utcnow
+from app.db.models import Box, Image, ImageReview, QueryRun
 from app.errors import AppError, not_found
 from app.imagery import summary
 from app.projects.service import ProjectHandle
@@ -87,6 +92,21 @@ def count_marked_empty(s: Session, image_ids: Iterable[str]) -> int:
     ).scalar_one()
 
 
+def follow_review(s: Session, image_ids: Iterable[str], value: bool) -> None:
+    """Move the existing review rows of photos whose mark was just set (`value` True: they read
+    `none`) or cleared (a `none` row becomes `not_assessed`). A photo with no row keeps none: its
+    status is read from the mark. Chunked, set-based."""
+    ids = list(image_ids)
+    now = utcnow()
+    for chunk in _chunks(ids):
+        if value:
+            where = (ImageReview.image_id.in_(chunk), ImageReview.status != "none")
+            s.execute(update(ImageReview).where(*where).values(status="none", updated_at=now))
+        else:
+            where = (ImageReview.image_id.in_(chunk), ImageReview.status == "none")
+            s.execute(update(ImageReview).where(*where).values(status="not_assessed", updated_at=now))
+
+
 def clear_mark_for_ground_truth(s: Session, image_ids: Iterable[str]) -> None:
     """New ground truth on an image contradicts `marked_empty`; clear it in the same session."""
     ids = list(image_ids)
@@ -97,6 +117,24 @@ def clear_mark_for_ground_truth(s: Session, image_ids: Iterable[str]) -> None:
         .where(Image.id.in_(ids), Image.marked_empty.is_(True))
         .values(marked_empty=False)
     )
+    follow_review(s, ids, False)
+
+
+def apply_mark(s: Session, image: Image, value: bool, now: datetime) -> bool:
+    """Set or clear `image.marked_empty` in the caller's session by this module's rules: marking is
+    refused with 409 `conflict` while the image has ground truth, and rejects its pending proposals.
+    Returns whether any proposal was rejected (the caller publishes `boxes.changed`)."""
+    rejected = False
+    if value:
+        gt = _ground_truth_count(s, image.id)
+        if gt:
+            raise AppError("conflict", ground_truth_message(gt), 409)
+        if _reject_pending(s, image.id, now):
+            rejected = True
+            recount_runs_of(s, [image.id])
+            summary.touch(s, image.id)
+    image.marked_empty = value
+    return rejected
 
 
 def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple[ImageRow, list[str]]:
@@ -104,18 +142,10 @@ def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple
         image = s.get(Image, image_id)
         if image is None:
             raise not_found("image", image_id)
-        rejected_ids: list[str] = []
-        if value:
-            gt = _ground_truth_count(s, image_id)
-            if gt:
-                raise AppError("conflict", ground_truth_message(gt), 409)
-            if _reject_pending(s, image_id, datetime.now(UTC)):
-                rejected_ids.append(image_id)
-                recount_runs_of(s, rejected_ids)
-                summary.touch(s, image_id)
-        image.marked_empty = value
+        rejected = apply_mark(s, image, value, datetime.now(UTC))
+        follow_review(s, [image_id], value)
         s.flush()
-    return get_image(handle, image_id), rejected_ids
+    return get_image(handle, image_id), [image_id] if rejected else []
 
 
 def _distinct_image_ids(s: Session, ids: list[str], *, review_state) -> set[str]:
@@ -147,6 +177,7 @@ def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) ->
             to_unmark = [i for i in known_ids if existing[i]]
             for chunk in _chunks(to_unmark):
                 s.execute(update(Image).where(Image.id.in_(chunk)).values(marked_empty=False))
+            follow_review(s, to_unmark, False)
             return len(to_unmark), 0, []
 
         candidates = [i for i in known_ids if not existing[i]]  # already marked: nothing changed
@@ -161,6 +192,7 @@ def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) ->
             )
         for chunk in _chunks(to_mark):
             s.execute(update(Image).where(Image.id.in_(chunk)).values(marked_empty=True))
+        follow_review(s, to_mark, True)
         recount_runs_of(s, rejected_ids)
         for image_id in rejected_ids:  # bounded: the ids named in the request
             summary.touch(s, image_id)
