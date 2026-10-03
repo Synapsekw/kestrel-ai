@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -32,6 +33,7 @@ from reportlab.platypus import (
 )
 
 from app.jobs.cancellation import JobCancelled
+from app.reports.pdf import active
 from app.reports.pdf.canvas import PageMeta, band_height, canvas_class, draw_cover_band
 from app.reports.pdf.flowables import (
     FindingEnd,
@@ -371,6 +373,9 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+_BUILD_LOCK = threading.Lock()  # reportlab's font registry and default cell font are process-wide
+
+
 def render_pdf(
     doc: ReportDocument,
     out_dir: Path,
@@ -382,7 +387,34 @@ def render_pdf(
     check_cancelled: Callable[[], None],
     part_budget: int = PART_BUDGET,
 ) -> list[PdfPart]:
-    styles = build_styles(register_fonts())
+    with _BUILD_LOCK:
+        fonts = register_fonts()
+        with active.using(THEME, fonts.sans):
+            return _render_parts(
+                doc,
+                out_dir,
+                base_name,
+                styles=build_styles(fonts),
+                snapshot_path=snapshot_path,
+                volume_flowables=volume_flowables,
+                progress=progress,
+                check_cancelled=check_cancelled,
+                part_budget=part_budget,
+            )
+
+
+def _render_parts(
+    doc,
+    out_dir,
+    base_name,
+    *,
+    styles,
+    snapshot_path,
+    volume_flowables,
+    progress,
+    check_cancelled,
+    part_budget,
+) -> list[PdfPart]:
     meta = doc_meta(doc)
     sizes: dict[str, int] = {}
     parts = plan_parts(doc, lambda b: _estimate(b, snapshot_path, sizes), part_budget)

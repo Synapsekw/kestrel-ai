@@ -16,6 +16,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas as rl_canvas
 
+from app.reports.pdf.flowables_text import undash
 from app.reports.pdf.styles import Styles, colour
 from app.reports.theme import THEME
 
@@ -70,7 +71,7 @@ def _furniture(canv: rl_canvas.Canvas, meta: PageMeta, styles: Styles, local: in
     canv.saveState()
     canv.setFont(head_font, size)
     canv.setFillColor(colour("ink") if override else colour("muted"))
-    canv.drawString(m, h - off, fit_width(override or meta.title, head_font, size, room))
+    canv.drawString(m, h - off, fit_width(undash(override or meta.title), head_font, size, room))
     canv.setFont(styles.fonts.sans, size)
     canv.setFillColor(colour("muted"))
     canv.drawRightString(w - m, h - off, meta.version_label)
@@ -78,7 +79,7 @@ def _furniture(canv: rl_canvas.Canvas, meta: PageMeta, styles: Styles, local: in
     canv.setLineWidth(0.5)
     canv.line(m, h - off - 2 * mm, w - m, h - off - 2 * mm)
     who = f"Kestrel AI · {meta.project}" if meta.project else "Kestrel AI"
-    canv.drawRightString(w - m, off, f"{who} · page {local + meta.page_offset} / {total}")
+    canv.drawRightString(w - m, off, undash(f"{who} · page {local + meta.page_offset} / {total}"))
     canv.restoreState()
 
 

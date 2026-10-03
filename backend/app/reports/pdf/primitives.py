@@ -31,7 +31,7 @@ from reportlab.pdfbase import pdfdoc, pdfutils
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Flowable, Paragraph, Table, TableStyle
 
-from app.reports.pdf.flowables_text import text
+from app.reports.pdf.flowables_text import text, undash
 from app.reports.pdf.styles import Styles, colour, safe_colour, tint
 from app.reports.theme import THEME
 
@@ -135,7 +135,7 @@ class Placeholder(Flowable):
         c.roundRect(0, 0, self.width, self.height, RADIUS, stroke=1, fill=1)
         c.setFillColor(colour("muted"))
         c.setFont(self.font, 8)
-        lines = simpleSplit(self.reason, self.font, 8, max(self.width - 8 * mm, 10))
+        lines = simpleSplit(undash(self.reason), self.font, 8, max(self.width - 8 * mm, 10))
         y = self.height / 2 + (len(lines) - 1) * 5 - 3
         for line in lines:
             c.drawCentredString(self.width / 2, y, line)
@@ -148,7 +148,7 @@ class SeverityTag(Flowable):
 
     def __init__(self, label: str, colour_hex: str | None, styles: Styles, size: float = 8.5):
         super().__init__()
-        self.label, self.size, self.font = label, size, styles.fonts.sans
+        self.label, self.size, self.font = undash(label), size, styles.fonts.sans
         self.fill = safe_colour(colour_hex)
         self.dot = THEME["severity"]["dot_mm"] * mm
         self.pad = 2 * mm
