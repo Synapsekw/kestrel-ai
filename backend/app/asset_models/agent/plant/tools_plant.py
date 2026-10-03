@@ -11,7 +11,7 @@ import json
 import logging
 import math
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, ValidationError
 from pyproj import CRS
@@ -21,6 +21,7 @@ from shapely.geometry import LineString, Polygon
 from app.asset_models.agent.plant import packages as pk
 from app.asset_models.agent.plant import sitefit, views
 from app.asset_models.agent.plant.merge import with_flag
+from app.asset_models.agent.plant.state import env_of
 from app.asset_models.agent.tools import _A, FinishArgs, Region, ToolOut, _short
 from app.asset_models.agent.tools import TOOLS as M1_TOOLS
 from app.asset_models.agent.tools import run_tool as run_m1_tool
@@ -28,6 +29,8 @@ from app.asset_models.builders.base import PLANNED_TYPES, REGISTRY, catalogue, l
 from app.asset_models.look import LookError
 from app.asset_models.siteframe import GridError, fit_plant_grid, footprint_ref
 from app.asset_models.spec import Datum, EnvFeature, Item, ItemFlag, SiteCrs, SiteFrame, Source
+from app.db.models import Drawing
+from app.errors import AppError
 from app.project_agent.history import ToolResult, ToolSpec
 from app.project_agent.tools import clean_schema
 
@@ -602,6 +605,152 @@ class SetSite:
         return ToolOut("\n".join([text, *lines]), "Set the site frame")
 
 
+class OrthoArgs(_A):
+    bbox: Annotated[list[float], Field(min_length=4, max_length=4)] = Field(
+        description="[E0, N0, E1, N1] plant metres"
+    )
+    map_id: str | None = None
+    items: bool = Field(True, description="draw the register's footprints on top")
+
+
+class OrthoView:
+    name, Args = "ortho_view", OrthoArgs
+    description = (
+        "The project's ortho photo over a plant-metre box (at most 5 000 m across), plant north up, "
+        "<= 1 600 px, with the register's footprints drawn on top. Use it to check positions and to "
+        "trace the environment."
+    )
+
+    def run(self, rc, scope, a):
+        e0, n0, e1, n1 = a.bbox
+        if not (e1 > e0 and n1 > n0) or max(e1 - e0, n1 - n0) > 5000:
+            return ToolOut(
+                "bbox must be [E0, N0, E1, N1] with E1 > E0, N1 > N0 and at most 5 000 m across.",
+                "Bad box",
+                ok=False,
+            )
+        if rc.site() is None:
+            return ToolOut(
+                "Set the site frame first (set_site): the ortho is placed through it.",
+                "No site frame",
+                ok=False,
+            )
+        map_id = a.map_id or views.pick_map(rc.handle)
+        if map_id is None:
+            return ToolOut("This project has no ortho map.", "No ortho", ok=False)
+        cv = views.canvas_for(a.bbox)
+        try:
+            bg = views.background(rc, cv, "map", map_id)
+        except AppError as e:
+            return ToolOut(f"The ortho can't be read: {e.message}", "Ortho unreadable", ok=False)
+        if bg is None:
+            return ToolOut(
+                "The ortho does not cover that box, or the map has no coordinate system.",
+                "Ortho does not cover the box",
+                ok=False,
+            )
+        with rc.lock:
+            items = list(scope.items.values()) if a.items else []
+        img = views.plan_image(rc, items, [], a.bbox, bg=bg)
+        text = (
+            f"Ortho {img.width}x{img.height}, plant north up, {cv.res:.2f} m per pixel, "
+            f"E {e0:g}..{e1:g}, N {n0:g}..{n1:g}."
+        )
+        return ToolOut(text, "Looked at the ortho", image=views.jpeg(img), phase="checking")
+
+
+SiteView = Annotated[str, Field(pattern=r"^(plan|iso|area:[A-Za-z0-9_.\- ]{1,40})$")]
+
+
+class RenderSiteArgs(_A):
+    views: Annotated[list[SiteView], Field(min_length=1, max_length=4)]
+    overlay: Literal["ortho", "drawing", "none"] = "ortho"
+    drawing_id: str | None = None
+    highlight: Annotated[list[Annotated[str, Field(max_length=64)]], Field(max_length=50)] = Field(
+        default_factory=list
+    )
+
+
+def _overlay(rc, a, notes: list[str]):
+    if a.overlay == "none":
+        return None
+    if rc.site() is None:
+        notes.append("No overlay: the site frame is not set.")
+        return None
+    if a.overlay == "ortho":
+        mid = views.pick_map(rc.handle)
+        if mid is None:
+            notes.append("No ortho in this project.")
+            return None
+        return "map", mid
+    did = a.drawing_id
+    if did is None:
+        with rc.handle.session() as s:
+            did = next(
+                (
+                    x["id"]
+                    for x in rc.sources
+                    if x["type"] == "drawing" and getattr(s.get(Drawing, x["id"]), "georef", None)
+                ),
+                None,
+            )
+    if did is None or did not in rc.drawing_ids():
+        notes.append("No placed drawing to overlay.")
+        return None
+    return "drawing_raster", did
+
+
+class RenderSite:
+    name, Args = "render_site", RenderSiteArgs
+    description = (
+        "Render the model for a self-check: 'plan' (the whole site, plant north up, footprints over the "
+        "ortho or a placed drawing, flagged items red), 'area:<label>' (one area), 'iso' (the built 3D "
+        "model from the south-west). Up to 4 views, <= 1 600 px."
+    )
+
+    def run(self, rc, scope, a):
+        with rc.lock:
+            items = list(scope.items.values())
+        env = env_of(rc.state)
+        if not items and not env:
+            return ToolOut("Nothing to render yet.", "Nothing to render", ok=False, phase="checking")
+        notes: list[str] = []
+        layer = _overlay(rc, a, notes)
+        imgs, titles = [], []
+        for v in a.views:
+            if v == "iso":
+                img, note = views.iso_image(rc, items)
+                if note:
+                    notes.append(note)
+            else:
+                sel = items if v == "plan" else [i for i in items if i.area == v[5:]]
+                if not sel:
+                    areas = sorted({i.area for i in items if i.area})
+                    return ToolOut(
+                        f"No items in area {v[5:]!r}. Areas: {', '.join(areas[:40]) or 'none'}.",
+                        "Unknown area",
+                        ok=False,
+                        phase="checking",
+                    )
+                shown_env = env if v == "plan" else []
+                bbox = views.bbox_of(sel, shown_env)
+                cv = views.canvas_for(bbox)
+                bg = None
+                if layer is not None:
+                    try:
+                        bg = views.background(rc, cv, *layer)
+                    except AppError as e:
+                        notes.append(f"Overlay not drawn: {e.message}")
+                img = views.plan_image(rc, sel, shown_env, bbox, bg=bg, highlight=frozenset(a.highlight))
+            imgs.append(img)
+            titles.append(v)
+        out = views.sheet(imgs, titles)
+        if scope.package is None:
+            scope.rendered = True
+        text = f"Rendered {', '.join(titles)}." + ("" if not notes else " " + " ".join(notes))
+        return ToolOut(text, f"Rendered {len(titles)} site views", image=views.jpeg(out), phase="checking")
+
+
 # ------------------------------------------------------------------ registry and dispatch
 _TOOLS = [
     UpsertItems(),
@@ -615,6 +764,8 @@ _TOOLS = [
     FinishPackage(),
     DrawingZoom(),
     SetSite(),
+    OrthoView(),
+    RenderSite(),
 ]
 PLANT_TOOLS = {t.name: t for t in _TOOLS}
 ORCH_NAMES = (
@@ -629,12 +780,15 @@ ORCH_NAMES = (
     "upsert_items",
     "remove_items",
     "upsert_environment",
+    "ortho_view",
+    "render_site",
     "next_stage",
     "finish",
 )
 SUB_NAMES = (
     *LOOK,
     "drawing_zoom",
+    "ortho_view",
     "catalogue",
     "items_query",
     "upsert_items",
