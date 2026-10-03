@@ -46,6 +46,11 @@ export interface ImageCanvasProps {
   neighbourIds?: readonly string[];
   suggestions?: ReactNode;
   overlay?: ReactNode;
+  /**
+   * Drawn in its own non-listening layer above the interaction layer, and not hidden with the
+   * annotations (the split inspection's finding shapes over a bare photo). Absent: no layer.
+   */
+  topOverlay?: ReactNode;
   children?: ReactNode;
   onShapeCreated?: (result: BoxWriteResult) => void;
   className?: string;
@@ -114,6 +119,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     neighbourIds,
     suggestions,
     overlay,
+    topOverlay,
     children,
     onShapeCreated,
     className,
@@ -332,6 +338,11 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
             {suggestions}
           </Layer>
           <InteractionLayer ctx={ctx} overlay={overlay} />
+          {topOverlay !== undefined && (
+            <Layer name="top-overlay" listening={false}>
+              {topOverlay}
+            </Layer>
+          )}
         </Stage>
       )}
       <TypePicker ctx={ctx} />

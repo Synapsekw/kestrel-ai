@@ -22,7 +22,12 @@ const st = () => useImagesWorkspace.getState();
 const type = { ...exampleClasses[0], id: "t1" };
 
 function mount(
-  extra: { suggestions?: ReactNode; overlay?: ReactNode; onShapeCreated?: (b: BoxWriteResult) => void } = {},
+  extra: {
+    suggestions?: ReactNode;
+    overlay?: ReactNode;
+    topOverlay?: ReactNode;
+    onShapeCreated?: (b: BoxWriteResult) => void;
+  } = {},
 ) {
   const { api, requests } = fakeClient([
     {
@@ -82,6 +87,16 @@ describe("ImageCanvas", () => {
     expect(screen.getByTestId("sugg").closest('[data-name="suggestions"]')).not.toBeNull();
     expect(screen.getByTestId("marker").closest('[data-name="interaction"]')).not.toBeNull();
     expect(screen.getByTestId("floating")).toBeInTheDocument();
+  });
+
+  it("draws the top overlay in its own layer, shown even with the annotations hidden", () => {
+    act(() => st().toggleAnnotations());
+    expect(st().showAnnotations).toBe(false);
+    mount({ topOverlay: <span data-testid="rings" /> });
+    const layer = screen.getByTestId("rings").closest('[data-konva="layer"]');
+    expect(layer).toHaveAttribute("data-name", "top-overlay");
+    expect(layer).toHaveAttribute("data-visible", "true");
+    expect(document.querySelector('[data-name="interaction"]')).toHaveAttribute("data-visible", "false");
   });
 
   it("carries the e2e hooks", () => {
