@@ -165,6 +165,32 @@ function CreateTypesLater(props: { onCreate: (v: PinDraftInput) => void; initial
 }
 
 describe("PinCalloutCreate", () => {
+  it("names a new anomaly and uses it for the draft", async () => {
+    const onCreate = vi.fn();
+    const created = { ...defectTypes[0], id: "new-defect", name: "Rust", default_severity: 2 };
+    const onCreateType = vi.fn(async () => created);
+    const submitRef = { current: null };
+    withSeams(
+      <PinCalloutCreate
+        defectTypes={[]}
+        initialTypeId={null}
+        busy={false}
+        locationText="Z 1.0 m"
+        onCreate={onCreate}
+        onCreateType={onCreateType}
+        onCancel={() => {}}
+        submitRef={submitRef}
+      />,
+      [],
+    );
+    expect(screen.getByRole("button", { name: /Create/ })).toBeDisabled();
+    await userEvent.type(screen.getByRole("textbox", { name: "New anomaly name" }), "Rust{Enter}");
+    await waitFor(() => expect(onCreateType).toHaveBeenCalledWith("Rust"));
+    expect(screen.getByRole("button", { name: /Create/ })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: /Create/ }));
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ typeId: "new-defect", severity: 2 }));
+  });
+
   it("disables Create until a type is chosen, then takes the type's default severity", async () => {
     const onCreate = vi.fn();
     withSeams(<Create initialTypeId={null} onCreate={onCreate} />, []);

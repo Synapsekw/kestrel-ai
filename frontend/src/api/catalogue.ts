@@ -51,6 +51,10 @@ export function createCatalogueType(api: ApiClient, body: CatalogueTypeCreate): 
   return unwrap(api.POST("/api/v1/catalogue/types", { body }));
 }
 
+export function fetchCatalogueType(api: ApiClient, typeId: string): Promise<CatalogueType> {
+  return unwrap(api.GET("/api/v1/catalogue/types/{typeId}", { params: { path: { typeId } } }));
+}
+
 /** An object → defect change answers `backfill_candidates: true` (§7.2). */
 export function patchCatalogueType(
   api: ApiClient,

@@ -16,8 +16,10 @@ export interface ToolPointer {
 
 export interface ToolApi {
   store: ImagesWorkspaceStore;
-  /** Creates with the active type; opens the T picker (purpose "active") when there is none. */
+  /** Creates with the active type. With none, keeps the geometry and opens the T picker. */
   createShape: (body: Omit<BoxCreate, "class_id">) => Promise<BoxWriteResult | undefined>;
+  /** Keeps a mark drawn before a type exists, and opens the picker so it can be named or chosen. */
+  holdShape: (body: Omit<BoxCreate, "class_id">) => void;
   createMeasurement: (a: Point, b: Point) => Promise<void>;
   openPicker: (purpose: "active" | "retype") => void;
   notify: (text: string, tone?: "info" | "ok" | "danger") => void;

@@ -66,8 +66,8 @@ export function AnomaliesCard() {
         </ul>
       ) : (
         <p className="text-sm text-muted">
-          No anomaly types yet. Add them from the Catalogue or make a new one. You can also add them later in
-          Project settings.
+          No anomaly types yet. Add them from the Catalogue or make a new one. You can also name them later,
+          while you mark a photo, a map or a point cloud.
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">

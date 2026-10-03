@@ -23,6 +23,13 @@ export async function fetchSources(api: ApiClient, projectId: string): Promise<S
   return r.items;
 }
 
+const projectListeners = new Set<(project: Project) => void>();
+
+/** Every `useProject` for this id picks up the project a write just saved (a type added while marking). */
+export function publishProject(project: Project): void {
+  for (const listener of projectListeners) listener(project);
+}
+
 export function useProject(projectId: string): {
   project: Project | null;
   error: string | null;
@@ -48,6 +55,15 @@ export function useProject(projectId: string): {
       cancelled = true;
     };
   }, [api, projectId, attempt]);
+  useEffect(() => {
+    const hear = (p: Project) => {
+      if (p.id === projectId) setProject(p);
+    };
+    projectListeners.add(hear);
+    return () => {
+      projectListeners.delete(hear);
+    };
+  }, [projectId]);
   const reload = useCallback(() => setAttempt((a) => a + 1), []);
   return { project, error, reload, setProject };
 }

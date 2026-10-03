@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { activateTool, getTool } from "@/images/tools/registry";
-import { useToolApi } from "@/images/tools/toolApi";
+import { clearHeldShape, useToolApi } from "@/images/tools/toolApi";
 import type { KeyHandlers } from "@/images/workspace/keymap";
 import { useImagesWorkspace, type ToolId } from "@/store/imagesWorkspace";
 import { deleteSelection, duplicateSelection, nudgeSelection, rotateSelection } from "./actions";
@@ -34,7 +34,11 @@ export function useCanvasKeyHandlers(ctx: CommandContext): KeyHandlers {
         // Dialog and Popover handle Esc themselves (and stop it) while focus is inside them; this
         // covers focus left outside, closing just the open layer and nothing behind it.
         if (s.confirm) return void s.setConfirm(null);
-        if (s.picker) return void s.closePicker();
+        if (s.picker) {
+          clearHeldShape();
+          s.closePicker();
+          return;
+        }
         if (s.draft) {
           if (!current()?.onCancel?.(api)) s.setDraft(null);
           return;

@@ -14,17 +14,18 @@ export const POINT_TOOL: ToolDefinition = {
   typeFilter: (t) => t.kind === "defect",
   onDown: (p, api) => {
     if (p.button !== 0) return;
+    const body = {
+      shape: "point" as const,
+      x: Math.round(p.image.x * 10) / 10,
+      y: Math.round(p.image.y * 10) / 10,
+    };
     const s = api.store.getState();
     const type = s.types.find((t) => t.id === s.activeTypeId);
     if (!type || type.kind !== "defect") {
-      api.openPicker("active");
-      api.notify("Point markers need a defect type. Pick one.");
+      api.holdShape(body);
+      if (type) api.notify("Point markers need a defect. Pick one, or name a new anomaly.");
       return;
     }
-    void api.createShape({
-      shape: "point",
-      x: Math.round(p.image.x * 10) / 10,
-      y: Math.round(p.image.y * 10) / 10,
-    });
+    void api.createShape(body);
   },
 };
