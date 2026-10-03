@@ -188,6 +188,36 @@ def test_a_gate_shorter_than_its_posts_falls_back():
     assert [f.code for f in flags] == ["builder_fallback"]
 
 
+@pytest.mark.parametrize(
+    ("length", "params"),
+    [
+        (0.13, {"post": 0.06}),  # longer than two posts, but no room for a leaf's two stiles
+        (0.40, {}),
+        (0.41, {}),
+        (0.42, {}),
+        (0.6, {"leaf_max": 0.55}),  # split in two leaves, each too short
+    ],
+)
+def test_a_gate_too_short_for_its_leaves_falls_back(length, params):
+    item = make_item(
+        "gate",
+        {"kind": "line", "pts": [[E0, N0], [E0 + length, N0]], "width": 0.3},
+        top_el=102.5,
+        params=params,
+    )
+    _, flags = build_item(item, BuildCtx(grid=None))
+    assert [f.code for f in flags] == ["builder_fallback"]
+
+
+def test_a_short_gate_keeps_its_leaf_between_the_posts():
+    item = make_item("gate", {"kind": "line", "pts": [[E0, N0], [E0 + 0.45, N0]], "width": 0.3}, top_el=102.5)
+    nodes = by_name(build_ok(item))
+    a, b = nodes["posts"].geometry.transforms[:, [0, 2], 3]
+    d = (b - a) / np.hypot(*(b - a))
+    s = (nodes["frame"].geometry.vertices[:, [0, 2]] - a) @ d  # distance along the gate line
+    assert s.min() >= 0.1 - 1e-9 and s.max() <= 0.45 - 0.1 + 1e-9  # clear of both posts' faces
+
+
 def test_a_very_long_gate_caps_its_pickets():
     item = make_item(
         "gate",

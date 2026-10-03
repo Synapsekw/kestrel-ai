@@ -36,6 +36,7 @@ from app.asset_models.spec import Item
 
 PROUD = 0.03  # glazing and doors stand this far off the wall face
 MIN_WALL_M = 0.5
+LEAF_MIN_M = 0.12  # a gate leaf's two end stiles; a shorter leaf would invert
 
 
 class HouseParams(B3Params):
@@ -281,13 +282,14 @@ def build_gate(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     frame, picket_rows = [], []
     for a, b in zip(pts[:-1], pts[1:], strict=True):
         length = float(np.hypot(*(b - a)))
-        if length <= p.post * 2:
+        leaves = 2 if length > p.leaf_max else 1
+        lw = (length - p.post) / leaves
+        # each leaf keeps 0.05 m clear of its neighbours and needs room for its two 0.06 m stiles
+        if length <= p.post * 2 or lw - 0.1 <= LEAF_MIN_M + 1e-9:
             continue
         d = (b - a) / length
         for q in (a, b):
             posts.setdefault((round(float(q[0]), 6), round(float(q[1]), 6)), (q[0], q[1], d[0], d[1]))
-        leaves = 2 if length > p.leaf_max else 1
-        lw = (length - p.post) / leaves
         for k in range(leaves):
             s0 = a + d * (p.post / 2 + k * lw + 0.05)
             s1 = a + d * (p.post / 2 + (k + 1) * lw - 0.05)
