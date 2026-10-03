@@ -77,6 +77,7 @@ def test_registered_builders_sit_in_their_planned_family():
 def test_builder_refuses_bad_registrations(registry):
     with pytest.raises(ValueError, match="twice"):
         builder("other", family="fallback", params=BoxParams, doc="x", default_height_m=1)(lambda i, c: [])
+    registry.pop("tank_lng", None)  # B2 registers the real one; the scratch copy must not hold it here
     with pytest.raises(ValueError, match="equipment family"):
         builder("tank_lng", family="civil", params=BoxParams, doc="x", default_height_m=1)(lambda i, c: [])
     with pytest.raises(ValueError, match="not a builder family"):
