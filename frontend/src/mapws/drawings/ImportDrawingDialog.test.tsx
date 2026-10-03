@@ -46,6 +46,15 @@ function routes(inspection: DrawingInspection, extra: FakeRoute[] = []): FakeRou
     },
     {
       method: "POST",
+      path: /\/drawings\/pages$/,
+      status: 202,
+      body: {
+        drawings: [pdfDrawing, { ...pdfDrawing, id: "d-p1", page: 1, name: "foundation-plan · p1" }],
+        job: drawingJob(BUILD_JOB, "queued"),
+      },
+    },
+    {
+      method: "POST",
       path: /\/drawings$/,
       status: 202,
       body: { drawing: pdfDrawing, job: drawingJob(BUILD_JOB, "queued") },
@@ -82,7 +91,6 @@ describe("ImportDrawingDialog", () => {
       `/drawing-inspections/${INSPECTION_ID}/pages/2/thumbnail?token=t`,
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Page 1" }));
-    fireEvent.click(page2);
     fireEvent.click(screen.getByRole("radio", { name: "300 dpi" }));
     expect(screen.getByLabelText("Name")).toHaveValue("foundation-plan · p2");
     expect(screen.getByText(/placed with control points once it is imported/)).toBeInTheDocument();
@@ -97,7 +105,7 @@ describe("ImportDrawingDialog", () => {
     });
   });
 
-  it("imports every page of a multi-page PDF from one button", async () => {
+  it("imports every page by default in one request", async () => {
     const onStarted = vi.fn();
     const { api, requests } = fakeClient(routes(pdfInspection));
     renderWithProviders(
@@ -105,45 +113,67 @@ describe("ImportDrawingDialog", () => {
       { api },
     );
     await read("D:\\plans\\foundation-plan.pdf");
-    fireEvent.click(screen.getByRole("button", { name: "Import all pages" }));
-    await waitFor(() => expect(onStarted).toHaveBeenCalledTimes(1));
-    expect(
-      posts(requests)
-        .slice(1)
-        .map((r) => r.body),
-    ).toEqual([
-      {
-        inspection_id: INSPECTION_ID,
-        name: "foundation-plan · p1",
-        page: 1,
-        dpi: 150,
-        placement: { method: "none" },
-      },
-      {
-        inspection_id: INSPECTION_ID,
-        name: "foundation-plan · p2",
-        page: 2,
-        dpi: 150,
-        placement: { method: "none" },
-      },
-    ]);
+    expect(screen.getByRole("checkbox", { name: "Page 1" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("checkbox", { name: "Page 2" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByRole("button", { name: "Import all pages" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith(pdfDrawing));
+    const sent = posts(requests).slice(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toMatch(/\/drawings\/pages$/);
+    expect(sent[0].body).toEqual({
+      inspection_id: INSPECTION_ID,
+      name: "foundation-plan",
+      pages: "all",
+      dpi: 150,
+      placement: { method: "none" },
+    });
   });
 
-  it("imports every page that was clicked, in one Start import", async () => {
-    const { api, requests } = fakeClient(routes(pdfInspection));
+  it("sends the pages still ticked, and All pages ticks them again", async () => {
+    const three = {
+      ...pdfInspection,
+      page_count: 3,
+      pages: [...pdfInspection.pages, { page: 3, width_pt: 2384, height_pt: 1684 }],
+    };
+    const { api, requests } = fakeClient(routes(three));
     renderWithProviders(
       <ImportDrawingDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
       { api },
     );
     await read("D:\\plans\\foundation-plan.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    fireEvent.click(screen.getByRole("button", { name: "All pages" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Page 2" }));
     fireEvent.click(screen.getByRole("button", { name: "Start import" }));
-    await waitFor(() => expect(posts(requests)).toHaveLength(3));
-    expect(
-      posts(requests)
-        .slice(1)
-        .map((r) => (r.body as { page: number }).page),
-    ).toEqual([1, 2]);
+    await waitFor(() => expect(posts(requests)).toHaveLength(2));
+    expect(posts(requests)[1].body).toMatchObject({ pages: [1, 3] });
+  });
+
+  it("shows the server's refusal and keeps the dialog open", async () => {
+    const { api } = fakeClient(
+      routes(pdfInspection, [
+        {
+          method: "POST",
+          path: /\/drawings\/pages$/,
+          status: 409,
+          body: {
+            error: {
+              code: "job_running",
+              message: "a drawing is being imported from this file",
+              details: {},
+            },
+          },
+        },
+      ]),
+    );
+    renderWithProviders(
+      <ImportDrawingDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await read("D:\\plans\\foundation-plan.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(await screen.findByText("a drawing is being imported from this file")).toBeInTheDocument();
   });
 
   it("lowers the DPI of a large page and says so", async () => {
