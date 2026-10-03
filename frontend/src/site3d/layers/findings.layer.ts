@@ -74,6 +74,8 @@ export function circleSprite(size = 32): THREE.DataTexture {
 
 export interface FindingsLayer extends StatusLayer {
   hit(clientX: number, clientY: number): { findingId: string } | null;
+  /** Recolours the drawn pins in place (no re-read); pins drawn later use it too. */
+  setScale(scale: readonly SeverityLevel[]): void;
 }
 
 interface Pin {
@@ -90,11 +92,13 @@ export function createFindingsLayer(o: {
   scale?: readonly SeverityLevel[];
 }): FindingsLayer {
   const status = new StatusCell();
-  const scale = o.scale ?? DEFAULT_SEVERITY_SCALE;
+  let scale = o.scale ?? DEFAULT_SEVERITY_SCALE;
   let parts: EngineParts | null = null;
   let points: THREE.Points | null = null;
   let positions = new Float32Array(0);
   let ids: string[] = [];
+  /** The drawn pins' severities, in draw order, for a recolour. */
+  let severities: (number | null)[] = [];
   let visible = true;
   /** Bumped by every attach and detach: a read whose number is no longer current is discarded (StrictMode re-attaches the same layer). */
   let loadSeq = 0;
@@ -109,18 +113,23 @@ export function createFindingsLayer(o: {
     points = null;
   }
 
+  function colourPins(out: Float32Array): Float32Array {
+    const fallback = tokenColor(tokenRgb("accent"));
+    severities.forEach((sev, k) => {
+      const level = severityOf(scale, sev);
+      const c = level ? new THREE.Color(level.colour) : fallback;
+      out.set([c.r, c.g, c.b], k * 3);
+    });
+    return out;
+  }
+
   function draw(pins: Pin[]): void {
     if (!parts || pins.length === 0) return;
     clear();
     positions = new Float32Array(pins.length * 3);
-    const colours = new Float32Array(pins.length * 3);
-    const fallback = tokenColor(tokenRgb("accent"));
-    pins.forEach((p, k) => {
-      positions.set([p.at.x, p.at.y, p.at.z], k * 3);
-      const level = severityOf(scale, p.severity);
-      const c = level ? new THREE.Color(level.colour) : fallback;
-      colours.set([c.r, c.g, c.b], k * 3);
-    });
+    pins.forEach((p, k) => positions.set([p.at.x, p.at.y, p.at.z], k * 3));
+    severities = pins.map((p) => p.severity);
+    const colours = colourPins(new Float32Array(pins.length * 3));
     ids = pins.map((p) => p.id);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -218,6 +227,14 @@ export function createFindingsLayer(o: {
     setVisible(v) {
       visible = v;
       if (points) points.visible = v;
+      parts?.requestRender();
+    },
+    setScale(next) {
+      scale = next;
+      if (!points) return;
+      const attr = points.geometry.getAttribute("color") as THREE.BufferAttribute;
+      colourPins(attr.array as Float32Array);
+      attr.needsUpdate = true;
       parts?.requestRender();
     },
     hit(clientX, clientY) {

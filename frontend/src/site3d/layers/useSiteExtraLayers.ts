@@ -41,7 +41,6 @@ export const DEFAULT_ON: Readonly<Record<string, boolean>> = {
   photos: false,
   findings: true,
 };
-const NO_OVERRIDES: Readonly<Record<string, boolean>> = {};
 
 interface LayerSet {
   rows: Omit<ExtraLayerRow, "visible">[];
@@ -76,7 +75,8 @@ export function useSiteExtraLayers(o: {
     const sky = createSkyLayer();
     const water = createWaterLayer({ sun: sky.sun });
     const photos = createPhotosLayer({ api, projectId, frame, scene });
-    const findings = createFindingsLayer({ api, projectId, frame, scene, scale });
+    // the severity scale reaches the pins through `setScale` below, so a scale change never rebuilds the set
+    const findings = createFindingsLayer({ api, projectId, frame, scene });
     return {
       clouds,
       water,
@@ -90,17 +90,18 @@ export function useSiteExtraLayers(o: {
         { id: findings.id, label: findings.label, group: "Data", layer: findings },
       ],
     };
-  }, [engine, scene, frame, api, projectId, baseUrl, token, host, scale]);
+  }, [engine, scene, frame, api, projectId, baseUrl, token, host]);
 
-  const [overrides, setOverrides] = useState<{ key: LayerSet | null; vis: Record<string, boolean> }>({
-    key: null,
-    vis: {},
-  });
-  const vis = overrides.key === set ? overrides.vis : NO_OVERRIDES;
+  /** The operator's toggles by layer id, so they outlive a rebuild (a scene reload after a saved edit); a cloud id that goes simply has no row. */
+  const [vis, setVis] = useState<Record<string, boolean>>({});
   const [, bump] = useReducer((n: number) => n + 1, 0);
   const [cloudColour, setCloudColourState] = useState<CloudColour>("rgb");
   const [budget, setBudgetState] = useState(() => host.budget());
 
+  // before the attach effect, so the first read already colours by the current scale
+  useEffect(() => {
+    set?.findings.setScale(scale);
+  }, [set, scale]);
   useEffect(() => {
     if (!engine || !set) return;
     const offs = set.rows.map((r) => r.layer.status.subscribe(() => bump()));
@@ -123,8 +124,7 @@ export function useSiteExtraLayers(o: {
 
   return {
     rows: set ? set.rows.map((r) => ({ ...r, visible: shownOf(vis, r.id) })) : [],
-    setVisible: (id, v) =>
-      setOverrides((prev) => ({ key: set, vis: { ...(prev.key === set ? prev.vis : {}), [id]: v } })),
+    setVisible: (id, v) => setVis((prev) => ({ ...prev, [id]: v })),
     cloudColour,
     setCloudColour: setCloudColourState,
     budget,

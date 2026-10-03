@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { waitFor } from "@testing-library/react";
-import { createApiClient } from "@contract/client";
+import type { ApiClient } from "@contract/client";
 import { describe, expect, it } from "vitest";
-import { fakeClient, fakeFetch } from "@/test/fixtures";
+import { DEFAULT_SEVERITY_SCALE } from "@/ui";
+import { fakeClient } from "@/test/fixtures";
 import { fakeSiteEngine } from "@/test/fakeSiteEngine";
 import { FRAME, cloudRow, sceneWith } from "@/test/siteSceneFixtures";
 import {
@@ -145,6 +146,30 @@ describe("findings layer", () => {
     expect(pos.getY(1)).toBeCloseTo(0, 4); // cloud z -20.45 + 120.45 = EL 100 = the datum
   });
 
+  it("a new severity scale recolours the drawn pins in place, without a re-read", async () => {
+    const { layer, scene: s3, requests } = setup([MAP([mapPin("f1", 4)]), CLOUD([])]);
+    await waitFor(() => expect(layer.status.get().kind).toBe("ready"));
+    const before = pins(s3);
+    const reads = requests.length;
+    const blue = DEFAULT_SEVERITY_SCALE.map((l) => (l.level === 4 ? { ...l, colour: "#0000ff" } : l));
+    layer.setScale(blue);
+    expect(pins(s3)).toBe(before);
+    const col = pins(s3).geometry.getAttribute("color");
+    expect([col.getX(0), col.getY(0), col.getZ(0)]).toEqual([0, 0, 1]);
+    expect(requests).toHaveLength(reads);
+  });
+
+  it("a scale set before the pins land colours them when they are drawn", async () => {
+    const { api } = fakeClient([MAP([mapPin("f1", 4)]), CLOUD([])] as never);
+    const f = fakeSiteEngine();
+    const layer = createFindingsLayer({ api, projectId: "p", frame: FRAME, scene });
+    layer.setScale(DEFAULT_SEVERITY_SCALE.map((l) => ({ ...l, colour: "#00ff00" })));
+    layer.attach(f.engine);
+    await waitFor(() => expect(layer.status.get().kind).toBe("ready"));
+    const col = pins(f.scene).geometry.getAttribute("color");
+    expect([col.getX(0), col.getY(0), col.getZ(0)]).toEqual([0, 1, 0]);
+  });
+
   it("pins ignore depth so a pin at the datum shows through raised land", async () => {
     const { layer, scene: s3 } = setup([MAP([mapPin("f1", 4)]), CLOUD([])]);
     await waitFor(() => expect(layer.status.get().kind).toBe("ready"));
@@ -212,23 +237,36 @@ describe("findings layer", () => {
   });
 
   it("a read that resolves after detach is dropped; attach after detach loads again", async () => {
-    const { fetch: inner } = fakeFetch([MAP([mapPin("f1", 1)]), CLOUD([])] as never);
+    // The API answers in-process (no fetch, no body stream), so once the gated answers are out
+    // everything left of the stale read is promise callbacks, which one macrotask drains.
+    const answer = (path: string) => {
+      const data = path.endsWith("/map-workspace/findings")
+        ? { items: [mapPin("f1", 1)], truncated: false }
+        : { items: [], next_cursor: null };
+      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+    };
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     let gated = true;
-    const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
-      if (gated) await gate;
-      return inner(input, init);
-    }) as typeof fetch;
-    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
+    const stale: Promise<unknown>[] = [];
+    const api = {
+      GET: (path: string) => {
+        if (!gated) return Promise.resolve(answer(path));
+        const p = gate.then(() => answer(path));
+        stale.push(p);
+        return p;
+      },
+    } as unknown as ApiClient;
     const f = fakeSiteEngine();
     const layer = createFindingsLayer({ api, projectId: "p", frame: FRAME, scene });
     layer.attach(f.engine);
     expect(layer.status.get().kind).toBe("loading");
     layer.detach();
+    expect(stale).toHaveLength(2); // the map read and the cloud's pins
     gated = false;
     release();
-    await new Promise((r) => setTimeout(r, 50)); // the stale reads have resolved by now
+    await Promise.all(stale);
+    await new Promise((r) => setTimeout(r, 0)); // drains the stale read's remaining promise callbacks
     expect(pins(f.scene)).toBeUndefined();
     expect(layer.status.get().kind).toBe("loading");
 

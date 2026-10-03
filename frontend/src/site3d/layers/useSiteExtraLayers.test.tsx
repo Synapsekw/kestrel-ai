@@ -1,6 +1,8 @@
 import { StrictMode, type ReactNode } from "react";
-import { act, renderHook } from "@testing-library/react";
+import type * as THREE from "three";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_SEVERITY_SCALE, SeverityScaleContext, type SeverityLevel } from "@/ui";
 import { TestApiProvider } from "@/test/render";
 import { fakeClient } from "@/test/fixtures";
 import { fakeSiteEngine } from "@/test/fakeSiteEngine";
@@ -86,6 +88,80 @@ describe("useSiteExtraLayers", () => {
     expect(a.layers.size).toBe(0);
     expect(b.layers.size).toBe(5);
     for (const l of second) expect(first).not.toContain(l);
+  });
+
+  it("a severity scale change keeps the layer set and recolours the pins in place", async () => {
+    const ortho = {
+      id: "o1",
+      name: "Ortho",
+      tile_url_template: "",
+      bounds_site: [0, 0, 1, 1],
+      min_z: 7,
+      max_z: 17,
+    };
+    const s = sceneWith({ orthos: [ortho], findings: { count: 1, url: "" } });
+    const pin = {
+      id: "f1",
+      number: 1,
+      type_id: "t",
+      severity: 4,
+      status: "open",
+      created_by: "human",
+      map_id: "o1",
+      geometry_site: { type: "Point", coordinates: FRAME.origin_crs },
+    };
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/map-workspace\/findings$/, body: { items: [pin], truncated: false } },
+    ] as never);
+    const f = fakeSiteEngine();
+    let scale: readonly SeverityLevel[] = DEFAULT_SEVERITY_SCALE;
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={api}>
+        <SeverityScaleContext.Provider value={scale}>{children}</SeverityScaleContext.Provider>
+      </TestApiProvider>
+    );
+    const hook = renderHook(
+      () => useSiteExtraLayers({ engine: f.engine, scene: s, frame: FRAME, projectId: "p", modelRoot: null }),
+      { wrapper },
+    );
+    const findings = hook.result.current.findings!;
+    await waitFor(() => expect(findings.status.get().kind).toBe("ready"));
+    const layers = hook.result.current.rows.map((r) => r.layer);
+    const reads = requests.length;
+    const adds = f.raw.addLayer.mock.calls.length;
+
+    scale = DEFAULT_SEVERITY_SCALE.map((l) => (l.level === 4 ? { ...l, colour: "#0000ff" } : l));
+    hook.rerender();
+
+    hook.result.current.rows.forEach((r, k) => expect(r.layer).toBe(layers[k]));
+    expect(f.raw.addLayer.mock.calls.length).toBe(adds);
+    expect(requests).toHaveLength(reads);
+    const col = (f.scene.getObjectByName("site-findings") as THREE.Points).geometry.getAttribute("color");
+    expect([col.getX(0), col.getY(0), col.getZ(0)]).toEqual([0, 0, 1]);
+  });
+
+  it("a layer toggle survives a scene reload (a new scene object rebuilds the set)", () => {
+    const { api } = fakeClient([]);
+    const f = fakeSiteEngine();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={api}>{children}</TestApiProvider>
+    );
+    const hook = renderHook(
+      ({ s }) =>
+        useSiteExtraLayers({ engine: f.engine, scene: s, frame: FRAME, projectId: "p", modelRoot: null }),
+      { wrapper, initialProps: { s: scene } },
+    );
+    act(() => hook.result.current.setVisible("sky", false));
+    act(() => hook.result.current.setVisible("photos", true));
+    const firstSky = hook.result.current.rows.find((r) => r.id === "sky")!.layer;
+
+    hook.rerender({ s: { ...scene } });
+
+    const rows = hook.result.current.rows;
+    expect(rows.find((r) => r.id === "sky")!.layer).not.toBe(firstSky);
+    expect(rows.find((r) => r.id === "sky")!.visible).toBe(false);
+    expect(rows.find((r) => r.id === "photos")!.visible).toBe(true);
+    expect(f.scene.getObjectByName("site-sky")!.visible).toBe(false);
   });
 });
 
