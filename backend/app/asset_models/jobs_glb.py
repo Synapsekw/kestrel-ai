@@ -14,7 +14,7 @@ import os
 
 from sqlalchemy import select
 
-from app.asset_models import store
+from app.asset_models import plant_frame, store
 from app.asset_models.assemble import AssembleError, assemble, index_items, site_label, write_csv
 from app.asset_models.build import build_glb
 from app.asset_models.spec import AssetSpec
@@ -121,6 +121,8 @@ def run_glb(ctx) -> dict:
             index_items(s, mid, n, rows)
             v = store.get_version(s, mid, n)
             v.glb_status, v.meta = "ready", meta
+            if spec.site is not None:
+                plant_frame.fill_frame(s, mid, spec, meta)
     except _SpecErrors:
         _mark_failed(ctx, {"validation": checked})
         raise JobFailure("The model spec has errors; open the version to see them.") from None
