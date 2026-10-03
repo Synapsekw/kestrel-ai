@@ -22,7 +22,9 @@ const { stub } = vi.hoisted(() => ({
       </div>
     ),
 }));
-vi.mock("@/assetmodels/review/ReviewImportDialog", () => ({ ReviewImportDialog: stub("Import inspection review") }));
+vi.mock("@/assetmodels/review/ReviewImportDialog", () => ({
+  ReviewImportDialog: stub("Import inspection review"),
+}));
 vi.mock("./ImportImagesDialog", () => ({ ImportImagesDialog: stub("Import images") }));
 vi.mock("@/maps/ImportMapDialog", () => ({ ImportMapDialog: stub("Import map") }));
 vi.mock("@/clouds/ImportCloudDialog", () => ({ ImportCloudDialog: stub("Import cloud") }));
@@ -41,7 +43,14 @@ describe("AddDataDialog", () => {
   it("offers six tiles, all enabled", () => {
     const { api } = fakeClient([]);
     renderWithProviders(<AddDataDialog project={exampleProject} onClose={() => {}} />, { api });
-    for (const name of [/Photos/, /Orthomosaic/, /Elevation/, /Point cloud/, /Drawing/, /Inspection review/]) {
+    for (const name of [
+      /Photos/,
+      /Orthomosaic/,
+      /Elevation/,
+      /Point cloud/,
+      /Drawing/,
+      /Inspection review/,
+    ]) {
       expect(screen.getByRole("button", { name })).toBeEnabled();
       expect(screen.getByRole("button", { name })).not.toHaveAttribute("aria-disabled");
     }

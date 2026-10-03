@@ -15,7 +15,8 @@ export function prefillClassMap(
 ): Record<string, string | null> {
   const byName = new Map(types.map((t) => [normName(t.name), t.id]));
   const out: Record<string, string | null> = {};
-  for (const c of classes) out[c.key] = c.type_id ?? byName.get(normName(c.label)) ?? byName.get(normName(c.key)) ?? null;
+  for (const c of classes)
+    out[c.key] = c.type_id ?? byName.get(normName(c.label)) ?? byName.get(normName(c.key)) ?? null;
   return out;
 }
 
@@ -30,7 +31,12 @@ export const REASON_TEXT: Record<UnmatchedReason, string> = {
   size_mismatch: "The image's shape does not match the kit's photo",
 };
 
-const BY_TEXT = { path: "by path", suffix: "by folder and name", name: "by name", time_size: "by capture time and size" } as const;
+const BY_TEXT = {
+  path: "by path",
+  suffix: "by folder and name",
+  name: "by name",
+  time_size: "by capture time and size",
+} as const;
 
 export function matchedByText(by: ReviewImportPreview["matched_by"]): string | null {
   const parts = (Object.keys(BY_TEXT) as (keyof typeof BY_TEXT)[])
@@ -47,7 +53,9 @@ export function blockers(p: ReviewImportPreview): string[] {
     out.push("The asset model has no 3D model yet and the folder has no model.glb. Import the GLB first.");
   }
   if (p.model && p.model.existing_sightings > 0) {
-    out.push(`This asset model already holds ${p.model.existing_sightings} sightings. Import into a new asset model instead.`);
+    out.push(
+      `This asset model already holds ${p.model.existing_sightings} sightings. Import into a new asset model instead.`,
+    );
   }
   return out;
 }

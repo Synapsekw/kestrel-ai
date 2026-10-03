@@ -88,10 +88,12 @@ describe("asset review job toasts", () => {
     );
     expect(jobToastText(done("asset_group"))).toBe("Findings regrouped");
     expect(jobToastText(done("review_kit_import"))).toBe("Review job imported");
-    expect(jobToastText(done("review_kit_import", { findings: 656, sightings: 1441, unmatched_count: 0 }))).toBe(
-      "Review job imported: 656 findings from 1441 sightings",
+    expect(
+      jobToastText(done("review_kit_import", { findings: 656, sightings: 1441, unmatched_count: 0 })),
+    ).toBe("Review job imported: 656 findings from 1441 sightings");
+    expect(jobToastText(done("review_kit_import", { photos: 3 }, { dry_run: true }))).toBe(
+      "Review folder checked",
     );
-    expect(jobToastText(done("review_kit_import", { photos: 3 }, { dry_run: true }))).toBe("Review folder checked");
   });
 
   it("names the job when it fails", () => {

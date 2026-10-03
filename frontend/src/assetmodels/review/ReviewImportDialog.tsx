@@ -45,7 +45,9 @@ export function ReviewImportDialog({
   useEffect(() => {
     fetchAllSources(api, projectId).then(
       (all) => {
-        const images = all.filter((s) => s.kind === "images").map((s) => ({ id: s.id, label: s.label ?? s.folder }));
+        const images = all
+          .filter((s) => s.kind === "images")
+          .map((s) => ({ id: s.id, label: s.label ?? s.folder }));
         setSources(images);
         setSourceId((cur) => cur || (images[0]?.id ?? ""));
       },
@@ -72,7 +74,11 @@ export function ReviewImportDialog({
     folder: folder.trim(),
     image_source_id: sourceId,
     ...(target ? { asset_model_id: target } : { new_model_name: newName.trim() }),
-    ...(dryRun ? {} : { class_map: Object.fromEntries(Object.entries(map).filter(([, v]) => !!v)) as Record<string, string> }),
+    ...(dryRun
+      ? {}
+      : {
+          class_map: Object.fromEntries(Object.entries(map).filter(([, v]) => !!v)) as Record<string, string>,
+        }),
     dry_run: dryRun,
   });
   const formReady = folder.trim() !== "" && sourceId !== "" && (target !== "" || newName.trim() !== "");
@@ -138,11 +144,22 @@ export function ReviewImportDialog({
             Cancel
           </Button>
           {preview ? (
-            <Button variant="primary" icon="import" loading={busy} disabled={!canImport} onClick={() => void run()}>
+            <Button
+              variant="primary"
+              icon="import"
+              loading={busy}
+              disabled={!canImport}
+              onClick={() => void run()}
+            >
               Import
             </Button>
           ) : (
-            <Button variant="primary" loading={busy || checking} disabled={!formReady || checking} onClick={() => void check()}>
+            <Button
+              variant="primary"
+              loading={busy || checking}
+              disabled={!formReady || checking}
+              onClick={() => void check()}
+            >
               Check the folder
             </Button>
           )}
@@ -213,15 +230,23 @@ export function ReviewImportDialog({
           </Field>
         )}
         {sources && sources.length === 0 && (
-          <Alert tone="warn">Import the review&apos;s photos first (Add data, Photos). The kit&apos;s photos are matched to them.</Alert>
+          <Alert tone="warn">
+            Import the review&apos;s photos first (Add data, Photos). The kit&apos;s photos are matched to
+            them.
+          </Alert>
         )}
         {checking && <Progress thin running value={dry?.progress ?? undefined} label="Checking the folder" />}
         {dryError && <Alert tone="danger">{dryError}</Alert>}
         {preview && (
-          <section aria-label="What this import will do" className="flex flex-col gap-3 border-t border-line pt-3">
+          <section
+            aria-label="What this import will do"
+            className="flex flex-col gap-3 border-t border-line pt-3"
+          >
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Pill size="sm">{preview.profile}</Pill>
-              <span className="text-muted">{preview.unit === "region" ? "One finding per region" : "One finding per photo"}</span>
+              <span className="text-muted">
+                {preview.unit === "region" ? "One finding per region" : "One finding per photo"}
+              </span>
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt className="text-muted">Photos</dt>
@@ -257,7 +282,9 @@ export function ReviewImportDialog({
                 <ul aria-label="Photos not matched" className="mt-1 max-h-40 overflow-y-auto">
                   {reasons.map((r) => (
                     <li key={r.kit_id} className="flex gap-2 py-0.5">
-                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink">{r.source_name}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink">
+                        {r.source_name}
+                      </span>
                       <span className="shrink-0 text-xs text-muted">{REASON_TEXT[r.reason]}</span>
                     </li>
                   ))}

@@ -9,30 +9,83 @@ import { ReviewImportDialog } from "./ReviewImportDialog";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "D:\\kits\\tower\\job") }));
 
-const SOURCE = { id: "src-1", kind: "images", label: "Flight 14 Sep", captured_on: null, map_id: null, folder: "D:\\photos",
-  site: null, settings: {}, image_count: 3, duplicate_count: 0, job_id: null, imported_at: null, created_at: "" };
+const SOURCE = {
+  id: "src-1",
+  kind: "images",
+  label: "Flight 14 Sep",
+  captured_on: null,
+  map_id: null,
+  folder: "D:\\photos",
+  site: null,
+  settings: {},
+  image_count: 3,
+  duplicate_count: 0,
+  job_id: null,
+  imported_at: null,
+  created_at: "",
+};
 
 const PREVIEW = {
-  dry_run: true, unit: "region", profile: "building-facade", profile_id: "building_facade",
-  photos: 3, matched: 2, matched_by: { path: 2 }, unmatched_count: 1, unmatched: ["flight-b/DJI_0003.JPG"],
+  dry_run: true,
+  unit: "region",
+  profile: "building-facade",
+  profile_id: "building_facade",
+  photos: 3,
+  matched: 2,
+  matched_by: { path: 2 },
+  unmatched_count: 1,
+  unmatched: ["flight-b/DJI_0003.JPG"],
   unmatched_reasons: [{ kit_id: "p03", source_name: "flight-b/DJI_0003.JPG", reason: "not_found" }],
   classes: [
     { key: "cladding", label: "Cladding damage", count: 2, type_id: "t-clad" },
     { key: "staining", label: "Staining", count: 1, type_id: null },
   ],
   statuses: { finding: 2, none: 0, uncertain: 0, not_assessed: 0 },
-  sightings: 3, has_surface: true, has_glb: false, has_merged: true,
+  sightings: 3,
+  has_surface: true,
+  has_glb: false,
+  has_merged: true,
   model: { ready_version: 2, existing_sightings: 0 },
 };
 
 const job = (id: string, dry: boolean, extra: object = {}) => ({
-  id, project_id: PROJECT_ID, type: "review_kit_import", state: "succeeded", progress: 1, message: "", log_path: "",
-  params: { dry_run: dry }, result: dry ? PREVIEW : null, error: null, created_at: "", started_at: null, finished_at: null, ...extra,
+  id,
+  project_id: PROJECT_ID,
+  type: "review_kit_import",
+  state: "succeeded",
+  progress: 1,
+  message: "",
+  log_path: "",
+  params: { dry_run: dry },
+  result: dry ? PREVIEW : null,
+  error: null,
+  created_at: "",
+  started_at: null,
+  finished_at: null,
+  ...extra,
 });
 
 const CLASSES = [
-  { id: "t-clad", name: "Cladding damage", colour: "#f97316", hotkey: null, order: 0, kind: "defect", default_severity: null, group: null },
-  { id: "t-staining", name: "Stain marks", colour: "#3b82f6", hotkey: null, order: 1, kind: "defect", default_severity: null, group: null },
+  {
+    id: "t-clad",
+    name: "Cladding damage",
+    colour: "#f97316",
+    hotkey: null,
+    order: 0,
+    kind: "defect",
+    default_severity: null,
+    group: null,
+  },
+  {
+    id: "t-staining",
+    name: "Stain marks",
+    colour: "#3b82f6",
+    hotkey: null,
+    order: 1,
+    kind: "defect",
+    default_severity: null,
+    group: null,
+  },
 ];
 
 function setup(extra: unknown[] = [], mode: "mock" | "tauri" = "mock") {
@@ -42,12 +95,18 @@ function setup(extra: unknown[] = [], mode: "mock" | "tauri" = "mock") {
     ...extra,
     { method: "GET", path: /\/sources$/, body: { items: [SOURCE], next_cursor: null } },
     { method: "GET", path: /\/asset-models$/, body: { items: [MODEL_REVIEWED] } },
-    { method: "POST", path: /\/review-imports$/, status: 202,
-      body: (r: { body: unknown }) => ({ job: job(`j${++n}`, (r.body as { dry_run: boolean }).dry_run) }) },
+    {
+      method: "POST",
+      path: /\/review-imports$/,
+      status: 202,
+      body: (r: { body: unknown }) => ({ job: job(`j${++n}`, (r.body as { dry_run: boolean }).dry_run) }),
+    },
   ] as never);
   const onStarted = vi.fn();
-  renderWithProviders(<ReviewImportDialog projectId={PROJECT_ID} modelId="m1" onClose={() => {}} onStarted={onStarted} />,
-    { api: client.api, mode });
+  renderWithProviders(
+    <ReviewImportDialog projectId={PROJECT_ID} modelId="m1" onClose={() => {}} onStarted={onStarted} />,
+    { api: client.api, mode },
+  );
   return { ...client, onStarted };
 }
 
@@ -56,7 +115,9 @@ afterEach(() => useJobsStore.setState({ jobs: {} }));
 describe("ReviewImportDialog", () => {
   it("checks the folder, shows the preview, maps the classes and starts the import", async () => {
     const { requests, onStarted } = setup();
-    fireEvent.change(screen.getByLabelText(/review job folder/i), { target: { value: "D:\\kits\\tower\\job" } });
+    fireEvent.change(screen.getByLabelText(/review job folder/i), {
+      target: { value: "D:\\kits\\tower\\job" },
+    });
     await screen.findByRole("option", { name: /flight 14 sep/i });
     fireEvent.click(screen.getByRole("button", { name: /check the folder/i }));
 
@@ -81,9 +142,17 @@ describe("ReviewImportDialog", () => {
 
     await waitFor(() => expect(onStarted).toHaveBeenCalled());
     const posts = requests.filter((r) => r.method === "POST").map((r) => r.body);
-    expect(posts[0]).toEqual({ folder: "D:\\kits\\tower\\job", image_source_id: "src-1", asset_model_id: "m1", dry_run: true });
+    expect(posts[0]).toEqual({
+      folder: "D:\\kits\\tower\\job",
+      image_source_id: "src-1",
+      asset_model_id: "m1",
+      dry_run: true,
+    });
     expect(posts[1]).toEqual({
-      folder: "D:\\kits\\tower\\job", image_source_id: "src-1", asset_model_id: "m1", dry_run: false,
+      folder: "D:\\kits\\tower\\job",
+      image_source_id: "src-1",
+      asset_model_id: "m1",
+      dry_run: false,
       class_map: { cladding: "t-clad", staining: "t-staining" },
     });
     expect(useJobsStore.getState().jobs.j2).toBeDefined();
@@ -99,8 +168,14 @@ describe("ReviewImportDialog", () => {
   });
 
   it("shows the server's reason for a folder that is not a review job", async () => {
-    setup([{ method: "POST", path: /\/review-imports$/, status: 422,
-      body: { error: { code: "kit_invalid", message: "This folder has no job.yaml.", details: {} } } }]);
+    setup([
+      {
+        method: "POST",
+        path: /\/review-imports$/,
+        status: 422,
+        body: { error: { code: "kit_invalid", message: "This folder has no job.yaml.", details: {} } },
+      },
+    ]);
     fireEvent.change(screen.getByLabelText(/review job folder/i), { target: { value: "D:\\nothing" } });
     await screen.findByRole("option", { name: /flight 14 sep/i });
     fireEvent.click(screen.getByRole("button", { name: /check the folder/i }));
@@ -108,8 +183,16 @@ describe("ReviewImportDialog", () => {
   });
 
   it("shows a failed dry run's message", async () => {
-    setup([{ method: "POST", path: /\/review-imports$/, status: 202,
-      body: { job: job("jf", true, { state: "failed", result: null, error: "Unknown review profile: chimney." }) } }]);
+    setup([
+      {
+        method: "POST",
+        path: /\/review-imports$/,
+        status: 202,
+        body: {
+          job: job("jf", true, { state: "failed", result: null, error: "Unknown review profile: chimney." }),
+        },
+      },
+    ]);
     fireEvent.change(screen.getByLabelText(/review job folder/i), { target: { value: "D:\\k" } });
     await screen.findByRole("option", { name: /flight 14 sep/i });
     fireEvent.click(screen.getByRole("button", { name: /check the folder/i }));
@@ -119,7 +202,9 @@ describe("ReviewImportDialog", () => {
   it("picks the folder with the Tauri dialog in the desktop app", async () => {
     setup([], "tauri");
     fireEvent.click(screen.getByRole("button", { name: /^browse$/i }));
-    await waitFor(() => expect(screen.getByLabelText(/review job folder/i)).toHaveValue("D:\\kits\\tower\\job"));
+    await waitFor(() =>
+      expect(screen.getByLabelText(/review job folder/i)).toHaveValue("D:\\kits\\tower\\job"),
+    );
   });
 
   it("imports into a new asset model by name", async () => {
