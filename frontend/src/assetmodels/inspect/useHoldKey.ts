@@ -2,10 +2,27 @@ import { useEffect, useRef } from "react";
 import { chordOf, isTypingTarget, normaliseChord } from "@/ui";
 
 /**
- * Calls `onChange(true)` when `chord` goes down and `onChange(false)` when it comes up (or the window
- * loses focus mid-hold). For hold-to-compare: `useToolShortcuts` binds key-down only.
+ * The key belongs to the hold only when nothing else has focus (the body) or focus is inside `zone`
+ * (a selector), and never inside a modal dialog: a focused button, radio, slider or select keeps its
+ * own key (Space presses a button), as `canvasOwnsSpace` in the images keymap.
  */
-export function useHoldKey(chord: string, onChange: (held: boolean) => void, enabled = true): void {
+export function holdOwnsKey(target: EventTarget | null, zone: string): boolean {
+  if (!(target instanceof Element)) return true; // window or document: nothing focused
+  if (target.closest('[aria-modal="true"]')) return false;
+  return target === document.body || (zone !== "" && target.closest(zone) !== null);
+}
+
+/**
+ * Calls `onChange(true)` when `chord` goes down and `onChange(false)` when it comes up (or the window
+ * loses focus mid-hold). For hold-to-compare: `useToolShortcuts` binds key-down only. The key is taken
+ * (and default-prevented) only where `holdOwnsKey` says so.
+ */
+export function useHoldKey(
+  chord: string,
+  onChange: (held: boolean) => void,
+  enabled = true,
+  zone = "",
+): void {
   const cb = useRef(onChange);
   useEffect(() => {
     cb.current = onChange;
@@ -21,6 +38,7 @@ export function useHoldKey(chord: string, onChange: (held: boolean) => void, ena
     };
     const down = (e: KeyboardEvent) => {
       if (e.repeat || e.defaultPrevented || isTypingTarget(e.target) || chordOf(e) !== want) return;
+      if (!holdOwnsKey(e.target, zone)) return;
       e.preventDefault();
       set(true);
     };
@@ -37,5 +55,5 @@ export function useHoldKey(chord: string, onChange: (held: boolean) => void, ena
       window.removeEventListener("blur", blur);
       if (held) cb.current(false);
     };
-  }, [chord, enabled]);
+  }, [chord, enabled, zone]);
 }

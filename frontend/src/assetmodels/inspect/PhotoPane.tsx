@@ -1,6 +1,7 @@
 // The Photo mode: the existing ImageCanvas, loaded through the images store (useImageData), with the
-// finding's polygons as its overlay. The annotations stay on (the overlay is drawn in their layer),
-// and the pan tool is on, so a drag pans and nothing is edited by accident; both are restored after.
+// finding's polygons in the canvas's top overlay layer. The photo's other annotations are hidden (the
+// top overlay does not follow them, so hold to compare shows the bare photo), and the pan tool is on,
+// so a drag pans and nothing is edited by accident; both are restored on unmount.
 import { useEffect, useMemo } from "react";
 import type { FindingSighting } from "@/api/assetReview";
 import { useProjectTypes } from "@/findings/useProjectTypes";
@@ -36,8 +37,7 @@ export function PhotoPane({
     const s = useImagesWorkspace.getState();
     const before = { tool: s.tool, annotations: s.showAnnotations };
     s.setTool("pan");
-    // The overlay lives in the canvas's interaction layer, which is hidden with the annotations.
-    if (!s.showAnnotations) s.toggleAnnotations();
+    if (s.showAnnotations) s.toggleAnnotations();
     return () => {
       const now = useImagesWorkspace.getState();
       now.setTool(before.tool);
@@ -78,12 +78,14 @@ export function PhotoPane({
           <Skeleton className="h-40 w-56 rounded-panel" />
         </div>
       ) : null}
-      <ImageCanvas
-        projectId={projectId}
-        types={types}
-        imageUrl={imageUrl}
-        overlay={showing ? <InspectOverlay rings={rings} opacity={opacity} /> : null}
-      />
+      {!error && (
+        <ImageCanvas
+          projectId={projectId}
+          types={types}
+          imageUrl={imageUrl}
+          topOverlay={showing ? <InspectOverlay rings={rings} opacity={opacity} /> : null}
+        />
+      )}
     </div>
   );
 }

@@ -6,24 +6,33 @@ import { SPLIT_MAX, SPLIT_MIN, splitFromKey, splitFromPointer } from "./split";
 export function Splitter({
   value,
   onChange,
+  onCommit,
   label = "Resize the model and photo panes",
 }: {
   value: number;
+  /** Every move, drag frames included: only sets the width. */
   onChange(v: number): void;
+  /** The settled width, after a drag ends or a key moves it: the place to remember it. */
+  onCommit?(v: number): void;
   label?: string;
 }) {
-  const drag = useRef<{ left: number; width: number } | null>(null);
+  const drag = useRef<{ left: number; width: number; last: number | null } | null>(null);
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     const host = e.currentTarget.parentElement?.getBoundingClientRect();
     if (!host) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { left: host.left, width: host.width };
+    drag.current = { left: host.left, width: host.width, last: null };
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (drag.current) onChange(splitFromPointer(e.clientX, drag.current.left, drag.current.width));
+    const d = drag.current;
+    if (!d) return;
+    d.last = splitFromPointer(e.clientX, d.left, d.width);
+    onChange(d.last);
   };
   const end = () => {
+    const last = drag.current?.last ?? null;
     drag.current = null;
+    if (last !== null) onCommit?.(last);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const next = splitFromKey(value, e.key, e.shiftKey);
@@ -31,6 +40,7 @@ export function Splitter({
     e.preventDefault();
     e.stopPropagation();
     onChange(next);
+    onCommit?.(next);
   };
   return (
     <div

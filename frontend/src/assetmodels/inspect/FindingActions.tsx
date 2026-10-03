@@ -15,6 +15,7 @@ export function FindingActions({
   current,
   others,
   typeName,
+  onChanged,
   onGo,
 }: {
   projectId: string;
@@ -23,6 +24,8 @@ export function FindingActions({
   current: FindingSighting | null;
   others: readonly Finding[];
   typeName(id: string): string | undefined;
+  /** A split or merge changed the findings: reload the list, the placements and the sightings. */
+  onChanged(): void;
   onGo(findingId: string): void;
 }) {
   const api = useApi();
@@ -30,9 +33,9 @@ export function FindingActions({
   const [merging, setMerging] = useState(false);
   const [into, setInto] = useState("");
   const label = formatFindingNumber(finding.number);
-  // same type first, then by number
+  // open findings only (a merged-away one is closed); same type first, then by number
   const candidates = [...others]
-    .filter((f) => f.id !== finding.id)
+    .filter((f) => f.id !== finding.id && f.status !== "closed")
     .sort(
       (a, b) =>
         Number(b.type_id === finding.type_id) - Number(a.type_id === finding.type_id) || a.number - b.number,
@@ -44,6 +47,7 @@ export function FindingActions({
     try {
       const made = await splitFinding(api, projectId, finding.id, [current.id]);
       toast("ok", `Split this sighting into ${formatFindingNumber(made.number)}`);
+      onChanged();
       onGo(made.id);
     } catch (e) {
       toast("danger", messageOf(e, "The sighting could not be split off."));
@@ -51,13 +55,15 @@ export function FindingActions({
       setBusy(false);
     }
   };
+  const target = candidates.some((f) => f.id === into) ? into : "";
   const merge = async () => {
-    if (!into) return;
+    if (!target) return;
     setBusy(true);
     try {
-      const survivor = await mergeFinding(api, projectId, finding.id, into);
+      const survivor = await mergeFinding(api, projectId, finding.id, target);
       toast("ok", `Merged ${label} into ${formatFindingNumber(survivor.number)}`);
       setMerging(false);
+      onChanged();
       onGo(survivor.id);
     } catch (e) {
       toast("danger", messageOf(e, "The findings could not be merged."));
@@ -94,14 +100,14 @@ export function FindingActions({
             <Button onClick={() => setMerging(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="primary" loading={busy} disabled={!into} onClick={() => void merge()}>
+            <Button variant="primary" loading={busy} disabled={!target} onClick={() => void merge()}>
               Merge
             </Button>
           </>
         }
       >
         <Field label="Merge into" htmlFor="merge-into">
-          <Select id="merge-into" value={into} onChange={(e) => setInto(e.target.value)}>
+          <Select id="merge-into" value={target} onChange={(e) => setInto(e.target.value)}>
             <option value="">Pick a finding</option>
             {candidates.map((f) => (
               <option key={f.id} value={f.id}>

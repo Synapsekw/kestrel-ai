@@ -10,6 +10,7 @@ import {
   useSightings,
 } from "@/api/assetReview";
 import { useApi, useBackend } from "@/api/client";
+import { codeOf, messageOf } from "@/api/errors";
 import { fetchFinding, type Finding } from "@/api/findings";
 import { useAssetModelList } from "@/assetmodels/useAssetModels";
 import { cameraPosesFrom, type CameraPose } from "@/assetmodels/viewer/cameras";
@@ -18,7 +19,6 @@ import { placementItems } from "@/assetmodels/viewer/placements";
 import { tokenRgb } from "@/clouds/viewer/overlay";
 import { formatFindingNumber } from "@/findings/format";
 import { useProjectTypes } from "@/findings/useProjectTypes";
-import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import {
   Alert,
   Button,
@@ -33,7 +33,7 @@ import {
 } from "@/ui";
 import { FindingActions } from "./FindingActions";
 import { InspectHud } from "./InspectHud";
-import { currentSighting, stepId } from "./nav";
+import { currentSighting, sideText, stepId } from "./nav";
 import { PhotoPane } from "./PhotoPane";
 import { readSplit, writeSplit } from "./split";
 import { Splitter } from "./Splitter";
@@ -48,6 +48,8 @@ const MODES: { value: Mode; label: string }[] = [
 ];
 const keyOf = (action: string) => WORKSPACE_KEYS.inspect.find((k) => k.action === action)?.keys[0];
 const rgb = (t: string) => `rgb(${tokenRgb(t).join(", ")})`;
+const HOLD_ZONE =
+  '[data-testid="inspect-photo"], [data-testid="inspect-stage"], [data-testid="inspect-right-stage"]';
 
 type Focus = { frustum: number[]; oblique_deg?: number | null };
 type FramePreset = { id: string; label: string; target: number[]; camera: number[] };
@@ -104,22 +106,38 @@ export function AssetInspect() {
 
   const list = useAssetFindings(projectId, modelId, { sort: "-severity" });
   const listed = list.items.find((f) => f.id === findingId) ?? null;
-  const [fetched, setFetched] = useState<{ id: string; finding: Finding | null } | null>(null);
+  // A finding not in the list (closed, or on a later page): fetched alone. Only a 404 means it is
+  // not on this asset model; any other failure is an error the operator can retry.
+  const [fetched, setFetched] = useState<{
+    id: string;
+    finding: Finding | null;
+    error: string | null;
+  } | null>(null);
+  const [fetchGen, setFetchGen] = useState(0);
   useEffect(() => {
     if (!findingId || listed || !list.done) return;
     let live = true;
     fetchFinding(api, projectId, findingId).then(
-      (f) => live && setFetched({ id: findingId, finding: f.asset_model_id === modelId ? f : null }),
-      () => live && setFetched({ id: findingId, finding: null }),
+      (f) =>
+        live && setFetched({ id: findingId, finding: f.asset_model_id === modelId ? f : null, error: null }),
+      (e: unknown) =>
+        live &&
+        setFetched({
+          id: findingId,
+          finding: null,
+          error: codeOf(e) === "not_found" ? null : messageOf(e, "The finding could not be loaded."),
+        }),
     );
     return () => {
       live = false;
     };
-  }, [api, projectId, modelId, findingId, listed, list.done]);
-  const finding = listed ?? (fetched?.id === findingId ? fetched.finding : null);
-  const missing = !listed && list.done && fetched?.id === findingId && fetched.finding === null;
+  }, [api, projectId, modelId, findingId, listed, list.done, fetchGen]);
+  const mine = !listed && list.done && fetched?.id === findingId ? fetched : null;
+  const finding = listed ?? mine?.finding ?? null;
+  const missing = mine !== null && mine.finding === null && mine.error === null;
+  const findingError = mine?.error ?? null;
 
-  const { sightings } = useSightings(projectId, findingId);
+  const { sightings, error: sightingsError, reload: reloadSightings } = useSightings(projectId, findingId);
   const current = currentSighting(sightings ?? [], wantedSighting);
   const index = current && sightings ? sightings.indexOf(current) : 0;
 
@@ -153,14 +171,11 @@ export function AssetInspect() {
   ]);
 
   const [split, setSplit] = useState(readSplit);
-  const onSplit = (v: number) => {
-    setSplit(v);
-    writeSplit(v);
-  };
   const [mode, setMode] = useState<Mode>("photo");
   const [opacity, setOpacity] = useState(55);
   const [comparing, setComparing] = useState(false);
-  useHoldKey("Space", setComparing, mode === "photo");
+  // Space is taken only with nothing focused or focus in a pane; a focused control keeps it.
+  useHoldKey("Space", setComparing, mode === "photo", HOLD_ZONE);
 
   // The stage's data: placements of the model, cameras of this finding's sightings only.
   const placements = usePlacements(projectId, modelId);
@@ -186,9 +201,11 @@ export function AssetInspect() {
     () => (mode === "pose" ? { kind: "pose", pose: currentPose } : { kind: "preset", pose: preset }),
     [mode, currentPose, preset],
   );
-  const captureTime = useImagesWorkspace((s) =>
-    s.image?.id === current?.image_id ? s.image?.capture_time : null,
-  );
+  const reloadAll = () => {
+    list.reload();
+    placements.reload();
+    reloadSightings();
+  };
 
   if (!findingId)
     return (
@@ -215,6 +232,21 @@ export function AssetInspect() {
         >
           It may have been merged, split or deleted.
         </EmptyState>
+      </div>
+    );
+  if (findingError)
+    return (
+      <div data-testid="asset-inspect" className="grid h-full place-items-center p-6">
+        <Alert
+          tone="danger"
+          actions={
+            <Button size="sm" onClick={() => setFetchGen((g) => g + 1)}>
+              Retry
+            </Button>
+          }
+        >
+          {findingError}
+        </Alert>
       </div>
     );
 
@@ -265,10 +297,23 @@ export function AssetInspect() {
           </Button>
         </GlassPanel>
       </section>
-      <Splitter value={split} onChange={onSplit} />
+      <Splitter value={split} onChange={setSplit} onCommit={writeSplit} />
       <section aria-label="Photo" className="relative h-full min-w-0 flex-1">
         {mode === "photo" ? (
-          current ? (
+          sightingsError ? (
+            <div className="grid h-full place-items-center p-6">
+              <Alert
+                tone="danger"
+                actions={
+                  <Button size="sm" onClick={reloadSightings}>
+                    Retry
+                  </Button>
+                }
+              >
+                {sightingsError}
+              </Alert>
+            </div>
+          ) : current ? (
             <PhotoPane
               projectId={projectId}
               imageId={current.image_id}
@@ -357,7 +402,8 @@ export function AssetInspect() {
               finding={finding}
               typeName={typeName(finding.type_id)}
               zone={model?.review?.zones?.find((z) => z.id === finding.zone)?.label ?? finding.zone ?? null}
-              captureTime={captureTime}
+              side={sideText(finding.side, model?.review?.sides)}
+              captureTime={current?.captured_at ?? null}
               index={index}
               count={sightings?.length ?? 0}
             />
@@ -385,12 +431,14 @@ export function AssetInspect() {
                 Next sighting
               </Button>
               <FindingActions
+                key={finding.id}
                 projectId={projectId}
                 finding={finding}
                 sightings={sightings ?? []}
                 current={current}
                 others={list.items}
                 typeName={typeName}
+                onChanged={reloadAll}
                 onGo={(id) => go({ finding: id })}
               />
             </GlassPanel>

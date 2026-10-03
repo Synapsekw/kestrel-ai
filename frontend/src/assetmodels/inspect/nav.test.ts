@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { captureText, currentSighting, overlayRings, stepId } from "./nav";
+import { captureText, currentSighting, overlayRings, sideText, stepId } from "./nav";
 
 const sighting = (id: string, image_id: string, annotation_id: string | null, extra: object = {}) =>
   ({
@@ -80,5 +80,16 @@ describe("split inspection navigation", () => {
   it("formats the capture time for the HUD", () => {
     expect(captureText("2026-09-14T06:05:00Z")).toMatch(/14 Sept? 2026/);
     expect(captureText(null)).toBeNull();
+  });
+});
+
+describe("sideText", () => {
+  const compass = { type: "compass", labels: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] };
+  it("reads a compass label as its word and leaves faces and unknown values alone", () => {
+    expect(sideText("W", compass)).toBe("West");
+    expect(sideText("NE", compass)).toBe("Northeast");
+    expect(sideText("West", { type: "faces", labels: ["North", "West"] })).toBe("West");
+    expect(sideText("W", null)).toBe("W");
+    expect(sideText(null, compass)).toBeNull();
   });
 });

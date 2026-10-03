@@ -28,4 +28,24 @@ describe("Splitter", () => {
     // the arrows move the splitter, never the sighting behind it
     expect(outer).not.toHaveBeenCalled();
   });
+
+  it("commits the width once when a drag ends, not on every move", () => {
+    const onChange = vi.fn();
+    const onCommit = vi.fn();
+    render(
+      <div style={{ width: 1000 }}>
+        <Splitter value={50} onChange={onChange} onCommit={onCommit} />
+      </div>,
+    );
+    const sep = screen.getByRole("separator");
+    sep.setPointerCapture = vi.fn();
+    sep.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 1000 }) as DOMRect;
+    fireEvent.pointerDown(sep, { pointerId: 1, clientX: 500 });
+    fireEvent.pointerMove(sep, { pointerId: 1, clientX: 400 });
+    fireEvent.pointerMove(sep, { pointerId: 1, clientX: 300 });
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onCommit).not.toHaveBeenCalled();
+    fireEvent.pointerUp(sep, { pointerId: 1, clientX: 300 });
+    expect(onCommit.mock.calls).toEqual([[30]]);
+  });
 });

@@ -61,3 +61,27 @@ export function captureText(iso: string | null | undefined): string | null {
     minute: "2-digit",
   });
 }
+
+const COMPASS_WORDS: Readonly<Record<string, string>> = {
+  N: "North",
+  NE: "Northeast",
+  E: "East",
+  SE: "Southeast",
+  S: "South",
+  SW: "Southwest",
+  W: "West",
+  NW: "Northwest",
+};
+
+/**
+ * The finding's side through the review profile's side labels: a compass label reads as its word
+ * ("W" is "West"), a face label as itself; without a profile (or an unknown value) the raw value.
+ */
+export function sideText(
+  side: string | null | undefined,
+  sides: { type: string; labels: readonly string[] } | null | undefined,
+): string | null {
+  if (!side) return null;
+  if (sides?.type === "compass" && sides.labels.includes(side)) return COMPASS_WORDS[side] ?? side;
+  return side;
+}

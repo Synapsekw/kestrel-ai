@@ -8,6 +8,7 @@ export function InspectHud({
   finding,
   typeName,
   zone,
+  side,
   captureTime,
   index,
   count,
@@ -15,13 +16,15 @@ export function InspectHud({
   finding: Finding;
   typeName: string | undefined;
   zone: string | null;
+  /** The side as the operator reads it (see `sideText`). */
+  side: string | null;
   captureTime: string | null | undefined;
   index: number;
   count: number;
 }) {
   const facts: [string, string | null][] = [
     ["Height", finding.height_m == null ? null : `${finding.height_m.toFixed(1)} m`],
-    ["Side", finding.side ?? null],
+    ["Side", side],
     ["Zone", zone],
     ["Taken", captureText(captureTime)],
   ];

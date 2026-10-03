@@ -11,16 +11,29 @@ vi.mock("@/assetmodels/viewer/ModelViewer", async () => ({
   ModelViewer: (await import("@/test/fakeModelViewer")).FakeModelViewer,
 }));
 vi.mock("@/images/canvas/ImageCanvas", () => ({
-  ImageCanvas: function FakeCanvas(p: { overlay?: ReactNode }) {
-    return <div data-testid="image-canvas" data-has-overlay={p.overlay ? "yes" : "no"} />;
+  ImageCanvas: function FakeCanvas(p: { overlay?: ReactNode; topOverlay?: ReactNode }) {
+    return (
+      <div
+        data-testid="image-canvas"
+        data-has-overlay={p.topOverlay ? "yes" : "no"}
+        data-old-overlay={p.overlay ? "yes" : "no"}
+      />
+    );
   },
 }));
 import { callsTo, emitState, resetFake } from "@/test/fakeModelViewer";
 import { SPLIT_KEY } from "./split";
 import { AssetInspect } from "./AssetInspect";
 
-const sighting = (id: string, image_id: string, annotation_id: string, representative = false) => ({
+const sighting = (
+  id: string,
+  image_id: string,
+  annotation_id: string,
+  representative = false,
+  captured_at = "2026-09-14T06:05:00Z",
+) => ({
   id,
+  captured_at,
   finding_id: "f1",
   image_id,
   annotation_id,
@@ -35,7 +48,10 @@ const sighting = (id: string, image_id: string, annotation_id: string, represent
   representative,
   created_at: "2026-10-03T00:00:00Z",
 });
-const SIGHTINGS = [sighting("s1", "img-1", "b-1", true), sighting("s2", "img-2", "b-2")];
+const SIGHTINGS = [
+  sighting("s1", "img-1", "b-1", true),
+  sighting("s2", "img-2", "b-2", false, "2026-09-15T08:30:00Z"),
+];
 const pose = (image_id: string) => ({
   image_id,
   position: [30, 12, 0],
@@ -88,7 +104,7 @@ const routes = (extra: unknown[] = []) => [
 
 const open = (search = "?finding=f1", extra: unknown[] = []) => {
   const client = fakeClient(routes(extra) as never);
-  renderWithProviders(
+  const view = renderWithProviders(
     <>
       <AssetInspect />
       <LocationProbe />
@@ -99,8 +115,10 @@ const open = (search = "?finding=f1", extra: unknown[] = []) => {
       path: "/p/:projectId/models/:modelId/inspect",
     },
   );
-  return client;
+  return { ...client, unmount: view.unmount };
 };
+const gets = (requests: { method: string; url: string }[], re: RegExp) =>
+  requests.filter((r) => r.method === "GET" && re.test(r.url.split("?")[0])).length;
 
 beforeEach(() => resetFake());
 afterEach(() => {
@@ -210,5 +228,129 @@ describe("split inspection", () => {
       },
     ]);
     expect(await screen.findByText(/this finding is not on this asset model/i)).toBeInTheDocument();
+  });
+
+  it("hides the photo's other annotations and keeps the overlay; tool and annotations come back after", async () => {
+    useImagesWorkspace.setState({ tool: "select" });
+    expect(useImagesWorkspace.getState().showAnnotations).toBe(true);
+    const { unmount } = open();
+    const pane = await screen.findByTestId("inspect-photo");
+    await waitFor(() => expect(pane).toHaveAttribute("data-rings", "1"));
+    expect(useImagesWorkspace.getState().showAnnotations).toBe(false);
+    expect(useImagesWorkspace.getState().tool).toBe("pan");
+    const canvas = screen.getByTestId("image-canvas");
+    expect(canvas).toHaveAttribute("data-has-overlay", "yes"); // the top layer, not the annotations'
+    expect(canvas).toHaveAttribute("data-old-overlay", "no");
+    unmount();
+    expect(useImagesWorkspace.getState().showAnnotations).toBe(true);
+    expect(useImagesWorkspace.getState().tool).toBe("select");
+  });
+
+  it("stepping a sighting neither rebuilds the placements nor re-aims the model", async () => {
+    open();
+    await screen.findByText("Sighting 1 of 2");
+    act(() => emitState("running"));
+    await waitFor(() => expect(callsTo("focusFinding").length).toBeGreaterThan(0));
+    await waitFor(() => expect(callsTo("setPlacements").at(-1)?.[0]).toHaveLength(2));
+    const placed = callsTo("setPlacements").length;
+    const focused = callsTo("focusFinding").length;
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(await screen.findByText("Sighting 2 of 2")).toBeInTheDocument();
+    await waitFor(() => expect(callsTo("setSelectedCamera")).toContainEqual(["img-2", true]));
+    expect(callsTo("setPlacements")).toHaveLength(placed);
+    expect(callsTo("focusFinding")).toHaveLength(focused);
+  });
+
+  it("reloads the findings list and the placements after a split", async () => {
+    const client = open("?finding=f1", [
+      {
+        method: "POST",
+        path: /\/findings\/f1\/split$/,
+        body: { ...ASSET_FINDINGS[0], id: "f9", number: 99 },
+      },
+    ]);
+    fireEvent.click(await screen.findByRole("button", { name: /split off this sighting/i }));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("finding=f9"));
+    await waitFor(() => expect(gets(client.requests, /\/findings$/)).toBe(2));
+    await waitFor(() => expect(gets(client.requests, /\/placements$/)).toBe(2));
+  });
+
+  it("forgets the merge target on the next finding and never offers a closed one", async () => {
+    const closed = { ...ASSET_FINDINGS[1], id: "f3", number: 44, status: "closed" };
+    open("?finding=f1", [
+      {
+        method: "GET",
+        path: /\/findings$/,
+        body: { items: [...ASSET_FINDINGS, closed], next_cursor: null },
+      },
+      { method: "POST", path: /\/findings\/f1\/merge$/, body: ASSET_FINDINGS[1] },
+    ]);
+    fireEvent.click(await screen.findByRole("button", { name: /merge into/i }));
+    let dialog = await screen.findByRole("dialog", { name: /merge f-0042/i });
+    expect(within(dialog).queryByRole("option", { name: /F-0044/ })).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/merge into/i), { target: { value: "f2" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("finding=f2"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(await screen.findByRole("button", { name: /merge into/i }));
+    dialog = await screen.findByRole("dialog", { name: /merge f-0043/i });
+    expect(within(dialog).getByLabelText(/merge into/i)).toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: /^merge$/i })).toBeDisabled();
+  });
+
+  it("offers a retry when the sightings fail to load", async () => {
+    let calls = 0;
+    const client = open("?finding=f1", [
+      {
+        method: "GET",
+        path: /\/findings\/f1\/sightings$/,
+        status: () => (++calls === 1 ? 500 : 200),
+        body: () =>
+          calls === 1
+            ? { error: { code: "internal", message: "The disk is busy.", details: {} } }
+            : { items: SIGHTINGS },
+      },
+    ]);
+    const alert = await screen.findByRole("alert");
+    expect(screen.queryByRole("status", { name: /loading the sightings/i })).not.toBeInTheDocument();
+    fireEvent.click(within(alert).getByRole("button", { name: /retry/i }));
+    expect(await screen.findByTestId("inspect-photo")).toBeInTheDocument();
+    expect(gets(client.requests, /\/findings\/f1\/sightings$/)).toBe(2);
+  });
+
+  it("an error fetching an unlisted finding is not a missing finding", async () => {
+    open("?finding=nope", [
+      {
+        method: "GET",
+        path: /\/findings\/nope$/,
+        status: 500,
+        body: { error: { code: "internal", message: "The disk is busy.", details: {} } },
+      },
+    ]);
+    const message = await screen.findByText("The disk is busy.");
+    const alert = message.closest<HTMLElement>('[role="alert"]')!;
+    expect(within(alert).getByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(screen.queryByText(/this finding is not on this asset model/i)).not.toBeInTheDocument();
+  });
+
+  it("stops comparing when the pane leaves Photo mode with Space held", async () => {
+    open();
+    const pane = await screen.findByTestId("inspect-photo");
+    await waitFor(() => expect(pane).toHaveAttribute("data-rings", "1"));
+    fireEvent.keyDown(window, { key: " " });
+    expect(pane).toHaveAttribute("data-overlay", "off");
+    fireEvent.click(screen.getByRole("radio", { name: /^model$/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /^photo$/i }));
+    expect(await screen.findByTestId("inspect-photo")).toHaveAttribute("data-overlay", "on");
+  });
+
+  it("reads the capture time from the sighting, also outside Photo mode, and the side as a word", async () => {
+    open();
+    await screen.findByText("Sighting 1 of 2");
+    fireEvent.click(screen.getByRole("radio", { name: /^model$/i }));
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    const hud = await screen.findByTestId("inspect-hud");
+    await waitFor(() => expect(hud).toHaveTextContent(/15 Sept? 2026/));
+    expect(hud).toHaveTextContent("West");
   });
 });
