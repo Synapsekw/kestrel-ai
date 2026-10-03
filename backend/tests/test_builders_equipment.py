@@ -429,6 +429,37 @@ CASES: dict[str, Case] = {
         golden=(),
     ),
     # --- jetty (Task 11)
+    "loading_arm": Case(  # Cowork 10-Z-0001A LNG unloading arm: riser D ~1.06, stowed ~18 m
+        "loading_arm",
+        circle(1.06),
+        18.0,
+        margin=12.6,
+        tris=(180, 1500),
+        parts=frozenset({"riser", "inner_arm", "outer_arm", "counterweight", "swivels", "pantograph"}),
+    ),
+    "crane": Case(  # Cowork 20-A-0011 jib crane on the pump platform: 8 m, reach ~7
+        "crane",
+        circle(1.2),
+        8.0,
+        margin=7.2,
+        tris=(52, 800),
+        parts=frozenset({"mast", "jib", "hoist", "hook"}),
+    ),
+    "monitor": Case(  # Cowork 10-RCM-001 elevated water monitor: 15 m tower
+        "monitor",
+        circle(0.8),
+        15.0,
+        margin=1.3,
+        tris=(92, 1500),
+        parts=frozenset({"tower", "platform", "monitor", "ladder_rungs"}),
+    ),
+    "nav_aid": Case(  # Cowork 10-NA-11V01 navigation light mast: 6 m
+        "nav_aid",
+        circle(0.8),
+        6.0,
+        tris=(72, 800),
+        parts=frozenset({"base", "mast", "lantern", "cap"}),
+    ),
 }
 FIRST: dict[str, str] = {}
 for _cid, _case in CASES.items():
@@ -960,3 +991,108 @@ def test_package_skid_on_a_tiny_footprint_is_refused():
     it = make_item("package", rect(0.8, 0.3), h=1.0, params={"style": "skid"})
     with pytest.raises(ValueError, match="too small"):
         REGISTRY["package"].fn(it, CTX)
+
+
+# ------------------------------------------------------------------ jetty
+def test_loading_arm_reaches_toward_its_slew_bearing():
+    for slew in (90.0, 200.0):  # not 0: atan2 of a -0.0 z wraps to ~360
+        it = make_item("loading_arm", circle(1.06), h=18.0, params={"slew_deg": slew})
+        arm = next(n for n in REGISTRY["loading_arm"].fn(it, CTX) if n.name == "outer_arm").geometry
+        x, _, z = arm.centroid
+        assert math.degrees(math.atan2(z, x)) % 360 == pytest.approx(slew, abs=1.0)
+
+
+def test_crane_jib_points_along_slew_and_pedestal_builds():
+    it = make_item("crane", circle(1.2), h=8.0, params={"slew_deg": 270.0})
+    jib = next(n for n in REGISTRY["crane"].fn(it, CTX) if n.name == "jib").geometry
+    assert jib.centroid[2] < -2.0  # 270 deg = west = -z
+    ped = make_item("crane", circle(2.0), h=12.0, params={"kind": "pedestal", "reach_m": 15.0})
+    names = {n.name for n in REGISTRY["crane"].fn(ped, CTX)}
+    assert {"pedestal", "cab", "boom", "luffing_rope"} <= names
+
+
+@pytest.mark.parametrize("kind", ["horn", "beacon"])
+def test_nav_aid_kinds_build(kind):
+    it = make_item("nav_aid", circle(0.6), h=4.0, params={"kind": kind, "colour": "green"})
+    nodes = REGISTRY["nav_aid"].fn(it, CTX)
+    names = {n.name for n in nodes}
+    assert ("horn" in names) == (kind == "horn") and ("daymark" in names) == (kind == "beacon")
+    lo, hi = bounds(nodes)
+    assert abs(hi[1] - 4.0) <= 0.5
+
+
+@pytest.mark.parametrize("up", [65.0, 90.0])
+def test_loading_arm_counterweight_beam_clears_the_riser(up):
+    p = _parts("loading_arm", circle(1.06), 18.0, {"slew_deg": 90.0, "inner_up_deg": up})
+    riser_top = p["riser"].bounds[1][1]
+    bearing_r = p["slew_bearing"].bounds[1][0]
+    assert p["inner_arm"].bounds[0][1] >= riser_top - 1e-6  # no arm or beam dips into the riser
+    assert p["counterweight"].bounds[1][2] < -bearing_r  # hangs behind the slew bearing, not in it
+    assert p["pantograph"].bounds[0][1] >= p["counterweight"].bounds[1][1] - 0.05  # rises from it
+
+
+def test_loading_arm_pantograph_runs_outside_the_inner_arm():
+    it = make_item("loading_arm", circle(1.06), h=18.0, params={"slew_deg": 90.0})
+    nodes = REGISTRY["loading_arm"].fn(it, CTX)
+    p = {n.name: expanded(n.geometry) for n in nodes}
+    p0 = np.array([0.0, p["slew_bearing"].bounds[1][1]])  # (z, y) of the inner arm pivot
+    t = math.radians(65.0)
+    di = np.array([math.cos(t), math.sin(t)])
+    mid = p["pantograph"].centroid[[2, 1]] - p0
+    rp = 0.5 * min(0.6, 0.5 * 1.06) / 2
+    assert abs(mid[0] * di[1] - mid[1] * di[0]) > rp + 0.1
+
+
+def test_loading_arm_too_flat_for_its_height_is_refused():
+    with pytest.raises(ValueError, match="inner_up_deg"):
+        REGISTRY["loading_arm"].fn(
+            make_item("loading_arm", circle(1.06), h=18.0, params={"inner_up_deg": 45.0}), CTX
+        )
+    it = make_item("loading_arm", circle(1.06), h=18.0, params={"inner_up_deg": 30.0, "riser_frac": 0.7})
+    assert abs(bounds(REGISTRY["loading_arm"].fn(it, CTX))[1][1] - 18.0) <= 0.9
+
+
+def test_crane_jib_reach_inside_the_mast_is_refused():
+    with pytest.raises(ValueError, match="reach_m"):
+        REGISTRY["crane"].fn(make_item("crane", circle(0.5), h=3.0, params={"reach_m": 0.5}), CTX)
+
+
+def test_pedestal_crane_luffing_rope_hangs_from_a_gantry():
+    it = make_item("crane", circle(2.0), h=12.0, params={"kind": "pedestal", "reach_m": 15.0})
+    p = {n.name: expanded(n.geometry) for n in REGISTRY["crane"].fn(it, CTX)}
+    rope = p["luffing_rope"].vertices
+    back = rope[rope[:, 0] < 0.0]  # the rope's anchor end, behind the mast axis
+    boom = p["boom"].vertices
+    behind = boom[boom[:, 0] < 0.0]
+    assert len(behind) and behind[:, 1].max() >= back[:, 1].max() - 0.05
+
+
+@pytest.mark.parametrize("params", [{"reach_m": 3.0}, {"boom_up_deg": 0.0, "reach_m": 8.0}])
+def test_pedestal_crane_boom_short_of_the_top_is_refused(params):
+    it = make_item("crane", circle(2.0), h=12.0, params={"kind": "pedestal", **params})
+    with pytest.raises(ValueError, match="top_el"):
+        REGISTRY["crane"].fn(it, CTX)
+
+
+def test_monitor_lattice_stands_on_grade_with_its_ladder_on_a_face():
+    p = _parts("monitor", circle(0.8), 15.0, {"tower": "lattice", "aim_deg": 45.0})
+    assert p["tower"].bounds[0][1] <= 0.01
+    x, _, z = p["ladder_stiles"].centroid
+    assert min(abs(x), abs(z)) < 0.05  # on a face axis, not in a corner where a leg stands
+
+
+def test_monitor_platform_narrower_than_tower_and_ladder_is_refused():
+    with pytest.raises(ValueError, match="platform_m"):
+        REGISTRY["monitor"].fn(make_item("monitor", circle(3.0), h=25.0), CTX)
+
+
+@pytest.mark.parametrize(("kind", "part"), [("horn", "horn"), ("beacon", "daymark")])
+def test_nav_aid_horn_and_daymark_touch_the_mast(kind, part):
+    p = _parts("nav_aid", circle(0.6), 4.0, {"kind": kind})
+    assert p[part].bounds[0][0] <= p["mast"].bounds[1][0]
+
+
+def test_nav_aid_light_too_short_for_its_solar_panel_is_refused():
+    with pytest.raises(ValueError, match="too small"):
+        REGISTRY["nav_aid"].fn(make_item("nav_aid", circle(0.6), h=1.0), CTX)
+    assert bounds(REGISTRY["nav_aid"].fn(make_item("nav_aid", circle(0.6), h=1.2), CTX))[0][1] >= -0.01
