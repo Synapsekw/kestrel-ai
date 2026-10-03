@@ -288,7 +288,6 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 - **Build warning:** the main chunk is 2.27 MB (`engine` 0.86 MB), over Vite's 500 kB limit; route-level lazy loading would split it.
 - **Decision:** React Router `v7_startTransition` / `v7_relativeSplatPath` future flags (vitest prints both notices; the splat flag changes how relative links resolve).
 - **pytest warnings:** 502 per run, not yet reviewed; one known source is `backend/app/workspace/views.py:72` (Affine `*` → `@`).
-- **Untracked:** `.superpowers/installer-*.log` on `main`; add to `.gitignore`.
 
 ### Workspace rail (opened 2026-10-03)
 
