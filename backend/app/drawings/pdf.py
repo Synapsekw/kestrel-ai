@@ -57,10 +57,22 @@ def effective_dpi(requested: int, w_pt: float, h_pt: float) -> int:
     return min(requested, max_dpi(w_pt, h_pt))
 
 
+class PdfBusy(Exception):
+    """open_pdf(wait_s=...) gave up waiting for the PDFium lock (another thread is rendering)."""
+
+
 @contextlib.contextmanager
-def open_pdf(path: Path):
-    with _PDFIUM_LOCK:
+def open_pdf(path: Path, *, wait_s: float | None = None):
+    """Open `path` under the PDFium lock. Jobs block (wait_s None); a route passes wait_s so it never
+    waits behind an import's render, and gets PdfBusy instead."""
+    if wait_s is None:
+        _PDFIUM_LOCK.acquire()
+    elif not _PDFIUM_LOCK.acquire(timeout=wait_s):
+        raise PdfBusy
+    try:
         yield from _open_pdf_locked(path)
+    finally:
+        _PDFIUM_LOCK.release()
 
 
 def _open_pdf_locked(path: Path):

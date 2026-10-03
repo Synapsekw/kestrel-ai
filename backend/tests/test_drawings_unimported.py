@@ -187,3 +187,36 @@ def test_the_route_answers_and_is_not_read_as_a_drawing_id(client, project_id, h
             {"path": str(src), "name": "T0006.pdf", "format": "pdf", "size": src.stat().st_size, "pages": 2}
         ]
     }
+
+
+def test_a_busy_pdfium_lock_lists_the_pdf_without_pages_and_does_not_cache_it(client, project_id, handle):
+    import threading
+    import time
+
+    from app.drawings import pdf
+
+    src = write_pdf(_root(handle) / "Drawings" / "busy.pdf", [(200.0, 200.0)] * 2)
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        with pdf._PDFIUM_LOCK:  # an import rendering a page holds it for tens of seconds
+            held.set()
+            release.wait(30)
+
+    t = threading.Thread(target=hold, daemon=True)
+    t.start()
+    assert held.wait(5)
+    try:
+        t0 = time.monotonic()
+        r = client.get(f"/api/v1/projects/{project_id}/drawings/unimported")
+        assert time.monotonic() - t0 < 5
+        assert r.status_code == 200, r.text
+        files = r.json()["files"]
+        assert [(f["name"], f["pages"]) for f in files] == [("busy.pdf", None)]
+        cached = store.read_json(unimported.cache_path(handle))["entries"][str(src)]
+        assert "pages" not in cached
+    finally:
+        release.set()
+        t.join(5)
+    assert [(f["name"], f["pages"]) for f in unimported.scan_unimported(handle)] == [("busy.pdf", 2)]
+    assert store.read_json(unimported.cache_path(handle))["entries"][str(src)]["pages"] == 2
