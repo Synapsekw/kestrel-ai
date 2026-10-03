@@ -52,6 +52,28 @@ describe("ModelViewer", () => {
     expect(onState).toHaveBeenCalledWith("load-error");
   });
 
+  it("a failed swap labels the old model stale and offers a reload", async () => {
+    create.mockReset();
+    const load = vi
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValueOnce([{ id: "s", name: "S", group: "Shell" }])
+      .mockRejectedValueOnce(new Error("bad v3"));
+    create.mockImplementation(() => stub(load));
+    const onParts = vi.fn();
+    const onState = vi.fn();
+    const { rerender } = render(
+      <ModelViewer glbUrl="v2.glb" onParts={onParts} onSelect={() => {}} onState={onState} />,
+    );
+    await waitFor(() => expect(onParts).toHaveBeenCalledTimes(1));
+    rerender(<ModelViewer glbUrl="v3.glb" onParts={onParts} onSelect={() => {}} onState={onState} />);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/the new version's 3D model could not load/i);
+    expect(alert).toHaveTextContent(/stale/i);
+    expect(alert).toHaveTextContent(/the model shown is the previous version/i);
+    expect(screen.getByRole("button", { name: /reload view/i })).toBeInTheDocument();
+    expect(onState).toHaveBeenLastCalledWith("load-error");
+  });
+
   it("reports parts after a load and disposes on unmount", async () => {
     const dispose = vi.fn();
     create.mockImplementation(() =>

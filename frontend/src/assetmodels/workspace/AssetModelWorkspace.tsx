@@ -39,6 +39,7 @@ import {
   useToolShortcuts,
 } from "@/ui";
 import { downloadGlb, downloadSpec } from "./download";
+import { ListReloadNotice } from "./ListReloadNotice";
 import { ModelDetailsDialog } from "./ModelDetailsDialog";
 import { ModelInspector, type ModelInspectorTab } from "./ModelInspector";
 import { ModelPanel } from "./ModelPanel";
@@ -812,6 +813,7 @@ export function AssetModelWorkspace() {
       </div>
       {dialog}
       {details}
+      {error && <ListReloadNotice error={error} onRetry={reload} />}
     </div>
   );
 }
