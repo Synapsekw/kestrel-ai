@@ -91,7 +91,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Name an anomaly while marking** (2026-10-03, `26a3b90a` on `main`, **not pushed**). A box, polygon or point on a photo, a finding or label on a map, and a pin on a point cloud can create their defect type on the spot. It no longer has to exist from project setup. Video is not covered (no video annotation surface). Touched-file eslint, prettier and vitest passed; the full gate was not re-run, and it is not in an installed build. See [[2026-10-03-1531-anomaly-on-the-fly]].
+**Shipped last:** **Scan overlay stays smooth while orbiting** (2026-10-03, `1ce7ad64` on `task/overlay-smooth`, pushed, **not merged, not installed**). The asset-model viewer draws at most 32,000 scan points from the cells in frame, and paints once per frame. Installer written (`Kestrel AI_0.1.0_x64-setup.exe` in the overlay-smooth worktree, 15:39); the install was aborted and then deferred because other edges are running. The installed app is still the 11:28 build. Touched-file vitest and eslint passed; the full gate was not run. See [[2026-10-03-1705-scan-overlay-smooth]].
+
+Before that: **Name an anomaly while marking** (2026-10-03, `26a3b90a` on `main`, **not pushed**). A box, polygon or point on a photo, a finding or label on a map, and a pin on a point cloud can create their defect type on the spot. It no longer has to exist from project setup. Video is not covered (no video annotation surface). Touched-file eslint, prettier and vitest passed; the full gate was not re-run, and it is not in an installed build. See [[2026-10-03-1531-anomaly-on-the-fly]].
 
 Before that: **Cleanup pass** (2026-10-03, `fe56752d` on `main`, **not pushed**). `frontend/tsconfig.json` no longer trips TS5069 (`tsBuildInfoFile` without `incremental`; seen only on TypeScript < 5.6, because `tsc -b` implies incremental) and drops `baseUrl` (deprecated in TS 6, removed in TS 7). Frontend lint is down from 22 warnings to 0. Gate: pytest 5462, vitest 4283, e2e 189/8 skipped, build ok. No user-observable change. The installer was rebuilt from `d94aa249` (reusing the `914c4d5b` sidecar; no backend diff since) and **installed** on 2026-10-03; it also carries multi-page PDF drawing import (`2a5c4523`). The app and backend start. See [[2026-10-03-1107-cleanup-pass]].
 
@@ -286,6 +288,13 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Scan overlay smoothness (opened 2026-10-03)
+
+- **Not merged, not installed.** `1ce7ad64` is on `origin/task/overlay-smooth` only. The setup exe is already built; do not rebuild. Install it only after the other in-flight edges are done and Kestrel AI is closed. Walkthrough: [[2026-10-03-1705-scan-overlay-smooth]].
+- **Operator check:** rotate and zoom an asset model with **Show scan overlay** on. Nobody has done that on this build.
+- **Gate:** touched vitest files and eslint only. The full frontend, backend, contract and e2e gates were not run.
+- **Budget:** 32,000 drawn points. Raise `OVERLAY_BUDGET` if the overlay looks too thin.
 
 ### Name an anomaly while marking (opened 2026-10-03)
 

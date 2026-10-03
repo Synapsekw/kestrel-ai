@@ -121,7 +121,7 @@ EnvFeature
 - Site CRS from plant: rotate (E, N) by `plant_north_deg` and add `origin_crs`.
 
 `backend/app/asset_models/siteframe.py` holds both conversions. A golden test checks them against the
-Al-Zour register (`plant_E`/`plant_N` → `utm39_E`/`utm39_N`, all 864 geometry rows within 0.05 m).
+Al-Zour register (`plant_E`/`plant_N` → `utm39_E`/`utm39_N`, all 878 rows with coordinates within 0.05 m).
 
 **Validation** (extends M1 `validate`):
 - **Errors:** an unknown type; params failing the builder schema; a self-intersecting footprint;
@@ -470,7 +470,7 @@ package); GLB/CSV build; PDF all-pages import; cloud check (inside the run).
 ## 13. Testing and acceptance
 
 **Gate tests** (no live model calls):
-- **F0:** spec round-trip; `siteframe` against the 864 Al-Zour rows (0.05 m); contract test covers
+- **F0:** spec round-trip; `siteframe` against the 878 Al-Zour rows with coordinates (0.05 m); contract test covers
   every new route.
 - **B1 to B3:** for each builder, bounds, triangle count range, a watertight check where the shape
   is closed, instancing counts, defaults recorded; golden render (rasterizer) within tolerance.
@@ -531,3 +531,19 @@ fetched from the artifact by a script.
 | meshopt encoder not available in the frozen sidecar | uncompressed GLB fallback; F0 checks the PyInstaller build |
 | Collision with the artifact-port P1 wave (asset_model, engine.ts) | 0017 additive only; a separate `site3d` engine; ping P1's coordinator before merges that touch `asset_model` |
 | Parallel sub-runs hit provider rate limits | a concurrency of 4 is configurable; retry with backoff in `llm.complete`; a package failure doesn't fail the run |
+
+## 15. Amendments made while planning (2026-10-03)
+
+- **No meshopt compression in G1.** There is no Python encoder and no new packages are allowed, so
+  GLBs are uncompressed. Instancing is the size lever. The scene still registers the meshopt
+  decoder for imported GLBs. This replaces the meshopt lines in §6 and §7.
+- **All-pages import is a new operation, `createDrawingPages`.** The existing `createDrawing`
+  refuses a second build from one inspection while one is queued.
+- **Drawing auto-georef from the plant grid.** When `set_site` fits the grid from a page without a
+  georeference, the run writes one through the drawings georef service. The Al-Zour area plot plans
+  then show on the map and in the Site 3D view.
+- **Item `type` is a free string in the contract**, checked against the builder registry by
+  `validate()`. The catalogue route publishes the live list.
+- **The register has 878 rows with coordinates** (7 of 885 have none). The rotation
+  `[X, Y] = origin + R(θ)·[E, N]` with `R = [[cos θ, sin θ], [-sin θ, cos θ]]` reproduces Cowork's
+  UTM columns to 0.01 m.
