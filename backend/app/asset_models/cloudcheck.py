@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -660,3 +661,56 @@ def _candidates(
     for k, c in enumerate(out, start=1):
         c.id = f"cand-{k:03d}"
     return out
+
+
+# ---------------------------------------------------------------- applying and reporting
+
+
+def apply_check(items: list[Item], result: CheckResult) -> list[Item]:
+    """Heights where the item's are indicative become cloud heights; cloud flags are replaced by this
+    check's. Footprints, ids and every other field are never changed (D5)."""
+    out: list[Item] = []
+    for it in items:
+        chk = result.items.get(it.id)
+        if chk is None:
+            out.append(it)
+            continue
+        update: dict = {"flags": [f for f in it.flags if f.code not in CLOUD_CODES] + list(chk.flags)}
+        if (
+            it.height_source == "indicative"
+            and chk.ground_el is not None
+            and chk.top_el is not None
+            and chk.top_el > chk.ground_el
+        ):
+            update.update(base_el=chk.ground_el, top_el=chk.top_el, height_source="cloud")
+        out.append(it.model_copy(update=update))
+    return out
+
+
+def summarise(result: CheckResult, *, limit: int = 300) -> dict:
+    """A bounded, JSON-ready digest for the run (the cloud_check tool's reply): flagged items first."""
+    counts = Counter(f.code for c in result.items.values() for f in c.flags)
+    rows = sorted(result.items.values(), key=lambda c: (not c.flags, c.item_id))
+    return {
+        "datum": None if result.datum is None else result.datum.model_dump(),
+        "note": result.note,
+        "checked": len(result.items),
+        "flag_counts": dict(sorted(counts.items())),
+        "items": [
+            {
+                "id": c.item_id,
+                "ground_el": c.ground_el,
+                "top_el": c.top_el,
+                "coverage": c.coverage,
+                "offset_m": c.offset_m,
+                "flags": [{"code": f.code, "value": f.value} for f in c.flags],
+            }
+            for c in rows[:limit]
+        ],
+        "truncated": len(rows) > limit,
+        "candidates": [
+            {"id": c.id, "size_m": list(c.size_m), "top_el": c.top_el, "pts": [list(p) for p in c.pts[:64]]}
+            for c in result.candidates[:50]
+        ],
+        "candidates_total": len(result.candidates),
+    }

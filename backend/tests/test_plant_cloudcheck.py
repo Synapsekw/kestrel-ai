@@ -360,3 +360,52 @@ def test_candidates_survive_a_sparse_sample(scene, tmp_path, handle, make_cloud)
     r = cc.check_items(s, g, items, cc.fit_datum(s, g, items))
     assert len(r.candidates) == 1
     assert [f.code for f in r.items["tank-c"].flags] == ["height_mismatch"]
+
+
+# ---------------------------------------------------------------- apply and summarise
+
+
+def test_apply_check_leaves_a_skipped_cloud_alone(scene):
+    pts, items = scene
+    g = pc.grid()
+    result = cc.check_items(pc.to_sample(g, pts, epsg=32640), g, items, None)
+    assert cc.apply_check(items, result) == items  # never projected, never touched
+
+
+def test_apply_check_fills_indicative_heights_and_never_moves(checked):
+    items, _, r = checked
+    out = cc.apply_check(items, r)
+    by = {it.id: it for it in out}
+    assert [it.id for it in out] == [it.id for it in items]
+    for before in items:
+        after = by[before.id]
+        assert after.footprint == before.footprint
+    assert by["tank-b"].height_source == "cloud"
+    assert by["tank-b"].base_el == pytest.approx(pc.GROUND_EL, abs=0.05)
+    assert by["tank-b"].top_el == pytest.approx(129.5, abs=0.05)
+    assert by["tank-c"].height_source == "drawing" and by["tank-c"].top_el == 134.5
+    assert [f.code for f in by["tank-c"].flags] == ["height_mismatch"]
+    assert by["pad-missing"].height_source == "indicative" and by["pad-missing"].top_el is None
+
+
+def test_apply_check_replaces_stale_cloud_flags(checked):
+    items, _, r = checked
+    old = [{"code": "plan_offset", "value": 9.0}, {"code": "builder_fallback"}]
+    stale = [
+        type(it).model_validate({**it.model_dump(), "flags": old}) if it.id == "tank-a" else it
+        for it in items
+    ]
+    out = {it.id: it for it in cc.apply_check(stale, r)}
+    assert [f.code for f in out["tank-a"].flags] == ["builder_fallback"]
+
+
+def test_summarise_is_bounded_and_flagged_first(checked):
+    _, _, r = checked
+    s = cc.summarise(r, limit=2)
+    assert s["checked"] == 5 and s["truncated"] is True and len(s["items"]) == 2
+    assert all(row["flags"] for row in s["items"])
+    assert s["flag_counts"] == {"height_mismatch": 1, "missing_in_cloud": 1, "plan_offset": 1}
+    assert s["candidates_total"] == 1 and s["datum"]["offset_m"] == pytest.approx(pc.EL_OFFSET, abs=0.05)
+    import json
+
+    json.dumps(s, allow_nan=False)
