@@ -2,7 +2,8 @@
 9.2), from pre-aggregated rows only: `finding_count`, `finding_daily`, the type snapshots, small-table
 COUNTs and SUM(source.image_count). Nothing here reads `finding`, `box` or `image` (a statement
 counter in tests/test_overview.py pins it), except `project_summary`'s cover, which takes the newest
-image by rowid: one row, no scan."""
+image by rowid: one row, no scan. `photo_review` groups `image_review`, at most one row per reviewed
+photo."""
 
 import logging
 from collections.abc import Callable
@@ -11,7 +12,16 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.catalogue import service as catalogue_service
-from app.db.models import Drawing, GeoMap, PointCloud, Source, Surface, VolumeMeasurement
+from app.db.models import (
+    AssetModel,
+    Drawing,
+    GeoMap,
+    ImageReview,
+    PointCloud,
+    Source,
+    Surface,
+    VolumeMeasurement,
+)
 from app.findings import counts, query
 
 LATEST_VOLUME_WINDOW = 21  # the newest ready measurement and the 20 before it, looking for its polygon
@@ -70,9 +80,40 @@ def newest_ready_cloud_id(s: Session) -> str | None:
     ).scalar_one_or_none()
 
 
+REVIEW_STATUSES = ("finding", "none", "uncertain", "not_assessed")
+
+
+def hero_asset_model_id(s: Session) -> str | None:
+    """The newest built asset model with a review profile (asset findings spec section 9). A JSON
+    null and an SQL NULL both mean "no profile"."""
+    return s.execute(
+        select(AssetModel.id)
+        .where(
+            AssetModel.status == "ready",
+            AssetModel.current_version.is_not(None),
+            func.coalesce(func.json_type(AssetModel.review), "null") != "null",
+        )
+        .order_by(AssetModel.updated_at.desc(), AssetModel.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def photo_review(s: Session) -> dict | None:
+    """Photos by review status; None until any photo has one (spec section 5.4)."""
+    rows = s.execute(select(ImageReview.status, func.count()).group_by(ImageReview.status)).all()
+    if not rows:
+        return None
+    out = dict.fromkeys(REVIEW_STATUSES, 0)
+    for status, n in rows:
+        out[status] = n
+    return out
+
+
 def hero(s: Session, data: dict, map_id: str | None) -> dict | None:
-    """Spec 2026-09-30-project-landing section 4.1. Every candidate is read every time, so the
-    Overview's statement count does not depend on what the project holds."""
+    """Spec 2026-09-30-project-landing section 4.1, with the asset model first (asset findings spec
+    section 9). Every candidate is read every time, so the Overview's statement count does not
+    depend on what the project holds."""
+    asset_id = hero_asset_model_id(s)
     cloud_id = newest_ready_cloud_id(s)
     drawing_id = s.execute(
         select(Drawing.id)
@@ -80,6 +121,8 @@ def hero(s: Session, data: dict, map_id: str | None) -> dict | None:
         .order_by(Drawing.created_at.desc(), Drawing.id.desc())
         .limit(1)
     ).scalar_one_or_none()
+    if asset_id:
+        return {"kind": "asset_model", "id": asset_id}
     if map_id:
         return {"kind": "map", "id": map_id}
     if cloud_id:
@@ -173,6 +216,7 @@ def build(handle) -> dict:
             "latest_volume": latest_volume(s),
             "hero_map_id": map_id,
             "hero": hero(s, data, map_id),
+            "photo_review": photo_review(s),
         }
     banners: list[dict] = []
     for provider in BANNER_PROVIDERS:

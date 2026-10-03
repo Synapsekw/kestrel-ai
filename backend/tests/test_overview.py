@@ -70,6 +70,7 @@ def test_an_empty_project(client, project):
     assert (out["latest_volume"], out["hero_map_id"], out["hero"], out["banners"]) == (None, None, None, [])
     assert out["findings"]["by_status"] == {"open": 0, "reviewed": 0, "closed": 0}
     assert out["findings"]["open_by_severity"] == {"1": 0, "2": 0, "3": 0, "4": 0}
+    assert out["photo_review"] is None
 
 
 def test_the_overview_costs_the_same_whatever_the_project_holds(client, project, handle, crack):
@@ -210,3 +211,60 @@ def test_the_hero_is_map_then_cloud_then_images_then_drawing(client, project, ha
     assert _overview(client, project)["hero"] == {"kind": "point_cloud", "id": cloud}
     april = _map(handle, "April", "ready", date(2026, 4, 1))
     assert _overview(client, project)["hero"] == {"kind": "map", "id": april}
+
+
+def _asset_model(handle, *, review: dict | None, status: str = "ready", version: int | None = 1) -> str:
+    from app.db.models import AssetModel
+
+    with handle.session() as s:
+        row = AssetModel(name="Stack", status=status, current_version=version, review=review)
+        s.add(row)
+        s.flush()
+        return row.id
+
+
+def test_the_hero_is_a_reviewed_asset_model_before_the_map(client, project, handle):
+    april = _map(handle, "April", "ready", date(2026, 4, 1))
+    _asset_model(handle, review=None)  # built, but no review profile: not an inspected asset
+    assert _overview(client, project)["hero"] == {"kind": "map", "id": april}
+    _asset_model(handle, review={"profile_id": "stack"}, status="building", version=None)  # not built yet
+    assert _overview(client, project)["hero"] == {"kind": "map", "id": april}
+    model = _asset_model(handle, review={"profile_id": "stack"})
+    assert _overview(client, project)["hero"] == {"kind": "asset_model", "id": model}
+
+
+def test_photo_review_counts_by_status(client, project, handle):
+    from image_summary_helpers import new_image
+
+    from app.asset_review.review_status import set_status
+
+    ids = [new_image(handle) for _ in range(4)]
+    assert _overview(client, project)["photo_review"] is None  # photos, but none reviewed yet
+    with handle.session() as s:
+        set_status(s, ids[0], "uncertain")
+        set_status(s, ids[1], "uncertain")
+        set_status(s, ids[2], "none")
+        set_status(s, ids[3], "finding")
+    assert _overview(client, project)["photo_review"] == {
+        "finding": 1,
+        "none": 1,
+        "uncertain": 2,
+        "not_assessed": 0,
+    }
+
+
+def test_the_asset_reads_keep_the_overview_cost_flat(client, project, handle):
+    """The two new reads run on every call, so the statement count does not depend on the project."""
+    from image_summary_helpers import new_image
+
+    from app.asset_review.review_status import set_status
+
+    empty, _ = _counted(handle.engine, lambda: _overview(client, project))
+    _asset_model(handle, review={"profile_id": "stack"})
+    image = new_image(handle)
+    with handle.session() as s:
+        set_status(s, image, "none")
+    seen, out = _counted(handle.engine, lambda: _overview(client, project))
+    assert len(seen) == len(empty), (empty, seen)
+    assert [st for st in seen if FORBIDDEN.search(st)] == []
+    assert out["hero"]["kind"] == "asset_model"
