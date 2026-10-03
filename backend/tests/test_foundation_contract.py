@@ -215,10 +215,11 @@ def test_the_severity_scale_has_at_most_nine_levels(spec):
 # ------------------------------------------------------------------------------ Task 4
 
 
-def test_a_finding_anchor_is_one_of_three_kinds(spec):
+def test_a_finding_anchor_is_one_of_four_kinds(spec):
     anchor = _schemas(spec)["FindingAnchor"]
     assert anchor["discriminator"]["propertyName"] == "kind"
-    assert set(anchor["discriminator"]["mapping"]) == {"image", "map", "cloud"}
+    # asset: spec 2026-10-02-asset-findings §5.5, plan 2026-10-03-asset-findings-c0
+    assert set(anchor["discriminator"]["mapping"]) == {"image", "map", "cloud", "asset"}
     cloud = _schemas(spec)["FindingCloudAnchor"]["properties"]
     assert set(cloud) == {"kind", "cloud_id", "x", "y", "z", "uncertainty_m"}  # C10: no normal here
 

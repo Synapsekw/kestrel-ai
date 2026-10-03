@@ -15,3 +15,6 @@ overrides:
   - files: ["openapi.yaml#/components/schemas/InspectResult"]
     rules:
       oas3-unused-component: off
+  - files: ["openapi.yaml#/components/schemas/ReviewImportPreview"]
+    rules:
+      oas3-unused-component: off

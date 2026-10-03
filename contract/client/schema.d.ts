@@ -2966,8 +2966,12 @@ export interface paths {
         /**
          * Create a finding. An `image` anchor names an existing annotation (`annotation_id`) or
          *     carries `box` geometry, which creates the annotation in the same transaction. A map anchor
-         *     should carry `lon`/`lat` (the anchor's WGS84 centroid). `severity` defaults to the type's
-         *     `default_severity`, `status` to `open`. A type of kind `object` answers 422 `not_a_defect`.
+         *     should carry `lon`/`lat` (the anchor's WGS84 centroid). An `asset` anchor carries one or
+         *     more sightings; each creates its annotation (a box, or a polygon from `points`) and a
+         *     `finding_sighting` with `placement` `pending` in the same transaction, and `lon`/`lat`
+         *     default to the asset frame's origin. `severity` defaults to the type's `default_severity`
+         *     (an asset finding: the highest sighting severity when one is given), `status` to `open`.
+         *     A type of kind `object` answers 422 `not_a_defect`.
          */
         post: operations["createFinding"];
         delete?: never;
@@ -3965,11 +3969,19 @@ export interface paths {
         get: operations["getAssetModel"];
         put?: never;
         post?: never;
-        /** Delete the model, its versions, runs and files. Refused while a run or GLB job is live. */
+        /**
+         * Delete the model, its versions, runs, poses, placements and files. Refused while a run,
+         *     GLB, import, pose, placement or grouping job is live, and while any finding or ungrouped
+         *     sighting references it.
+         */
         delete: operations["deleteAssetModel"];
         options?: never;
         head?: never;
-        /** Rename or retag. Publishes `asset_models.changed`. */
+        /**
+         * Rename or retag, or set the asset frame (`frame`, the whole object) and the review profile
+         *     (`review`: a built-in profile id, resolved against the frame's height, or an edited copy).
+         *     Publishes `asset_models.changed`.
+         */
         patch: operations["patchAssetModel"];
         trace?: never;
     };
@@ -4159,6 +4171,417 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/import-glb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an existing GLB as the model's next version (`kind` `imported`). An
+         *     `asset_glb_import` job copies and hashes the file, reads its node names and extras, checks
+         *     that it loads, converts it to the asset frame once (`frame_conversion`), and fills
+         *     `frame.height_m` and `frame.silhouette` when the model has no frame yet. Publishes
+         *     `asset_models.changed`.
+         */
+        post: operations["importAssetModelGlb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/poses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Where each photo was taken from, in this model's asset frame, keyset-paged by image id: the
+         *     cameras layer and split inspection's view from pose. `outcome` is the photo's review status.
+         */
+        get: operations["listImagePoses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/poses/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an `asset_pose` job: a pose for each image in scope from its GPS, altitude and gimbal
+         *     angles (`exif_gimbal`), or aimed at the asset axis when it has no gimbal yaw
+         *     (`exif_axis_aim`). A pose from a kit or set by hand is never overwritten. An image without
+         *     GPS is skipped and listed in the job result.
+         */
+        post: operations["estimateImagePoses"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/poses/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set one photo's pose by hand (`source` `manual`). Publishes `asset_models.changed`. */
+        put: operations["putImagePose"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/placements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The placed sightings (`point` and `patch`) of the model's current version, keyset-paged by
+         *     sighting id. Patch files are fetched one by one, only for visible patches.
+         */
+        get: operations["listPlacements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/compute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an `asset_place` job over every sighting of the model, or only the dirty ones
+         *     (`pending`, or placed on an older version). On success it queues `asset_group` for the same
+         *     model.
+         */
+        post: operations["computePlacements"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/{sightingId}/mesh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                sightingId: components["parameters"]["sightingId"];
+            };
+            cookie?: never;
+        };
+        /** A patch's triangles. */
+        get: operations["getPlacementMesh"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/{sightingId}/texture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                sightingId: components["parameters"]["sightingId"];
+            };
+            cookie?: never;
+        };
+        /** A patch's texture. */
+        get: operations["getPlacementTexture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/placements/{sightingId}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                sightingId: components["parameters"]["sightingId"];
+            };
+            cookie?: never;
+        };
+        /** A patch's label grid, for pixel-exact picking. */
+        get: operations["getPlacementLabels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/findings/regroup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an `asset_group` job. A finding whose sightings are unchanged keeps its number, status,
+         *     note, comments and attachments. A merged-away finding is closed with a comment naming the
+         *     survivor (the lowest number), never deleted. A split creates new findings.
+         */
+        post: operations["regroupAssetFindings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge this asset finding into another on the same asset model (`into`). Its sightings move
+         *     to `into`, and it is closed with a comment naming the survivor; its comments and attachments
+         *     stay with it. Answers the survivor. Publishes `findings.changed`.
+         */
+        post: operations["mergeFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the named sightings of this asset finding to a new finding of the same type, with the
+         *     highest severity among them, and answer it. At least one sighting must stay. Publishes
+         *     `findings.changed`.
+         */
+        post: operations["splitFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/sightings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The finding's sightings, the representative first, then by capture time. An image finding
+         *     answers its one implicit sighting; map and cloud findings answer none.
+         */
+        get: operations["listFindingSightings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/{imageId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        /** The photo's review status. An image never reviewed answers `not_assessed` with `updated_at` null. */
+        get: operations["getImageReview"];
+        /**
+         * Set the photo's review status. `none` also marks the image empty (`Image.marked_empty`) and
+         *     any other status clears it, in one transaction, so the training data path is unchanged.
+         *     Publishes `images.changed`.
+         */
+        put: operations["putImageReview"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/review-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a `review_kit_import` job on a kit job folder (`job.yaml`, `cameras.json`,
+         *     `assessment.json`, `masks/`, optional `merged.json`, `surface.json` and GLB) against an
+         *     image source already imported in the project. With `dry_run` the job writes nothing and its
+         *     result is a `ReviewImportPreview`: the class mapping to confirm and the photo match. A real
+         *     run needs exactly one of `asset_model_id` and `new_model_name`, and a type for every kit
+         *     class.
+         */
+        post: operations["startReviewImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every brand, built-ins first, then by name. Brands live in the catalogue. */
+        get: operations["listBrands"];
+        put?: never;
+        /** Create a brand. Fonts are bundled family names. */
+        post: operations["createBrand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a brand. A report that names it renders with the Kestrel theme. */
+        delete: operations["deleteBrand"];
+        options?: never;
+        head?: never;
+        /** Change a brand. Built-ins are editable; logos go through `setBrandLogo` and `clearBrandLogo`. */
+        patch: operations["patchBrand"];
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/logos/{slot}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+                slot: components["parameters"]["brandLogoSlot"];
+            };
+            cookie?: never;
+        };
+        /** The brand's logo for this slot as a PNG. Callers add `?v=<logo id>`, so the answer is cached as immutable. */
+        get: operations["getBrandLogo"];
+        /** Import a local PNG, JPEG or WebP (at most 20 MB) as this slot's logo. A copy, at most 1200 px a side, is kept in the app data folder, never in a project. */
+        put: operations["setBrandLogo"];
+        post?: never;
+        /** Remove this slot's logo from the brand. The file stays (another brand may use it). */
+        delete: operations["clearBrandLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4716,6 +5139,17 @@ export interface components {
                  *     `{errors: [{path, message}]}`), invalid_severity_rule (422: a severity rule names a
                  *     level that is not on the scale; details `{name, severity}`), type_name_blank (422: a
                  *     type name is empty once normalised; details `{name}`).
+                 *     Asset findings: has_findings (409: findings still reference the asset model;
+                 *     details `{count}`), glb_invalid (422: not a readable glTF binary; details
+                 *     `{reason}`), unknown_profile and invalid_frame (422: an asset model patch),
+                 *     no_origin (422: pose estimation needs the frame's geographic origin), invalid_merge
+                 *     and invalid_split (422: details `{reason}`), kit_invalid (422: the folder is not a
+                 *     review kit job; details `{missing}`), invalid_import (422: details
+                 *     `{errors: [{path, message}]}`), brand_name_taken (409: a brand with that normalised
+                 *     name exists; details `{brand_id}`), brand_builtin (409: a built-in brand is never
+                 *     deleted), invalid_brand (422: details `{errors: [{path, message}]}`), unknown_font
+                 *     (422: not a bundled font family; details `{path, fonts}`). A brand logo that is not
+                 *     a readable image answers asset_invalid.
                  */
                 code: string;
                 message: string;
@@ -9342,7 +9776,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render" | "setup_inspect" | "asset_model_glb" | "asset_model_run";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render" | "setup_inspect" | "asset_model_glb" | "asset_model_run" | "asset_glb_import" | "asset_pose" | "asset_place" | "asset_group" | "review_kit_import";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -9377,7 +9811,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}); asset_model_glb {model_id, version}; asset_model_run {run_id, version} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}); asset_model_glb {model_id, version}; asset_model_run {run_id, version}; asset_glb_import {asset_model_id, version} (params {asset_model_id, version, path, frame_conversion}); asset_pose {asset_model_id, estimated, kept, skipped, skipped_images: [{image_id, reason}] at most 200} (params {asset_model_id, image_ids}); asset_place {asset_model_id, version, point, patch, none, group_job_id} (params {asset_model_id, only_dirty}); asset_group {asset_model_id, created, kept, merged, split} (params {asset_model_id}); review_kit_import {asset_model_id, findings, sightings, statuses, unmatched_count, unmatched: [kit photo names] at most 500}, or a ReviewImportPreview when params.dry_run (params ReviewImportRequest) */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -9737,7 +10171,7 @@ export interface components {
         /** @enum {string} */
         FindingStatus: "open" | "reviewed" | "closed";
         /** @enum {string} */
-        FindingAnchorKind: "image" | "map" | "cloud";
+        FindingAnchorKind: "image" | "map" | "cloud" | "asset";
         /**
          * @example {
          *       "type": "Point",
@@ -9862,7 +10296,7 @@ export interface components {
             uncertainty_m: number | null;
         };
         /** @description where the finding is; its kind never changes */
-        FindingAnchor: components["schemas"]["FindingImageAnchor"] | components["schemas"]["FindingMapAnchor"] | components["schemas"]["FindingCloudAnchor"];
+        FindingAnchor: components["schemas"]["FindingImageAnchor"] | components["schemas"]["FindingMapAnchor"] | components["schemas"]["FindingCloudAnchor"] | components["schemas"]["FindingAssetAnchor"];
         /**
          * @description exactly one of `annotation_id` (an existing annotation) and `box` (a new one)
          * @example {
@@ -9886,7 +10320,7 @@ export interface components {
             annotation_id?: string;
             box?: components["schemas"]["FindingBox"];
         } & (unknown | unknown);
-        FindingAnchorInput: components["schemas"]["FindingImageAnchorInput"] | components["schemas"]["FindingMapAnchor"] | components["schemas"]["FindingCloudAnchor"];
+        FindingAnchorInput: components["schemas"]["FindingImageAnchorInput"] | components["schemas"]["FindingMapAnchor"] | components["schemas"]["FindingCloudAnchor"] | components["schemas"]["FindingAssetAnchorInput"];
         /**
          * @description Moves a map anchor (`geometry`) or a cloud anchor (`x`, `y`, `z`, optional `uncertainty_m`); the map, cloud and anchor kind stay. An image anchor moves with its annotation (`PATCH /boxes/{boxId}`).
          * @example {
@@ -9928,7 +10362,19 @@ export interface components {
          *       "created_at": "2026-09-26T10:15:00Z",
          *       "updated_at": "2026-09-26T10:20:00Z",
          *       "reviewed_at": null,
-         *       "closed_at": null
+         *       "closed_at": null,
+         *       "asset_model_id": null,
+         *       "height_m": null,
+         *       "bearing_deg": null,
+         *       "side": null,
+         *       "zone": null,
+         *       "component": null,
+         *       "placement": null,
+         *       "sighting_count": 1,
+         *       "representative": {
+         *         "image_id": "10000000-5555-4000-8000-000000000001",
+         *         "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *       }
          *     }
          */
         Finding: {
@@ -9949,7 +10395,7 @@ export interface components {
             lon: number | null;
             lat: number | null;
             data_type: components["schemas"]["DataItemType"];
-            /** @description the anchor's data item: the image's source, the map or the point cloud */
+            /** @description the anchor's data item: the image's source, the map, the point cloud or the asset model */
             data_id: string;
             /** Format: date-time */
             created_at: string;
@@ -9959,6 +10405,27 @@ export interface components {
             reviewed_at: string | null;
             /** Format: date-time */
             closed_at: string | null;
+            /** @description the asset model of an `asset` finding; null for every other kind */
+            asset_model_id: string | null;
+            /** @description metres above the asset's ground datum, from the representative sighting; null when it is not placed or not an asset finding */
+            height_m: number | null;
+            /** @description clockwise from plant north */
+            bearing_deg: number | null;
+            /** @description a side label of the model's review profile */
+            side: string | null;
+            /** @description a zone id of the model's review profile */
+            zone: string | null;
+            /** @description the GLB part hit, through the profile's component map */
+            component: string | null;
+            /**
+             * @description the representative sighting's placement; null for other anchor kinds
+             * @enum {string|null}
+             */
+            placement: "point" | "patch" | "none" | null;
+            /** @description an asset finding's `finding_sighting` rows; every other kind has one implicit sighting and answers 1 */
+            sighting_count: number;
+            /** @description the sighting the finding is shown by (an image finding: its own annotation); null for map and cloud findings, or an asset finding with no sighting left */
+            representative: components["schemas"]["FindingRepresentative"] | null;
         };
         /**
          * @example {
@@ -9983,6 +10450,18 @@ export interface components {
          *       "updated_at": "2026-09-26T10:20:00Z",
          *       "reviewed_at": null,
          *       "closed_at": null,
+         *       "asset_model_id": null,
+         *       "height_m": null,
+         *       "bearing_deg": null,
+         *       "side": null,
+         *       "zone": null,
+         *       "component": null,
+         *       "placement": null,
+         *       "sighting_count": 1,
+         *       "representative": {
+         *         "image_id": "10000000-5555-4000-8000-000000000001",
+         *         "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *       },
          *       "attachment_count": 2,
          *       "comment_count": 3
          *     }
@@ -10015,7 +10494,19 @@ export interface components {
          *           "created_at": "2026-09-26T10:15:00Z",
          *           "updated_at": "2026-09-26T10:20:00Z",
          *           "reviewed_at": null,
-         *           "closed_at": null
+         *           "closed_at": null,
+         *           "asset_model_id": null,
+         *           "height_m": null,
+         *           "bearing_deg": null,
+         *           "side": null,
+         *           "zone": null,
+         *           "component": null,
+         *           "placement": null,
+         *           "sighting_count": 1,
+         *           "representative": {
+         *             "image_id": "10000000-5555-4000-8000-000000000001",
+         *             "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *           }
          *         },
          *         {
          *           "id": "f0000000-1212-4000-8000-000000000218",
@@ -10044,7 +10535,16 @@ export interface components {
          *           "created_at": "2026-09-26T10:30:00Z",
          *           "updated_at": "2026-09-26T10:31:00Z",
          *           "reviewed_at": "2026-09-26T10:31:00Z",
-         *           "closed_at": null
+         *           "closed_at": null,
+         *           "asset_model_id": null,
+         *           "height_m": null,
+         *           "bearing_deg": null,
+         *           "side": null,
+         *           "zone": null,
+         *           "component": null,
+         *           "placement": null,
+         *           "sighting_count": 1,
+         *           "representative": null
          *         }
          *       ],
          *       "next_cursor": null
@@ -10513,12 +11013,19 @@ export interface components {
             /** @description an in-app path the banner's button opens, or null */
             action?: string | null;
         };
-        /** @description what the Overview's big pane shows; the first of a ready map, a ready point cloud, the photos, a ready drawing */
+        /** @description what the Overview's big pane shows; the first of a ready asset model with a review profile (asset findings spec §9), a ready map, a ready point cloud, the photos, a ready drawing */
         OverviewHero: {
             /** @enum {string} */
-            kind: "map" | "point_cloud" | "images" | "drawing";
+            kind: "asset_model" | "map" | "point_cloud" | "images" | "drawing";
             /** @description null for `images`: the client reads the newest frames */
             id: string | null;
+        };
+        /** @description photos by review status (asset findings spec §5.4); a photo never reviewed is not counted */
+        PhotoReviewCounts: {
+            finding: number;
+            none: number;
+            uncertain: number;
+            not_assessed: number;
         };
         /**
          * @example {
@@ -10641,6 +11148,8 @@ export interface components {
             hero_map_id: string | null;
             hero: components["schemas"]["OverviewHero"] | null;
             banners: components["schemas"]["OverviewBanner"][];
+            /** @description null until a photo has a review status */
+            photo_review?: components["schemas"]["PhotoReviewCounts"] | null;
         };
         /**
          * @example {
@@ -10666,7 +11175,19 @@ export interface components {
          *           "created_at": "2026-09-26T10:15:00Z",
          *           "updated_at": "2026-09-26T10:20:00Z",
          *           "reviewed_at": null,
-         *           "closed_at": null
+         *           "closed_at": null,
+         *           "asset_model_id": null,
+         *           "height_m": null,
+         *           "bearing_deg": null,
+         *           "side": null,
+         *           "zone": null,
+         *           "component": null,
+         *           "placement": null,
+         *           "sighting_count": 1,
+         *           "representative": {
+         *             "image_id": "10000000-5555-4000-8000-000000000001",
+         *             "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *           }
          *         }
          *       ],
          *       "data": [
@@ -10708,7 +11229,7 @@ export interface components {
             id: string;
             /** Format: date-time */
             at: string;
-            /** @description `finding.created`, `finding.status`, `finding.severity`, `finding.comment`, `data.imported`, `job.finished` or `detections.accepted` */
+            /** @description `finding.created`, `finding.status`, `finding.severity`, `finding.comment`, `finding.merged`, `finding.split`, `findings.grouped`, `data.imported`, `job.finished` or `detections.accepted` */
             kind: string;
             /** @description the finding or data item it is about */
             subject_id: string | null;
@@ -11957,6 +12478,10 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /** @description the asset frame (asset findings spec §5.1); null until a GLB import, a kit import or the operator sets it */
+            frame: components["schemas"]["AssetFrame"] | null;
+            /** @description the resolved review profile, a copy stored on the model (asset findings spec §7); null until one is chosen */
+            review: components["schemas"]["AssetReviewConfig"] | null;
         };
         AssetModelList: {
             items: components["schemas"]["AssetModel"][];
@@ -11972,6 +12497,10 @@ export interface components {
             tag?: string | null;
             /** Format: date */
             captured_on?: string | null;
+            /** @description the whole frame; null clears it */
+            frame?: components["schemas"]["AssetFrame"] | null;
+            /** @description a built-in profile id (resolved against the frame's height) or an edited copy; null clears it */
+            review?: components["schemas"]["AssetReviewChoice"] | null;
         };
         AssetPartPlacement: {
             origin_mm?: number[];
@@ -12037,14 +12566,14 @@ export interface components {
             model_id: string;
             version: number;
             /** @enum {string} */
-            kind: "agent" | "manual" | "draft";
+            kind: "agent" | "manual" | "draft" | "imported";
             /** @enum {string} */
             glb_status: "pending" | "ready" | "failed";
             source_ids: components["schemas"]["AssetSourceRef"][];
             run_id: string | null;
             note: string | null;
             part_count: number;
-            /** @description `build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}] */
+            /** @description `build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]; an `imported` version: source_name, sha256, bytes, node_count, frame_conversion, parts[{node,name,group,extras}] */
             meta: Record<string, never> | null;
             /** Format: date-time */
             created_at: string;
@@ -12117,6 +12646,639 @@ export interface components {
         AssetModelRunWithJob: {
             run: components["schemas"]["AssetModelRun"];
             job: components["schemas"]["Job"];
+        };
+        /** @description x, y, z in the asset frame: metres, Y up, X plant north, Z plant east */
+        AssetVec3: number[];
+        /** @description The asset's base centre (WGS84) and the ground altitude in the photos' altitude datum. */
+        AssetFrameOrigin: {
+            lat: number;
+            lon: number;
+            ground_alt_m: number;
+        };
+        /** @description A named close-up view, in the asset frame (metres). */
+        AssetFramePreset: {
+            id: string;
+            label: string;
+            target: number[];
+            camera: number[];
+        };
+        /** @description `asset_model.frame` (spec 2026-10-02-asset-findings §5.1). Metres, Y up, X plant north, Z plant east, origin at the base centre on the ground datum. `north_offset_deg` is the true bearing of plant north; `line_azimuth_deg` is a true bearing. Every field but `height_m` has a default. */
+        AssetFrame: {
+            origin?: components["schemas"]["AssetFrameOrigin"] | null;
+            /** @default 0 */
+            north_offset_deg: number;
+            height_m: number;
+            /** @default Ground */
+            datum_label: string;
+            /** @default  */
+            datum_note: string;
+            line_azimuth_deg?: number | null;
+            /** @description [y, r] pairs, ascending y: the radial outline used by the findings map */
+            silhouette?: number[][];
+            levels?: number[];
+            presets?: components["schemas"]["AssetFramePreset"][];
+        };
+        AssetReviewZone: {
+            id: string;
+            label: string;
+            /** @description null: open below */
+            min_m: number | null;
+            /** @description null: open above */
+            max_m: number | null;
+        };
+        AssetReviewSides: {
+            /** @enum {string} */
+            type: "compass" | "faces";
+            /** @description the eight compass points, or the faces in order from the line azimuth */
+            labels: string[];
+            /** @enum {string} */
+            basis: "position" | "normal";
+            title: string;
+            noun: string;
+        };
+        AssetReviewFocus: {
+            /** @description half-height of the focus view as [min, max] fractions of the asset height */
+            frustum: number[];
+            oblique_deg: number;
+        };
+        AssetReviewReport: {
+            /** @enum {string} */
+            pages: "finding" | "defect";
+            min_severity: number;
+        };
+        AssetReviewComponentRule: {
+            /** @description a case-insensitive regular expression over the GLB node name */
+            match: string;
+            label: string;
+        };
+        AssetReviewLimit: {
+            title: string;
+            text: string;
+        };
+        /** @description `asset_model.review` (spec 2026-10-02-asset-findings §5.1, §7): a review profile resolved for the asset's height and editable by the operator. Zones are in metres, top first. */
+        AssetReviewConfig: {
+            /** @description the built-in profile it came from: stack, building_facade, tank, telecom_tower or ohtl_tower */
+            profile_id: string;
+            name: string;
+            asset_noun: string;
+            finding_noun: string;
+            assessment_title: string;
+            /** @enum {string} */
+            finding_unit: "photo" | "region";
+            /** @enum {string} */
+            placement: "patch" | "point" | "mixed";
+            patch_grid: number;
+            cluster_m: number;
+            zones: components["schemas"]["AssetReviewZone"][];
+            sides: components["schemas"]["AssetReviewSides"];
+            focus: components["schemas"]["AssetReviewFocus"];
+            report: components["schemas"]["AssetReviewReport"];
+            component_map: components["schemas"]["AssetReviewComponentRule"][];
+            facts: string[];
+            limits: components["schemas"]["AssetReviewLimit"][];
+            breakdowns: string[];
+            footer_disclaimer: string;
+        };
+        /**
+         * @description how an imported GLB maps to the asset frame: `none` (already X north, Y up, Z east), `x_east_minus_z_north` (Y up, X east, minus Z north: the three.js and kit layout), `enu_z_up` (X east, Y north, Z up: most photogrammetry exports)
+         * @enum {string}
+         */
+        AssetFrameConversion: "none" | "x_east_minus_z_north" | "enu_z_up";
+        /** @enum {string} */
+        AssetProfileId: "stack" | "building_facade" | "tank" | "telecom_tower" | "ohtl_tower";
+        /** @description a built-in profile by id, or an edited copy */
+        AssetReviewChoice: {
+            profile_id: components["schemas"]["AssetProfileId"];
+        } | components["schemas"]["AssetReviewConfig"];
+        AssetGlbImport: {
+            /** @description an absolute path to a .glb picked with the file dialog */
+            path: string;
+            frame_conversion?: components["schemas"]["AssetFrameConversion"];
+            /** @description sets `frame.origin` when the model has no frame yet */
+            origin?: components["schemas"]["AssetFrameOrigin"] | null;
+            note?: string | null;
+        };
+        /** @enum {string} */
+        ImagePoseSource: "kit" | "exif_gimbal" | "exif_axis_aim" | "manual";
+        /** @enum {string} */
+        ImageReviewStatus: "finding" | "none" | "uncertain" | "not_assessed";
+        ImagePose: {
+            image_id: string;
+            position: components["schemas"]["AssetVec3"];
+            target: components["schemas"]["AssetVec3"];
+            up: components["schemas"]["AssetVec3"];
+            hfov_deg: number;
+            vfov_deg: number;
+            source: components["schemas"]["ImagePoseSource"];
+            /** @description the stated accuracy, shown in the UI */
+            accuracy_m: number | null;
+            /** @description a flight or sequence label for filters and colours */
+            sequence: string | null;
+            outcome: components["schemas"]["ImageReviewStatus"];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "image_id": "10000000-5555-4000-8000-000000000001",
+         *           "position": [
+         *             42,
+         *             31.5,
+         *             -18.2
+         *           ],
+         *           "target": [
+         *             0,
+         *             30,
+         *             0
+         *           ],
+         *           "up": [
+         *             0,
+         *             1,
+         *             0
+         *           ],
+         *           "hfov_deg": 69.7,
+         *           "vfov_deg": 55.8,
+         *           "source": "exif_gimbal",
+         *           "accuracy_m": 2.5,
+         *           "sequence": "Flight 1",
+         *           "outcome": "finding",
+         *           "updated_at": "2026-10-03T09:00:00Z"
+         *         }
+         *       ],
+         *       "next": null
+         *     }
+         */
+        ImagePoseList: {
+            items: components["schemas"]["ImagePose"][];
+            /** @description pass as `after` for the next page; null on the last */
+            next: string | null;
+        };
+        ImagePoseIn: {
+            position: components["schemas"]["AssetVec3"];
+            target: components["schemas"]["AssetVec3"];
+            up: components["schemas"]["AssetVec3"];
+            hfov_deg: number;
+            vfov_deg: number;
+            accuracy_m?: number | null;
+            sequence?: string | null;
+        };
+        ImagePoseEstimate: {
+            /** @description absent: every image of the project with GPS */
+            image_ids?: string[];
+        };
+        /**
+         * @example {
+         *       "image_id": "10000000-5555-4000-8000-000000000001",
+         *       "status": "uncertain",
+         *       "note": "Glare on the lower shell.",
+         *       "coverage": null,
+         *       "uncertain_coverage": 0.04,
+         *       "updated_at": "2026-10-03T09:00:00Z"
+         *     }
+         */
+        ImageReview: {
+            image_id: string;
+            status: components["schemas"]["ImageReviewStatus"];
+            note: string;
+            /** @description share of the photo inside finding polygons (computed) */
+            coverage: number | null;
+            uncertain_coverage: number | null;
+            /**
+             * Format: date-time
+             * @description null: never reviewed
+             */
+            updated_at: string | null;
+        };
+        ImageReviewPut: {
+            status: components["schemas"]["ImageReviewStatus"];
+            /** @description empty when absent */
+            note?: string;
+        };
+        Placement: {
+            sighting_id: string;
+            finding_id: string;
+            /** @enum {string} */
+            kind: "point" | "patch";
+            center: components["schemas"]["AssetVec3"];
+            normal: components["schemas"]["AssetVec3"];
+            /** @description a patch's longest bounding edge (m); 0 for a point */
+            size: number;
+            /** @description the sighting's grade, else its finding's */
+            severity: number | null;
+            type_id: string;
+            /** @description true for a patch: its mesh, texture and labels can be fetched */
+            has_patch: boolean;
+        };
+        /**
+         * @example {
+         *       "version": 2,
+         *       "items": [
+         *         {
+         *           "sighting_id": "s0000000-8888-4000-8000-000000000001",
+         *           "finding_id": "f0000000-1212-4000-8000-000000000217",
+         *           "kind": "patch",
+         *           "center": [
+         *             1.2,
+         *             61.4,
+         *             -9.8
+         *           ],
+         *           "normal": [
+         *             0.12,
+         *             0,
+         *             -0.99
+         *           ],
+         *           "size": 0.84,
+         *           "severity": 2,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "has_patch": true
+         *         },
+         *         {
+         *           "sighting_id": "s0000000-8888-4000-8000-000000000002",
+         *           "finding_id": "f0000000-1212-4000-8000-000000000218",
+         *           "kind": "point",
+         *           "center": [
+         *             -3.1,
+         *             12,
+         *             4.4
+         *           ],
+         *           "normal": [
+         *             -0.6,
+         *             0,
+         *             0.8
+         *           ],
+         *           "size": 0,
+         *           "severity": 1,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "has_patch": false
+         *         }
+         *       ],
+         *       "next": null
+         *     }
+         */
+        PlacementList: {
+            /** @description the model version the placements were computed on; null when the model has none */
+            version: number | null;
+            items: components["schemas"]["Placement"][];
+            /** @description pass as `after` for the next page; null on the last */
+            next: string | null;
+        };
+        PlacementCompute: {
+            /** @description true: only `pending` sightings and those placed on an older version; absent or false: every sighting */
+            only_dirty?: boolean;
+        };
+        FindingRepresentative: {
+            image_id: string;
+            annotation_id: string;
+        };
+        /**
+         * @example {
+         *       "kind": "asset",
+         *       "asset_model_id": "m0000000-9999-4000-8000-000000000001",
+         *       "asset_version": 2,
+         *       "point": [
+         *         1.2,
+         *         61.4,
+         *         -9.8
+         *       ],
+         *       "normal": [
+         *         0.12,
+         *         0,
+         *         -0.99
+         *       ]
+         *     }
+         */
+        FindingAssetAnchor: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset";
+            asset_model_id: string;
+            /** @description the model version the placement was computed on */
+            asset_version: number | null;
+            /** @description the representative sighting's hit point (asset frame, m); null when unplaced */
+            point: number[] | null;
+            normal: number[] | null;
+        };
+        FindingSightingInput: {
+            image_id: string;
+            box: components["schemas"]["FindingBox"];
+            /** @description the polygon in image pixels; the annotation is then a polygon whose box is `box` */
+            points?: number[][];
+            /** @description the sighting's own grade */
+            severity?: number | null;
+            /** @description sightings with the same tag always group together */
+            group_tag?: string | null;
+        };
+        /**
+         * @example {
+         *       "kind": "asset",
+         *       "asset_model_id": "m0000000-9999-4000-8000-000000000001",
+         *       "sightings": [
+         *         {
+         *           "image_id": "10000000-5555-4000-8000-000000000001",
+         *           "box": {
+         *             "x": 812,
+         *             "y": 404,
+         *             "w": 96,
+         *             "h": 40
+         *           }
+         *         }
+         *       ]
+         *     }
+         */
+        FindingAssetAnchorInput: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset";
+            asset_model_id: string;
+            sightings: components["schemas"]["FindingSightingInput"][];
+        };
+        /** @enum {string} */
+        FindingSightingPlacement: "point" | "patch" | "none" | "pending";
+        FindingSighting: {
+            /** @description the sighting id; an image finding's implicit sighting answers its annotation id */
+            id: string;
+            /** @description the asset model the sighting belongs to; an image finding's implicit sighting answers an empty string */
+            asset_model_id: string;
+            /** @description null for a sighting not grouped into a finding yet (before `asset_group` runs) */
+            finding_id: string | null;
+            image_id: string;
+            /** @description the box, rbox, polygon or point (`Box.id`) that is the sighting's geometry */
+            annotation_id: string;
+            /** @description the photo's file name */
+            image_name: string;
+            /** Format: date-time */
+            captured_at: string | null;
+            severity: number | null;
+            group_tag: string | null;
+            placement: components["schemas"]["FindingSightingPlacement"];
+            /** @description the hit point (asset frame, m); null unless placed */
+            center: number[] | null;
+            normal: number[] | null;
+            /** @description the GLB node hit, through the profile's component map */
+            part: string | null;
+            /** @description polygon area over the photo area */
+            coverage: number | null;
+            placed_version: number | null;
+            /** @description placed on an older version than the model's current one */
+            stale: boolean;
+            /** @description derived from `center` on read; null when unplaced */
+            height_m: number | null;
+            bearing_deg: number | null;
+            side: string | null;
+            zone: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "s0000000-8888-4000-8000-000000000001",
+         *           "asset_model_id": "m0000000-9999-4000-8000-000000000001",
+         *           "finding_id": "f0000000-1212-4000-8000-000000000217",
+         *           "image_id": "10000000-5555-4000-8000-000000000001",
+         *           "annotation_id": "b0000000-6666-4000-8000-000000000003",
+         *           "image_name": "DJI_0412.JPG",
+         *           "captured_at": "2026-09-14T09:12:00Z",
+         *           "severity": 2,
+         *           "group_tag": null,
+         *           "placement": "patch",
+         *           "center": [
+         *             1.2,
+         *             61.4,
+         *             -9.8
+         *           ],
+         *           "normal": [
+         *             0.12,
+         *             0,
+         *             -0.99
+         *           ],
+         *           "part": "Shaft",
+         *           "coverage": 0.012,
+         *           "placed_version": 2,
+         *           "stale": false,
+         *           "height_m": 61.4,
+         *           "bearing_deg": 277,
+         *           "side": "W",
+         *           "zone": "shaft",
+         *           "created_at": "2026-10-03T09:00:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        FindingSightingList: {
+            items: components["schemas"]["FindingSighting"][];
+        };
+        FindingMerge: {
+            /** @description the finding that survives */
+            into: string;
+        };
+        FindingSplit: {
+            sighting_ids: string[];
+        };
+        ReviewImportRequest: {
+            /** @description an absolute path to the kit job folder */
+            folder: string;
+            /** @description the image source holding the kit's photos */
+            image_source_id: string;
+            /** @description fill this model; or give `new_model_name` */
+            asset_model_id?: string | null;
+            new_model_name?: string | null;
+            /** @description kit class key to catalogue type id, as confirmed after the dry run */
+            class_map?: {
+                [key: string]: string;
+            };
+            dry_run: boolean;
+        };
+        ReviewImportClass: {
+            key: string;
+            label: string;
+            count: number;
+            /** @description from `class_map`, else the catalogue type with the same normalised name, else null */
+            type_id: string | null;
+        };
+        /**
+         * @description the `result` of a `review_kit_import` dry run (read through `GET /projects/{projectId}/jobs/{jobId}`)
+         * @example {
+         *       "unit": "region",
+         *       "profile": "building_facade",
+         *       "profile_id": "building_facade",
+         *       "photos": 3,
+         *       "matched": 2,
+         *       "unmatched_count": 1,
+         *       "unmatched": [
+         *         "DJI_0099.JPG"
+         *       ],
+         *       "classes": [
+         *         {
+         *           "key": "crack",
+         *           "label": "Crack",
+         *           "count": 4,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009"
+         *         }
+         *       ],
+         *       "statuses": {
+         *         "finding": 2,
+         *         "none": 0,
+         *         "uncertain": 1,
+         *         "not_assessed": 0
+         *       },
+         *       "has_surface": false,
+         *       "has_glb": true,
+         *       "has_merged": true
+         *     }
+         */
+        ReviewImportPreview: {
+            /** @enum {string} */
+            unit: "region" | "photo";
+            /** @description the profile name in job.yaml */
+            profile: string;
+            /** @description the built-in it maps to; null when Kestrel has no such profile (a real run refuses with `kit_invalid`) */
+            profile_id: components["schemas"]["AssetProfileId"] | null;
+            photos: number;
+            matched: number;
+            unmatched_count: number;
+            /** @description kit photo names with no project image */
+            unmatched: string[];
+            classes: components["schemas"]["ReviewImportClass"][];
+            statuses: {
+                finding: number;
+                none: number;
+                uncertain: number;
+                not_assessed: number;
+            };
+            /** @description surface.json is present: placements replay */
+            has_surface: boolean;
+            has_glb: boolean;
+            /** @description merged.json is present: region polygons */
+            has_merged: boolean;
+        };
+        /** @description Hex colours (`#RRGGBB`). Stored upper case. */
+        BrandColors: {
+            accent: string;
+            accent_dark: string;
+            navy: string;
+            ink: string;
+            pale: string;
+            line: string;
+        };
+        /**
+         * @example {
+         *       "id": "builtin-white-label",
+         *       "name": "White label",
+         *       "colors": {
+         *         "accent": "#2F6FED",
+         *         "accent_dark": "#1E4FB8",
+         *         "navy": "#1B2A41",
+         *         "ink": "#1F2328",
+         *         "pale": "#F4F6F8",
+         *         "line": "#D0D7DE"
+         *       },
+         *       "font_text": "Inter",
+         *       "font_numerals": "Inter",
+         *       "logo_on_light": null,
+         *       "logo_on_dark": null,
+         *       "logo_flat": null,
+         *       "website": "",
+         *       "owner": "",
+         *       "confidentiality": "Confidential. Prepared for {customer}, {year}.",
+         *       "pdf_author": "",
+         *       "builtin": true,
+         *       "created_at": "2026-10-03T00:00:00Z",
+         *       "updated_at": "2026-10-03T00:00:00Z"
+         *     }
+         */
+        Brand: {
+            id: string;
+            name: string;
+            colors: components["schemas"]["BrandColors"];
+            /** @description A bundled font family (`Nunito Sans`, `Poppins`, `Inter`); null prints in the report theme's font. */
+            font_text: string | null;
+            /** @description The family for numbers and headings; null falls back to `font_text`. */
+            font_numerals: string | null;
+            /** @description A brand logo id (`logo-<16 hex>`); read it with getBrandLogo. */
+            logo_on_light: string | null;
+            logo_on_dark: string | null;
+            logo_flat: string | null;
+            website: string;
+            owner: string;
+            /** @description The footer line. `{year}` and `{customer}` are filled in when the report renders. */
+            confidentiality: string;
+            pdf_author: string;
+            /** @description Seeded by the app; editable */
+            builtin: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "builtin-white-label",
+         *           "name": "White label",
+         *           "colors": {
+         *             "accent": "#2F6FED",
+         *             "accent_dark": "#1E4FB8",
+         *             "navy": "#1B2A41",
+         *             "ink": "#1F2328",
+         *             "pale": "#F4F6F8",
+         *             "line": "#D0D7DE"
+         *           },
+         *           "font_text": "Inter",
+         *           "font_numerals": "Inter",
+         *           "logo_on_light": null,
+         *           "logo_on_dark": null,
+         *           "logo_flat": null,
+         *           "website": "",
+         *           "owner": "",
+         *           "confidentiality": "Confidential. Prepared for {customer}, {year}.",
+         *           "pdf_author": "",
+         *           "builtin": true,
+         *           "created_at": "2026-10-03T00:00:00Z",
+         *           "updated_at": "2026-10-03T00:00:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        BrandList: {
+            items: components["schemas"]["Brand"][];
+        };
+        BrandCreate: {
+            name: string;
+            colors?: components["schemas"]["BrandColors"];
+            font_text?: string | null;
+            font_numerals?: string | null;
+            website?: string;
+            owner?: string;
+            confidentiality?: string;
+            pdf_author?: string;
+        };
+        BrandPatch: {
+            name?: string;
+            colors?: components["schemas"]["BrandColors"];
+            font_text?: string | null;
+            font_numerals?: string | null;
+            website?: string;
+            owner?: string;
+            confidentiality?: string;
+            pdf_author?: string;
+        };
+        /**
+         * @description `on_light` for white bars, `on_dark` for the cover band, `flat` (no alpha) for the PDF running header.
+         * @enum {string}
+         */
+        BrandLogoSlot: "on_light" | "on_dark" | "flat";
+        BrandLogoImport: {
+            /** @description An absolute path to a PNG */
+            path: string;
         };
         DrawingPatch: {
             name?: string;
@@ -12728,6 +13890,7 @@ export interface components {
          *           "days": null
          *         }
          *       },
+         *       "brand_id": null,
          *       "sections": [
          *         {
          *           "key": "cover",
@@ -12823,6 +13986,8 @@ export interface components {
             paper: components["schemas"]["ReportPaper"];
             filters: components["schemas"]["ReportFilters"];
             sections: components["schemas"]["ReportSection"][];
+            /** @description a `Brand` id; null, or a brand since deleted, prints with the Kestrel theme */
+            brand_id: string | null;
         };
         /** @description a GeoJSON Point, LineString or Polygon in the item's CRS */
         SnapshotGeometry: {
@@ -13931,6 +15096,15 @@ export interface components {
         assetModelId: string;
         assetModelVersion: number;
         assetModelRunId: string;
+        sightingId: string;
+        brandId: string;
+        brandLogoSlot: components["schemas"]["BrandLogoSlot"];
+        /** @description the previous page's `next`: rows after this id (a plain id, never decoded) */
+        assetPageAfter: string;
+        /** @description at most 2000 rows a page; 500 when absent */
+        assetPageLimit: number;
+        /** @description comma-separated photo review statuses (asset findings spec §5.4); `not_assessed` also matches a photo with no review status yet */
+        imageReviewStatus: string;
         sourceId: string;
         imageId: string;
         boxId: string;
@@ -14879,6 +16053,8 @@ export interface operations {
                 reviewed?: components["parameters"]["imageReviewed"];
                 /** @description true = no ground truth and not marked empty (the same test as `labeled=false`) */
                 unlabeled?: components["parameters"]["imageUnlabeled"];
+                /** @description comma-separated photo review statuses (asset findings spec §5.4); `not_assessed` also matches a photo with no review status yet */
+                review_status?: components["parameters"]["imageReviewStatus"];
                 /** @description case-insensitive substring of the image path */
                 search?: string;
                 sort?: "path" | "source_id" | "group_key" | "labeled" | "box_count" | "pending_count" | "max_pending_confidence" | "capture_time" | "created_at" | "worst_severity";
@@ -20336,7 +21512,7 @@ export interface operations {
                 severity?: string[];
                 type_id?: string[];
                 anchor_kind?: components["schemas"]["FindingAnchorKind"][];
-                /** @description the anchor's data item (an images source, a map, an elevation or a point cloud) */
+                /** @description the anchor's data item (an images source, a map, an elevation, a point cloud or an asset model) */
                 data_id?: string;
                 /** @description image anchors on this image (image inspection spec §3, an agreed addition to this group) */
                 image_id?: string;
@@ -20347,8 +21523,17 @@ export interface operations {
                 updated_to?: string;
                 /** @description only findings with (true) or without (false) `lon`/`lat` */
                 has_location?: boolean;
-                /** @description `-severity` when absent */
-                sort?: "-severity" | "number" | "-updated_at" | "type";
+                /** @description only `asset` findings on this asset model */
+                asset_model_id?: string;
+                /** @description zone ids of the model's review profile (`AssetReviewZone.id`) */
+                zone?: string[];
+                /** @description side labels of the model's review profile */
+                side?: string[];
+                component?: string[];
+                /** @description asset findings placed as a point or a patch (true) or not placed (false); other anchor kinds never match */
+                placed?: boolean;
+                /** @description `-severity` when absent. `-height`: highest first, findings without a height last, then `-number`. `zone`: zone id ascending, findings without a zone last, then `-height`, then `number` */
+                sort?: "-severity" | "number" | "-updated_at" | "type" | "-height" | "zone";
                 /** @description findings pages hold at most 500 */
                 limit?: components["parameters"]["findingsLimit"];
                 /** @description opaque cursor from the previous page's `next_cursor` */
@@ -22338,7 +23523,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
-            /** @description a run or GLB job is live (`code` is `job_running`) */
+            /** @description a job of this model is live (`code` is `job_running`), or findings or ungrouped sightings reference it (`code` is `has_findings`, details `{count}`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22376,6 +23561,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description an unknown profile (`code` is `unknown_profile`) or a frame that breaks a rule the schema cannot state, such as zones that overlap or a level above `height_m` (`code` is `invalid_frame`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -22718,6 +23912,807 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    importAssetModelGlb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetGlbImport"];
+            };
+        };
+        responses: {
+            /** @description the pending version and its import job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelVersionWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a job of this model is live (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the path is not a readable glTF binary (`code` is `glb_invalid`, details `{reason}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listImagePoses: {
+        parameters: {
+            query?: {
+                /** @description only poses with this sequence label */
+                sequence?: string;
+                /** @description only these images */
+                image_id?: string[];
+                /** @description the previous page's `next`: rows after this id (a plain id, never decoded) */
+                after?: components["parameters"]["assetPageAfter"];
+                /** @description at most 2000 rows a page; 500 when absent */
+                limit?: components["parameters"]["assetPageLimit"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description one page of poses */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImagePoseList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    estimateImagePoses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ImagePoseEstimate"];
+            };
+        };
+        responses: {
+            /** @description pose job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a pose job of this model is live (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the model's frame has no geographic origin (`code` is `no_origin`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putImagePose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImagePoseIn"];
+            };
+        };
+        responses: {
+            /** @description the stored pose */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImagePose"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listPlacements: {
+        parameters: {
+            query?: {
+                /** @description the previous page's `next`: rows after this id (a plain id, never decoded) */
+                after?: components["parameters"]["assetPageAfter"];
+                /** @description at most 2000 rows a page; 500 when absent */
+                limit?: components["parameters"]["assetPageLimit"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description one page of placements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacementList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    computePlacements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlacementCompute"];
+            };
+        };
+        responses: {
+            /** @description placement job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a placement or grouping job of this model is live (`code` is `job_running`), or the model has no ready version (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPlacementMesh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                sightingId: components["parameters"]["sightingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description little-endian Float32: n positions (x, y, z in the asset frame, metres), then n uvs (u, v); n is the byte length over 20; every three vertices are one triangle */
+            200: {
+                headers: {
+                    /** @description the placement's version and sighting; send it back as `If-None-Match` */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description `If-None-Match` matched the ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPlacementTexture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                sightingId: components["parameters"]["sightingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the finding polygon filled in its severity colour over the photo crop, with alpha; at most 512 px a side */
+            200: {
+                headers: {
+                    /** @description the placement's version and sighting; send it back as `If-None-Match` */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description `If-None-Match` matched the ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPlacementLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                sightingId: components["parameters"]["sightingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 4 bytes (width, then height, each a little-endian uint16), then width times height uint8 labels, row by row from the top left; 1 inside the finding polygon, 0 outside; at most 128 px a side */
+            200: {
+                headers: {
+                    /** @description the placement's version and sighting; send it back as `If-None-Match` */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description `If-None-Match` matched the ETag */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    regroupAssetFindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description grouping job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a placement or grouping job of this model is live (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    mergeFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingMerge"];
+            };
+        };
+        responses: {
+            /** @description the surviving finding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the merge is not possible (`code` is `invalid_merge`, details `{reason}`: `not_asset`, `other_model` or `same_finding`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    splitFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingSplit"];
+            };
+        };
+        responses: {
+            /** @description the new finding */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the split is not possible (`code` is `invalid_split`, details `{reason}`: `not_asset`, `not_on_finding` or `all_sightings`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listFindingSightings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the sightings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingSightingList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getImageReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageReview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putImageReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageReviewPut"];
+            };
+        };
+        responses: {
+            /** @description the stored review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageReview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startReviewImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewImportRequest"];
+            };
+        };
+        responses: {
+            /** @description import job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description an import into this project is live (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the folder is not a kit job (`code` is `kit_invalid`, details `{missing}`), or the request breaks a rule the schema cannot state (`code` is `invalid_import`, details `{errors: [{path, message}]}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listBrands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description brands */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandList"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createBrand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            /** @description the name is taken after normalising (`code` is `brand_name_taken`, details `{brand_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the name normalises to nothing (`invalid_brand`, details `{errors: [{path, message}]}`) or a font is not bundled (`unknown_font`, details `{path, fonts}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteBrand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a built-in brand is never deleted (`code` is `brand_builtin`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchBrand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandPatch"];
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the name is taken after normalising (`code` is `brand_name_taken`, details `{brand_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the name normalises to nothing (`invalid_brand`, details `{errors: [{path, message}]}`) or a font is not bundled (`unknown_font`, details `{path, fonts}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getBrandLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+                slot: components["parameters"]["brandLogoSlot"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the logo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setBrandLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+                slot: components["parameters"]["brandLogoSlot"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandLogoImport"];
+            };
+        };
+        responses: {
+            /** @description the brand with the new logo id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the file is missing, too large or not an image (`code` is `asset_invalid`, details `{reason}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    clearBrandLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: components["parameters"]["brandId"];
+                slot: components["parameters"]["brandLogoSlot"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the brand without that logo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["CatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };
