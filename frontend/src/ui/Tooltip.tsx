@@ -23,6 +23,8 @@ export interface TooltipProps {
   shortcut?: string;
   /** Milliseconds before it shows on hover; focus shows it at once. */
   delay?: number;
+  /** Keeps the wrapper (so the child is never remounted) but never shows the label. */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -91,7 +93,15 @@ function FloatingLabel({
 }
 
 /** Disabled controls still receive hover explanations through the wrapping span. */
-export function Tooltip({ label, children, side = "top", shortcut, delay = 400, className }: TooltipProps) {
+export function Tooltip({
+  label,
+  children,
+  side = "top",
+  shortcut,
+  delay = 400,
+  disabled = false,
+  className,
+}: TooltipProps) {
   const [open, setOpen] = useState(false);
   const timer = useRef<number | null>(null);
   const focused = useRef(false);
@@ -109,6 +119,7 @@ export function Tooltip({ label, children, side = "top", shortcut, delay = 400, 
   );
   const show = (immediate: boolean) => {
     clearTimer();
+    if (disabled) return;
     if (immediate) setOpen(true);
     else
       timer.current = window.setTimeout(() => {
@@ -120,9 +131,10 @@ export function Tooltip({ label, children, side = "top", shortcut, delay = 400, 
     clearTimer();
     setOpen(false);
   };
+  const visible = open && !disabled;
   const child = isValidElement<{ "aria-describedby"?: string }>(children)
     ? cloneElement(children, {
-        "aria-describedby": open
+        "aria-describedby": visible
           ? [children.props["aria-describedby"], id].filter(Boolean).join(" ")
           : children.props["aria-describedby"],
       })
@@ -147,10 +159,10 @@ export function Tooltip({ label, children, side = "top", shortcut, delay = 400, 
       onKeyDown={(event) => {
         if (event.key === "Escape") hide();
       }}
-      aria-describedby={open ? id : undefined}
+      aria-describedby={visible ? id : undefined}
     >
       {child}
-      {open && <FloatingLabel label={label} shortcut={shortcut} id={id} side={side} anchor={anchor} />}
+      {visible && <FloatingLabel label={label} shortcut={shortcut} id={id} side={side} anchor={anchor} />}
     </span>
   );
 }

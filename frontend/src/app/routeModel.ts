@@ -161,3 +161,38 @@ export function sheetScope(info: RouteInfo): WorkspaceScope | null {
     ? (info.tab as WorkspaceScope)
     : null;
 }
+
+/** Below this window width the sidebar collapses on its own (the inspector's breakpoint). */
+export const SIDEBAR_NARROW_WIDTH = 1100;
+
+/**
+ * Full-bleed and workspace surfaces (Images, the report builder) and narrow windows collapse the
+ * sidebar, so the canvas keeps its width (spec 2026-10-03-sidebar §4).
+ */
+export function isForcedCollapse(layout: Layout, windowWidth: number): boolean {
+  return layout === "fullbleed" || layout === "workspace" || windowWidth < SIDEBAR_NARROW_WIDTH;
+}
+
+/**
+ * Whether the sidebar is collapsed: on a forced route it is, unless the operator chose otherwise on
+ * this visit (`override`); elsewhere the stored preference decides and the override is ignored.
+ */
+export function sidebarCollapsed(stored: boolean, forced: boolean, override: boolean | null): boolean {
+  if (forced) return override ?? true;
+  return stored;
+}
+
+/** The top bar's title (spec §5): the page in a project, else the section and its sub-page. */
+export function topBarTitle(info: RouteInfo): string {
+  if (info.projectId) return info.page ?? "Project";
+  if (!info.section) return info.page ?? "";
+  const section = SECTION_LABEL[info.section];
+  return info.page && info.page !== section ? `${section} · ${info.page}` : section;
+}
+
+/** The secondary page a project path is on (Runs, Review, …), or null. */
+export function secondaryOf(pathname: string): string | null {
+  const [head, , seg] = pathname.split("/").filter(Boolean);
+  if (head !== "p" || !seg) return null;
+  return SECONDARY_PAGES.find((p) => p.id === seg)?.id ?? null;
+}

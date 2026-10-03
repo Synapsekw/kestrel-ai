@@ -1,6 +1,7 @@
 import type { AssetModel } from "@contract/client";
 import type { Finding } from "@/api/findings";
-import { exampleFinding, TYPE_CRACK, TYPE_SPALLING } from "./findingFixtures";
+import type { ProjectOverview } from "@/api/overview";
+import { exampleFinding, fullOverview, TYPE_CRACK, TYPE_SPALLING } from "./findingFixtures";
 
 export const ASSET_MODEL_ID = "a0000000-9999-4000-8000-000000000001";
 export const ASSET_FINDING_ID = "f0000000-9999-4000-8000-000000000401";
@@ -123,4 +124,21 @@ export const exampleUnplacedAssetFinding: Finding = {
   component: null,
   placement: "none",
   sighting_count: 1,
+};
+
+export const examplePhotoReview: NonNullable<ProjectOverview["photo_review"]> = {
+  finding: 12,
+  none: 90,
+  uncertain: 15,
+  not_assessed: 3,
+};
+
+/** An asset-inspection project: photos, a reviewed asset model as the hero, no map or cloud. */
+export const assetOverview: ProjectOverview = {
+  ...fullOverview,
+  data: { image_sets: 1, images: 120, maps: 0, elevations: 0, point_clouds: 0, drawings: 0 },
+  latest_volume: null,
+  hero_map_id: null,
+  hero: { kind: "asset_model", id: ASSET_MODEL_ID },
+  photo_review: examplePhotoReview,
 };

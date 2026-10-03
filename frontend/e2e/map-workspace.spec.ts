@@ -22,7 +22,7 @@ test("tools and survey dates follow the keyboard", async ({ page }) => {
   await page.goto(`/p/${P}/maps`);
   await expect(page.getByRole("button", { name: "Select" })).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("h");
-  await expect(page.getByRole("button", { name: "Pan" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Pan", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("status").filter({ hasText: "Pan" })).toBeVisible();
   await page.keyboard.press("[");
   await expect(page).toHaveURL(/r=2026-08-14/);

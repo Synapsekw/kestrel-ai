@@ -100,11 +100,11 @@ test("the workspace draws the cloud full-bleed, picks it, and stops rendering on
   const w = ws(page);
   expect(await w.canvas.boundingBox()).toEqual(await w.viewport.boundingBox());
   // full-bleed (spec §6): the viewport runs from the app's side rail to the window's right and bottom
-  // edges, and the project tabs hide here (F §5.2)
+  // edges. Full-bleed: the sidebar opens collapsed here (spec 2026-10-03-sidebar §4).
   const vp = (await w.viewport.boundingBox())!;
   const win = page.viewportSize()!;
   expect([vp.x + vp.width, vp.y + vp.height]).toEqual([win.width, win.height]);
-  await expect(page.getByRole("tab", { name: /^Point clouds/ })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveAttribute("data-state", "collapsed");
   const colours = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
   expect(colours.red / colours.total).toBeGreaterThan(0.01);
   expect(colours.green / colours.total).toBeGreaterThan(0.01);

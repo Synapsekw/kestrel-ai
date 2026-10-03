@@ -20,7 +20,6 @@ from schemathesis.specs.openapi.checks import (
 
 from app.asset_models.stubs_plant import stub_operation_ids as plant_stub_operation_ids
 from app.asset_review.stubs import stub_operation_ids as asset_review_stub_operation_ids
-from app.brands.stubs import stub_operation_ids as brands_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -109,10 +108,9 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
 # Asset findings (plan 2026-10-03-asset-findings-c0): the unit lists of app/asset_review/stubs.py
-# (D1, J1 to J5) and app/brands/stubs.py (D2). An owner deletes its tuples; nothing here changes.
-# The last owner of each module deletes the module, its line in app/api.py and its line here.
+# (D1, J1 to J5); D2's module is gone. An owner deletes its tuples; nothing here changes. The last
+# owner of a module deletes the module, its line in app/api.py and its line here.
 EXPECTED_STUBS |= asset_review_stub_operation_ids()
-EXPECTED_STUBS |= brands_stub_operation_ids()
 
 # Plant model (plan 2026-10-03-plant-model-f0): the unit lists of app/asset_models/stubs_plant.py (A1,
 # R1, S1, I1). An owner deletes its tuples; the last one deletes the module, its api.py lines and this.
@@ -138,7 +136,6 @@ BACKEND_PENDING: dict[str, str] = {
     # deletes its line.
     "createFinding": "J4",
     "listFindings": "J4",
-    "patchAssetModel": "J1",
 }
 
 
@@ -158,6 +155,8 @@ RETIRING: dict[str, str] = {}
 # S1, S2 and S3 add entries here and never loosen the test another way; each status must be
 # declared for its operation in openapi.yaml (guarded below).
 REFUSES_VALID_DATA: dict[str, set[int]] = {
+    # D2: a generated path is never a readable logo (`asset_invalid`, details {reason}).
+    "setBrandLogo": {422},
     "startAssetModelRun": {409, 422},  # provider_key_missing / job_running; no_sources / nothing_to_refine
     # S2 (plan deviation 14): a schema-valid build whose ids resolve can still be refused - a full
     # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
@@ -173,6 +172,17 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createAssetModelVersion": {422},
     "getAssetModelGlb": {409},
     "deleteAssetModel": {409},
+    # asset findings J2: a model whose frame has no origin (`no_origin`) or with a pose job live
+    # (`job_running`); a manual pose whose target is its position or whose up is along the view
+    # (`invalid_pose`).
+    "estimateImagePoses": {409, 422},
+    "putImagePose": {422},
+    # asset findings J1: a generated review names no built-in profile (`unknown_profile`), or the
+    # model has no frame yet (`frame_required`), or an override is out of range (`invalid_review`).
+    "patchAssetModel": {422},
+    # asset findings J1: a schema-valid path that is not a readable GLB 2.0 (`glb_invalid`); a model
+    # with a live agent run (`job_running`).
+    "importAssetModelGlb": {409, 422},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
     # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
     # `grid_too_large`, `insufficient_disk`).
@@ -276,6 +286,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # details.errors[{path, message}]).
     "createProjectTemplate": {422},
     "patchProjectTemplate": {422},
+    # D2: a generated brand name can already be taken (`brand_name_taken`, 409), normalise to nothing
+    # (`invalid_brand`) or a generated font name is not bundled (`unknown_font`, 422).
+    "createBrand": {409, 422},
+    "patchBrand": {409, 422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

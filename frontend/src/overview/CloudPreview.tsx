@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { cloudOctreeUrl } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
@@ -9,6 +9,7 @@ import { autoProbeSettled } from "@/app/effects";
 import { reducedEffects, watchEffects } from "@/clouds/viewer/edl";
 import { cx, focusRing, GlassPanel, Skeleton } from "@/ui";
 import { CloudStaticCard } from "./CloudStaticCard";
+import { PreviewBoundary } from "./PreviewBoundary";
 import { useInView } from "./useInView";
 
 export const HERO_BUDGET = 1_000_000;
@@ -16,30 +17,6 @@ export const TILE_BUDGET = 300_000;
 
 // three + potree-core load only when a preview actually starts (as the Clouds screen does).
 const CloudViewer = lazy(() => import("@/clouds/CloudViewer").then((m) => ({ default: m.CloudViewer })));
-
-/**
- * Catches what the viewer throws past its own no-WebGL fallback (an engine error, a chunk that failed to
- * load), logs it and shows `fallback`, so a broken preview never takes the whole app down.
- */
-class PreviewBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode; onError: () => void },
-  { failed: boolean }
-> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: Error) {
-    pushLog(`point cloud preview failed: ${error.message}`);
-    this.props.onError();
-  }
-
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
 
 function Notice({ projectId, text, className }: { projectId: string; text: string; className?: string }) {
   return (
@@ -173,6 +150,7 @@ export function CloudPreview({
       ) : wantLive && inView ? (
         <PreviewBoundary
           key={key}
+          what="point cloud"
           onError={() => setFailedKey(key)}
           fallback={<CloudStaticCard projectId={projectId} cloud={cloud} />}
         >

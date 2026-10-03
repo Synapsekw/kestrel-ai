@@ -1,6 +1,6 @@
 """The catalogue database (`catalogue.db`): catalogue types, the severity scale and a key/value
-meta table (spec 2026-09-26-foundation section 7.1), report templates (revision 0002) and project
-templates (revision 0003)."""
+meta table (spec 2026-09-26-foundation section 7.1), report templates (revision 0002), project
+templates (revision 0003) and report brands (revision 0004)."""
 
 from datetime import datetime
 from typing import Any
@@ -98,3 +98,33 @@ class ProjectTemplate(CatalogueBase):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
     __table_args__ = (Index("ux_project_template_name_key", "name_key", unique=True),)
+
+
+class Brand(CatalogueBase):
+    """A report brand (spec 2026-10-02-asset-findings §5.8, catalogue revision 0004): colours, fonts,
+    three logos and the footer text a report prints with when `ReportConfig.brand_id` names it.
+
+    The two built-ins (`builtin=True`, fixed ids from app/brands/builtins.py) are seeded by the
+    migration; they can be edited (the operator adds e&'s logos here) but never deleted. `colors` is
+    `{accent, accent_dark, navy, ink, pale, line}`, upper-case hex. `font_text` and `font_numerals` are
+    bundled family names (app/brands/fonts.py). A logo column holds a brand logo id (`logo-<16 hex>`,
+    a PNG under `<catalogue root>/brand-assets/`). `name_key` is `normalise_name(name)`, unique."""
+
+    __tablename__ = "brand"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(80))
+    name_key: Mapped[str] = mapped_column(String(80))
+    colors: Mapped[dict] = mapped_column(JSON)
+    font_text: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    font_numerals: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    logo_on_light: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    logo_on_dark: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    logo_flat: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    website: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    owner: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    confidentiality: Mapped[str] = mapped_column(Text, default="", server_default="")
+    pdf_author: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ux_brand_name_key", "name_key", unique=True),)

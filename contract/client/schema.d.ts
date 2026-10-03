@@ -13164,8 +13164,11 @@ export interface components {
             /** @default  */
             datum_note: string;
             line_azimuth_deg?: number | null;
-            /** @description [y, r] pairs, ascending y: the radial outline used by the findings map */
-            silhouette?: number[][];
+            /** @description [y, r] pairs, ascending y: the radial outline used by the findings map; r is not negative */
+            silhouette?: [
+                number,
+                number
+            ][];
             levels?: number[];
             presets?: components["schemas"]["AssetFramePreset"][];
         };
@@ -13665,12 +13668,12 @@ export interface components {
          *       "id": "builtin-white-label",
          *       "name": "White label",
          *       "colors": {
-         *         "accent": "#2F6FED",
-         *         "accent_dark": "#1E4FB8",
-         *         "navy": "#1B2A41",
-         *         "ink": "#1F2328",
-         *         "pale": "#F4F6F8",
-         *         "line": "#D0D7DE"
+         *         "accent": "#1F4FD1",
+         *         "accent_dark": "#173DA6",
+         *         "navy": "#131A26",
+         *         "ink": "#141821",
+         *         "pale": "#E8EEFF",
+         *         "line": "#E3E6EC"
          *       },
          *       "font_text": "Inter",
          *       "font_numerals": "Inter",
@@ -13679,7 +13682,7 @@ export interface components {
          *       "logo_flat": null,
          *       "website": "",
          *       "owner": "",
-         *       "confidentiality": "Confidential. Prepared for {customer}, {year}.",
+         *       "confidentiality": "Confidential. Prepared for {customer}. Do not distribute without written consent.",
          *       "pdf_author": "",
          *       "builtin": true,
          *       "created_at": "2026-10-03T00:00:00Z",
@@ -13717,12 +13720,12 @@ export interface components {
          *           "id": "builtin-white-label",
          *           "name": "White label",
          *           "colors": {
-         *             "accent": "#2F6FED",
-         *             "accent_dark": "#1E4FB8",
-         *             "navy": "#1B2A41",
-         *             "ink": "#1F2328",
-         *             "pale": "#F4F6F8",
-         *             "line": "#D0D7DE"
+         *             "accent": "#1F4FD1",
+         *             "accent_dark": "#173DA6",
+         *             "navy": "#131A26",
+         *             "ink": "#141821",
+         *             "pale": "#E8EEFF",
+         *             "line": "#E3E6EC"
          *           },
          *           "font_text": "Inter",
          *           "font_numerals": "Inter",
@@ -13731,7 +13734,7 @@ export interface components {
          *           "logo_flat": null,
          *           "website": "",
          *           "owner": "",
-         *           "confidentiality": "Confidential. Prepared for {customer}, {year}.",
+         *           "confidentiality": "Confidential. Prepared for {customer}. Do not distribute without written consent.",
          *           "pdf_author": "",
          *           "builtin": true,
          *           "created_at": "2026-10-03T00:00:00Z",
@@ -24563,6 +24566,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description the pose has no view direction, an up vector along the view, or a 180 degree field of view (`code` is `invalid_pose`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -25420,6 +25432,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            503: components["responses"]["CatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };

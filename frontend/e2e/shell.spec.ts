@@ -16,46 +16,47 @@ async function settled(page: Page) {
   expect(opacity).toBe("1");
 }
 
-test("the rail reaches every section and marks the current one", async ({ page }) => {
+test("the sidebar reaches every section and marks the current one", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/projects$/);
-  const rail = page.getByRole("navigation", { name: "Main navigation" });
-  await expect(rail.getByRole("link", { name: "Projects", exact: true })).toHaveAttribute(
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(nav.getByRole("link", { name: "Projects", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await rail.getByRole("link", { name: "Models", exact: true }).click();
+  await nav.getByRole("link", { name: "Models", exact: true }).click();
   await expect(page).toHaveURL(/\/models\/library$/);
-  await expect(rail.getByRole("link", { name: "Models", exact: true })).toHaveAttribute(
+  await expect(nav.getByRole("link", { name: "Models", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await rail.getByRole("link", { name: "Catalogue", exact: true }).click();
+  await nav.getByRole("link", { name: "Catalogue", exact: true }).click();
   await expect(page).toHaveURL(/\/catalogue$/);
-  await rail.getByRole("link", { name: "Jobs", exact: true }).click();
+  await nav.getByRole("link", { name: "Jobs", exact: true }).click();
   await expect(page).toHaveURL(/\/jobs$/);
-  await rail.getByRole("link", { name: "Settings", exact: true }).click();
+  await nav.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "App settings" })).toBeVisible();
-  const box = await rail.boundingBox();
-  expect(box?.width).toBe(64);
+  const box = await nav.boundingBox();
+  expect(box?.width).toBe(236);
   // "?" outside a text field opens the shortcut sheet.
   await page.keyboard.press("?");
   await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
 });
 
-test("a project opens on Overview; the tabs switch pages and the entrance finishes", async ({ page }) => {
+test("a project opens on Overview; the sidebar tree switches pages and the entrance finishes", async ({ page }) => {
   const overview = await fromMock<{ data: { images: number } }>(page, `/api/v1/projects/${P}/overview`);
   await page.goto(`/p/${P}`);
   await expect(page).toHaveURL(new RegExp(`/p/${P}/overview$`));
-  const tabs = page.getByRole("tablist");
-  await expect(tabs.getByRole("tab")).toHaveCount(9);
-  await expect(tabs.getByRole("tab", { name: /^Drawings/ })).toHaveAttribute("href", `/p/${P}/drawings`);
-  await expect(tabs.getByRole("tab", { name: /^Images/ })).toContainText(
-    new RegExp(String(overview.data.images).replace(/\B(?=(\d{3})+(?!\d))/g, ",?")),
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: /^Drawings/ })).toHaveAttribute("href", `/p/${P}/drawings`);
+  await expect(nav.getByRole("link", { name: /^Images/ })).toHaveAccessibleName(
+    `Images ${overview.data.images.toLocaleString("en-US")}`,
   );
-  await tabs.getByRole("tab", { name: /^Images/ }).click();
+  await nav.getByRole("link", { name: /^Images/ }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images(/[^/?]+)?$`));
-  await expect(tabs.getByRole("tab", { name: /^Images/ })).toHaveAttribute("aria-selected", "true");
+  await expect(nav.getByRole("link", { name: /^Images/ })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("banner")).toContainText("Images");
   await settled(page);
 });
@@ -91,7 +92,7 @@ test("Ctrl K goes to a tab and finds a finding or a data item", async ({ page })
   await expect(page.getByRole("combobox", { name: "Command" })).toHaveCount(0);
 });
 
-test("old addresses land on the new tabs", async ({ page }) => {
+test("old addresses land on the new pages", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images(/[^/?]+)?$`));
   await page.goto(`/p/${P}/edit/${IMG}`);
@@ -109,26 +110,35 @@ test("old addresses land on the new tabs", async ({ page }) => {
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
 });
 
-test("the map viewer is full-bleed: no tabs, and the breadcrumb names the tab", async ({ page }) => {
-  // The map detail left in the tab is the evaluation screen; `maps/:mapId` now redirects to the workspace.
+test("the map viewer is full-bleed: the sidebar is collapsed and the title names Maps", async ({ page }) => {
   await page.goto(`/p/${P}/maps/${MAP}/evaluate`);
   await expect(page.getByRole("banner")).toContainText("Maps");
-  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveAttribute("data-state", "collapsed");
 });
 
-test("the Maps tab is the full-bleed map workspace", async ({ page }) => {
+test("Maps opens collapsed; expanding there lasts for the visit only", async ({ page }) => {
   await page.goto(`/p/${P}/maps`);
   await expect(page.getByRole("toolbar", { name: "Map" })).toBeVisible();
-  await expect(page.getByRole("banner")).toContainText("Maps");
-  await expect(page.getByRole("tablist")).toHaveCount(0);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(nav).toHaveAttribute("data-state", "collapsed");
+  await nav.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(nav).toHaveAttribute("data-state", "expanded");
+  await nav.getByRole("link", { name: /^Findings/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/findings`));
+  await expect(nav).toHaveAttribute("data-state", "expanded");
+  await nav.getByRole("link", { name: /^Maps/ }).click();
+  await expect(page.getByRole("toolbar", { name: "Map" })).toBeVisible();
+  await expect(nav).toHaveAttribute("data-state", "collapsed");
 });
 
-test("secondary pages open from More", async ({ page }) => {
+test("secondary pages open from More in the sidebar", async ({ page }) => {
   await page.goto(`/p/${P}/overview`);
-  await page.getByRole("button", { name: "More", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Analytics" }).click();
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "More", exact: true }).click();
+  await nav.getByRole("link", { name: "Analytics", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/analytics$`));
   await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Analytics", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
 test("the palette field's Ctrl K key caps sit on one line", async ({ page }) => {
@@ -144,4 +154,25 @@ test("the palette field's Ctrl K key caps sit on one line", async ({ page }) => 
   }
   const wrapper = await caps.first().evaluate((el) => el.parentElement!.getBoundingClientRect().height);
   expect(wrapper).toBeLessThanOrEqual(18);
+});
+
+test("collapse by button and by Ctrl+B is remembered across a reload", async ({ page }) => {
+  await page.goto("/projects");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(nav).toHaveAttribute("data-state", "expanded");
+  await nav.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(nav).toHaveAttribute("data-state", "collapsed");
+  await expect.poll(async () => (await nav.boundingBox())?.width).toBe(64);
+  await page.reload();
+  await expect(nav).toHaveAttribute("data-state", "collapsed");
+  await page.keyboard.press("Control+B");
+  await expect(nav).toHaveAttribute("data-state", "expanded");
+  await page.reload();
+  await expect(nav).toHaveAttribute("data-state", "expanded");
+});
+
+test("a window under 1100px wide starts with the sidebar collapsed", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 720 });
+  await page.goto("/projects");
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveAttribute("data-state", "collapsed");
 });

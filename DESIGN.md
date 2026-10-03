@@ -23,7 +23,7 @@ Translucent surfaces are complete `rgba()` values and take **no** opacity modifi
 | `--backdrop` | indigo radial top right, teal radial bottom left, on `#0e0f1c` | `body`, painted once, fixed |
 | `bg` | #0e0f1c | solid base, canvas behind imagery, sticky table header, reduced-effects glass |
 | `surface` / `surface-2` / `field` | white 5.5% / 8% / 6% | cards and panes / wells, tracks, neutral chips / inputs |
-| `hover` / `rail` | white 5% / 3% | row hover / icon rail |
+| `hover` / `rail` | white 5% / 3% | row hover / sidebar |
 | `glass`, `glass-line`, `glass-ink` | rgba(14,15,28,.55), white 14%, #f2f1fb | floating panels over imagery |
 | `line` / `line-strong` / `card-line` | white 8% / 20% / 9% | separators, borders |
 | `control-line` | #767496 | boundaries that are a control's only affordance (checkbox, switch track, slider track) |
@@ -115,13 +115,19 @@ p95 > 24ms, remembers that, and offers Undo, which chooses Full for good.
 
 ## Shell
 
-A 64px icon rail (the logo tile, Projects, Models, Catalogue, Jobs, a spacer, Settings) with tooltips on
-the right; the active entry is `accent-soft` with a 3px gradient bar. A 56px top bar: the breadcrumb
-(`Projects / ● Name / Tab`, the dot a `StatusDot`, live while a job runs), the search field that opens
-the command palette (Ctrl K), the route's context actions, the agent button and the running-jobs pill.
-Project tabs (`Tabs asLinks`, counts in mono) sit under it: Overview, Images, Maps, Point clouds,
-Findings, Measurements, Reports; they hide on the full-bleed Maps and Point clouds workspaces. A tab
-change fades and rises 6px over `--dur-base`, with no exit animation.
+A labelled sidebar, 236px wide, collapsible to a 64px icon column (`app/Sidebar`). Its rows, from the top:
+the brand (logo tile and "Kestrel AI"), Projects, then, inside a project, the project as a tree under
+Projects: its row (initials tile, name, `StatusDot` live while a job runs) and its nine pages
+(Overview, Images, Maps, Drawings, Point clouds, Asset models, Findings, Measurements, Reports, with
+counts in mono), then More, which opens the secondary pages in place. Then Models, Catalogue, Jobs
+(badge: running jobs), a spacer, Settings and the collapse button. The current row is `accent-soft` with
+the 3px gradient bar; the rows on its path are `ink` without the fill. Collapsed rows keep tooltips on
+the right. Ctrl+B or the button toggles it, and the choice is kept in `localStorage`
+(`kestrel.sidebar`). Canvas surfaces (full-bleed Maps, Point clouds and Asset models, the Images workspace and the report builder) and windows under 1100px open collapsed; expanding there lasts for that visit.
+
+A 56px top bar: the page title, the search field that opens the command palette (Ctrl K), the route's
+context actions, the running-jobs pill and the agent button. There is no breadcrumb and no project tab
+strip. A page change fades and rises 6px over `--dur-base`, with no exit animation.
 
 ## Workspaces
 
