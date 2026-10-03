@@ -300,8 +300,10 @@ export class TileCache {
     for (const e of [...this.entries.values()]) {
       if (e.state !== "queued" || e.wantedAt >= this.frameNo) continue;
       // A due retry nobody wanted this frame goes back to waiting, keeping its count of tries.
-      if (e.tries > 0) e.state = "error";
-      else this.entries.delete(e.url);
+      if (e.tries > 0) {
+        e.state = "error";
+        e.retryAt = Date.now(); // still due: the next want() re-queues it
+      } else this.entries.delete(e.url);
     }
     const quiet = [...this.entries.values()].filter((e) => e.state === "empty" || e.state === "error");
     if (quiet.length > this.capacity * 4) {
