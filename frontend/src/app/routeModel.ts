@@ -1,9 +1,9 @@
 import type { IconName } from "@/ui";
 import type { WorkspaceScope } from "@/ui/keymap";
 
-/** The seven project tabs, in order (spec 2026-09-26-foundation section 5.2). */
+/** The project tabs, in order (spec 2026-09-26-foundation section 5.2, plus Drawings). */
 export type ProjectTabId =
-  "overview" | "images" | "maps" | "clouds" | "models" | "findings" | "measurements" | "reports";
+  "overview" | "images" | "maps" | "drawings" | "clouds" | "models" | "findings" | "measurements" | "reports";
 /** The rail's sections (section 5.1). */
 export type Section = "projects" | "models" | "catalogue" | "jobs" | "settings";
 /** A padded, scrolling page; a bare workspace under the tabs; or a full-bleed surface without tabs. */
@@ -23,6 +23,7 @@ export const PROJECT_TABS: readonly NavEntry<ProjectTabId>[] = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "images", label: "Images", icon: "images" },
   { id: "maps", label: "Maps", icon: "map" },
+  { id: "drawings", label: "Drawings", icon: "drawing" },
   { id: "clouds", label: "Point clouds", icon: "cloud" },
   { id: "models", label: "Asset models", icon: "cube" },
   { id: "findings", label: "Findings", icon: "findings" },

@@ -82,11 +82,12 @@ describe("routeInfo", () => {
     expect(key("/projects")).not.toBe(key("/projects/new"));
   });
 
-  it("has the seven tabs and the rail entries in the spec's order", () => {
+  it("has the project tabs and the rail entries in order", () => {
     expect(PROJECT_TABS.map((t) => t.label)).toEqual([
       "Overview",
       "Images",
       "Maps",
+      "Drawings",
       "Point clouds",
       "Asset models",
       "Findings",

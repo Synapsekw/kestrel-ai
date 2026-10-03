@@ -3,6 +3,7 @@ import type { Project } from "@contract/client";
 import type { AddDataTile } from "@/app/addDataStore";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
+import { bumpWorkspaceData } from "@/mapws/data/bump";
 import { ImportDrawingDialog } from "@/mapws/drawings/ImportDrawingDialog";
 import { useChangesStore } from "@/store/changes";
 import { ImportElevationDialog } from "@/surfaces/ImportElevationDialog";
@@ -32,6 +33,7 @@ export function AddDataDialog({
   const started = useCallback(
     (t: AddDataTile) => {
       useChangesStore.getState().bumpData();
+      if (t === "drawing") bumpWorkspaceData();
       toast("ok", `${TILE_NAME[t]} import started. It runs in the background; follow it in Jobs.`);
       onClose();
     },

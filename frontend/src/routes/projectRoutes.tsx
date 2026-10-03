@@ -1,5 +1,6 @@
 import type { RouteObject } from "react-router-dom";
 import { AssetModelsScreen, CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
+import { DrawingsScreen } from "@/drawings/DrawingsScreen";
 import { FindingsScreen } from "@/findings/FindingsScreen";
 import { ImagesWorkspace } from "@/images/workspace/ImagesWorkspace";
 import { MapWorkspace } from "@/mapws/MapWorkspace";
@@ -27,6 +28,7 @@ export const projectRoutes: RouteObject[] = [
   { path: "images/:imageId?", element: <ImagesWorkspace /> },
   // Maps: the map workspace (M-W1).
   { path: "maps", element: <MapWorkspace /> },
+  { path: "drawings", element: <DrawingsScreen /> },
   // Maps: one map's labels, evaluation zones and score in pixels, and the maps without coordinates
   // (spec 2026-09-26-map-workspace section 11). `maps/:mapId` is a redirect (legacyRedirects).
   { path: "maps/:mapId/evaluate", element: <MapEvaluateRoute /> },

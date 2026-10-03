@@ -48,7 +48,8 @@ test("a project opens on Overview; the tabs switch pages and the entrance finish
   await page.goto(`/p/${P}`);
   await expect(page).toHaveURL(new RegExp(`/p/${P}/overview$`));
   const tabs = page.getByRole("tablist");
-  await expect(tabs.getByRole("tab")).toHaveCount(8);
+  await expect(tabs.getByRole("tab")).toHaveCount(9);
+  await expect(tabs.getByRole("tab", { name: /^Drawings/ })).toHaveAttribute("href", `/p/${P}/drawings`);
   await expect(tabs.getByRole("tab", { name: /^Images/ })).toContainText(
     new RegExp(String(overview.data.images).replace(/\B(?=(\d{3})+(?!\d))/g, ",?")),
   );

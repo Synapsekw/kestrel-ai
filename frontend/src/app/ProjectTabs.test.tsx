@@ -37,11 +37,11 @@ function renderTabs(path: string, overviewStatus = 200) {
 }
 
 describe("ProjectTabs", () => {
-  it("lists the eight tabs as links, marks the current one and shows the counts", async () => {
+  it("lists the project tabs as links, marks the current one and shows the counts", async () => {
     renderTabs(`/p/${PROJECT_ID}/findings`);
     const list = screen.getByRole("tablist");
     const tabs = within(list).getAllByRole("tab");
-    expect(tabs).toHaveLength(8);
+    expect(tabs).toHaveLength(9);
     expect(within(list).getByRole("tab", { name: /^Images/ })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/images`,
@@ -50,6 +50,11 @@ describe("ProjectTabs", () => {
     await waitFor(() =>
       expect(within(list).getByRole("tab", { name: /^Images/ })).toHaveTextContent(/1,?284/),
     );
+    expect(within(list).getByRole("tab", { name: /^Drawings/ })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/drawings`,
+    );
+    expect(within(list).getByRole("tab", { name: /^Drawings/ })).toHaveTextContent("0");
     expect(within(list).getByRole("tab", { name: /^Maps/ })).toHaveTextContent("3");
     expect(within(list).getByRole("tab", { name: /^Point clouds/ })).toHaveTextContent("2");
     expect(within(list).getByRole("tab", { name: /^Findings/ })).toHaveTextContent("47");
@@ -66,7 +71,7 @@ describe("ProjectTabs", () => {
     // overview has actually been handled, rather than a fixed sleep that would race a regression.
     await waitFor(() => expect(requests).toHaveLength(1));
     await waitFor(() => {
-      expect(screen.getAllByRole("tab")).toHaveLength(8);
+      expect(screen.getAllByRole("tab")).toHaveLength(9);
       expect(screen.getByRole("tab", { name: /^Images/ })).not.toHaveTextContent(/\d/);
     });
   });

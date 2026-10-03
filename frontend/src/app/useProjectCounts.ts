@@ -10,6 +10,7 @@ type ProjectOverview = components["schemas"]["ProjectOverview"];
 export interface ProjectCounts {
   images: number;
   maps: number;
+  drawings: number;
   pointClouds: number;
   openFindings: number;
 }
@@ -18,6 +19,7 @@ export function countsFromOverview(o: ProjectOverview): ProjectCounts {
   return {
     images: o.data.images,
     maps: o.data.maps,
+    drawings: o.data.drawings,
     pointClouds: o.data.point_clouds,
     openFindings: o.findings.by_status.open,
   };

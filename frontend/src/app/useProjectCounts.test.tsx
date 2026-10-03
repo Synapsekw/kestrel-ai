@@ -17,6 +17,7 @@ describe("useProjectCounts", () => {
     expect(countsFromOverview(exampleOverview)).toEqual({
       images: 1284,
       maps: 3,
+      drawings: 0,
       pointClouds: 2,
       openFindings: 47,
     });

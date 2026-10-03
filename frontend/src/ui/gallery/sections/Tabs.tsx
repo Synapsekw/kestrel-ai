@@ -9,6 +9,7 @@ const PROJECT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "images", label: "Images", count: 1284 },
   { id: "maps", label: "Maps", count: 3 },
+  { id: "drawings", label: "Drawings" },
   { id: "clouds", label: "Point clouds", count: 2 },
   { id: "findings", label: "Findings", count: 47 },
   { id: "measurements", label: "Measurements" },

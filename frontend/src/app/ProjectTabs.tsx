@@ -7,12 +7,13 @@ function countFor(id: ProjectTabId, counts: ProjectCounts | null): number | null
   if (!counts) return null;
   if (id === "images") return counts.images;
   if (id === "maps") return counts.maps;
+  if (id === "drawings") return counts.drawings;
   if (id === "clouds") return counts.pointClouds;
   if (id === "findings") return counts.openFindings;
   return null;
 }
 
-/** The seven project tabs (spec 2026-09-26-foundation section 5.2) and the More menu of secondary pages. */
+/** The project tabs (spec 2026-09-26-foundation section 5.2, plus Drawings) and the More menu. */
 export function ProjectTabs({ projectId }: { projectId: string }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
