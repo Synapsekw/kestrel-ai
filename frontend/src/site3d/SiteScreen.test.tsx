@@ -27,28 +27,37 @@ const h = vi.hoisted(() => ({
   fail: null as Error | null,
 }));
 
-vi.mock("@/site3d/engine/create", () => ({
-  createSiteEngine: () => {
-    if (h.fail) throw h.fail;
-    let cb: ((hit: PickHit | null) => void) | null = null;
-    const layers = new Map<string, SiteLayer>();
-    const e = {
-      layers,
-      addLayer: vi.fn((l: SiteLayer) => layers.set(l.id, l)),
-      removeLayer: vi.fn((id: string) => layers.delete(id)),
-      select: vi.fn((hit: PickHit | null) => cb?.(hit)),
-      setPreset: vi.fn(),
-      setNav: vi.fn(),
-      onSelect: (f: (hit: PickHit | null) => void) => {
-        cb = f;
-        return () => (cb = null);
-      },
-      dispose: vi.fn(),
-    };
-    h.engines.push(e);
-    return e;
-  },
-}));
+// S2's layers read the engine's three objects (R-S2-9): real ones, no WebGL. This fake never attaches.
+vi.mock("@/site3d/engine/create", async () => {
+  const THREE = await import("three");
+  return {
+    createSiteEngine: () => {
+      if (h.fail) throw h.fail;
+      let cb: ((hit: PickHit | null) => void) | null = null;
+      const layers = new Map<string, SiteLayer>();
+      const e = {
+        layers,
+        scene: new THREE.Scene(),
+        camera: new THREE.PerspectiveCamera(),
+        canvas: document.createElement("canvas"),
+        renderer: { info: { render: { frame: 0 } } },
+        requestRender: vi.fn(),
+        addLayer: vi.fn((l: SiteLayer) => layers.set(l.id, l)),
+        removeLayer: vi.fn((id: string) => layers.delete(id)),
+        select: vi.fn((hit: PickHit | null) => cb?.(hit)),
+        setPreset: vi.fn(),
+        setNav: vi.fn(),
+        onSelect: (f: (hit: PickHit | null) => void) => {
+          cb = f;
+          return () => (cb = null);
+        },
+        dispose: vi.fn(),
+      };
+      h.engines.push(e);
+      return e;
+    },
+  };
+});
 
 vi.mock("@/site3d/layers/model.layer", () => ({
   createModelLayer: (opts: {
@@ -252,10 +261,22 @@ describe("SiteScreen", () => {
     open(TILE_SCENE);
     await viewStarted();
     const e = h.engines[0];
-    expect([...e.layers.keys()].sort()).toEqual(["drawing:d1", "model", "ortho:o1"]);
+    // S1's layers; S2's extra layers (cloud, water, sky, photos, findings) join them.
+    expect([...e.layers.keys()]).toEqual(expect.arrayContaining(["drawing:d1", "model", "ortho:o1"]));
     await userEvent.click(screen.getByRole("switch", { name: "Maps" }));
     expect((e.layers.get("ortho:o1") as unknown as { shown: boolean }).shown).toBe(false);
     expect((e.layers.get("drawing:d1") as unknown as { shown: boolean }).shown).toBe(true);
+  });
+
+  it("S2's layers join the engine and say their state to screen readers", async () => {
+    open(MODEL_SCENE);
+    await viewStarted();
+    const status = await screen.findByRole("list", { name: "Layer status" });
+    await waitFor(() => expect(h.engines[0].layers.has("sky")).toBe(true));
+    expect([...h.engines[0].layers.keys()]).toEqual(
+      expect.arrayContaining(["cloud:c1", "water", "sky", "photos", "findings"]),
+    );
+    expect(status).toHaveTextContent("Sky: shown");
   });
 
   it("view tools drive the engine", async () => {

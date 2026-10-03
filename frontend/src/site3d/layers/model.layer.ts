@@ -174,6 +174,7 @@ export class ModelLayer implements SiteLayer {
   private offSelect: (() => void) | null = null;
   private wanted: string;
   private selectedId: string | null = null;
+  private adopted: THREE.Object3D | null = null;
 
   constructor(private readonly opts: ModelLayerOptions) {
     this.label = opts.label ?? "Plant model";
@@ -256,10 +257,16 @@ export class ModelLayer implements SiteLayer {
     e.select({ layerId: this.id, itemId: it.id, point: [c.x, c.y, c.z], extras: { ...it.extras } });
   }
 
+  /** The adopted GLB scene (a new object on every load, under `root`); null before a load and after detach. */
+  get scene(): THREE.Object3D | null {
+    return this.adopted;
+  }
+
   /** Takes a parsed scene as the model (the load path, and tests). */
   adopt(scene: THREE.Object3D): ModelLoadInfo {
     this.clearModel();
     this.root.add(scene);
+    this.adopted = scene;
     this.root.updateMatrixWorld(true);
     this.items = collectItems(scene);
     for (const it of this.items) if (!this.byId.has(it.id)) this.byId.set(it.id, it);
@@ -460,6 +467,7 @@ export class ModelLayer implements SiteLayer {
     this.items = [];
     this.byId.clear();
     this.originals.clear();
+    this.adopted = null;
   }
 }
 

@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import type * as THREE from "three";
 import { useBackend } from "@/api/client";
 import { absUrl, type SiteScene } from "@/api/siteScene";
 import { NoWebGlError } from "@/clouds/viewer/engine";
@@ -17,6 +18,11 @@ export interface ModelStatus {
   url: string;
   state: "ready" | "error";
   info: ModelLoadInfo | null;
+  /**
+   * The loaded GLB scene (`ModelLayer.scene`), a new object per load or swap. On error it is what
+   * stays shown: the old model after a failed swap, null when nothing ever loaded.
+   */
+  root: THREE.Object3D | null;
 }
 export interface SiteViewHandle {
   clearSelection(): void;
@@ -41,7 +47,10 @@ export interface SiteViewProps {
   onModel(s: ModelStatus): void;
   /** The 3D view could not start (null once a reload starts it). */
   onFailure?(kind: "no-webgl" | "failed" | null): void;
-  /** Fired when the engine starts, whenever its layer set changes, and with null when it goes. */
+  /**
+   * Fired when the engine starts, whenever its layer set changes, and with null when it goes.
+   * S2's layers attach to `.engine`.
+   */
   onEngine?(e: SiteEngineInfo | null): void;
   /** A drape whose tiles are gone (the map or drawing was removed); only while that layer is attached. */
   onLayerGone?(id: string): void;
@@ -117,11 +126,12 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     if (!eng || !modelId || !url) return;
     const layer = createModelLayer({
       url,
+      // `layer.scene` is read at call time, so a `load` swap reports the new root.
       onLoad: (info, u) => {
         setAreas({ url: u, list: info.areas });
-        cbs.current.onModel({ url: u, state: "ready", info });
+        cbs.current.onModel({ url: u, state: "ready", info, root: layer.scene });
       },
-      onError: (_err, u) => cbs.current.onModel({ url: u, state: "error", info: null }),
+      onError: (_err, u) => cbs.current.onModel({ url: u, state: "error", info: null, root: layer.scene }),
     });
     layer.setVisible(!cbs.current.hidden.has(layer.id));
     layers.current.set(layer.id, layer);
