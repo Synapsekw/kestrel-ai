@@ -69,16 +69,30 @@ def _budget_line(rc) -> str:
     )
 
 
+def _source_lines(rc) -> list[str]:
+    from app.asset_models.agent.tools import group_drawing_sources  # I1
+
+    lines = [
+        f"- drawing file {g['file']}: " + ", ".join(f"p{p['page'] or 1} {p['id']}" for p in g["pages"])
+        for g in group_drawing_sources(rc.sources)
+    ]
+    lines += [
+        f"- {s['type']} {s['id']}: {s.get('label', '')} ({s.get('facts', '')})"
+        for s in rc.sources
+        if s["type"] != "drawing"
+    ]
+    return lines
+
+
 def first_message(rc) -> str:
     lines = [
         "Task: build a plant model of this project from its drawings.",
         "Sources (call list_sources to see the drawing pages grouped by file):",
     ]
-    lines += [
-        f"- {s['type']} {s['id']}: {s.get('label', '')} ({s.get('facts', '')})" for s in rc.sources[:60]
-    ]
-    if len(rc.sources) > 60:
-        lines.append(f"- and {len(rc.sources) - 60} more")
+    src = _source_lines(rc)
+    lines += src[:60]
+    if len(src) > 60:
+        lines.append(f"- and {len(src) - 60} more (call list_sources for all of them)")
     lines.append(_budget_line(rc))
     if rc.notes:
         lines.append("The operator's notes:\n" + rc.notes)
