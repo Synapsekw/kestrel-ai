@@ -92,17 +92,22 @@ def _row(i: Item) -> str:
 
 
 def _begin_write(rc, scope, what: str) -> str | None:
-    """A refusal text, or None. In the build stage the first write after a render opens a fix round."""
+    """A refusal text, or None. In the build stage a write after a render needs a fix round left."""
     if scope.package is not None:
         return None
     if scope.stage == "survey":
         return f"{what} are written once tracing has run: plan_packages, then next_stage."
-    if scope.stage == "build" and scope.rendered:
-        if rc.state.fix_rounds >= MAX_FIX_ROUNDS:
-            return "Both fix rounds are used: call finish."
+    if scope.stage == "build" and scope.rendered and rc.state.fix_rounds >= MAX_FIX_ROUNDS:
+        return "Both fix rounds are used: call finish."
+    return None
+
+
+def _wrote(rc, scope, changed: bool) -> None:
+    """Ruling R15: the first write after a render that changed something opens a fix round; a write
+    that saved or removed nothing does not use one."""
+    if changed and scope.package is None and scope.stage == "build" and scope.rendered:
         rc.state.fix_rounds += 1
         scope.rendered = False
-    return None
 
 
 # ------------------------------------------------------------------ register tools
@@ -151,6 +156,7 @@ class UpsertItems:
                 scope.items[item.id] = item
                 saved.append(item.id)
             total = len(scope.items)
+            _wrote(rc, scope, bool(saved))
         if scope.package is None:
             rc.save_store()
             rc.save()
@@ -183,6 +189,7 @@ class RemoveItems:
             for i in a.ids:
                 scope.items.pop(i, None)
             total = len(scope.items)
+            _wrote(rc, scope, len(missing) < len(a.ids))
         if scope.package is None:
             rc.save_store()
             rc.save()
@@ -322,6 +329,7 @@ class UpsertEnvironment:
                 by_id[feat.id] = feat.model_dump(mode="json")
                 saved.append(feat.id)
             rc.state.environment = list(by_id.values())
+            _wrote(rc, scope, bool(saved))
         rc.save()
         text = f"Saved {len(saved)} feature(s); the environment has {len(rc.state.environment)}."
         if rejected:
@@ -580,12 +588,15 @@ class SetSite:
         )
         with rc.lock:
             rc.state.site = frame.model_dump(mode="json")
+            # a new frame replaces the old one: its fit question goes, and comes back only if this
+            # fit's residual is over 1 m too
+            rc.state.questions = [x for x in rc.state.questions if "plant grid fit" not in x]
             if rms is not None and rms > 1.0:
                 q = (
                     f"The plant grid fit has a residual of {rms:.2f} m over {len(pairs)} grid points: "
                     "check the grid points read off the drawings."
                 )
-                rc.state.questions = [x for x in rc.state.questions if "plant grid fit" not in x] + [q]
+                rc.state.questions.append(q)
                 lines.append("The residual is over 1 m: check the grid points (an open question was added).")
         rc.save()
         for did, row in rows.items():

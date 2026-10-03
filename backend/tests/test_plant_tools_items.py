@@ -280,3 +280,14 @@ def test_recorder_usage_writes_f0_run_usage_shape(rc, handle):
     assert usage["by_stage"]["current"] == "trace" and usage["by_stage"]["stages"]["trace"]["calls"] == 1
     assert usage["by_stage"]["cost_estimate_usd"] is not None and phase == "building"
     assert rc.job.messages[-1] == "Tracing packages (1/4)"
+
+
+def test_a_build_write_that_saves_nothing_does_not_use_a_fix_round(rc):
+    sc = orch(rc, "build")
+    sc.rendered = True
+    out = T.run_plant_tool(rc, sc, "upsert_items", {"items": [item("x", type="no_such_type")]})
+    assert not out.ok and rc.state.fix_rounds == 0 and sc.rendered  # the round is still open
+    out = T.run_plant_tool(rc, sc, "remove_items", {"ids": ["nope"]})
+    assert rc.state.fix_rounds == 0 and sc.rendered
+    assert T.run_plant_tool(rc, sc, "upsert_items", {"items": [item("ok")]}).ok
+    assert rc.state.fix_rounds == 1 and not sc.rendered

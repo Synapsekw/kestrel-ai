@@ -168,3 +168,19 @@ def test_a_local_map_frame_places_no_page(handle, app):
 
 def test_set_site_is_an_orchestrator_tool():
     assert "set_site" in T.ORCH_NAMES and "set_site" not in T.SUB_NAMES
+
+
+def test_a_good_refit_removes_the_stale_grid_fit_question(rc, handle):
+    d0 = rc.test_ids["drawings"][0]
+    _georef(handle, d0)
+    gps = [
+        {"drawing_id": d0, "page_xy": _page_xy(e, n), "plant_E": e, "plant_N": n}
+        for e, n in ((0, 0), (400, 0), (0, 300), (400, 300))
+    ]
+    bad = [dict(g, page_xy=list(g["page_xy"])) for g in gps]
+    bad[3]["page_xy"][0] += 0.003
+    assert T.run_plant_tool(rc, orch(rc), "set_site", {"grid_points": bad}).ok
+    assert any("plant grid fit" in q for q in rc.state.questions)
+    out = T.run_plant_tool(rc, orch(rc), "set_site", {"grid_points": gps})
+    assert out.ok and "over 1 m" not in out.text
+    assert not any("plant grid fit" in q for q in rc.state.questions)
