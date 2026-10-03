@@ -27,7 +27,13 @@ function setup(brand: Brand, mode: "mock" | "tauri", putStatus = 200) {
   ]);
   render(
     <TestApiProvider api={api} mode={mode}>
-      <BrandLogoField brand={brand} slot="on_dark" label="Logo on dark" hint="White version." onChange={onChange} />
+      <BrandLogoField
+        brand={brand}
+        slot="on_dark"
+        label="Logo on dark"
+        hint="White version."
+        onChange={onChange}
+      />
     </TestApiProvider>,
   );
   return { onChange, requests };
@@ -49,7 +55,9 @@ describe("BrandLogoField", () => {
 
   it("takes a path in the browser", async () => {
     const { onChange, requests } = setup(eandBrand, "mock");
-    fireEvent.change(screen.getByLabelText("Logo on dark file path"), { target: { value: " C:\\logos\\w.png " } });
+    fireEvent.change(screen.getByLabelText("Logo on dark file path"), {
+      target: { value: " C:\\logos\\w.png " },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add logo" }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(requests[0].body).toEqual({ path: "C:\\logos\\w.png" });
@@ -65,7 +73,10 @@ describe("BrandLogoField", () => {
     expect(screen.getByRole("button", { name: "Replace logo" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Remove logo" }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
-    expect(requests[0]).toMatchObject({ method: "DELETE", url: `/api/v1/brands/${PARTNER_ID}/logos/on_dark` });
+    expect(requests[0]).toMatchObject({
+      method: "DELETE",
+      url: `/api/v1/brands/${PARTNER_ID}/logos/on_dark`,
+    });
   });
 
   it("reports a refused file inline", async () => {

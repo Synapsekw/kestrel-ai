@@ -68,7 +68,10 @@ export function BrandLogoField({ brand, slot, label, hint, onChange }: BrandLogo
     let picked: unknown;
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      picked = await open({ multiple: false, filters: [{ name: "Logo", extensions: ["png", "jpg", "jpeg", "webp"] }] });
+      picked = await open({
+        multiple: false,
+        filters: [{ name: "Logo", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      });
     } catch (e) {
       pushLog(`brand logo dialog failed: ${messageOf(e, String(e))}`);
       setError("The file dialog did not open. Try again.");
