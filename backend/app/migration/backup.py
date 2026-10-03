@@ -26,6 +26,12 @@ from alembic.util import CommandError
 
 BACKUP_BEFORE = "0010"  # the foundation revision (foundation spec §11.1)
 BACKUP_LABEL = "v1"  # the schema generation the copy holds
+# The foundation revision itself, never patched by tests (they patch BACKUP_BEFORE): a database
+# older than it has no `finding` table yet, and the foundation copy is the one that open takes.
+FOUNDATION_REVISION = "0010"
+# Revisions that rebuild a table holding the operator's records (0016 rebuilds `finding`). Opening a
+# project that will apply one takes a copy labelled `r<revision>` first (asset findings spec §5.5).
+REBUILD_GUARDS = ("0016",)
 BACKUPS_DIR = "backups"
 DB_NAME = "project.db"
 _NAME = re.compile(r"^project\.db\.[A-Za-z0-9]+-(?P<stamp>\d{8}T\d{6}Z)(?:-(?P<n>\d+))?\.bak$")
@@ -58,6 +64,24 @@ def needs_backup(current: str | None, script) -> bool:
         return False
     pending.discard(current)
     return BACKUP_BEFORE in pending
+
+
+def needs_rebuild_backup(current: str | None, script) -> str | None:
+    """The first revision of REBUILD_GUARDS that upgrading from `current` will apply, else None.
+
+    None for a new database, for one older than the foundation (its upgrade takes the foundation
+    copy, and it has no findings to lose), and for a revision this chain does not know (a newer
+    build's database: Alembic reports that itself)."""
+    if current is None:
+        return None
+    try:
+        pending = {rev.revision for rev in script.walk_revisions(base=current, head="heads")}
+    except (CommandError, ResolutionError):
+        return None
+    pending.discard(current)
+    if FOUNDATION_REVISION in pending:
+        return None
+    return next((rev for rev in REBUILD_GUARDS if rev in pending), None)
 
 
 def ro_uri(path) -> str:
@@ -108,8 +132,8 @@ def backup_path(entry: dict | None, folder) -> str | None:
     return str(found) if found else None
 
 
-def _target(folder: Path, now: datetime) -> Path:
-    stem = f"{DB_NAME}.{BACKUP_LABEL}-{now.astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+def _target(folder: Path, now: datetime, label: str) -> Path:
+    stem = f"{DB_NAME}.{label}-{now.astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')}"
     path, n = backups_dir(folder) / f"{stem}.bak", 2
     while path.exists() or path.with_name(path.name + ".partial").exists():
         path, n = backups_dir(folder) / f"{stem}-{n}.bak", n + 1
@@ -124,13 +148,14 @@ def _discard(partial: Path | None) -> None:
             pass
 
 
-def backup_project_db(folder: Path, now: datetime | None = None) -> Path:
-    """Write and check `<folder>/backups/project.db.v1-<UTC stamp>.bak`; raise BackupFailed."""
+def backup_project_db(folder: Path, now: datetime | None = None, *, label: str = BACKUP_LABEL) -> Path:
+    """Write and check `<folder>/backups/project.db.<label>-<UTC stamp>.bak`; raise BackupFailed.
+    `label` is `v1` for the foundation copy and `r<revision>` for a rebuild guard's copy."""
     folder = Path(folder)
     partial: Path | None = None
     try:
         backups_dir(folder).mkdir(exist_ok=True)
-        target = _target(folder, now or datetime.now(UTC))
+        target = _target(folder, now or datetime.now(UTC), label)
         partial = target.with_name(target.name + ".partial")
         src = sqlite3.connect(folder / DB_NAME)
         try:
