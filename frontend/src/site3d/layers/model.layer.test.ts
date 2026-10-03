@@ -127,6 +127,19 @@ describe("ModelLayer", () => {
     expect(e.setPresetBox).toHaveBeenCalledWith("model", "area:30", expect.any(THREE.Box3));
   });
 
+  it("scene is the adopted GLB, a new object per load, null after detach (R-S2-5)", async () => {
+    const e = engine();
+    const layer = createModelLayer({ url: "x.glb", loader: async () => plant() });
+    expect(layer.scene).toBeNull();
+    await layer.attach(e);
+    const first = layer.scene;
+    expect(first?.parent).toBe(layer.root);
+    layer.adopt(plant());
+    expect(layer.scene).not.toBe(first);
+    layer.detach();
+    expect(layer.scene).toBeNull();
+  });
+
   it("resolves a pick on a part's mesh to its item", async () => {
     const { e, layer } = await loaded();
     const mesh = meshes(layer)[1];
