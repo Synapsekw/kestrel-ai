@@ -1,6 +1,10 @@
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useAddData } from "@/app/addDataStore";
+import { LayerRowView } from "@/mapws/chrome/LayerRowView";
+import type { LayerRow } from "@/mapws/layers/layerRegistry";
 import drawingDialogsPanel from "@/mapws/panels/drawingDialogs.panel";
 import { useGoneLayers } from "@/mapws/layers/goneLayers";
 import { makeStores, renderInWorkspace } from "@/mapws/test/harness";
@@ -10,21 +14,25 @@ import { useChangesStore } from "@/store/changes";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { ALIGN_TOOL_ID } from "./AlignOverlay";
 import { DrawingDialogs } from "./DrawingDialogs";
+import { drawingRowMenu } from "./drawingRows";
 import { useDrawingUi } from "./drawingUi";
 import { useDrawingsStore } from "./drawingsStore";
 import { takeImportPrefill } from "./importPrefill";
 import { pdfDrawing, SITE_FRAME } from "./testFixtures";
 
-function show(routes: Parameters<typeof fakeClient>[0] = []) {
+function show(routes: Parameters<typeof fakeClient>[0] = [], extra?: ReactNode) {
   const stores = makeStores({
     frame: SITE_FRAME,
     lookup: (id) => (id === ALIGN_TOOL_ID ? alignDrawing : id === "select" ? selectTool : undefined),
   });
   const client = fakeClient([...routes, { method: "GET", path: /\/drawings$/, body: { items: [] } }]);
-  renderInWorkspace(<DrawingDialogs projectId={PROJECT_ID} frame={SITE_FRAME} />, {
-    stores,
-    api: client.api,
-  });
+  renderInWorkspace(
+    <>
+      <DrawingDialogs projectId={PROJECT_ID} frame={SITE_FRAME} />
+      {extra}
+    </>,
+    { stores, api: client.api },
+  );
   return { stores, requests: client.requests };
 }
 const ask = (
@@ -94,5 +102,37 @@ describe("DrawingDialogs (the row menu's actions, PF8)", () => {
     ask("reimport", "other");
     expect(useAddData.getState().open).toBe(false);
     expect(stores.tools.getState().active).toBe("select");
+  });
+
+  it("the row trash opens Are you sure, Cancel sends nothing, and Yes deletes", async () => {
+    const row: LayerRow = {
+      key: `drawing:${pdfDrawing.id}`,
+      kind: "drawing",
+      group: "drawings",
+      id: pdfDrawing.id,
+      name: pdfDrawing.name,
+      meta: "",
+      date: null,
+    };
+    const { requests } = show(
+      [{ method: "DELETE", path: new RegExp(`/drawings/${pdfDrawing.id}$`), status: 204 }],
+      <LayerRowView
+        row={row}
+        kind={{ id: "drawing", group: "drawings", icon: "trash", rows: () => [], menu: drawingRowMenu }}
+        state={{ visible: true, opacity: 100 }}
+        notInCompare={false}
+        onState={() => {}}
+        onMove={() => {}}
+        onDropOn={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: `Delete ${pdfDrawing.name}` }));
+    const dialog = screen.getByRole("dialog", { name: "Are you sure?" });
+    expect(dialog).toHaveTextContent("The drawing leaves the project; the original file is not touched.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: `Delete ${pdfDrawing.name}` }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
   });
 });
