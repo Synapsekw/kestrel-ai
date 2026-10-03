@@ -48,4 +48,32 @@ describe("RunTab", () => {
     });
     expect(screen.getByText(/no runs yet/i)).toBeInTheDocument();
   });
+
+  it("a finished plant run links to the site view; an asset run does not", () => {
+    const { api } = fakeClient([]);
+    const { unmount } = renderWithProviders(
+      <RunTab
+        projectId={PROJECT_ID}
+        model={{ ...MODEL, kind: "plant" }}
+        runs={[RUN_FINISHED]}
+        onStarted={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.getByRole("link", { name: "Open in site" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/site/${MODEL.id}`,
+    );
+    unmount();
+    renderWithProviders(
+      <RunTab
+        projectId={PROJECT_ID}
+        model={{ ...MODEL, kind: "asset" }}
+        runs={[RUN_FINISHED]}
+        onStarted={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.queryByRole("link", { name: "Open in site" })).toBeNull();
+  });
 });

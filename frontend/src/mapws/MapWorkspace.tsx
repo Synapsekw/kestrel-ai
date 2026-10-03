@@ -5,6 +5,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { useCommands } from "@/app/commands";
 import { Alert, Button, Dialog, GlassPanel, Skeleton, WorkspaceRail, cx, toast, type Command } from "@/ui";
+import { useOpenSiteAction } from "@/site3d/entry/useOpenSiteAction";
 import { arrivalRequest, asksToCentre } from "./arrival/arrival";
 import { CoordinatesPanel } from "./chrome/CoordinatesPanel";
 import { NavControls } from "./chrome/NavControls";
@@ -117,6 +118,10 @@ function unionExtent(extents: readonly SiteExtent[]): SiteExtent | null {
 
 function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolean }) {
   const { workspace, projectId, frame } = useWorkspaceStores();
+  useOpenSiteAction(projectId, () => {
+    const v = workspace.getState().viewInfo;
+    return v ? { x: v.center[0], y: v.center[1], epsg: frame.kind === "crs" ? frame.epsg : null } : null;
+  });
   const api = useApi();
   const location = useLocation();
 

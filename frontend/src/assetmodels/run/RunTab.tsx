@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { AssetModel, AssetModelRun } from "@contract/client";
 import { useBackend } from "@/api/client";
 import { providerLabel } from "@/api/providers";
 import { relativeTime } from "@/findings/format";
 import { useNow } from "@/jobs/useNow";
+import { siteHref } from "@/site3d/entry/links";
 import {
   Button,
   Disclosure,
@@ -163,6 +165,14 @@ export function RunTab({
           </p>
         )}
         {run.summary && <p className="text-sm leading-relaxed text-ink">{run.summary}</p>}
+        {run.state === "finished" && run.version != null && model.kind === "plant" && (
+          <Link
+            to={siteHref(projectId, model.id)}
+            className="self-start text-sm text-accent-ink underline-offset-2 hover:underline"
+          >
+            Open in site
+          </Link>
+        )}
       </section>
 
       {run.open_questions.length > 0 && (
