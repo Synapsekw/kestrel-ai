@@ -1,0 +1,157 @@
+{
+  "cases": [
+    {
+      "name": "e& with its fonts, accent_dark in lower case",
+      "brand": {
+        "colors": {
+          "accent": "#BC0000",
+          "accent_dark": "#9e0000",
+          "navy": "#141D2D",
+          "ink": "#1A1A1A",
+          "pale": "#FFE5E5",
+          "line": "#E7E4DE"
+        },
+        "font_text": "Nunito Sans",
+        "font_numerals": "Poppins"
+      },
+      "expected": {
+        "colours": {
+          "ink": "#1A1A1A",
+          "muted": "#5E5C7A",
+          "rule": "#E7E4DE",
+          "head_fill": "#FFE5E5",
+          "paper": "#FFFFFF",
+          "violet": "#BC0000",
+          "violet_print": "#9E0000",
+          "teal": "#0F8F76",
+          "teal_print": "#5FE3C0",
+          "placeholder_fill": "#EEEDF5",
+          "ungraded": "#9A98B0",
+          "tone_neutral": "#5E5C7A",
+          "tone_good": "#0F8F76",
+          "tone_bad": "#B3261E",
+          "tone_warn": "#8A5A00"
+        },
+        "cover_gradient": ["#141D2D", "#141D2D", "#9E0000"],
+        "chart_palette": ["#BC0000", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"],
+        "fonts": { "sans": "Nunito Sans", "mono": "JetBrains Mono", "numerals": "Poppins" }
+      }
+    },
+    {
+      "name": "White label in lower case hex, Inter for both",
+      "brand": {
+        "colors": {
+          "accent": "#1f4fd1",
+          "accent_dark": "#173da6",
+          "navy": "#131a26",
+          "ink": "#141821",
+          "pale": "#e8eeff",
+          "line": "#e3e6ec"
+        },
+        "font_text": "Inter",
+        "font_numerals": "Inter"
+      },
+      "expected": {
+        "colours": {
+          "ink": "#141821",
+          "muted": "#5E5C7A",
+          "rule": "#E3E6EC",
+          "head_fill": "#E8EEFF",
+          "paper": "#FFFFFF",
+          "violet": "#1F4FD1",
+          "violet_print": "#173DA6",
+          "teal": "#0F8F76",
+          "teal_print": "#5FE3C0",
+          "placeholder_fill": "#EEEDF5",
+          "ungraded": "#9A98B0",
+          "tone_neutral": "#5E5C7A",
+          "tone_good": "#0F8F76",
+          "tone_bad": "#B3261E",
+          "tone_warn": "#8A5A00"
+        },
+        "cover_gradient": ["#131A26", "#131A26", "#173DA6"],
+        "chart_palette": ["#1F4FD1", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"],
+        "fonts": { "sans": "Inter", "mono": "JetBrains Mono", "numerals": "Inter" }
+      }
+    },
+    {
+      "name": "a brand without fonts keeps Space Grotesk",
+      "brand": {
+        "colors": {
+          "accent": "#BC0000",
+          "accent_dark": "#9E0000",
+          "navy": "#141D2D",
+          "ink": "#1A1A1A",
+          "pale": "#FFE5E5",
+          "line": "#E7E4DE"
+        },
+        "font_text": null,
+        "font_numerals": null
+      },
+      "expected": {
+        "colours": {
+          "ink": "#1A1A1A",
+          "muted": "#5E5C7A",
+          "rule": "#E7E4DE",
+          "head_fill": "#FFE5E5",
+          "paper": "#FFFFFF",
+          "violet": "#BC0000",
+          "violet_print": "#9E0000",
+          "teal": "#0F8F76",
+          "teal_print": "#5FE3C0",
+          "placeholder_fill": "#EEEDF5",
+          "ungraded": "#9A98B0",
+          "tone_neutral": "#5E5C7A",
+          "tone_good": "#0F8F76",
+          "tone_bad": "#B3261E",
+          "tone_warn": "#8A5A00"
+        },
+        "cover_gradient": ["#141D2D", "#141D2D", "#9E0000"],
+        "chart_palette": ["#BC0000", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"],
+        "fonts": { "sans": "Space Grotesk", "mono": "JetBrains Mono", "numerals": "Space Grotesk" }
+      }
+    },
+    {
+      "name": "a text font alone is also the numerals font",
+      "brand": {
+        "colors": {
+          "accent": "#BC0000",
+          "accent_dark": "#9E0000",
+          "navy": "#141D2D",
+          "ink": "#1A1A1A",
+          "pale": "#FFE5E5",
+          "line": "#E7E4DE"
+        },
+        "font_text": "Nunito Sans",
+        "font_numerals": null
+      },
+      "expected": {
+        "colours": {
+          "ink": "#1A1A1A",
+          "muted": "#5E5C7A",
+          "rule": "#E7E4DE",
+          "head_fill": "#FFE5E5",
+          "paper": "#FFFFFF",
+          "violet": "#BC0000",
+          "violet_print": "#9E0000",
+          "teal": "#0F8F76",
+          "teal_print": "#5FE3C0",
+          "placeholder_fill": "#EEEDF5",
+          "ungraded": "#9A98B0",
+          "tone_neutral": "#5E5C7A",
+          "tone_good": "#0F8F76",
+          "tone_bad": "#B3261E",
+          "tone_warn": "#8A5A00"
+        },
+        "cover_gradient": ["#141D2D", "#141D2D", "#9E0000"],
+        "chart_palette": ["#BC0000", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"],
+        "fonts": { "sans": "Nunito Sans", "mono": "JetBrains Mono", "numerals": "Nunito Sans" }
+      }
+    },
+    {
+      "name": "no brand keeps the Kestrel theme",
+      "brand": null,
+      "expected": null
+    }
+  ]
+}
