@@ -79,7 +79,7 @@ class SnapshotResult:
 
 def _clamp_out(size: tuple[int, int]) -> tuple[int, int]:
     """Each side clamped to check_limits' own 16-2400 bounds, so a spec that has not (yet) been
-    through check_limits — e.g. a missing source, where render_result never calls check_limits —
+    through check_limits, e.g. a missing source, where render_result never calls check_limits,
     cannot produce a placeholder outside the sizes a real render is ever allowed."""
     w, h = size
     return (min(max(int(w), MIN_OUT), MAX_OUT), min(max(int(h), MIN_OUT), MAX_OUT))

@@ -44,18 +44,18 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
     if data.surveys and classes:
         unit = "verified objects" if verified_only else "objects, total (verified)"
         head, rows = survey_counts.class_table(data, classes, verified_only)
-        out.append(blocks.heading(f"Per survey — {unit}", level=2))
+        out.append(blocks.heading(f"Per survey: {unit}", level=2))
         out.append(_table(head, rows, text_cols=1))
         out += [blocks.para(n, style="small") for n in survey_counts.not_comparable_notes(data)]
         if opts.per_area:
             label, ahead, arows = survey_counts.area_table(ctx.handle, classes, verified_only)
             if label and arows:
-                out.append(blocks.heading(f"Per site area — {label}", level=2))
+                out.append(blocks.heading(f"Per site area: {label}", level=2))
                 out.append(_table(ahead, arows, text_cols=2))
 
     phead, prows = survey_counts.photo_table(ctx.handle, type_ids, verified_only)
     if prows:
-        out.append(blocks.heading("Photo batches — detections", level=2))
+        out.append(blocks.heading("Photo batches: detections", level=2))
         out.append(blocks.para(survey_counts.PHOTO_NOTE, style="note"))
         out.append(_table(phead, prows, text_cols=3))
 

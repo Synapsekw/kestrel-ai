@@ -32,7 +32,7 @@ import {
 } from "./builderModel";
 import { matchLine } from "./format";
 
-/** The contract's bound on `filters.date.days` (ReportDateFilter: 1–3650). */
+/** The contract's bound on `filters.date.days` (ReportDateFilter: 1 to 3650). */
 const MAX_DAYS = 3650;
 
 const DATA_ICON: Record<DataItemType, IconName> = {
@@ -128,7 +128,7 @@ export interface ReportFiltersProps {
  *
  * Ruling R-7.1 (coordinator ruling, overrides the plan): choosing a severity level sets
  * `include_ungraded: false` (via `setSeverityMin`); a Checkbox "Include ungraded findings" lets the
- * operator turn it back on without changing the floor, and only appears while a level is chosen —
+ * operator turn it back on without changing the floor, and only appears while a level is chosen,
  * "Any" has no ungraded concept, so the control disappears with it.
  */
 export function ReportFilters({

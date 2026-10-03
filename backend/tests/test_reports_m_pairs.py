@@ -77,7 +77,7 @@ def test_non_overlapping_maps_have_no_frame_and_print_side_by_side(handle):
     ctx = make_ctx(handle)
     [row] = survey_pairs.pair_blocks(ctx, a, b, None, "swipe")
     assert row.kind == "figure_row" and len(row.figures) == 2
-    assert all(f.caption.endswith("— no common area") for f in row.figures)
+    assert all(f.caption.endswith(": no common area") for f in row.figures)
     assert row.figures[0].snapshot.spec.item_id == a.id
     assert row.figures[0].snapshot.spec.geometry.type == "Polygon"
 

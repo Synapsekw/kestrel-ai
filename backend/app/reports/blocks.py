@@ -127,11 +127,11 @@ def cover(
 
 def fmt_date(d: date | datetime | None) -> str:
     if d is None:
-        return "—"
+        return NONE
     return f"{d.day} {MONTHS[d.month - 1]} {d.year}"
 
 
 def fmt_lat_lon(lat: float | None, lon: float | None) -> str:
     if lat is None or lon is None:
-        return "—"
+        return NONE
     return f"{lat:.6f}, {lon:.6f}"

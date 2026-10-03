@@ -81,7 +81,7 @@ def test_value_texts():
 
     assert measure_rows.value_text(item()) == "1,234.50 m²"
     assert measure_rows.value_text(item(unit="m3", headline=3.0)) == "3.00 m³"
-    assert measure_rows.value_text(item(headline=None, unit=None)) == "—"
+    assert measure_rows.value_text(item(headline=None, unit=None)) == "-"
     assert measure_rows.value_text(item(status="stale")) == "stale, recalculate"
     assert measure_rows.value_text(item(status="computing")) == "calculating"
     assert measure_rows.value_text(item(status="failed")) == "failed"

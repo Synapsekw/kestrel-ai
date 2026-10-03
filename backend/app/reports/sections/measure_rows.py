@@ -94,7 +94,7 @@ def value_text(item: MeasurementItem, stale: bool | None = None) -> str:
         return STATUS_TEXT[item.status]
     v, unit = item.headline, item.unit
     if v is None:
-        return "—"
+        return blocks.NONE
     if unit == "deg":
         return f"{v:.1f}°"
     if unit == "mm_per_m":
@@ -110,7 +110,7 @@ def status_text(item: MeasurementItem, stale: bool | None = None) -> str:
 def table_row(item: MeasurementItem, labels: dict[str, str], stale: bool | None = None) -> list[str]:
     return [
         item.name,
-        labels.get(item.data_id or "", "—"),
+        labels.get(item.data_id or "", blocks.NONE),
         SOURCE_TEXT[(item.kind, item.sub_kind)],
         value_text(item, stale),
         status_text(item, stale),

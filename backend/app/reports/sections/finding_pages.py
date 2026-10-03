@@ -24,7 +24,7 @@ def finding_kv(row: FindingRow) -> list[tuple[str, str]]:
     if row.created_by != "human" and row.confidence is not None:
         created += f" ({row.confidence:.2f})"
     rows = [
-        ("Data item", row.data_label or "—"),
+        ("Data item", row.data_label or blocks.NONE),
         ("Observed", blocks.fmt_date(row.observed_on)),
         ("Coordinates (WGS84)", blocks.fmt_lat_lon(row.lat, row.lon)),
         ("Created by", created),

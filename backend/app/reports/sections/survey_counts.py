@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from app.detect import analytics
 from app.maps import service as maps_service
 from app.maps import timeline
+from app.reports import blocks
 from app.reports.figures.map_geo import day_text
 
 OBJECTS = "objects"
@@ -63,7 +64,7 @@ def survey_label(sv: timeline.Survey) -> str:
 
 def _cell(sv: timeline.Survey, class_id: str, verified_only: bool) -> str:
     if sv.state == "not_counted":
-        return "—"
+        return blocks.NONE
     total, ver = sv.counts.get(class_id, 0), sv.verified_counts.get(class_id, 0)
     text = str(ver) if verified_only else f"{total} ({ver})"
     return text + (" *" if sv.state == "not_comparable" else "")
@@ -130,7 +131,7 @@ def photo_table(handle, type_ids: list[str] | None, verified_only: bool) -> tupl
     for b in analytics.photo_batches(handle):
         src = b.source.row
         label = src.label or src.site or src.folder
-        when = day_text(src.captured_on) if src.captured_on else "—"
+        when = day_text(src.captured_on) if src.captured_on else blocks.NONE
         if b.run is None:
             rows.append([label, when, "not counted", *([""] * (len(head) - 3))])
             continue

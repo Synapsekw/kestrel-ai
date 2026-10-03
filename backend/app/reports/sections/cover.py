@@ -27,9 +27,9 @@ def period(ctx: ComposeContext) -> str:
     with ctx.session() as s:
         lo, hi = s.execute(select(func.min(obs), func.max(obs)).where(ctx.where)).one()
     if lo is None:
-        return "—"
+        return blocks.NONE
     a, b = date.fromisoformat(lo), date.fromisoformat(hi)
-    return blocks.fmt_date(a) if a == b else f"{blocks.fmt_date(a)} – {blocks.fmt_date(b)}"
+    return blocks.fmt_date(a) if a == b else f"{blocks.fmt_date(a)} to {blocks.fmt_date(b)}"
 
 
 def locator_map(ctx: ComposeContext) -> GeoMap | None:

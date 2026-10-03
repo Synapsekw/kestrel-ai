@@ -133,7 +133,7 @@ describe("SectionList", () => {
     ).toBe("all");
   });
 
-  it("clamps the photo count to 0–6", () => {
+  it("clamps the photo count to 0 to 6", () => {
     const onChange = setup();
     fireEvent.click(within(row("Finding pages")).getByRole("button", { name: "Options" }));
     fireEvent.change(screen.getByRole("spinbutton", { name: "Photos per finding" }), {

@@ -308,7 +308,7 @@ class ComposeContext:
         except ImportError:
             log.warning("the snapshot engine is not installed; a %s figure has no key", type(model).__name__)
             # P1 (controller ruling): SnapshotRef.key must match ^[0-9a-f]{32}$, so the engine-missing
-            # path can never use "" — hash the spec instead.
+            # path can never use "", hash the spec instead.
             key = hashlib.sha256(
                 json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
             ).hexdigest()[:32]
