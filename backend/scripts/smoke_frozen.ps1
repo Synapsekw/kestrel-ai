@@ -82,6 +82,12 @@ if ($LASTEXITCODE -ne 0 -or $am -notmatch "asset-models ok \d+ \d+") { throw "as
 Write-Host ($am.Trim().Split("`n")[-1])
 Complete-Step "asset-models"
 
+# ijson (compiled backend) + cv2 contours inside the bundle (plan 2026-10-03-asset-findings-j5 Task 5).
+$ri = & $exe review-import-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $ri -notmatch "review-import ok yajl2_c 2 2") { throw "review-import selftest failed: $ri" }
+Write-Host ($ri.Trim().Split("`n")[-1])
+Complete-Step "review-import"
+
 # Volume exports (plan 2026-09-24-volumes Task 13): reportlab, openpyxl and scipy's qhull.
 $vol = & $exe volumes-selftest 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selftest failed: $vol" }

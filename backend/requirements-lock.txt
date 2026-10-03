@@ -43,6 +43,7 @@ httpx2==2.3.0
 hypothesis==6.168.0
 hypothesis-graphql==0.13.2
 idna==3.4
+ijson==3.5.1
 imagehash==4.3.2
 importlib-metadata==7.1.0
 iniconfig==2.3.0

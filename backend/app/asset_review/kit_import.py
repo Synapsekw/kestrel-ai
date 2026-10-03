@@ -20,6 +20,7 @@ from app.asset_review.kit_children import InlineRunner
 from app.asset_review.kit_format import STATUSES, UNCLASSIFIED, Kit, KitError, preview_size, read_kit
 from app.asset_review.kit_match import Match, load_candidates, match_photos
 from app.asset_review.kit_records import write_frame, write_poses, write_statuses
+from app.asset_review.kit_replay import mark_unplaced, placement_counts, replay
 from app.asset_review.kit_sightings import Written, plan_sightings, undo_records, write_sightings
 from app.db.models import AssetModel, AssetModelVersion, FindingSighting, Job, ProjectType, Source
 from app.errors import AppError, not_found
@@ -215,13 +216,13 @@ def run_kit_import(ctx) -> dict:
     ctx.progress(0, "Reading the kit folder")
     try:
         kit = read_kit(Path(ctx.params["folder"]))
+        prep = prepare(ctx, kit)
+        if ctx.params.get("dry_run"):
+            ctx.progress(1, f"Matched {len(prep.matches):,} of {len(kit.photos):,} kit photos")
+            return build_preview(ctx.project, kit, prep, ctx.params)
+        return _import(ctx, kit, prep)
     except KitError as e:
         raise JobFailure(str(e)) from None
-    prep = prepare(ctx, kit)
-    if ctx.params.get("dry_run"):
-        ctx.progress(1, f"Matched {len(prep.matches):,} of {len(kit.photos):,} kit photos")
-        return build_preview(ctx.project, kit, prep, ctx.params)
-    return _import(ctx, kit, prep)
 
 
 def _validate(handle, kit: Kit, prep: Prepared, params: dict) -> dict[str, str]:
@@ -308,6 +309,15 @@ def _result(kit: Kit, prep: Prepared, asset_model_id: str, version: int, **parts
     }
 
 
+def _scales(prep: Prepared, written: list[Written]) -> dict[str, tuple[float, float]]:
+    """Stored-image px per kit preview px, per sighting (for J3's patch crop)."""
+    out = {}
+    for w in written:
+        m, (pw, ph) = prep.matches[w.kit_photo], prep.previews[w.kit_photo]
+        out[w.sighting_id] = (m.width / pw, m.height / ph)
+    return out
+
+
 def _import(ctx, kit: Kit, prep: Prepared) -> dict:
     handle, params = ctx.project, ctx.params
     class_map = _validate(handle, kit, prep, params)
@@ -327,6 +337,15 @@ def _import(ctx, kit: Kit, prep: Prepared) -> dict:
     except Exception:
         undo_records(handle, mid, written, pose_ids)  # cancel included: JobCancelled is an Exception
         raise
+    ids = [w.sighting_id for w in written]
+    placement: dict = {"mode": "none"}
+    if kit.surface_path is not None:
+        ctx.progress(0.5, "Replaying the kit's placements")
+        keys = {w.kit_key: w.sighting_id for w in written if w.primary}
+        extra = replay(handle, ctx, mid, version, kit, keys, 0.5, 0.8, scales=_scales(prep, written))
+        mark_unplaced(handle, [w.sighting_id for w in written if not w.primary], version)
+        placement = {"mode": "replay", **extra}
+    placement.update(placement_counts(handle, ids))
     ctx.progress(1, f"Imported {len(written):,} sightings")
     return _result(
         kit,
@@ -337,4 +356,5 @@ def _import(ctx, kit: Kit, prep: Prepared) -> dict:
         statuses=statuses,
         sightings=len(written),
         skipped=skipped[:MAX_LISTED],
+        placement=placement,
     )
