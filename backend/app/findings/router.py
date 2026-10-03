@@ -42,12 +42,15 @@ from app.training.schemas import JobRef
 router = APIRouter(prefix="/projects/{projectId}", tags=["findings"])
 SEVERITY_VALUES = {str(n) for n in range(1, 10)} | {"none"}
 
+
 # BK's search (spec section 10.3) gets its findings group from here (plan BK hand-off).
-search.register_finding_search(
-    lambda s, q, limit: [
-        FindingOut.from_row(r).model_dump(mode="json") for r in query.search_findings(s, q, limit)
-    ]
-)
+def _search(s, q: str, limit: int) -> list[dict]:
+    rows = query.search_findings(s, q, limit)
+    reps = sightings.representatives(s, [r.id for r in rows if r.anchor_kind == "asset"])
+    return [FindingOut.from_row(r, representative=reps.get(r.id)).model_dump(mode="json") for r in rows]
+
+
+search.register_finding_search(_search)
 
 
 def _detail(handle: ProjectHandle, finding_id: str) -> FindingDetail:
@@ -66,7 +69,7 @@ def list_findings(
     status: list[Literal["open", "reviewed", "closed"]] | None = Query(None),
     severity: list[str] | None = Query(None),
     type_id: list[str] | None = Query(None),
-    anchor_kind: list[Literal["image", "map", "cloud"]] | None = Query(None),
+    anchor_kind: list[Literal["image", "map", "cloud", "asset"]] | None = Query(None),
     data_id: str | None = None,
     image_id: str | None = None,
     created_by: Literal["human", "model"] | None = None,
@@ -74,7 +77,12 @@ def list_findings(
     updated_from: datetime | None = None,
     updated_to: datetime | None = None,
     has_location: bool | None = None,
-    sort: Literal["-severity", "number", "-updated_at", "type"] = "-severity",
+    asset_model_id: str | None = None,
+    zone: list[str] | None = Query(None, max_length=200),
+    side: list[str] | None = Query(None, max_length=64),
+    component: list[str] | None = Query(None, max_length=200),
+    placed: bool | None = None,
+    sort: Literal["-severity", "number", "-updated_at", "type", "-height", "zone"] = "-severity",
     cursor: str | None = None,
     limit: int | None = Query(None, ge=1),
 ) -> FindingPage:
@@ -92,6 +100,11 @@ def list_findings(
         updated_from=updated_from,
         updated_to=updated_to,
         has_location=has_location,
+        asset_model_id=asset_model_id,
+        zone=zone,
+        side=side,
+        component=component,
+        placed=placed,
     )
     with handle.session() as s:
         rows, nxt = query.list_findings(s, filters, sort=sort, cursor=cursor, limit=limit)

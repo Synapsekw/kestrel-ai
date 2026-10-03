@@ -23,8 +23,17 @@ from app.errors import AppError
 from app.findings import counts, numbers, service
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 
-SORTS = ("-severity", "number", "-updated_at", "type")
-SORT_KEYS = {"-severity": ("s",), "number": (), "-updated_at": ("u",), "type": ("t",)}
+SORTS = ("-severity", "number", "-updated_at", "type", "-height", "zone")
+SORT_KEYS = {
+    "-severity": ("s",),
+    "number": (),
+    "-updated_at": ("u",),
+    "type": ("t",),
+    "-height": ("h",),
+    "zone": ("z", "h"),
+}
+NO_HEIGHT = -1.0e12  # a finding with no height (unplaced, or not an asset finding) sorts last
+NO_ZONE = "￿"  # after every zone id in SQLite's binary text order
 MAX_PAGE = 500
 MAX_BULK = 1000
 TREND_DAYS = 60
@@ -44,6 +53,11 @@ class FindingFilters:
     updated_from: datetime | None = None
     updated_to: datetime | None = None
     has_location: bool | None = None
+    asset_model_id: str | None = None  # asset findings spec section 8
+    zone: list[str] | None = None
+    side: list[str] | None = None
+    component: list[str] | None = None
+    placed: bool | None = None  # true: point or patch; false: asset findings with no placement
 
 
 def _where(q, f: FindingFilters):
@@ -77,6 +91,20 @@ def _where(q, f: FindingFilters):
         q = q.where(Finding.lon.is_not(None), Finding.lat.is_not(None))
     elif f.has_location is False:
         q = q.where(or_(Finding.lon.is_(None), Finding.lat.is_(None)))
+    if f.asset_model_id:
+        q = q.where(Finding.asset_model_id == f.asset_model_id)
+    if f.zone:
+        q = q.where(Finding.zone.in_(f.zone))
+    if f.side:
+        q = q.where(Finding.side.in_(f.side))
+    if f.component:
+        q = q.where(Finding.component.in_(f.component))
+    if f.placed is True:
+        q = q.where(Finding.placement.in_(("point", "patch")))
+    elif f.placed is False:
+        q = q.where(
+            Finding.anchor_kind == "asset", or_(Finding.placement.is_(None), Finding.placement == "none")
+        )
     text = (f.q or "").strip()
     if text:
         pattern = like_pattern(text)
@@ -106,6 +134,13 @@ def _cursor_key(sort: str, row: Finding, names: Mapping[str, str]) -> dict[str, 
         return {"u": row.updated_at.isoformat()}
     if sort == "type":
         return {"t": names.get(row.type_id, "")}
+    if sort == "-height":
+        return {"h": NO_HEIGHT if row.height_m is None else row.height_m}
+    if sort == "zone":
+        return {
+            "z": NO_ZONE if row.zone is None else row.zone,
+            "h": NO_HEIGHT if row.height_m is None else row.height_m,
+        }
     return {}
 
 
@@ -143,6 +178,23 @@ def list_findings(
                 raise AppError("validation_error", "invalid cursor", 422) from None
             q = q.where(or_(Finding.updated_at < at, and_(Finding.updated_at == at, Finding.number < c["n"])))
         q = q.order_by(Finding.updated_at.desc(), Finding.number.desc())
+    elif sort == "-height":
+        hv = func.coalesce(Finding.height_m, NO_HEIGHT)
+        if c:
+            q = q.where(or_(hv < c["h"], and_(hv == c["h"], Finding.number < c["n"])))
+        q = q.order_by(hv.desc(), Finding.number.desc())
+    elif sort == "zone":
+        zv = func.coalesce(Finding.zone, NO_ZONE)
+        hv = func.coalesce(Finding.height_m, NO_HEIGHT)
+        if c:
+            q = q.where(
+                or_(
+                    zv > c["z"],
+                    and_(zv == c["z"], hv < c["h"]),
+                    and_(zv == c["z"], hv == c["h"], Finding.number > c["n"]),
+                )
+            )
+        q = q.order_by(zv.asc(), hv.desc(), Finding.number.asc())
     else:
         tname = _type_name()
         if c:
