@@ -6283,6 +6283,7 @@ paths:
             image/png:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
     put:
       tags: [brands]

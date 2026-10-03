@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from alembic import command
+from alembic import op as alembic_op
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
@@ -142,7 +143,7 @@ def test_every_built_in_names_bundled_fonts_and_has_no_dashes():
     for brand in BUILTIN_BRANDS:
         assert brand["font_text"] in fonts.FAMILIES and brand["font_numerals"] in fonts.FAMILIES
         text = " ".join(str(v) for v in brand.values())
-        assert "—" not in text and "–" not in text
+        assert "\u2014" not in text and "\u2013" not in text
 
 
 def test_the_built_ins_are_seeded_once(tmp_path):
@@ -215,4 +216,37 @@ def test_0004_downgrades_to_0003_and_keeps_every_type(tmp_path):
         assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
 
     _run(data, go)
+    assert _types(data) == before
+
+
+def test_a_failure_after_the_table_is_created_leaves_0003_and_the_next_open_recovers(tmp_path, monkeypatch):
+    """The seed insert dies after create_table: the open raises, the next open recovers.
+
+    SQLite DDL is not transactional, so the half-made table survives; 0004 must drop it and go again.
+    """
+    data = tmp_path / "appdata"
+    _at_0003_with_a_type(data)
+    before = _types(data)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("seed failed")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(alembic_op, "bulk_insert", boom)
+        with pytest.raises(Exception, match="seed failed"):
+            open_catalogue(data)
+
+    con = sqlite3.connect(catalogue_root(data) / "catalogue.db")
+    try:
+        assert con.execute("SELECT version_num FROM alembic_version").fetchall() == [("0003",)]
+    finally:
+        con.close()
+    assert _types(data) == before
+
+    cat = open_catalogue(data)
+    try:
+        with cat.session() as s:
+            assert sorted(s.execute(select(Brand.id)).scalars()) == sorted(BUILTIN_IDS)
+    finally:
+        cat.engine.dispose()
     assert _types(data) == before

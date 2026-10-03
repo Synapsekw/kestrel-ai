@@ -24667,6 +24667,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            503: components["responses"]["CatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };

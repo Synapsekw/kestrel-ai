@@ -68,6 +68,8 @@ BUILTIN_ROWS = [
 
 
 def upgrade() -> None:
+    # SQLite DDL is not rolled back with the transaction: a half-done earlier attempt leaves the table.
+    op.execute("DROP TABLE IF EXISTS brand")
     table = op.create_table(
         "brand",
         sa.Column("id", sa.String(64), primary_key=True),

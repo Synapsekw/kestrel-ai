@@ -41,6 +41,7 @@ def test_the_logo_operations_exist():
     path = _doc()["paths"]["/api/v1/brands/{brandId}/logos/{slot}"]
     assert path["get"]["operationId"] == "getBrandLogo"
     assert "image/png" in path["get"]["responses"]["200"]["content"]
+    assert {"404", "503"} <= set(path["get"]["responses"])
     assert path["put"]["operationId"] == "setBrandLogo"
     assert path["delete"]["operationId"] == "clearBrandLogo"
     assert {"404", "422", "503"} <= set(path["put"]["responses"])
