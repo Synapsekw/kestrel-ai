@@ -1,6 +1,7 @@
 # backend/tests/test_plant_score.py
 """The plant register scorer against Cowork's KIPIC register (spec 2026-10-03 §13, K1)."""
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -43,3 +44,101 @@ def test_type_match_rules():
     assert sc.types_match("other", "building") and sc.types_match("trestle", "other")
     assert sc.types_match("composite", "tank_lng")
     assert not sc.types_match("fence", "pump")
+
+
+def test_cowork_against_itself_is_100_percent(ref):
+    rep = sc.score(ref, ref)
+    assert (rep.tagged_ref, rep.tagged_found, rep.type_match) == (404, 404, 404)
+    assert rep.recall == rep.type_accuracy == rep.within_tol == 1.0
+    assert rep.pos_err_p50_m == rep.pos_err_p95_m == 0.0
+    assert rep.missing == [] and rep.extra == []
+    assert len(rep.required_present) == 12 and all(rep.required_present.values())
+    assert rep.landmask_hausdorff_m is None
+    assert all(a["recall"] == 1.0 for a in rep.by_area.values())
+
+
+def _shift(row, de, dn=0.0):
+    row["plant_E"] = f"{float(row['plant_E']) + de:.2f}"
+    row["plant_N"] = f"{float(row['plant_N']) + dn:.2f}"
+
+
+def test_perturbed_copy_gives_the_expected_numbers(ref):
+    gen = copy.deepcopy(ref)
+    pool = [r for r in _tagged(gen) if not r["tag"].startswith("20-T-") and r["plant_E"]]
+    dropped = pool[:10]
+    retyped = [r for r in pool[10:] if sc.TYPE_FAMILY[r["type"]] == "equipment" and r["type"] != "package"][
+        :5
+    ]
+    as_package = [r for r in pool[10:] if r["type"] in ("pump", "vessel_v") and r not in retyped][:3]
+    as_other = [r for r in pool[10:] if r["type"] == "building"][:2]
+    rest = [r for r in pool[10:] if r not in retyped + as_package + as_other]
+    near, far, restyled = rest[:20], rest[20:30], rest[30:60]
+    for r in retyped:
+        r["type"] = "fence"
+    for r in as_package:
+        r["type"] = "package"
+    for r in as_other:
+        r["type"] = "other"
+    for r in near:
+        _shift(r, 3.0)  # within the 5 m tolerance (no footprint sizes)
+    for r in far:
+        _shift(r, 6.0)
+    for r in restyled:
+        r["tag"] = " " + r["tag"].lower().replace("-", " – ") + " "
+    drop_tags = {r["tag"] for r in dropped}
+    gen = [r for r in gen if r["tag"] not in drop_tags and r["tag"] != "20-T-0003"]
+    gen += [
+        {"node": "x1", "tag": "99-X-0001", "type": "pump", "plant_E": "1", "plant_N": "1"},
+        {"node": "x2", "tag": "99-X-0002", "type": "pump", "plant_E": "", "plant_N": ""},
+    ]
+    rep = sc.score(gen, ref)
+    assert rep.tagged_found == 404 - 11
+    assert rep.recall == pytest.approx(393 / 404)
+    assert rep.type_match == 393 - 5
+    assert rep.type_accuracy == pytest.approx(388 / 404)
+    assert rep.missing == sorted(drop_tags | {"20-T-0003"})
+    assert rep.extra == ["99-X-0001", "99-X-0002"]
+    positioned = sum(1 for r in _tagged(ref) if r["plant_E"] and r["tag"] not in drop_tags | {"20-T-0003"})
+    assert rep.within_tol == pytest.approx((positioned - 10) / positioned)
+    assert rep.pos_err_p50_m == 0.0
+    assert rep.pos_err_p95_m == pytest.approx(3.0, abs=0.01)
+    assert rep.required_present["20-T-0003"] is False
+    assert all(v for k, v in rep.required_present.items() if k != "20-T-0003")
+    area = dropped[0]["area"] or "(none)"
+    lost = sum(1 for r in dropped if (r["area"] or "(none)") == area)
+    assert rep.by_area[area]["found"] == rep.by_area[area]["ref"] - lost
+
+
+def test_rows_without_coordinates_count_as_found_not_positioned(ref):
+    gen = copy.deepcopy(ref)
+    for r in _tagged(gen)[:5]:
+        r["plant_E"] = r["plant_N"] = ""
+    rep = sc.score(gen, ref)
+    assert rep.tagged_found == 404 and rep.within_tol == 1.0
+
+
+def test_footprint_size_sets_the_2_m_tolerance():
+    assert sc.tolerance_m({}) == 5.0
+    assert sc.tolerance_m({"footprint_m": 4.0}) == 5.0
+    assert sc.tolerance_m({"footprint_m": 90.0}) == 2.0
+    gen = [{"tag": "A-1", "type": "pump", "plant_E": "0", "plant_N": "3", "footprint_m": 12.0}]
+    rep = sc.score(gen, [{"tag": "A-1", "type": "pump", "plant_E": "0", "plant_N": "0"}])
+    assert rep.within_tol == 0.0 and rep.pos_err_p50_m == 3.0
+
+
+def test_required_present_tracks_jetties_trestles_and_dolphins(ref):
+    gen = copy.deepcopy(ref)
+    head = next(r for r in gen if r["node"] == "jetty1-loading-platform")
+    _shift(head, 40.0)
+    dolphin = next(r for r in gen if r["type"] == "dolphin")
+    _shift(dolphin, 0.0, 30.0)
+    gen = [r for r in gen if r["node"] != "trestle-shore"]
+    req = sc.required_present(gen, ref)
+    assert req["jetty_head_1"] is False and req["jetty_head_2"] is True
+    assert req["dolphins"] is False and req["trestles"] is False
+    assert all(req[f"20-T-000{k}"] for k in range(1, 9))
+
+
+def test_required_present_skips_what_the_reference_lacks():
+    ref = [{"node": "a", "tag": "P-1", "type": "pump", "plant_E": "0", "plant_N": "0"}]
+    assert sc.required_present(ref, ref) == {}
