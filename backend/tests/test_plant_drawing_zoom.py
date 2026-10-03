@@ -82,6 +82,14 @@ def test_overlay_draws_plant_grid_lines(handle, a0_drawing):
     assert views.drawing_zoom(handle, a0_drawing, [0, 0, 1, 1], 30).grid_step_m is None
 
 
+def test_overlay_degrades_to_ticks_when_the_mapper_returns_non_finite(handle, a0_drawing):
+    for bad in (float("nan"), float("inf")):
+        z = views.drawing_zoom(
+            handle, a0_drawing, [0, 0, 1, 1], 30, page_to_plant=lambda fx, fy, b=bad: (b, b)
+        )
+        assert z.grid_step_m is None and z.jpeg
+
+
 def test_nice_steps_and_segments():
     assert views._nice(166.7) == 200.0 and views._nice(0.013) == 0.02 and views._nice(3) == 5.0
     assert views._segment(1.0, 0.0, 0.0, 50.0, 100, 80) == ((50.0, 0.0), (50.0, 80.0))

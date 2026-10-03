@@ -9,22 +9,25 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
 import time
 from typing import Annotated
 
 from pydantic import Field, ValidationError
+from pyproj import CRS
+from pyproj.exceptions import CRSError
 from shapely.geometry import LineString, Polygon
 
 from app.asset_models.agent.plant import packages as pk
-from app.asset_models.agent.plant import views
+from app.asset_models.agent.plant import sitefit, views
 from app.asset_models.agent.plant.merge import with_flag
 from app.asset_models.agent.tools import _A, FinishArgs, Region, ToolOut, _short
 from app.asset_models.agent.tools import TOOLS as M1_TOOLS
 from app.asset_models.agent.tools import run_tool as run_m1_tool
 from app.asset_models.builders.base import PLANNED_TYPES, REGISTRY, catalogue, load_all
 from app.asset_models.look import LookError
-from app.asset_models.siteframe import footprint_ref
-from app.asset_models.spec import EnvFeature, Item, ItemFlag
+from app.asset_models.siteframe import fit_plant_grid, footprint_ref
+from app.asset_models.spec import Datum, EnvFeature, Item, ItemFlag, SiteCrs, SiteFrame, Source
 from app.project_agent.history import ToolResult, ToolSpec
 from app.project_agent.tools import clean_schema
 
@@ -465,7 +468,135 @@ class DrawingZoom:
 
 
 def _page_to_plant(rc, drawing_id):
-    return None  # Task 7 replaces this with sitefit.page_to_plant_fn
+    return sitefit.page_to_plant_fn(rc, drawing_id)
+
+
+NEED_FRAME = (
+    "The site frame can't be fixed yet. Give either at least two grid points on a page that is already "
+    "placed on the map, or origin_crs and plant_north_deg read off a drawing (a coordinate note or the "
+    "key plan) with the epsg of their coordinate system. Pages without a georeference are placed from "
+    "their grid points once the frame is known."
+)
+Frac = Annotated[float, Field(ge=0, le=1)]
+
+
+class GridPoint(_A):
+    drawing_id: str
+    page_xy: Annotated[list[Frac], Field(min_length=2, max_length=2)] = Field(
+        description="[x, y] page fractions of the grid intersection, (0,0) top-left (read the zoom's ticks)"
+    )
+    plant_E: float
+    plant_N: float
+
+
+class SetSiteArgs(_A):
+    epsg: int | None = Field(None, ge=1024, le=999_999)
+    origin_crs: Annotated[list[float], Field(min_length=2, max_length=2)] | None = Field(
+        None, description="plant (E 0, N 0) in the site CRS, metres"
+    )
+    plant_north_deg: float | None = Field(
+        None, ge=-360, le=360, description="plant north, clockwise from grid north"
+    )
+    datum_label: str = Field("EL", min_length=1, max_length=20)
+    datum_el_m: float = Field(0.0, ge=-1000, le=10_000, description="plant EL at the model's base level")
+    grid_points: Annotated[list[GridPoint], Field(max_length=12)] = Field(default_factory=list)
+    source_drawing_id: str | None = None
+    note: str | None = Field(None, max_length=300)
+
+
+def _site_crs(handle, epsg):
+    from app.workspace.service import get_frame
+
+    if epsg is not None:
+        try:
+            return CRS.from_epsg(epsg).to_wkt(), SiteCrs(epsg=epsg)
+        except CRSError:
+            raise LookError(f"EPSG:{epsg} is not a coordinate system this app knows.") from None
+    ws = get_frame(handle)
+    if ws.kind == "local":
+        return None, SiteCrs()
+    return ws.crs_wkt, SiteCrs(epsg=ws.epsg) if ws.epsg else SiteCrs(wkt=ws.crs_wkt)
+
+
+class SetSite:
+    name, Args = "set_site", SetSiteArgs
+    description = (
+        "Fix the site frame: where plant (E 0, N 0) sits in the site CRS, plant north's angle clockwise "
+        "from grid north, and the vertical datum. Either give grid_points (grid intersections read off "
+        "pages: page_xy fractions + the plant E/N labels; >= 2 on a page already placed on the map, "
+        "spread wide) or origin_crs + plant_north_deg (+ epsg) read off a drawing. Unplaced pages with 2+ "
+        "grid points are then placed on the map from the grid."
+    )
+
+    def run(self, rc, scope, a):
+        ids = rc.drawing_ids()
+        for did in {gp.drawing_id for gp in a.grid_points} | (
+            {a.source_drawing_id} if a.source_drawing_id else set()
+        ):
+            if did not in ids:
+                raise LookError("That drawing is not one of this run's sources.")
+        site_wkt, crs = _site_crs(rc.handle, a.epsg)
+        rows = {did: sitefit.drawing_row(rc.handle, did) for did in {gp.drawing_id for gp in a.grid_points}}
+        pairs, placed_from = [], None
+        for gp in a.grid_points:
+            row = rows.get(gp.drawing_id)
+            xy = (
+                sitefit.page_to_site(row, gp.page_xy[0], gp.page_xy[1], site_wkt) if row is not None else None
+            )
+            if xy is not None:
+                pairs.append(((gp.plant_E, gp.plant_N), (float(xy[0]), float(xy[1]))))
+                placed_from = placed_from or gp.drawing_id
+        lines, rms = [], None
+        if len(pairs) >= 2:
+            origin, theta, rms = fit_plant_grid(pairs)
+            source = Source(kind="drawing", id=placed_from, note=a.note)
+            if a.origin_crs is not None and a.plant_north_deg is not None:
+                d = math.dist(origin, a.origin_crs)
+                lines.append(
+                    f"The frame you stated differs from the grid fit by {d:.2f} m and "
+                    f"{abs(theta - a.plant_north_deg):.4f} deg; the fit is used."
+                )
+        elif a.origin_crs is not None and a.plant_north_deg is not None:
+            origin, theta = (a.origin_crs[0], a.origin_crs[1]), a.plant_north_deg
+            source = (
+                Source(kind="drawing", id=a.source_drawing_id, note=a.note)
+                if a.source_drawing_id
+                else Source(kind="assumed", note=a.note or "Frame given without a drawing reference.")
+            )
+        else:
+            return ToolOut(NEED_FRAME, "Site frame not set", ok=False)
+        frame = SiteFrame(
+            crs=crs,
+            origin_crs=(float(origin[0]), float(origin[1])),
+            plant_north_deg=float(theta),
+            datum=Datum(label=a.datum_label, el_m=a.datum_el_m),
+            source=source,
+        )
+        with rc.lock:
+            rc.state.site = frame.model_dump(mode="json")
+            if rms is not None and rms > 1.0:
+                q = (
+                    f"The plant grid fit has a residual of {rms:.2f} m over {len(pairs)} grid points: "
+                    "check the grid points read off the drawings."
+                )
+                rc.state.questions = [x for x in rc.state.questions if "plant grid fit" not in x] + [q]
+                lines.append("The residual is over 1 m: check the grid points (an open question was added).")
+        rc.save()
+        for did, row in rows.items():
+            gps = [gp for gp in a.grid_points if gp.drawing_id == did]
+            if row is not None and row.georef is None and len(gps) >= 2:
+                lines.append(sitefit.georef_from_grid(rc, row, gps))
+        crs_label = (
+            f"EPSG:{crs.epsg}" if crs.epsg else ("the map's CRS" if crs.wkt else "local metres (no CRS)")
+        )
+        text = (
+            f"Site frame set: plant (0, 0) at ({frame.origin_crs[0]:.3f}, {frame.origin_crs[1]:.3f}) in "
+            f"{crs_label}; plant north {frame.plant_north_deg:.4f} deg clockwise from grid north; datum "
+            f"{a.datum_label} = {a.datum_el_m:g} m."
+        )
+        if rms is not None:
+            text += f" Grid fit residual {rms:.2f} m over {len(pairs)} points."
+        return ToolOut("\n".join([text, *lines]), "Set the site frame")
 
 
 # ------------------------------------------------------------------ registry and dispatch
@@ -480,6 +611,7 @@ _TOOLS = [
     PlantFinish(),
     FinishPackage(),
     DrawingZoom(),
+    SetSite(),
 ]
 PLANT_TOOLS = {t.name: t for t in _TOOLS}
 ORCH_NAMES = (
@@ -487,6 +619,7 @@ ORCH_NAMES = (
     "drawing_view",
     "drawing_text",
     "drawing_zoom",
+    "set_site",
     "catalogue",
     "plan_packages",
     "items_query",

@@ -191,11 +191,13 @@ def draw_overlay(img: Image.Image, region, page_to_plant) -> float | None:
         return None
     try:
         a, b, c, d, e, f = _affine_px_to(page_to_plant, region, W, H)
-    except Exception:  # noqa: BLE001 - a frame that can't map this page draws no grid
+        corners = [(0, 0), (W, 0), (0, H), (W, H)]
+        es = [a * u + b * w + c for u, w in corners]
+        ns = [d * u + e * w + f for u, w in corners]
+        if not all(math.isfinite(v) for v in (*es, *ns)):
+            return None
+    except Exception:  # noqa: BLE001 - a frame that can't map this page (or maps it to NaN/inf) draws no grid
         return None
-    corners = [(0, 0), (W, 0), (0, H), (W, H)]
-    es = [a * u + b * w + c for u, w in corners]
-    ns = [d * u + e * w + f for u, w in corners]
     gstep = _nice(max(max(es) - min(es), max(ns) - min(ns)) / 6)
     for (p, q, r), lo, hi, axis in (((a, b, c), min(es), max(es), "E"), ((d, e, f), min(ns), max(ns), "N")):
         val = math.ceil(lo / gstep) * gstep
