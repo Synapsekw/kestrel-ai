@@ -1,4 +1,4 @@
-import { Checkbox, Field, Input, Segmented, Select, Switch, Textarea } from "@/ui";
+import { Checkbox, Field, Input, Segmented, Select, Switch, Textarea, useSeverityScale } from "@/ui";
 import type { Sections } from "./builderModel";
 
 type ReportSection = Sections[number];
@@ -24,7 +24,6 @@ const TABLE_COLUMNS = [
   ["height", "Height"],
   ["sightings", "Sightings"],
 ] as const;
-const SEVERITY_FLOORS = [1, 2, 3, 4] as const;
 const TABLE_SORTS = [
   ["severity_desc", "Severity, worst first"],
   ["number", "Finding number"],
@@ -87,6 +86,7 @@ export function SectionOptions({
   section: ReportSection;
   onChange: (patch: Opts) => void;
 }) {
+  const scale = useSeverityScale();
   const o = (section.options ?? {}) as Opts;
   const id = `section-${section.key}`;
   switch (section.key) {
@@ -184,9 +184,9 @@ export function SectionOptions({
               onChange={(e) => onChange({ min_severity: e.target.value ? Number(e.target.value) : null })}
             >
               <option value="">Every finding</option>
-              {SEVERITY_FLOORS.map((n) => (
-                <option key={n} value={n}>
-                  {`Severity ${n} and above`}
+              {scale.map((l) => (
+                <option key={l.level} value={l.level}>
+                  {`${l.name} and above`}
                 </option>
               ))}
             </Select>

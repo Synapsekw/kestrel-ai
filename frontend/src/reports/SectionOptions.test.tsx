@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { reportConfig } from "@/test/reportBuilderFixtures";
+import { SeverityScaleContext } from "@/ui";
 import { SectionOptions } from "./SectionOptions";
 
 const sectionOf = (key: string) => {
@@ -27,6 +28,26 @@ describe("SectionOptions for the asset report (spec 2026-10-02-asset-findings §
     expect(onChange).toHaveBeenLastCalledWith({ min_severity: 2 });
     fireEvent.change(select, { target: { value: "" } });
     expect(onChange).toHaveBeenLastCalledWith({ min_severity: null });
+  });
+
+  it("names the pages' floors from the project severity scale", () => {
+    const scale = [
+      { level: 1, name: "Light", colour: "#3fb68e" },
+      { level: 2, name: "Significant", colour: "#e2bf2e" },
+      { level: 3, name: "Severe", colour: "#ff5a4f" },
+    ];
+    render(
+      <SeverityScaleContext.Provider value={scale}>
+        <SectionOptions section={sectionOf("finding_pages")} onChange={vi.fn()} />
+      </SeverityScaleContext.Provider>,
+    );
+    const options = Array.from(screen.getByLabelText("Pages for").querySelectorAll("option"));
+    expect(options.map((o) => [o.value, o.textContent])).toEqual([
+      ["", "Every finding"],
+      ["1", "Light and above"],
+      ["2", "Significant and above"],
+      ["3", "Severe and above"],
+    ]);
   });
 
   it("switches the asset summary's map and tables", () => {
