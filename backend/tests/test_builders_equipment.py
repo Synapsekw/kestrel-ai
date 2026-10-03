@@ -312,6 +312,27 @@ CASES: dict[str, Case] = {
         golden=("iso", "top"),
     ),
     # --- rotating (Tasks 7, 8)
+    "pump": Case(  # Cowork 20-P-0001A LP LNG pump head on the tank roof: R 0.9, 2 m
+        "pump",
+        circle(1.8),
+        2.0,
+        tris=(128, 800),
+        parts=frozenset({"baseplate", "pump_head", "motor"}),
+    ),
+    "pump_horizontal": Case(
+        "pump",
+        rect(2.4, 0.9, 30.0),
+        1.2,
+        tris=(128, 800),
+        parts=frozenset({"plinth", "baseplate", "casing", "discharge", "coupling_guard", "motor"}),
+    ),
+    "pump_group": Case(  # Cowork 70-P-0005B fire sea water pump row: 3.2 x 7.7, 3 m
+        "pump_group",
+        rect(7.7, 3.2),
+        3.0,
+        tris=(140, 6000),
+        parts=frozenset({"plinth", "casing", "motor"}),
+    ),
     # --- power (Task 8)
     # --- process (Tasks 9, 10)
     # --- jetty (Task 11)
@@ -607,3 +628,35 @@ def test_tank_lng_riser_runs_clear_the_roof_edge_rail():
     v = expanded(nodes["risers"].geometry).vertices
     over_wall = v[np.hypot(v[:, 0], v[:, 2]) < 93.5 / 2]  # the inner ends of the horizontal runs
     assert len(over_wall) and over_wall[:, 1].min() > rail_top
+
+
+# ------------------------------------------------------------------ rotating
+def test_pump_kind_follows_the_footprint():
+    assert built("pump")[0].extras["derived"]["kind"] == "column"
+    assert built("pump_horizontal")[0].extras["derived"]["kind"] == "horizontal"
+
+
+def test_pump_horizontal_shaft_follows_rot_deg():
+    assert principal_bearing(built("pump_horizontal"), "motor") == pytest.approx(30.0, abs=1.0)
+
+
+def test_pump_group_instances_one_unit_per_pump():
+    nodes = built("pump_group")
+    casing = next(n for n in nodes if n.name == "casing").geometry
+    assert isinstance(casing, Instanced) and len(casing.transforms) == 3  # floor(7.7 / 2.5)
+    assert nodes[0].extras["derived"]["n"] == 3
+
+
+def test_pump_group_max_units_stays_inside():  # Review Focus 5
+    it = make_item("pump_group", rect(3.0, 2.0), h=2.5, params={"n": 24})
+    nodes = REGISTRY["pump_group"].fn(it, CTX)
+    lo, hi = bounds(nodes)
+    assert lo[0] >= -1.5 - 0.05 and hi[0] <= 1.5 + 0.05
+    assert lo[2] >= -1.0 - 0.05 and hi[2] <= 1.0 + 0.05
+    assert tris(nodes) <= 24 * 800
+
+
+def test_pump_engine_driver_has_engine_and_radiator():
+    it = make_item("pump", rect(3.5, 1.2), h=1.8, params={"driver": "engine"})
+    names = {n.name for n in REGISTRY["pump"].fn(it, CTX)}
+    assert {"engine", "radiator"} <= names and "motor" not in names
