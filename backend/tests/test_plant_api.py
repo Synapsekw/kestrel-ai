@@ -14,7 +14,6 @@ PROJECT = "/api/v1/projects/{projectId}"
 UNIT_LISTS = {
     "A1": stubs_plant.A1_STUBS,
     "S1": stubs_plant.S1_STUBS,
-    "I1": stubs_plant.I1_STUBS,
 }
 
 
@@ -48,12 +47,6 @@ def test_an_unknown_project_is_404_before_any_stub(client):
     for method, path, op_id in _all_stubs():
         r = client.request(method, f"/api/v1/projects/nope{_concrete(path)}", **_kwargs(method))
         assert r.status_code == 404, (op_id, r.text)
-
-
-def test_unimported_is_not_taken_for_a_drawing_id(client, project_id):
-    """Review Focus 4: GET /drawings/unimported is the stub, not GET /drawings/{drawingId} (a 404)."""
-    r = client.get(f"/api/v1/projects/{project_id}/drawings/unimported")
-    assert r.status_code == 501, r.text
 
 
 def test_the_catalogue_lists_the_registered_builders(client):

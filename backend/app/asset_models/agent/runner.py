@@ -98,7 +98,16 @@ def _describe_sources(ctx, sources):
             if row is None:
                 out.append({**src, "label": src["id"], "facts": "missing"})
             elif src["type"] == "drawing":
-                out.append({**src, "label": row.name, "facts": _DRAWING_FACTS.get(row.format, "")})
+                out.append(
+                    {
+                        **src,
+                        "label": row.name,
+                        "facts": _DRAWING_FACTS.get(row.format, ""),
+                        "file": str(row.source_path).replace("\\", "/").rsplit("/", 1)[-1],
+                        "sha256": row.source_sha256,
+                        "page": row.page,
+                    }
+                )
             elif src["type"] == "point_cloud":
                 facts = f"{row.point_count} points" if row.point_count else ""
                 out.append({**src, "label": row.name, "facts": facts})

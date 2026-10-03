@@ -1,20 +1,34 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   AssetModel,
   AssetModelRun,
   AssetSourceRef,
+  Job,
   KeyedProviderName,
   Provider,
 } from "@contract/client";
 import { listVersions, startRun } from "@/api/assetModels";
 import { useApi } from "@/api/client";
 import type { DataItem } from "@/api/dataItems";
+import type { UnimportedDrawing } from "@/api/drawings";
 import { ApiFailure, codeOf, messageOf } from "@/api/errors";
 import { providerLabel, useProviders } from "@/api/providers";
-import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, Checkbox, Dialog, Field, Input, Pill, Segmented, Skeleton, Textarea } from "@/ui";
-import { MAX_SOURCES, sourceKey, useDataSources, usePhotoSources } from "./sources";
+import { useTrackedJob } from "@/jobs/useTrackedJob";
+import { isActiveJob, useJobsStore } from "@/store/jobs";
+import { Alert, Button, Dialog, Field, Input, Segmented, Skeleton, Textarea } from "@/ui";
+import { DrawingSources } from "./DrawingSources";
+import { groupDrawingFiles, type DrawingFile } from "./drawingFiles";
+import { importDrawingFile } from "./importFile";
+import { GroupHead, SourceRow } from "./SourceRows";
+import {
+  MAX_SOURCES,
+  sourceKey,
+  useDataSources,
+  usePhotoSources,
+  useProjectDrawings,
+  useUnimportedDrawings,
+} from "./sources";
 
 const NOTES_MAX = 4000;
 const MODEL_NAME_MAX = 120;
@@ -64,59 +78,6 @@ function startError(e: unknown): string {
 function defaultProvider(providers: Provider[]): KeyedProviderName | null {
   const keyed = providers.filter((p) => p.has_key);
   return (keyed.find((p) => p.name === "anthropic") ?? keyed[0])?.name ?? null;
-}
-
-const STATUS_TEXT: Record<DataItem["status"], string> = {
-  ready: "Ready",
-  importing: "Importing",
-  failed: "Failed",
-};
-
-function GroupHead({ title, chosen, total }: { title: string; chosen: number; total: number | null }) {
-  return (
-    <legend className="mb-1.5 flex w-full items-baseline gap-2 text-xs font-medium text-muted">
-      <span className="text-ink">{title}</span>
-      <span className="font-mono text-2xs tabular-nums text-dim">
-        {chosen > 0 ? `${chosen} chosen · ` : ""}
-        {total ?? "…"}
-      </span>
-    </legend>
-  );
-}
-
-function SourceRow({
-  label,
-  status,
-  checked,
-  onChange,
-}: {
-  label: ReactNode;
-  status?: DataItem["status"];
-  checked: boolean;
-  onChange(on: boolean): void;
-}) {
-  const ready = !status || status === "ready";
-  return (
-    <li className="flex min-h-7 items-center rounded-sm px-1.5 hover:bg-hover">
-      <Checkbox
-        checked={checked}
-        // A chosen source that is no longer ready stays untickable.
-        disabled={!ready && !checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="min-w-0 flex-1"
-        label={
-          <span className="flex min-w-0 items-center gap-2">
-            <span className={ready ? "truncate text-ink" : "truncate text-dim"}>{label}</span>
-            {!ready && status && (
-              <Pill size="sm" tone={status === "failed" ? "danger" : "warn"}>
-                {STATUS_TEXT[status]}
-              </Pill>
-            )}
-          </span>
-        }
-      />
-    </li>
-  );
 }
 
 function DataGroup({
@@ -227,6 +188,35 @@ function PhotoGroup({
   );
 }
 
+/** An "Import and include" whose job is being watched: its drawings, and whether the job has ended. */
+interface ImportRun {
+  jobId: string;
+  name: string;
+  ids: string[];
+  ended: boolean;
+  failed: boolean;
+}
+
+/** Watches one import job (the store's copy, polled by `useTrackedJob`) and reports its end once. */
+function ImportWatch({
+  projectId,
+  run,
+  onEnd,
+}: {
+  projectId: string;
+  run: ImportRun;
+  onEnd(run: ImportRun, job: Job): void;
+}) {
+  const { job } = useTrackedJob(projectId, run.jobId);
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!job || isActiveJob(job) || fired.current) return;
+    fired.current = true;
+    onEnd(run, job);
+  }, [job, run, onEnd]);
+  return null;
+}
+
 /**
  * Starts an asset model run (M1 spec §8): the sources to read, the provider and model, and notes for
  * the agent. Build writes a new model from the sources; Refine starts from the current version.
@@ -234,7 +224,30 @@ function PhotoGroup({
 export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, initial }: BuildDialogProps) {
   const api = useApi();
   const { providers, loading: providersLoading, unavailable, error: providersError } = useProviders();
-  const drawings = useDataSources(projectId, "drawing");
+  const drawingList = useProjectDrawings(projectId);
+  const files = useMemo(
+    () => (drawingList.items ? groupDrawingFiles(drawingList.items) : null),
+    [drawingList.items],
+  );
+  const unimported = useUnimportedDrawings(projectId);
+  const [importing, setImporting] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<Record<string, string>>({});
+  const [importRuns, setImportRuns] = useState<ImportRun[]>([]);
+  const [importNotices, setImportNotices] = useState<string[]>([]);
+  const { reload: reloadDrawings, add: addDrawings } = drawingList;
+  const onImportEnd = useCallback(
+    (run: ImportRun, job: Job) => {
+      const failed = job.state !== "succeeded";
+      setImportRuns((rs) => rs.map((r) => (r.jobId === run.jobId ? { ...r, ended: true, failed } : r)));
+      if (failed) {
+        const why =
+          job.error ?? (job.state === "cancelled" ? "the import was cancelled" : "the import failed");
+        setImportNotices((n) => [...n, `${run.name} could not be imported: ${why}`]);
+      }
+      reloadDrawings();
+    },
+    [reloadDrawings],
+  );
   const clouds = useDataSources(projectId, "point_cloud");
 
   // Refine starts from the current version's sources unless the caller brought its own.
@@ -264,8 +277,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   // Photos are paged, so a chosen photo off the loaded pages is kept.
   const { chosen, dropped } = useMemo(() => {
     const listed = (type: AssetSourceRef["type"]) => {
-      const list = type === "drawing" ? drawings : type === "point_cloud" ? clouds : null;
-      return !list || !list.items || list.error ? null : new Set(list.items.map((i) => i.id));
+      if (type === "drawing")
+        return !drawingList.items || drawingList.error ? null : new Set(drawingList.items.map((d) => d.id));
+      return type === "point_cloud" && clouds.items && !clouds.error
+        ? new Set(clouds.items.map((i) => i.id))
+        : null;
     };
     const ids = { drawing: listed("drawing"), point_cloud: listed("point_cloud"), image: null };
     const kept = new Map<string, AssetSourceRef>();
@@ -276,14 +292,78 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
       else kept.set(k, r);
     }
     return { chosen: kept, dropped: gone };
-  }, [seeded, drawings, clouds]);
+  }, [seeded, drawingList.items, drawingList.error, clouds]);
   const isChosen = (r: AssetSourceRef) => chosen.has(sourceKey(r));
+  // An import awaits the server: it adds its pages to the selection as it stands then, not as it was.
+  const chosenNow = useRef(chosen);
+  useEffect(() => {
+    chosenNow.current = chosen;
+  }, [chosen]);
+  // Once an import's job has ended and the list re-reads, its failed pages leave the selection
+  // (a tick sends only ready pages, as DrawingFile.refs does).
+  useEffect(() => {
+    const items = drawingList.items;
+    if (!items) return;
+    const settled = importRuns.filter(
+      (r) => r.ended && !items.some((d) => r.ids.includes(d.id) && d.status === "importing"),
+    );
+    if (settled.length === 0) return;
+    const next = new Map(chosenNow.current);
+    const notes: string[] = [];
+    for (const r of settled) {
+      const failed = items.filter((d) => r.ids.includes(d.id) && d.status === "failed").map((d) => d.id);
+      for (const id of failed) next.delete(sourceKey({ type: "drawing", id }));
+      if (failed.length > 0 && !r.failed)
+        notes.push(
+          failed.length === r.ids.length
+            ? `${r.name} could not be imported.`
+            : `${failed.length} of ${r.ids.length} pages of ${r.name} could not be imported and were left out.`,
+        );
+    }
+    if (next.size !== chosenNow.current.size) setPicked(next);
+    if (notes.length > 0) setImportNotices((n) => [...n, ...notes]);
+    setImportRuns((rs) => rs.filter((r) => !settled.includes(r)));
+  }, [importRuns, drawingList.items]);
   const onToggle = (r: AssetSourceRef, on: boolean) => {
     const next = new Map(chosen);
     if (on) next.set(sourceKey(r), r);
     else next.delete(sourceKey(r));
     setPicked(next);
   };
+  const onToggleFile = (file: DrawingFile, on: boolean) => {
+    const next = new Map(chosen);
+    for (const d of file.drawings) next.delete(sourceKey({ type: "drawing", id: d.id }));
+    if (on) for (const r of file.refs) next.set(sourceKey(r), r);
+    setPicked(next);
+  };
+  const onImport = async (file: UnimportedDrawing) => {
+    if (importing) return;
+    setImporting(file.path);
+    setImportErrors((m) => {
+      const next = { ...m };
+      delete next[file.path];
+      return next;
+    });
+    try {
+      const { drawings: made, job } = await importDrawingFile(api, projectId, file.path);
+      addDrawings(made);
+      const next = new Map(chosenNow.current);
+      for (const d of made) next.set(sourceKey({ type: "drawing", id: d.id }), { type: "drawing", id: d.id });
+      setPicked(next);
+      unimported.drop(file.path);
+      setImportRuns((rs) => [
+        ...rs,
+        { jobId: job.id, name: file.name, ids: made.map((d) => d.id), ended: false, failed: false },
+      ]);
+    } catch (e) {
+      setImportErrors((m) => ({ ...m, [file.path]: messageOf(e, "The file could not be imported.") }));
+    } finally {
+      setImporting(null);
+    }
+  };
+  const waiting = [...chosen.values()].filter(
+    (r) => r.type === "drawing" && drawingList.items?.find((d) => d.id === r.id)?.status === "importing",
+  ).length;
   const photosChosen = [...chosen.values()].filter((r) => r.type === "image").length;
 
   const [providerPick, setProviderPick] = useState<KeyedProviderName | null>(initial?.provider ?? null);
@@ -300,8 +380,12 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const keyless = providers.filter((p) => !p.has_key);
 
   const sourceName = (r: AssetSourceRef) => {
-    const list = r.type === "drawing" ? drawings.items : r.type === "point_cloud" ? clouds.items : null;
-    const label = list?.find((i) => i.id === r.id)?.label;
+    const label =
+      r.type === "drawing"
+        ? drawingList.items?.find((d) => d.id === r.id)?.name
+        : r.type === "point_cloud"
+          ? clouds.items?.find((i) => i.id === r.id)?.label
+          : undefined;
     return (
       label ??
       (r.type === "image"
@@ -315,7 +399,11 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tooMany = chosen.size > MAX_SOURCES;
-  const canStart = chosen.size > 0 && !tooMany && provider !== null && !busy;
+  // One chosen file that alone passes the cap: name it, so the fix is plain (untick that file).
+  const oversized = tooMany
+    ? files?.find((f) => f.refs.filter((r) => chosen.has(sourceKey(r))).length > MAX_SOURCES)
+    : undefined;
+  const canStart = chosen.size > 0 && !tooMany && waiting === 0 && provider !== null && !busy;
 
   const submit = async () => {
     if (!canStart || !provider) return;
@@ -382,13 +470,16 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
               </span>
             )}
           </h3>
-          <DataGroup
-            title="Drawings"
-            empty="No drawings in this project."
-            items={drawings.items}
-            error={drawings.error}
+          <DrawingSources
+            files={files}
+            error={drawingList.error}
             isChosen={isChosen}
-            onToggle={onToggle}
+            onToggleFile={onToggleFile}
+            unimported={unimported.items}
+            unimportedError={unimported.error}
+            importing={importing}
+            importErrors={importErrors}
+            onImport={(f) => void onImport(f)}
           />
           <DataGroup
             title="Point clouds"
@@ -401,7 +492,9 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
           <PhotoGroup projectId={projectId} chosen={photosChosen} isChosen={isChosen} onToggle={onToggle} />
           {tooMany && (
             <p role="alert" className="text-xs text-danger">
-              {`A run reads at most ${MAX_SOURCES} sources; untick ${chosen.size - MAX_SOURCES}.`}
+              {oversized
+                ? `${oversized.label} has ${oversized.refs.length} pages; a run reads at most ${MAX_SOURCES} sources.`
+                : `A run reads at most ${MAX_SOURCES} sources; untick ${chosen.size - MAX_SOURCES}.`}
             </p>
           )}
           {dropped > 0 && (
@@ -409,6 +502,21 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
               {dropped === 1
                 ? "1 source is no longer in the project and was left out."
                 : `${dropped} sources are no longer in the project and were left out.`}
+            </p>
+          )}
+          {importRuns
+            .filter((r) => !r.ended)
+            .map((r) => (
+              <ImportWatch key={r.jobId} projectId={projectId} run={r} onEnd={onImportEnd} />
+            ))}
+          {importNotices.map((n, i) => (
+            <p key={i} role="alert" className="text-xs text-danger">
+              {n}
+            </p>
+          ))}
+          {waiting > 0 && (
+            <p className="text-xs text-muted">
+              {`Waiting for ${waiting} ${waiting === 1 ? "drawing" : "drawings"} to finish importing.`}
             </p>
           )}
         </section>
