@@ -109,6 +109,21 @@ class FindingRow:
     updated_at: datetime
     reviewed_at: datetime | None
     closed_at: datetime | None
+    asset_model_id: str | None = None
+    asset_version: int | None = None
+    height_m: float | None = None
+    bearing_deg: float | None = None
+    side: str | None = None
+    zone: str | None = None
+    component: str | None = None
+    placement: str | None = None
+    sighting_count: int = 0
+    ax: float | None = None
+    ay: float | None = None
+    az: float | None = None
+    an_x: float | None = None
+    an_y: float | None = None
+    an_z: float | None = None
 
     @classmethod
     def build(cls, ctx: ComposeContext | None, src: Any, *, data_label: str, observed_on: date) -> FindingRow:
@@ -150,6 +165,21 @@ class FindingRow:
             updated_at=src.updated_at,
             reviewed_at=src.reviewed_at,
             closed_at=src.closed_at,
+            asset_model_id=getattr(src, "asset_model_id", None),
+            asset_version=getattr(src, "asset_version", None),
+            height_m=getattr(src, "height_m", None),
+            bearing_deg=getattr(src, "bearing_deg", None),
+            side=getattr(src, "side", None),
+            zone=getattr(src, "zone", None),
+            component=getattr(src, "component", None),
+            placement=getattr(src, "placement", None),
+            sighting_count=int(getattr(src, "sighting_count", 0) or 0),
+            ax=getattr(src, "ax", None),
+            ay=getattr(src, "ay", None),
+            az=getattr(src, "az", None),
+            an_x=getattr(src, "an_x", None),
+            an_y=getattr(src, "an_y", None),
+            an_z=getattr(src, "an_z", None),
         )
 
     @classmethod
@@ -229,6 +259,13 @@ class ComposeContext:
     def project_name(self) -> str:
         with self.session() as s:
             return self.handle.row(s).name
+
+    @cached_property
+    def asset_models(self):
+        """{id: AssetInfo} for every asset model of the project (tens), read once per context."""
+        from app.reports.asset_info import load_asset_models  # lazy: P1 loads only when asked
+
+        return load_asset_models(self.handle)
 
     def options(self, key: str):
         for sec in self.config.sections:
@@ -324,16 +361,40 @@ _COLUMNS = (
     Finding.updated_at,
     Finding.reviewed_at,
     Finding.closed_at,
+    Finding.asset_model_id,
+    Finding.asset_version,
+    Finding.height_m,
+    Finding.bearing_deg,
+    Finding.side,
+    Finding.zone,
+    Finding.component,
+    Finding.placement,
+    Finding.sighting_count,
+    Finding.ax,
+    Finding.ay,
+    Finding.az,
+    Finding.an_x,
+    Finding.an_y,
+    Finding.an_z,
 )
 
 
-def count_findings(ctx: ComposeContext) -> int:
+def _scope(ctx: ComposeContext, where):
+    return ctx.where if where is None else and_(ctx.where, where)
+
+
+def count_findings(ctx: ComposeContext, *, where=None) -> int:
     with ctx.session() as s:
-        return s.execute(select(func.count()).select_from(Finding).where(ctx.where)).scalar_one()
+        return s.execute(select(func.count()).select_from(Finding).where(_scope(ctx, where))).scalar_one()
 
 
 def findings_page(
-    ctx: ComposeContext, order: str = "number", cursor: str | None = None, limit: int = PAGE
+    ctx: ComposeContext,
+    order: str = "number",
+    cursor: str | None = None,
+    limit: int = PAGE,
+    *,
+    where=None,
 ) -> tuple[list[FindingRow], str | None]:
     if order not in ORDERS:
         raise AppError("validation_error", f"order is one of {', '.join(ORDERS)}", 422)
@@ -366,7 +427,7 @@ def findings_page(
         data_label().label("data_label"),
         tname.label("type_name"),
         sev.label("sev_key"),
-    ).where(ctx.where)
+    ).where(_scope(ctx, where))
     if order == "number":
         if c:
             q = q.where(Finding.number > c["n"])
