@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.db.base import utcnow
 from app.db.models import Drawing
-from app.drawings import detect, footprint, service, site, store, vtiles
+from app.drawings import detect, footprint, pages, service, site, store, vtiles
 from app.drawings import georef as fitting
 from app.drawings import jobs as _jobs  # noqa: F401 - registers `drawing_import`
 from app.drawings import placement as placing
@@ -31,6 +31,8 @@ from app.drawings.schemas import (
     DrawingInspectionWithJob,
     DrawingList,
     DrawingOut,
+    DrawingPagesCreate,
+    DrawingPagesWithJob,
     DrawingPatch,
     DrawingWithJob,
     GeorefFitOut,
@@ -100,6 +102,20 @@ def get_drawing_page_thumbnail(
 _BUILD_LOCK = threading.Lock()  # no second build of an inspection between the live check and the submit
 
 
+def _require_ready(insp: dict) -> None:
+    if insp["state"] != "ready":
+        message = (
+            "the file is still being read"
+            if insp["state"] == "inspecting"
+            else "reading the file failed; choose it again"
+        )
+        raise AppError("not_ready", message, 409)
+
+
+def _live_build(req: dict, runner) -> str | None:
+    return next((j for j in req.get("build_job_ids", []) if runner.is_live(j)), None)
+
+
 @router.get("/drawings", response_model=DrawingList)
 def list_drawings(handle: ProjectHandle = Depends(get_project)) -> DrawingList:
     frame = footprint.frame_or_none(handle)
@@ -114,19 +130,13 @@ def create_drawing(
 ) -> DrawingWithJob:
     idir = store.require_inspection(handle, body.inspection_id)
     insp = _read_or_404(idir / "inspection.json", "drawing inspection", body.inspection_id)
-    if insp["state"] != "ready":
-        message = (
-            "the file is still being read"
-            if insp["state"] == "inspecting"
-            else "reading the file failed; choose it again"
-        )
-        raise AppError("not_ready", message, 409)
+    _require_ready(insp)
     params = placing.check(insp, body, idir)
     chosen = params["layers"]
     runner = request.app.state.jobs
     with _BUILD_LOCK:
         req = _read_or_404(idir / "request.json", "drawing inspection", body.inspection_id)
-        live = next((j for j in req.get("build_job_ids", []) if runner.is_live(j)), None)
+        live = _live_build(req, runner)
         if live is not None:
             raise AppError("job_running", "a drawing is being imported from this file", 409, {"job_id": live})
         with handle.session() as s:
@@ -163,6 +173,74 @@ def create_drawing(
         out = service.to_out(row, None)
     publish_drawings_changed(request, handle, [did])
     return DrawingWithJob(drawing=out, job=JobOut.from_row(job, handle.id))
+
+
+@router.post("/drawings/pages", response_model=DrawingPagesWithJob, status_code=202)
+def create_drawing_pages(
+    body: DrawingPagesCreate, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> DrawingPagesWithJob:
+    """Every chosen page of a PDF in one `drawing_import` job (phase `pages`), in order (plant-model
+    spec §8.1). One Drawing per page, all sharing the file's sha256. Publishes `drawings.changed`."""
+    idir = store.require_inspection(handle, body.inspection_id)
+    insp = _read_or_404(idir / "inspection.json", "drawing inspection", body.inspection_id)
+    _require_ready(insp)
+    plan = pages.check_pages(insp, body, idir)
+    stem = Path(insp["path"]).stem
+    count = insp.get("page_count") or len(plan["pages"])
+    runner = request.app.state.jobs
+    with _BUILD_LOCK:
+        req = _read_or_404(idir / "request.json", "drawing inspection", body.inspection_id)
+        live = _live_build(req, runner)
+        if live is not None:
+            raise AppError("job_running", "a drawing is being imported from this file", 409, {"job_id": live})
+        with handle.session() as s:
+            rows = [
+                Drawing(
+                    name=pages.page_name(body.name, stem, page, count),
+                    format="pdf",
+                    source_path=insp["path"],
+                    source_size=insp["file_size"],
+                    source_sha256=insp["sha256"],
+                    page=page,
+                    status="importing",
+                    units=None,
+                    dpi=dpi,
+                    extent_src=None,
+                    layers=[],
+                    georef=None,
+                    georef_version=0,
+                    bounds_site=None,
+                    layer_state={"hidden_layers": [], "knockout_white": False},
+                    captured_on=body.captured_on,
+                )
+                for page, dpi in plan["pages"]
+            ]
+            s.add_all(rows)
+            s.flush()
+            ids = [r.id for r in rows]
+        items = [
+            {"drawing_id": did, "page": page, "dpi": dpi}
+            for did, (page, dpi) in zip(ids, plan["pages"], strict=True)
+        ]
+        job = runner.submit(
+            handle,
+            "drawing_import",
+            {
+                "phase": "pages",
+                "inspection_id": body.inspection_id,
+                "placement": plan["placement"],
+                "items": items,
+            },
+        )
+        store.patch_json(idir / "request.json", build_job_ids=[*req.get("build_job_ids", []), job.id])
+    with handle.session() as s:
+        outs = []
+        for did in ids:
+            row = service.require(s, did)
+            row.job_id = job.id
+            outs.append(service.to_out(row, None))
+    publish_drawings_changed(request, handle, ids)
+    return DrawingPagesWithJob(drawings=outs, job=JobOut.from_row(job, handle.id))
 
 
 @router.get("/drawings/{drawingId}", response_model=DrawingOut)

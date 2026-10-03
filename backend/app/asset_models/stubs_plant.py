@@ -39,7 +39,6 @@ S1_STUBS: list[Stub] = [
 
 # I1: intake (spec §8.1). Mounted with the drawings routes (the maps stack), before them.
 I1_STUBS: list[Stub] = [
-    ("POST", "/drawings/pages", "createDrawingPages"),
     ("GET", "/drawings/unimported", "listUnimportedDrawings"),
 ]
 
