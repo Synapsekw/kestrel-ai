@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon, MenuButton, StatusDot, Tooltip, cx, focusRing } from "@/ui";
 import { PROJECT_TABS, SECONDARY_PAGES, secondaryHref, type ProjectTabId } from "./routeModel";
-import { SidebarLink } from "./SidebarLink";
+import { ACTIVE, SidebarLink } from "./SidebarLink";
 import type { ProjectCounts } from "./useProjectCounts";
 
 export function projectInitials(name: string): string {
@@ -111,10 +111,14 @@ export function SidebarProjectTree({
           iconOnly
           icon="more"
           side="right"
+          variant="ghost"
+          data-current={secondary !== null ? "true" : undefined}
+          className={cx("relative h-10 w-[42px]", secondary !== null && ACTIVE)}
           items={SECONDARY_PAGES.map((p) => ({
             id: p.id,
             label: p.label,
             icon: p.icon,
+            current: secondary === p.id,
             onSelect: () => void navigate(secondaryHref(projectId, p)),
           }))}
         />

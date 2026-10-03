@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Icon, Tooltip, cx, focusRing, type IconName } from "@/ui";
 
 /** The 3px gradient bar on the current row, as the rail had (DESIGN.md § Shell). */
-const ACTIVE =
+export const ACTIVE =
   "bg-accent-soft font-medium text-accent-ink before:absolute before:-left-[11px] before:bottom-2 before:top-2 before:w-[3px] before:rounded-chip before:bg-grad-ink";
 
 export interface SidebarLinkProps {

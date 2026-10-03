@@ -149,4 +149,18 @@ describe("SidebarProjectTree", () => {
     );
     expect(screen.getByRole("link", { name: "Al Khail" })).toBe(row);
   });
+
+  it("collapsed on a secondary page, marks More as current and the item in its menu", () => {
+    const tree = renderTree({ collapsed: true, secondary: "runs", tab: null });
+    const more = within(tree).getByRole("button", { name: "More pages" });
+    expect(more).toHaveAttribute("data-current", "true");
+    act(() => void fireEvent.click(more));
+    expect(screen.getByRole("menuitem", { name: /Runs/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("menuitem", { name: /Review/ })).not.toHaveAttribute("aria-current");
+  });
+
+  it("collapsed on a main page, leaves More unmarked", () => {
+    const tree = renderTree({ collapsed: true });
+    expect(within(tree).getByRole("button", { name: "More pages" })).not.toHaveAttribute("data-current");
+  });
 });
