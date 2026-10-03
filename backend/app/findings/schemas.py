@@ -123,6 +123,20 @@ def anchor_of(r: Finding) -> dict[str, Any]:
     }
 
 
+class FindingRepresentative(BaseModel):
+    image_id: str
+    annotation_id: str
+
+
+def representative_of(r: Finding) -> FindingRepresentative | None:
+    """The sighting a finding is shown by (spec 2026-10-02-asset-findings §8). An image finding is
+    its own one implicit sighting (§4 A2); map and cloud findings have none. D1 adds the asset
+    branch (the representative `finding_sighting`)."""
+    if r.anchor_kind == "image":
+        return FindingRepresentative(image_id=r.image_id, annotation_id=r.annotation_id)
+    return None
+
+
 class FindingOut(BaseModel):
     id: str
     number: int
@@ -141,6 +155,17 @@ class FindingOut(BaseModel):
     updated_at: datetime
     reviewed_at: datetime | None
     closed_at: datetime | None
+    # Asset findings (spec 2026-10-02-asset-findings §8). C0 answers them for the kinds that exist
+    # today; D1 reads the asset columns.
+    asset_model_id: str | None
+    height_m: float | None
+    bearing_deg: float | None
+    side: str | None
+    zone: str | None
+    component: str | None
+    placement: Literal["point", "patch", "none"] | None
+    sighting_count: int
+    representative: FindingRepresentative | None
 
     @classmethod
     def from_row(cls, r: Finding) -> "FindingOut":
@@ -162,6 +187,15 @@ class FindingOut(BaseModel):
             updated_at=r.updated_at,
             reviewed_at=r.reviewed_at,
             closed_at=r.closed_at,
+            asset_model_id=None,
+            height_m=None,
+            bearing_deg=None,
+            side=None,
+            zone=None,
+            component=None,
+            placement=None,
+            sighting_count=1,
+            representative=representative_of(r),
         )
 
 
