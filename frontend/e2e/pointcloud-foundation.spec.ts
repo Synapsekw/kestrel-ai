@@ -6,7 +6,7 @@ import { buildOctree, redGreenGrid, routeOctree } from "./fixtures/potreeOctree"
 
 // No WebGL flags here: the Prism example cloud is not drawn, only the routes and the workspace
 // shell are checked (the canvas test is in clouds.spec.ts).
-test("Point clouds opens the full-bleed workspace from the project tabs; Measurements still opens", async ({
+test("Point clouds opens the full-bleed workspace from the sidebar; Measurements still opens", async ({
   page,
 }) => {
   // Prism's own PointCloudOut example (served for /pointclouds, unstubbed) has this same id, so
@@ -23,7 +23,7 @@ test("Point clouds opens the full-bleed workspace from the project tabs; Measure
   );
   await routeCameras(page, P, emptyCameras());
   await page.goto(`/p/${P}`);
-  await page.getByRole("tab", { name: /^Point clouds/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /^Point clouds/ }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds(/[^/?]+)?$`));
   // The workspace root is full-bleed (no page tabs): CloudWorkspace.tsx still renders an sr-only
   // <h1>Point clouds</h1> (S1's old assertion on the visible heading, kept here on the same text).
@@ -35,7 +35,7 @@ test("Point clouds opens the full-bleed workspace from the project tabs; Measure
   await expect(w.tool("Orbit")).toHaveAttribute("aria-pressed", "true");
 
   await page.goto(`/p/${P}`);
-  await page.getByRole("tab", { name: /^Measurements/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /^Measurements/ }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/measurements$`));
   await expect(page.getByRole("heading", { level: 1, name: "Measurements" })).toBeVisible();
 

@@ -9,8 +9,9 @@ test("Analytics shows totals with verified counts, and Verified only switches to
   page,
 }) => {
   await page.goto(`/p/${P}`);
-  await page.getByRole("button", { name: "More", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Analytics" }).click();
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "More", exact: true }).click();
+  await nav.getByRole("link", { name: "Analytics", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/analytics$`));
   await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
 

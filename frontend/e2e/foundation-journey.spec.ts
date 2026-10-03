@@ -569,7 +569,7 @@ test("one project from creation to a training run: every Foundation unit reads w
 
   // 4. Accept the proposed Crack box on the imported photo; the backend makes it a finding.
   await page.goto(`/p/${P}/images`);
-  await expect(page.getByRole("tab", { name: "Images 1" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Images 1" })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
   await expect(page.getByTestId("ai-hint-bar")).toContainText(/1 AI suggestion/);
   // The response, not the request: the handler has run (and made the finding) once it answered.
@@ -601,7 +601,7 @@ test("one project from creation to a training run: every Foundation unit reads w
     .attach("reads-per-finding-edit.txt", { body: reads.join("\n"), contentType: "text/plain" });
   // A regression guard, not an exact match. Measured 2026-09-27 (docs/evidence/foundation/README.md),
   // 5 reads, stable over repeated runs, no events socket in the mock:
-  //   GET /projects/{projectId}/overview                                (tab counts)
+  //   GET /projects/{projectId}/overview                                (sidebar counts)
   //   GET /projects/{projectId}/activity?subject_id={findingId}&limit=20 (inspector History)
   //   GET /projects/{projectId}/findings/{findingId}                    (inspector detail)
   //   GET /projects/{projectId}/findings/summary                        (filter counts)
@@ -611,8 +611,8 @@ test("one project from creation to a training run: every Foundation unit reads w
   // 6. Findings and the Overview show it at its new severity.
   await expect(picker.getByRole("radio", { name: "3 Major" })).toHaveAttribute("aria-checked", "true");
   await expect(row).toContainText("Major");
-  await expect(page.getByRole("tab", { name: "Findings 1" })).toBeVisible();
-  await page.getByRole("tab", { name: "Overview" }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Findings 1" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Overview", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/overview$`));
   await expect(page.getByRole("link", { name: "Major: 1 open" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Moderate: 0 open" })).toBeVisible();
