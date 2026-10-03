@@ -40,11 +40,11 @@ def test_same_tag_far_apart_or_other_type_is_flagged():
 
 
 def test_untagged_overlap_merges_only_same_type_over_sixty_percent():
-    a, b = it("a", e=0), it("b", e=2)  # 10x6 boxes shifted 2 m: overlap 8/10 = 80 %
+    a, b = it("a", n=0), it("b", n=2)  # 10 m N x 6 m E boxes shifted 2 m north: overlap 8/10 = 80 %
     assert len(merge_items([[a], [b]])) == 1
-    far = it("c", e=7)  # overlap 3/10 = 30 %
+    far = it("c", n=7)  # overlap 3/10 = 30 %
     assert len(merge_items([[a], [far]])) == 2
-    other_type = it("d", e=2, type="composite")
+    other_type = it("d", n=2, type="composite")
     assert len(merge_items([[a], [other_type]])) == 2
 
 

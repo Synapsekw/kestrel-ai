@@ -54,10 +54,8 @@ def replace_queued(s, run_id: str, specs: list[dict]) -> list[SiteModelPackage]:
             drawing_id=spec.get("drawing_id"),
             region=[float(v) for v in region] if region else None,
             area=spec.get("area"),
+            expected=[str(t) for t in spec.get("expected_tags") or []][:300],
             state="queued",
-            usage={},
-            item_count=0,
-            summary=None,
         )
         s.add(row)
         out.append(row)
@@ -70,6 +68,7 @@ def set_state(s, package_id: str, state: str, *, usage=None, item_count=None, su
     row.state = state
     if state == "running":
         row.started_at, row.ended_at = utcnow(), None
+        row.attempts = (row.attempts or 0) + 1
     elif state == "queued":
         row.started_at, row.ended_at = None, None
     if state in TERMINAL:
@@ -109,7 +108,7 @@ def work_of(row, meta: dict) -> PackageWork:
         region=tuple(row.region) if row.region else None,
         area=row.area,
         brief=str(meta.get("brief") or row.label),
-        expected_tags=tuple(meta.get("expected_tags") or ()),
+        expected_tags=tuple(meta.get("expected_tags") or row.expected or ()),
     )
 
 
@@ -125,5 +124,14 @@ def find_for_model(s, model_id: str, ids) -> list[SiteModelPackage]:
 
 
 def copy_for_rerun(s, run_id: str, old: list[SiteModelPackage]) -> list[SiteModelPackage]:
-    specs = [{"label": r.label, "drawing_id": r.drawing_id, "region": r.region, "area": r.area} for r in old]
+    specs = [
+        {
+            "label": r.label,
+            "drawing_id": r.drawing_id,
+            "region": r.region,
+            "area": r.area,
+            "expected_tags": r.expected,
+        }
+        for r in old
+    ]
     return replace_queued(s, run_id, specs)

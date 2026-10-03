@@ -115,3 +115,33 @@ def test_limits_from_round_trips_without_clamping():
 
     assert limits_from(asdict(lim)) == lim
     assert limits_from({"junk": 1}) == PlantLimits()
+
+
+def test_limits_from_skips_bad_values_for_known_keys():
+    bad = {"max_tokens": None, "max_images": "x", "max_seconds": float("inf"), "parallel": float("nan")}
+    assert limits_from(bad) == PlantLimits()
+    assert limits_from({"parallel": 2, "sub_calls": None}) == PlantLimits(parallel=2)
+
+
+def test_images_and_seconds_bounds_match_the_contract():
+    data = FakeAppData({"plant_run_limits": {"max_images": 0, "max_seconds": 10**9}})
+    lim = load_default_limits(data)
+    assert lim.max_images == 1 and lim.max_seconds == 86_400
+
+
+def test_run_usage_validates_through_the_run_schema_and_restores():
+    from app.asset_models.schemas import AssetModelRunUsageByStageOut
+
+    b = RunBudget(PlantLimits())
+    b.charge({"input_tokens": 10, "output_tokens": 4}, "survey")
+    b.charge_call("survey")
+    b.charge_image("trace")
+    out = b.run_usage("trace", "claude-opus-5-5")
+    assert out["input_tokens"] == 10 and out["output_tokens"] == 4
+    by = AssetModelRunUsageByStageOut.model_validate(out["by_stage"])
+    assert by.current == "trace" and by.stages["survey"].calls == 1 and by.stages["trace"].images == 1
+    assert by.cost_estimate_usd is not None and by.cost_label == COST_LABEL
+    again = RunBudget(PlantLimits(), used=out)
+    assert again.tokens() == 14
+    assert again.snapshot("x")["by_stage"]["survey"]["calls"] == 1
+    assert again.snapshot("x")["by_stage"]["trace"]["images"] == 1

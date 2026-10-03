@@ -33,8 +33,8 @@ class PlantLimits:
 
 BOUNDS = {
     "max_tokens": (100_000, 200_000_000),
-    "max_images": (0, 2_000),
-    "max_seconds": (60, 43_200),
+    "max_images": (1, 5_000),
+    "max_seconds": (60, 86_400),
     "parallel": (1, 8),
     "sub_calls": (5, 1_000),
     "sub_tokens": (50_000, 40_000_000),
@@ -70,7 +70,11 @@ def resolve_limits(appdata, override: dict | None) -> PlantLimits:
 def limits_from(d: dict | None) -> PlantLimits:
     """The limits a run stored at start (already clamped by the route; tests store small ones)."""
     known = {f.name for f in fields(PlantLimits)}
-    return PlantLimits(**{k: int(v) for k, v in (d or {}).items() if k in known})
+    ok = {}
+    for k, v in (d or {}).items():
+        if k in known and isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+            ok[k] = int(v)
+    return PlantLimits(**ok)
 
 
 @dataclass(frozen=True)
@@ -112,6 +116,8 @@ class RunBudget:
         self._lock = threading.Lock()
         self._t0 = clock() - float(elapsed_s or 0.0)
         earlier = (used or {}).get("by_stage") or {}
+        if isinstance(earlier.get("stages"), dict):  # run_usage form
+            earlier = earlier["stages"]
         self._stages: dict[str, dict[str, int]] = {}
         for stage, row in earlier.items():
             if isinstance(row, dict):
@@ -161,4 +167,18 @@ class RunBudget:
             "output_tokens": sum(r["output_tokens"] for r in by_stage.values()),
             "current": current,
             "by_stage": by_stage,
+        }
+
+    def run_usage(self, current: str, model_name: str) -> dict:
+        """The run's `usage` JSON: totals plus the `by_stage` block F0's `AssetModelRunOut.of` reads."""
+        snap = self.snapshot(current)
+        totals = {"input_tokens": snap["input_tokens"], "output_tokens": snap["output_tokens"]}
+        return {
+            **totals,
+            "by_stage": {
+                "current": current,
+                "stages": snap["by_stage"],
+                "cost_estimate_usd": estimate_cost_usd(model_name, totals),
+                "cost_label": COST_LABEL,
+            },
         }

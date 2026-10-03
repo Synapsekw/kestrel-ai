@@ -127,3 +127,34 @@ def test_work_of_and_rerun_copies(handle, run_ids):
         assert [(c.label, c.drawing_id, c.area, c.state, c.run_id) for c in copies] == [
             ("A", "d1", "20", "queued", run2.id)
         ]
+
+
+def test_expected_attempts_and_default_usage(handle, run_ids):
+    model_id, run_id = run_ids
+    with handle.session() as s:
+        (a,) = pk.replace_queued(s, run_id, [{"label": "A", "expected_tags": ["T-1", 2]}])
+        assert a.expected == ["T-1", "2"] and a.usage == {"input_tokens": 0, "output_tokens": 0}
+        (long,) = pk.replace_queued(
+            s, run_id, [{"label": "L", "expected_tags": [str(k) for k in range(400)]}]
+        )
+        assert len(long.expected) == 300
+        assert (a.attempts or 0) == 0
+        (c,) = pk.replace_queued(s, run_id, [{"label": "C", "expected_tags": ["X"]}])
+        pk.set_state(s, c.id, "running")
+        pk.set_state(s, c.id, "queued")
+        pk.set_state(s, c.id, "running")
+        assert c.attempts == 2
+        assert pk.work_of(c, {}).expected_tags == ("X",)
+        assert pk.work_of(c, {"expected_tags": ["Y"]}).expected_tags == ("Y",)
+        run2 = AssetModelRun(
+            model_id=model_id,
+            job_id="j3",
+            provider="anthropic",
+            model_name="x",
+            mode="plant_package",
+            sources=[],
+        )
+        s.add(run2)
+        s.flush()
+        (copy,) = pk.copy_for_rerun(s, run2.id, [c])
+        assert copy.expected == ["X"] and copy.attempts == 0
