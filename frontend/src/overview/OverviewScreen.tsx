@@ -9,6 +9,8 @@ import { useProjectTypes } from "@/findings/useProjectTypes";
 import { useNow } from "@/jobs/useNow";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, GlassPanel, Skeleton, buttonClass, useSeverityScale } from "@/ui";
+import { AssetMapCard } from "./AssetMapCard";
+import { AssetPreview } from "./AssetPreview";
 import { Banners } from "./Banners";
 import { CloudPreview } from "./CloudPreview";
 import { composeOverview, type OverviewFacts, type PaneId } from "./compose";
@@ -145,6 +147,7 @@ export function OverviewScreen() {
   // failed with none, is still the first-data screen rather than a near-empty grid.
   const dataTotal = d.images + d.maps + d.elevations + d.point_clouds + d.drawings;
   const hero = overview.hero;
+  const assetId = hero?.kind === "asset_model" ? hero.id : null;
   const facts: OverviewFacts = {
     heroKind: hero?.kind ?? null,
     dataTotal,
@@ -156,7 +159,7 @@ export function OverviewScreen() {
       ? // SiteLocation draws nothing without bounds, so only bounds make a location pane.
         site?.bounds_wgs84 != null
       : d.maps + d.point_clouds + d.images > 0,
-    hasAssetMap: false,
+    hasAssetMap: hero?.kind === "asset_model" && hero.id !== null,
     findingsTotal: total,
     runningJobs,
   };
@@ -178,6 +181,7 @@ export function OverviewScreen() {
           />
         );
       case "hero":
+        if (assetId) return <AssetPreview projectId={projectId} modelId={assetId} className="h-full" />;
         if (hero?.kind === "map" && hero.id)
           return <MapHero projectId={projectId} heroMapId={hero.id} hasData />;
         if (hero?.kind === "point_cloud")
@@ -189,6 +193,17 @@ export function OverviewScreen() {
             <Skeleton className="h-full rounded-panel" />
           );
         return <SummaryHero projectId={projectId} hero={hero} data={d} className="h-full" />;
+      case "assetMap":
+        return (
+          assetId && (
+            <AssetMapCard
+              projectId={projectId}
+              modelId={assetId}
+              photoReview={overview.photo_review ?? null}
+              className="h-full"
+            />
+          )
+        );
       case "cloud":
         return <CloudPreview projectId={projectId} cloudId={null} variant="tile" className="h-full" />;
       case "location":

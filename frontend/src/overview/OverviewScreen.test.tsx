@@ -11,6 +11,7 @@ import {
   fullOverview,
   imagesOnlyOverview,
 } from "@/test/findingFixtures";
+import { ASSET_MODEL_ID, assetOverview } from "@/test/assetFindingFixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
@@ -23,6 +24,18 @@ vi.mock("./MapHero", () => ({
 }));
 vi.mock("./CloudPreview", () => ({
   CloudPreview: ({ variant }: { variant: string }) => <div data-testid={`cloud-${variant}`} />,
+}));
+vi.mock("./AssetPreview", () => ({
+  AssetPreview: ({ modelId }: { modelId: string }) => <div data-testid="asset-hero" data-model={modelId} />,
+}));
+vi.mock("./AssetMapCard", () => ({
+  AssetMapCard: ({
+    modelId,
+    photoReview,
+  }: {
+    modelId: string;
+    photoReview: { uncertain: number } | null;
+  }) => <div data-testid="asset-map" data-model={modelId} data-uncertain={photoReview?.uncertain ?? ""} />,
 }));
 vi.mock("@/app/effects", async (orig) => ({
   ...(await orig<object>()),
@@ -241,6 +254,22 @@ describe("OverviewScreen", () => {
 });
 
 describe("Overview v2 layout", () => {
+  it("asset inspection: the asset is the hero and its findings map sits beside it", async () => {
+    renderOverview(assetOverview, [imagesRoute]);
+    await waitFor(() => expect(panes()).toContain("assetMap"));
+    expect(panes().slice(0, 4)).toEqual(["header", "hero", "assetMap", "location"]);
+    expect(screen.getByTestId("asset-hero")).toHaveAttribute("data-model", ASSET_MODEL_ID);
+    expect(screen.getByTestId("asset-map")).toHaveAttribute("data-uncertain", "15");
+    expect(screen.queryByTestId("map-hero")).not.toBeInTheDocument();
+  });
+
+  it("a payload without photo_review (an older backend) still shows the asset map", async () => {
+    const older: Partial<typeof assetOverview> = { ...assetOverview };
+    delete older.photo_review;
+    renderOverview(older, [imagesRoute]);
+    await waitFor(() => expect(screen.getByTestId("asset-map")).toHaveAttribute("data-uncertain", ""));
+  });
+
   beforeEach(() => {
     useJobsStore.setState({ jobs: {} });
     useChangesStore.setState({ findingsRevision: 0, dataRevision: 0 });
