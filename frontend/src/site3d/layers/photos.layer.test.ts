@@ -9,6 +9,7 @@ import {
   PHOTOS_NO_CLOUD,
   PHOTOS_NO_FRAME,
   PHOTOS_OTHER_CRS,
+  PHOTOS_TRUNCATED,
   PHOTO_GLYPH_CAP,
   capIndices,
   createPhotosLayer,
@@ -89,6 +90,21 @@ describe("photos layer", () => {
     await waitFor(() => expect(layer.status.get().kind).toBe("ready"));
     expect(glyphs(scene).count).toBe(2000);
     expect(layer.status.get()).toEqual({ kind: "ready", note: "Showing 2,000 of 2,500 photos" });
+  });
+
+  it("says when the server cut the camera list, so the count is not the whole project", async () => {
+    const { layer } = setup({ ...cameras(2500), truncated: true });
+    await waitFor(() => expect(layer.status.get().kind).toBe("ready"));
+    expect(layer.status.get()).toEqual({
+      kind: "ready",
+      note: `Showing 2,000 of 2,500 photos; ${PHOTOS_TRUNCATED}`,
+    });
+  });
+
+  it("a cut list under the cap still says some photos were not listed", async () => {
+    const { layer } = setup({ ...cameras(3), truncated: true });
+    await waitFor(() => expect(layer.status.get().kind).toBe("ready"));
+    expect(layer.status.get()).toEqual({ kind: "ready", note: PHOTOS_TRUNCATED });
   });
 
   it("a photo with no gimbal angles points its glyph straight down", async () => {

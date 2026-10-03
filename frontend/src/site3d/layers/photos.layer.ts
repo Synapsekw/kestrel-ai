@@ -19,6 +19,8 @@ export const NO_PHOTOS = "No posed photos in this project.";
 export const PHOTOS_NO_FRAME = "Photos need the site's plant grid.";
 export const PHOTOS_NO_CLOUD = "Photos show once a point cloud is placed on the site.";
 export const PHOTOS_OTHER_CRS = "The photos' point cloud is in a different coordinate system from the site.";
+/** The server cut the camera list, so the counts below cover only the photos it sent. */
+export const PHOTOS_TRUNCATED = "Some photos were not listed.";
 const fmt = new Intl.NumberFormat("en-GB");
 
 /** The cloud whose cameras the scene's `photos.url` names (`…/pointclouds/{id}/cameras`), else null (Ruling 7). */
@@ -115,6 +117,7 @@ export function createPhotosLayer(o: {
       notes.push(`Showing ${fmt.format(shown.length)} of ${fmt.format(withZ.length)} photos`);
     const noZ = set.image_id.length - withZ.length;
     if (noZ > 0) notes.push(`${fmt.format(noZ)} without an altitude`);
+    if (set.truncated) notes.push(PHOTOS_TRUNCATED);
     status.set(notes.length ? { kind: "ready", note: notes.join("; ") } : { kind: "ready" });
     parts.requestRender();
   }

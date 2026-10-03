@@ -109,6 +109,41 @@ describe("water layer", () => {
     expect(layer.status.get()).toEqual({ kind: "ready", note: "Flat water (reduced effects)" });
   });
 
+  it("water time moves only by the frame time the engine passes in (Ruling 2)", () => {
+    const { engine, scene, camera } = fakeSiteEngine();
+    const layer = createWaterLayer(opts);
+    layer.attach(engine);
+    layer.setModel(plantRoot());
+    const u = ((scene.getObjectByName("site-water") as Water).material as THREE.ShaderMaterial).uniforms;
+    const before = u.time.value as number;
+    layer.update!(0.5, camera);
+    expect(u.time.value).toBeCloseTo(before + 0.5, 9);
+  });
+
+  it("under reduced motion water time never moves", () => {
+    document.documentElement.dataset.motion = "reduced";
+    try {
+      const { engine, scene, camera } = fakeSiteEngine();
+      const layer = createWaterLayer(opts);
+      layer.attach(engine);
+      layer.setModel(plantRoot());
+      const u = ((scene.getObjectByName("site-water") as Water).material as THREE.ShaderMaterial).uniforms;
+      const before = u.time.value as number;
+      layer.update!(0.5, camera);
+      expect(u.time.value).toBe(before);
+    } finally {
+      delete document.documentElement.dataset.motion;
+    }
+  });
+
+  it("flat water (reduced effects) takes a frame update without throwing", () => {
+    const { engine, camera } = fakeSiteEngine();
+    const layer = createWaterLayer({ ...opts, reduced: () => true });
+    layer.attach(engine);
+    layer.setModel(plantRoot());
+    expect(() => layer.update!(0.5, camera)).not.toThrow();
+  });
+
   it("off: the water hides and the model's own sea shows again; detach restores it too", () => {
     const { engine, scene } = fakeSiteEngine();
     const root = plantRoot();
