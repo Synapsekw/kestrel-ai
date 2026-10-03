@@ -146,6 +146,46 @@ def test_a_version_that_is_not_ready_is_the_not_ready_reason(handle, monkeypatch
         raise AppError("not_ready", "The 3D model for this version is not ready.", 409)
 
     monkeypatch.setattr("app.asset_review.meshes.load_version_mesh", not_ready)
-    with pytest.raises(SnapshotUnavailable) as e:
+    with asset_locator.allow_mesh_load(), pytest.raises(SnapshotUnavailable) as e:
         asset_locator.render(handle, _spec(new_id()))
     assert e.value.reason == asset_locator.NOT_READY
+
+
+def _count_loads(monkeypatch):
+    calls = []
+
+    def load(h, mid, version):
+        calls.append(mid)
+        return BOX, np.zeros(len(BOX.faces), np.int32)
+
+    monkeypatch.setattr("app.asset_review.meshes.load_version_mesh", load)
+    monkeypatch.setattr("app.asset_review.meshes.cached_version_mesh", lambda h, mid, version: None)
+    return calls
+
+
+def test_the_route_path_never_loads_a_cold_mesh(handle, monkeypatch):
+    calls = _count_loads(monkeypatch)
+    mid = new_id()
+    _glb(handle, mid)
+    result = render_mod.render_result(handle, _spec(mid))
+    assert result.missing_reason == asset_locator.NOT_DRAWN_YET
+    assert asset_locator.NOT_DRAWN_YET == "The 3D view is drawn when the report renders."
+    assert calls == []
+
+
+def test_the_route_path_draws_a_warm_mesh(handle, monkeypatch):
+    mid = new_id()
+    _glb(handle, mid)
+    monkeypatch.setattr(
+        "app.asset_review.meshes.cached_version_mesh",
+        lambda h, m, v: (BOX, np.zeros(len(BOX.faces), np.int32)),
+    )
+    assert render_mod.render_result(handle, _spec(mid)).missing_reason is None
+
+
+def test_the_job_path_loads_and_renders(handle, monkeypatch):
+    calls = _count_loads(monkeypatch)
+    mid = new_id()
+    _glb(handle, mid)
+    path = render_mod.render_to_cache(handle, _spec(mid))
+    assert calls == [mid] and path.suffix == ".jpg"

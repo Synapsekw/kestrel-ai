@@ -242,7 +242,8 @@ def render_result(handle, spec) -> SnapshotResult:
 
 def render_to_cache(handle, spec) -> Path:
     """The cached JPEG for `spec`, or the placeholder's; never raises for a bad source."""
-    return render_result(handle, spec).path
+    with asset_locator.allow_mesh_load():  # the job path may load a GLB; render_result alone may not
+        return render_result(handle, spec).path
 
 
 @functools.cache

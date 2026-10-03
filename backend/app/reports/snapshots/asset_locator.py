@@ -6,18 +6,35 @@ Nothing heavy loads at import: the snapshot dispatcher imports this module eager
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import math
 import struct
 
 import numpy as np
 
+from app.asset_models.raster import MAX_SIZE
 from app.reports.snapshots import MISSING, SnapshotUnavailable
 from app.surfaces.design.store import ID_RE
 
 JPEG_QUALITY = 88
+MAX_OUT = MAX_SIZE  # the rasterizer's own cap
 GONE = "The asset model version for this finding no longer exists"
 NOT_READY = "The asset model has no 3D model file for this version yet"
-MAX_OUT = 1024  # the rasterizer's own cap
+NOT_DRAWN_YET = "The 3D view is drawn when the report renders."
+_MAY_LOAD = contextvars.ContextVar("asset_locator_may_load", default=False)
+
+
+@contextlib.contextmanager
+def allow_mesh_load():
+    """The report job's render path: loading the GLB blocks, which a request thread must not do."""
+    token = _MAY_LOAD.set(True)
+    try:
+        yield
+    finally:
+        _MAY_LOAD.reset(token)
+
+
 MAX_PATCH_BYTES = 64 * 1024  # one patch file is read, never more than this
 
 
@@ -50,12 +67,12 @@ def source_version(handle, spec) -> str:
     if not glb.is_file():
         return MISSING + NOT_READY
     sv = _stamp(glb)
-    try:
-        patch = patch_bin(handle, spec)
-        if patch is not None and patch.is_file():
+    patch = patch_bin(handle, spec)
+    if patch is not None:
+        try:
             sv += "|" + _stamp(patch)
-    except Exception:
-        pass
+        except OSError:  # no patch file (yet): the render falls back to the pin
+            pass
     return sv
 
 
@@ -117,14 +134,19 @@ def patch_outline(path, direction) -> list[tuple[float, float, float]]:
 
 
 def _load_mesh(handle, model_id: str, version: int):
-    from app.asset_review.meshes import load_version_mesh  # J1: cached per process by GLB sha256
+    from app.asset_review.meshes import cached_version_mesh, load_version_mesh  # J1: one mesh per process
     from app.errors import AppError
 
     try:
-        mesh, _face_node = load_version_mesh(handle, model_id, version)
+        if _MAY_LOAD.get():
+            loaded = load_version_mesh(handle, model_id, version)
+        else:
+            loaded = cached_version_mesh(handle, model_id, version)  # a request never loads a GLB
     except (AppError, FileNotFoundError) as e:
         raise SnapshotUnavailable(NOT_READY) from e
-    return mesh
+    if loaded is None:
+        raise SnapshotUnavailable(NOT_DRAWN_YET)
+    return loaded[0]
 
 
 def _rgb(hex_colour: str) -> tuple[int, int, int]:
