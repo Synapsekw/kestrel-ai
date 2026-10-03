@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -56,6 +57,16 @@ SPECS["dolphin"] = TypeSpec(
     rect(7, 6), 93.56, 104.5, rect(7, 6), {"cap", "piles", "fender", "bollards"}, pad_xz=1.05, pad_y=0.8
 )
 # -- racks (task 4)
+SPECS["pipe_rack"] = TypeSpec(
+    line([[0, 0], [0, 30]], 6), 100.0, 106.0, rect(30, 6), {"columns", "beams", "bracing"},
+    pad_y=0.65, piped=True,
+)  # fmt: skip
+SPECS["overbridge"] = TypeSpec(
+    rect(9, 5), 100.0, 107.0, rect(9, 5), {"columns", "beams", "bracing"}, pad_y=0.65, piped=True
+)
+SPECS["pipe_sleeper"] = TypeSpec(
+    line([[0, 0], [0, 30]], 4), 100.0, 100.6, rect(30, 4), {"sleepers"}, pad_y=0.65, piped=True
+)
 # -- access (task 5)
 # -- platforms (task 6)
 TYPES = list(SPECS)
@@ -256,3 +267,120 @@ def test_jetty_bollards_are_optional_and_instanced():
 def test_bad_params_fall_back(params):
     _nodes, flags = build_item(case("trestle", params=params), CTX)
     assert [f.code for f in flags] == ["builder_fallback"]
+
+
+# ---------------------------------------------------------------- racks (task 4)
+def _pipe_centres_y(nodes) -> set[float]:
+    return {
+        round(float(xf[1, 3]), 3)
+        for n in nodes
+        if n.name.startswith("pipes_")
+        for xf in n.geometry.transforms
+    }
+
+
+def test_pipe_rack_bents_tiers_and_pipes():
+    nodes = build(case("pipe_rack"))
+    assert instances(nodes, "columns") == 12  # 6 bents over 30 m at 6 m, 2 columns each
+    for n in nodes:
+        if n.name.startswith("pipes_"):
+            assert isinstance(n.geometry, Instanced)
+    tiers = {4.0, 6.0}  # n_tiers 2, tier_gap 2 m, top of steel at 6 m
+    ys = _pipe_centres_y(nodes)
+    assert {min(tiers, key=lambda t: abs(t - y)) for y in ys} == tiers
+
+
+def test_pipe_rack_tiers_follow_levels():
+    ys = _pipe_centres_y(build(case("pipe_rack", levels=[102.0, 104.0, 106.0])))
+    tiers = {2.0, 4.0, 6.0}
+    assert {min(tiers, key=lambda t: abs(t - y)) for y in ys} == tiers
+    assert all(any(0 < y - t <= 0.31 for t in tiers) for y in ys)  # pipe centre = tier + d / 2
+
+
+def test_pipe_rack_explicit_lines_replace_the_fill():
+    lines = [{"d_m": 0.8, "tier": 1, "insulated": True, "count": 3}]
+    pipes = [n for n in build(case("pipe_rack", params={"lines": lines})) if n.name.startswith("pipes_")]
+    assert [(n.name, n.material, len(n.geometry.transforms)) for n in pipes] == [
+        ("pipes_ins_800", "Pipe_Insulated", 3)
+    ]
+    assert not [
+        n for n in build(case("pipe_rack", params={"pipe_fill": False})) if n.name.startswith("pipes_")
+    ]
+
+
+def test_rack_bracing_modes():
+    def bracing_faces(mode):
+        nodes = build(case("pipe_rack", params={"bracing": mode}))
+        hit = [n for n in nodes if n.name == "bracing"]
+        return len(hit[0].geometry.faces) if hit else 0
+
+    assert bracing_faces("end_bays") == 2 * 2 * 2 * 8  # 2 end bays x 2 column lines x X (2 members)
+    assert bracing_faces("all") == 5 * 2 * 2 * 8
+    assert bracing_faces("none") == 0
+
+
+def test_overbridge_is_two_portals_with_pipes_along_the_span():
+    nodes = build(case("overbridge"))
+    assert instances(nodes, "columns") == 4
+    xf = next(n for n in nodes if n.name.startswith("pipes_")).geometry.transforms[0]
+    axis = xf[:3, :3] @ [0, 1, 0]
+    assert abs(axis[0]) == pytest.approx(9.0, abs=1e-6)  # pipes run the 9 m span (north)
+
+
+def test_sleepers_cross_the_band_at_spacing():
+    nodes = build(case("pipe_sleeper"))
+    assert instances(nodes, "sleepers") == 6  # 30 m at 6 m, 0.25 m in from each end
+    v = expand(nodes)["sleepers"].vertices
+    assert np.ptp(v[:, 2]) == pytest.approx(4.0)  # full band width across (east)
+
+
+def test_rot_90_swaps_the_plan_extents():
+    a = all_vertices(build(case("pipe_rack", footprint=rect(30, 6))))
+    b = all_vertices(build(case("pipe_rack", footprint=rect(30, 6, rot=90))))
+    ea, eb = np.ptp(a, axis=0), np.ptp(b, axis=0)
+    assert ea[0] == pytest.approx(eb[2], abs=0.05) and ea[2] == pytest.approx(eb[0], abs=0.05)
+    assert ea[0] > 29 and eb[2] > 29  # rot 0 runs north (x); rot 90 runs east (z)
+
+
+def _dist_to_polyline(p, pts) -> float:
+    best = math.inf
+    for a, b in zip(pts[:-1], pts[1:], strict=True):
+        ab = b - a
+        t = np.clip((p - a) @ ab / (ab @ ab), 0, 1)
+        best = min(best, float(np.linalg.norm(p - (a + t * ab))))
+    return best
+
+
+@pytest.mark.parametrize(
+    ("type_", "member"), [("pipe_rack", "columns"), ("trestle", "piles"), ("pipe_sleeper", "sleepers")]
+)
+def test_line_footprint_follows_the_polyline(type_, member):
+    pts = [[0, 0], [0, 40], [30, 70]]
+    width = SPECS[type_].footprint["width"]
+    it = case(type_, footprint=line(pts, width))
+    loc = k.local_pts(it, CTX, pts)
+    centres = node(build(it), member).geometry.transforms[:, [0, 2], 3]
+    assert all(_dist_to_polyline(c, loc) <= width / 2 + 1e-6 for c in centres)
+    for leg in ((loc[0] + loc[1]) / 2, (loc[1] + loc[2]) / 2):  # both legs carry members
+        assert min(np.linalg.norm(centres - leg, axis=1)) < 8.0
+    if type_ == "pipe_rack":  # the shared corner column is not doubled
+        d = np.linalg.norm(centres[:, None] - centres[None], axis=2) + np.eye(len(centres)) * 1e9
+        assert d.min() >= 0.1
+
+
+def test_zero_length_line_raises_and_build_item_falls_back():
+    it = case("pipe_rack", footprint=line([[5, 5], [5, 5]], 6))
+    with pytest.raises(ValueError):
+        build(it)
+    _nodes, flags = build_item(it, CTX)
+    assert [f.code for f in flags] == ["builder_fallback"]
+
+
+def test_a_three_km_polyline_builds_quickly():
+    pts = [[i * 50.0, (i % 2) * 5.0] for i in range(61)]  # 3 km zig-zag, 60 legs
+    for type_ in ("pipe_rack", "trestle"):
+        it = case(type_, footprint=line(pts, SPECS[type_].footprint["width"]))
+        t0 = time.perf_counter()
+        nodes = build(it)
+        assert time.perf_counter() - t0 < 5.0, type_
+        assert k.triangles(nodes) < 200_000, type_

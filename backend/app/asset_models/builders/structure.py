@@ -303,3 +303,164 @@ def build_dolphin(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         xf = k.translate(np.array([k.xz(run.at(t, 0.0), h) for t in ts_b]))
         nodes.append(MeshNode("bollards", "Steel_Dark", Instanced(bol, xf)))
     return _stamp(nodes, p, dflt)
+
+
+# ---------------------------------------------------------------- racks, sleepers, overbridges
+class PipeRackParams(_P):
+    bent_spacing_m: float = Field(6.0, gt=1, le=30)
+    columns_across: int = Field(2, ge=1, le=6)
+    n_tiers: int = Field(2, ge=1, le=6, description="used when levels is empty")
+    tier_gap_m: float = Field(2.0, gt=0.3, le=10)
+    column_section_m: float = Field(0.35, gt=0.05, le=2)
+    beam_depth_m: float = Field(0.35, gt=0.05, le=2)
+    bracing: Literal["none", "end_bays", "all"] = "end_bays"
+    lines: list[RackLine] = Field(default_factory=list, max_length=200)
+    pipe_fill: bool = Field(True, description="draw indicative pipes when lines is empty")
+
+
+def _tiers(item: Item, base: float, h: float, n: int, gap: float) -> list[float]:
+    ys = _levels(item, base, h)
+    if not ys:
+        ys = [h - gap * i for i in range(n)]
+        ys = sorted(y for y in ys if y > 0.5) or [h]
+    if abs(ys[-1] - h) > 1e-6:
+        ys = sorted(set(ys) | {h})
+    return ys
+
+
+def _rack(item, ctx, p, base, h, bent_spacing, bracing, knee=False):
+    tiers = _tiers(item, base, h, p.n_tiers, p.tier_gap_m)
+    c, bd = p.column_section_m, p.beam_depth_m
+    cols, cross, longs, braces, lines = [], [], [], [], []
+    for run in k.runs(item, ctx):
+        ss = (
+            np.linspace(-run.width / 2 + c / 2, run.width / 2 - c / 2, p.columns_across)
+            if p.columns_across > 1
+            else np.zeros(1)
+        )
+        ts = k.stations(run.length, bent_spacing, c / 2)
+        cols += [(run.at(t, s), run.u) for t in ts for s in ss]
+        for t in ts:
+            for y in tiers:
+                cross.append(
+                    k.member(
+                        k.xz(run.at(t, ss[0] - c / 2), y - bd / 2),
+                        k.xz(run.at(t, ss[-1] + c / 2), y - bd / 2),
+                        c,
+                        bd,
+                    )
+                )
+        for s in ss:
+            for y in tiers:
+                longs.append(
+                    k.member(
+                        k.xz(run.at(0, s), y - bd / 2),
+                        k.xz(run.at(run.length, s), y - bd / 2),
+                        0.25,
+                        bd * 0.8,
+                    )
+                )
+        bays = list(zip(ts[:-1], ts[1:], strict=True))
+        pick = (
+            bays
+            if bracing == "all"
+            else (sorted({bays[0], bays[-1]}) if bracing == "end_bays" and bays else [])
+        )
+        for t0, t1 in pick:
+            for s in ss:
+                braces.append(k.member(k.xz(run.at(t0, s), FOOT), k.xz(run.at(t1, s), tiers[0] - bd), 0.15))
+                braces.append(k.member(k.xz(run.at(t1, s), FOOT), k.xz(run.at(t0, s), tiers[0] - bd), 0.15))
+        if knee:
+            for t, dt in ((ts[0], 1.0), (ts[-1], -1.0)):
+                for s in ss:
+                    braces.append(
+                        k.member(
+                            k.xz(run.at(t, s), tiers[-1] - 1.2), k.xz(run.at(t + dt, s), tiers[-1] - bd), 0.15
+                        )
+                    )
+        for d, ins, y, s in _fill_lines(run.width - 2 * c, tiers, p.lines, p.pipe_fill):
+            lines.append((d, ins, k.xz(run.at(0, s), y + d / 2), k.xz(run.at(run.length, s), y + d / 2)))
+    keep = k.dedupe_index(np.array([q for q, _ in cols]), 0.1)
+    col = k.column_mesh(tiers[-1], c)
+    xf = np.concatenate([k.posed(k.xz(cols[i][0], 0.0)[None], cols[i][1]) for i in keep])
+    nodes = [
+        MeshNode("columns", "Steel_Structure", Instanced(col, xf)),
+        MeshNode("beams", "Steel_Structure", k.merge(cross + longs)),
+    ]
+    if braces:
+        nodes.append(MeshNode("bracing", "Steel_Structure", k.merge(braces)))
+    nodes += k.pipe_nodes(lines, ctx)
+    return nodes
+
+
+RACK_DOC = (
+    "Steel pipe rack: column bents at bent spacing, a cross beam per tier per bent, longitudinal beams, "
+    "bracing in the end bays, and pipes along the rack (params.lines, or an indicative fill). "
+    "Footprint: line (centreline + rack width; preferred), rect or polygon (long axis). base_el = grade; "
+    "top_el = top of steel of the highest tier; levels = tier elevations (top of steel)."
+)
+
+
+@builder("pipe_rack", family="structure", params=PipeRackParams, doc=RACK_DOC, default_height_m=6.0)
+def build_pipe_rack(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = PipeRackParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 6.0)
+    nodes = _rack(item, ctx, p, base, top_el - base, p.bent_spacing_m, p.bracing)
+    return _stamp(nodes, p, dflt)
+
+
+class OverbridgeParams(_P):
+    columns_across: int = Field(2, ge=2, le=4)
+    n_tiers: int = Field(2, ge=1, le=4)
+    tier_gap_m: float = Field(1.5, gt=0.3, le=6)
+    column_section_m: float = Field(0.35, gt=0.05, le=2)
+    beam_depth_m: float = Field(0.35, gt=0.05, le=2)
+    lines: list[RackLine] = Field(default_factory=list, max_length=100)
+    pipe_fill: bool = True
+
+
+OVERBRIDGE_DOC = (
+    "Pipe overbridge over a road: two portal frames at the ends of the span with knee braces, cross and "
+    "longitudinal beams per tier, pipes along the span. Footprint: rect (along = span direction) or line "
+    "(span centreline + width). base_el = grade; top_el = top of steel; levels = tier elevations."
+)
+
+
+@builder("overbridge", family="structure", params=OverbridgeParams, doc=OVERBRIDGE_DOC, default_height_m=7.0)
+def build_overbridge(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = OverbridgeParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 7.0)
+    nodes = _rack(item, ctx, p, base, top_el - base, 1e6, "none", knee=True)
+    return _stamp(nodes, p, dflt)
+
+
+class PipeSleeperParams(_P):
+    sleeper_spacing_m: float = Field(6.0, gt=0.5, le=30)
+    sleeper_width_m: float = Field(0.5, gt=0.1, le=3)
+    lines: list[RackLine] = Field(default_factory=list, max_length=200)
+    pipe_fill: bool = True
+
+
+SLEEPER_DOC = (
+    "Pipe sleeper band at grade: concrete sleepers across the band at spacing, pipes running along on "
+    "top. Footprint: line (centreline + band width; preferred) or rect. base_el = grade; top_el = top of "
+    "sleepers (pipes rest on it)."
+)
+
+
+@builder("pipe_sleeper", family="structure", params=PipeSleeperParams, doc=SLEEPER_DOC, default_height_m=0.6)
+def build_pipe_sleeper(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = PipeSleeperParams.model_validate(item.params)
+    base, top_el, dflt = ctx.height(item, 0.6)
+    h = top_el - base
+    xf, lines = [], []
+    rs = k.runs(item, ctx)
+    width = rs[0].width
+    for run in rs:
+        for t in k.stations(run.length, p.sleeper_spacing_m, p.sleeper_width_m / 2):
+            xf.append(k.posed(k.xz(run.at(t), h / 2)[None], run.v)[0])
+        for d, ins, _y, s in _fill_lines(run.width - 0.2, [h], p.lines, p.pipe_fill):
+            lines.append((d, ins, k.xz(run.at(0, s), h + d / 2), k.xz(run.at(run.length, s), h + d / 2)))
+    sl = k.block((width, h, p.sleeper_width_m))
+    nodes = [MeshNode("sleepers", "Concrete", Instanced(sl, np.array(xf)))] + k.pipe_nodes(lines, ctx)
+    return _stamp(nodes, p, dflt)
