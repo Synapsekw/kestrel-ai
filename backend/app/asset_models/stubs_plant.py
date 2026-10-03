@@ -24,10 +24,9 @@ R1_STUBS: list[Stub] = [
     ("GET", M + "/runs/{runId}/packages", "listAssetModelRunPackages"),
 ]
 
-# S1: the Site 3D manifest (spec §10, §11).
-S1_STUBS: list[Stub] = [
-    ("GET", "/site-scene", "getSiteScene"),
-]
+# S1: the Site 3D manifest (spec §10, §11). Built: `GET /site-scene` is routed by
+# `app.asset_models.site_scene`. The empty list stays so per-unit tests can still name it.
+S1_STUBS: list[Stub] = []
 
 STUBS: list[Stub] = [*A1_STUBS, *R1_STUBS, *S1_STUBS]
 
