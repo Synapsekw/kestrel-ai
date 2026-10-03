@@ -119,4 +119,34 @@ describe("FindingsTopic", () => {
     expect(h.setPlacements).toHaveBeenCalledTimes(1);
     expect(h.setPlacements.mock.calls[0]?.[0]).toHaveLength(2);
   });
+
+  it("sends the placements again when a reload moves a centre under the same ids", async () => {
+    let loads = 0;
+    const { api } = fakeClient([
+      { method: "GET", path: /\/findings$/, body: { items: ASSET_FINDINGS, next_cursor: null } },
+      {
+        method: "GET",
+        path: /\/placements$/,
+        body: () => {
+          loads += 1;
+          const moved = loads > 1;
+          return {
+            ...PLACEMENTS,
+            items: PLACEMENTS.items.map((p) => ({ ...p, center: moved ? [11, 12.4, -3] : p.center })),
+          };
+        },
+      },
+    ] as never);
+    const h = handle();
+    function Reloader() {
+      const viewer = useRef<ModelViewerHandle | null>(h);
+      const layer = useFindingsLayer({ projectId: PROJECT_ID, model: MODEL_REVIEWED, viewer });
+      return <button onClick={layer.reload}>reload</button>;
+    }
+    renderWithProviders(<Reloader />, { api, route: `/p/${PROJECT_ID}/models/m1` });
+    await waitFor(() => expect(h.setPlacements).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "reload" }));
+    await waitFor(() => expect(h.setPlacements).toHaveBeenCalledTimes(2));
+    expect(h.setPlacements.mock.calls[1]?.[0][0].center).toEqual([11, 12.4, -3]);
+  });
 });

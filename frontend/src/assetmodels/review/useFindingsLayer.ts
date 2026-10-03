@@ -27,10 +27,24 @@ export interface FindingsLayer {
   push(): void;
 }
 
-const sameItems = (a: readonly PlacementItem[], b: readonly PlacementItem[]) =>
+const sameVec = (a: readonly number[] | null, b: readonly number[] | null) =>
+  a === b || (a !== null && b !== null && a.length === b.length && a.every((x, i) => x === b[i]));
+
+// Every field the viewer reads: a reload that moves a centre or flips has_patch must push again.
+const samePlacement = (a: PlacementItem, b: PlacementItem) =>
   a === b ||
-  (a.length === b.length &&
-    a.every((p, i) => p.sightingId === b[i]?.sightingId && p.colour === b[i]?.colour));
+  (a.sightingId === b.sightingId &&
+    a.findingId === b.findingId &&
+    a.kind === b.kind &&
+    a.size === b.size &&
+    a.severity === b.severity &&
+    a.colour === b.colour &&
+    a.hasPatch === b.hasPatch &&
+    sameVec(a.center, b.center) &&
+    sameVec(a.normal, b.normal));
+
+const sameItems = (a: readonly PlacementItem[], b: readonly PlacementItem[]) =>
+  a === b || (a.length === b.length && a.every((p, i) => samePlacement(p, b[i]!)));
 
 export function useFindingsLayer(o: {
   projectId: string;
