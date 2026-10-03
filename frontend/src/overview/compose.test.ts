@@ -35,7 +35,13 @@ describe("composeOverview", () => {
   });
 
   it("asset hero alone: the findings map spans both side rows", () => {
-    const f = { ...everything, heroKind: "asset_model" as const, hasAssetMap: true, hasCloud: false, hasSite: false };
+    const f = {
+      ...everything,
+      heroKind: "asset_model" as const,
+      hasAssetMap: true,
+      hasCloud: false,
+      hasSite: false,
+    };
     expect(pane(f, "assetMap")).toEqual({ id: "assetMap", col: "9 / -1", row: "2 / span 2" });
   });
 
