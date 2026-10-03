@@ -2,9 +2,9 @@ import { createContext, useContext } from "react";
 import type { SnapshotRef } from "@/api/reports";
 import type { PaperSize } from "../printTheme";
 
-/** A brand's cover look (spec 2026-10-02-asset-findings §9): built by coverBrandOf from D2's overlay. */
+/** A brand's cover look (spec 2026-10-02-asset-findings Â§9): built by coverBrandOf from D2's overlay. */
 export interface CoverBrand {
-  /** Three hex stops for the band's 135° gradient. */
+  /** Three hex stops for the band's 135Â° gradient. */
   gradient: readonly string[];
   /** The brand's text font family, or null for the theme font. */
   fontFamily: string | null;

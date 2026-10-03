@@ -174,7 +174,7 @@ describe("CoverBlock (Ruling R-6)", () => {
   });
 });
 
-describe("CoverBlock with a brand (spec 2026-10-02-asset-findings ง9 brand editor preview)", () => {
+describe("CoverBlock with a brand (spec 2026-10-02-asset-findings ยง9 brand editor preview)", () => {
   const branded =
     (
       brand: { gradient: string[]; fontFamily: string | null; logoSrc: string | null },
@@ -190,7 +190,11 @@ describe("CoverBlock with a brand (spec 2026-10-02-asset-findings ง9 brand edito
 
   it("paints the band in the brand gradient and sets the title font", () => {
     const { container } = render(<CoverBlock block={cover} />, {
-      wrapper: branded({ gradient: ["#141D2D", "#141D2D", "#9E0000"], fontFamily: "Nunito Sans", logoSrc: null }),
+      wrapper: branded({
+        gradient: ["#141D2D", "#141D2D", "#9E0000"],
+        fontFamily: "Nunito Sans",
+        logoSrc: null,
+      }),
     });
     const band = container.querySelector("[data-cover-band]") as HTMLElement;
     expect(band.style.background).toContain("rgb(20, 29, 45)");
@@ -201,7 +205,11 @@ describe("CoverBlock with a brand (spec 2026-10-02-asset-findings ง9 brand edito
 
   it("shows the brand logo and hides it when it fails to load", () => {
     render(<CoverBlock block={cover} />, {
-      wrapper: branded({ gradient: ["#000000", "#000000", "#000000"], fontFamily: null, logoSrc: "brand://dark" }),
+      wrapper: branded({
+        gradient: ["#000000", "#000000", "#000000"],
+        fontFamily: null,
+        logoSrc: "brand://dark",
+      }),
     });
     const img = screen.getByRole("img", { name: "Brand logo" });
     expect(img).toHaveAttribute("src", "brand://dark");

@@ -8,7 +8,7 @@ import { KvBlock } from "./KvBlock";
 /**
  * The cover section's one block (spec §7.1, Ruling R-6): a full-bleed gradient band with the title,
  * subtitle and (when resolvable) the logo, in the report's brand when the preview has one
- * (spec 2026-10-02-asset-findings �9), then the rows and the site locator inside the page margins.
+ * (spec 2026-10-02-asset-findings §9), then the rows and the site locator inside the page margins.
  * The sheet gives this block no padding of its own — it lays out the band and margins itself.
  */
 export function CoverBlock({ block }: { block: BlockOf<"cover"> }) {
@@ -36,11 +36,24 @@ export function CoverBlock({ block }: { block: BlockOf<"cover"> }) {
           padding: mm(PRINT.margin),
         }}
       >
-        <p style={{ ...textStyle(PRINT.size.coverTitle, PRINT.paper), fontWeight: 600, margin: 0, fontFamily: titleFont }}>
+        <p
+          style={{
+            ...textStyle(PRINT.size.coverTitle, PRINT.paper),
+            fontWeight: 600,
+            margin: 0,
+            fontFamily: titleFont,
+          }}
+        >
           {block.title}
         </p>
         {block.subtitle ? (
-          <p style={{ ...textStyle(PRINT.size.coverSubtitle, PRINT.paper), margin: `${mm(2)} 0 0`, fontFamily: titleFont }}>
+          <p
+            style={{
+              ...textStyle(PRINT.size.coverSubtitle, PRINT.paper),
+              margin: `${mm(2)} 0 0`,
+              fontFamily: titleFont,
+            }}
+          >
             {block.subtitle}
           </p>
         ) : null}
