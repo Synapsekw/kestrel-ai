@@ -4,7 +4,10 @@
 - `packages/<n>.json`: a finished package's items;
 - `merged.json`: the merged item list once merge has run.
 
-The spec data only; never prompts, model text, keys or paths."""
+Never prompts, the conversations, keys or paths. Some fields do hold short model-written text the
+resumed run needs: `packages_meta` briefs (from plan_packages), `questions` (from the tools and the
+packages' open questions) and the spec data itself (item names, notes). These files stay in the
+project's run folder and never go to a log."""
 
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ class PlantState:
     limits: dict = field(default_factory=dict)
     package_ids: list[str] = field(default_factory=list)  # plant_package: the packages being redone
     base_version: int | None = None
-    questions: list[str] = field(default_factory=list)  # open questions raised by tools (app text)
+    questions: list[str] = field(default_factory=list)  # open questions: tool text and packages' (model text)
     notes: list[str] = field(default_factory=list)  # app-written run notes (cloud check skipped, ...)
     fix_rounds: int = 0
     candidates: list[dict] = field(default_factory=list)
