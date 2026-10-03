@@ -37,7 +37,8 @@ class PumpGroupParams(Params):
 DOC_PUMP = (
     "Pump. horizontal: plinth, baseplate, volute casing with suction and discharge, coupling guard, "
     "motor (or diesel engine + radiator) along the footprint's long axis. column: vertical can/roof "
-    "pump head with motor on top (circle footprint). vertical_inline: inline body with motor above. "
+    "pump head with motor on top (circle or near-square footprint). vertical_inline: inline body "
+    "with motor above. "
     "top_el = discharge or motor top."
 )
 DOC_GROUP = (
@@ -174,7 +175,8 @@ def build_pump(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     p = k.params(item, PumpParams)
     plan = k.plan_of(item, ctx)
     H, _ = k.height(item, ctx, H_PUMP)
-    kind = p.kind if p.kind != "auto" else ("column" if plan.is_round else "horizontal")
+    squat = plan.is_round or plan.along / plan.across < 1.3  # round or near-square plan: a column pump
+    kind = p.kind if p.kind != "auto" else ("column" if squat else "horizontal")
     nodes = pump_unit(kind, p.driver, plan.along, plan.across, H, ctx, plinth=p.plinth)
     return k.finish(
         k.turn(nodes, plan.place()), item, p, {"kind": kind, "along_m": plan.along, "across_m": plan.across}

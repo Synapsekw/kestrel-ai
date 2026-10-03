@@ -550,6 +550,8 @@ def test_builds_clean_nodes(cid):
         assert n.material in PALETTE, (n.name, n.material)
         m = expanded(n.geometry)
         assert len(m.faces) > 0 and np.isfinite(m.vertices).all(), n.name
+        g = n.geometry
+        assert (g.mesh if isinstance(g, Instanced) else g).is_watertight, n.name
     missing = CASES[cid].parts - set(names)
     assert not missing, missing
 
@@ -680,6 +682,29 @@ def test_storage_tank_small_form_follows_the_footprint():
     assert built("storage_tank_small_horizontal")[0].extras["derived"]["form"] == "horizontal"
 
 
+@pytest.mark.parametrize(
+    "footprint",
+    [
+        rect(10.6, 10.6),
+        poly(
+            [
+                (C[0] + 10.0 * math.sin(2 * math.pi * i / 16), C[1] + 10.0 * math.cos(2 * math.pi * i / 16))
+                for i in range(16)
+            ]
+        ),
+    ],
+)
+def test_storage_tank_small_near_square_footprint_stands_vertical(footprint):
+    nodes = REGISTRY["storage_tank_small"].fn(make_item("storage_tank_small", footprint, h=10.0), CTX)
+    assert nodes[0].extras["derived"]["form"] == "vertical"
+    assert {"foundation", "shell", "roof"} <= {n.name for n in nodes}
+
+
+def test_pump_near_square_footprint_is_a_column_pump():
+    nodes = REGISTRY["pump"].fn(make_item("pump", rect(1.6, 1.5), h=2.0), CTX)
+    assert nodes[0].extras["derived"]["kind"] == "column"
+
+
 def test_storage_tank_small_roof_posts_are_instanced():
     posts = next(n for n in built("storage_tank_small") if n.name == "roof_posts").geometry
     assert isinstance(posts, Instanced) and len(posts.transforms) >= 20
@@ -782,7 +807,7 @@ def test_pump_group_max_units_stays_inside():  # Review Focus 5
     lo, hi = bounds(nodes)
     assert lo[0] >= -1.5 - 0.05 and hi[0] <= 1.5 + 0.05
     assert lo[2] >= -1.0 - 0.05 and hi[2] <= 1.0 + 0.05
-    assert tris(nodes) <= 24 * 800
+    assert tris(nodes) <= 6000  # the plan's pump_group ceiling
 
 
 def test_pump_engine_driver_has_engine_and_radiator():
@@ -1077,6 +1102,15 @@ def test_pedestal_crane_boom_short_of_the_top_is_refused(params):
     it = make_item("crane", circle(2.0), h=12.0, params={"kind": "pedestal", **params})
     with pytest.raises(ValueError, match="top_el"):
         REGISTRY["crane"].fn(it, CTX)
+
+
+@pytest.mark.parametrize("h", [25.0, 30.0])
+def test_tall_pedestal_crane_with_default_reach_lengthens_its_boom(h):
+    it = make_item("crane", circle(2.0), h=h, params={"kind": "pedestal"})
+    nodes, flags = build_item(it, CTX)
+    assert not [f for f in flags if f.code == "builder_fallback"]
+    assert abs(bounds(nodes)[1][1] - h) <= max(0.05 * h, 0.5)
+    assert nodes[0].extras["derived"]["reach_m"] > 7.0
 
 
 def test_monitor_lattice_stands_on_grade_with_its_ladder_on_a_face():

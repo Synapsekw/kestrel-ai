@@ -34,9 +34,10 @@ class StorageTankSmallParams(Params):
 
 
 DOC_STS = (
-    "Small storage tank. Vertical form (circle footprint = shell OD): concrete ring foundation, shell, "
-    "cone/dome/flat roof, roof-edge handrail and a ladder. Horizontal form (rect footprint): cylindrical "
-    "tank on two saddles inside a low concrete bund. top_el = roof crown or handrail top."
+    "Small storage tank. Vertical form (circle or near-square footprint; D = shorter side): "
+    "concrete ring foundation, shell, cone/dome/flat roof, roof-edge handrail and a ladder. "
+    "Horizontal form (elongated footprint): cylindrical tank on two saddles inside a low concrete "
+    "bund. top_el = roof crown or handrail top."
 )
 
 
@@ -51,7 +52,8 @@ def build_storage_tank_small(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     p = k.params(item, StorageTankSmallParams)
     plan = k.plan_of(item, ctx)
     H, _ = k.height(item, ctx, H_STS)
-    form = p.form if p.form != "auto" else ("vertical" if plan.is_round else "horizontal")
+    squat = plan.is_round or plan.along / plan.across < 1.3  # round or near-square plan: stands upright
+    form = p.form if p.form != "auto" else ("vertical" if squat else "horizontal")
     if form == "vertical":
         nodes, derived = _vertical(p, plan, H, ctx)
     else:

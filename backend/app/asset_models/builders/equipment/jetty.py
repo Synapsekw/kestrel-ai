@@ -49,7 +49,8 @@ DOC_ARM = (
 )
 DOC_CRANE = (
     "Crane. jib: pillar jib crane (mast, horizontal jib with knee brace, hoist and hook) - the tank-roof and "
-    "platform cranes. pedestal: pedestal crane with cab and luffed boom. Footprint: circle = mast base."
+    "platform cranes. pedestal: pedestal crane with cab and luffed boom (reach_m left default: the boom "
+    "tip is sized to top_el). Footprint: circle = mast base."
 )
 DOC_MON = (
     "Elevated fire water monitor: red column or lattice tower, grating platform with handrail, "
@@ -152,7 +153,9 @@ def build_crane(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         b0 = np.array([0.4 * rm, hp + 0.8, 0.0])
         b = math.radians(p.boom_up_deg)
         lb = reach / math.cos(b)
-        if b0[1] + lb * math.sin(b) > H - 0.2 and math.sin(b) > 1e-3:
+        # a boom past the top is shortened; with reach_m defaulted, a short one is lengthened to the top
+        too_long = b0[1] + lb * math.sin(b) > H - 0.2
+        if (too_long or "reach_m" not in item.params) and math.sin(b) > 1e-3:
             lb = (H - 0.2 - b0[1]) / math.sin(b)
             reach = lb * math.cos(b)
         tip = b0 + lb * np.array([math.cos(b), math.sin(b), 0.0])

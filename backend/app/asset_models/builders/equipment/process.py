@@ -42,7 +42,7 @@ DOC_HEATER = (
 DOC_ORV = (
     "Open rack vaporizer: concrete pad and sea-water trough, a bank of aluminium heat-exchange panels "
     "across the long axis, top distribution troughs, LNG inlet and NG outlet headers, a side stair and a "
-    "top walkway."
+    "top walkway. Needs a footprint at least ~7.2 m wide (the side walkway lane)."
 )
 DOC_SCV = (
     "Submerged combustion vaporizer: pad, water bath tank with handrailed top and ladder, combustion air "
