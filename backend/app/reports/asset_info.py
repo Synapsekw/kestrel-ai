@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.asset_review.frame import Frame
 from app.asset_review.profiles import ReviewConfig
@@ -74,8 +74,7 @@ def representative(s, finding_id: str) -> FindingSighting | None:
             FindingSighting.severity.is_(None),
             FindingSighting.severity.desc(),
             FindingSighting.placement.not_in(PLACED),
-            FindingSighting.coverage.is_(None),
-            FindingSighting.coverage.desc(),
+            func.coalesce(FindingSighting.coverage, 0.0).desc(),  # None is 0, as in sightings.sort_key
             FindingSighting.created_at,
             FindingSighting.id,
         )

@@ -4,7 +4,8 @@ sighting, the extra WHERE and the observed date and label of `asset_model` findi
 from reports_asset_rows import T0, add_asset_finding, add_asset_image, add_asset_model
 from reports_rows import add_type, config, ctx_for
 
-from app.db.models import Finding
+from app.db.models import Finding, FindingSighting
+from app.findings.sightings import sort_key
 from app.reports.asset_info import ASSET, NOT_PLACED, representative
 from app.reports.context import count_findings, findings_page
 
@@ -64,6 +65,26 @@ def test_the_representative_is_worst_then_placed_then_largest(handle):
     )
     with handle.session() as s:
         assert representative(s, fid).id == "s-c"
+
+
+def test_the_representative_reads_no_coverage_as_zero_like_the_findings_sort(handle):
+    """findings/sightings.sort_key treats a None coverage as 0: a tie then goes to the older one."""
+    crack = add_type(handle, "crack")
+    mid, _, _ = add_asset_model(handle)
+    a, b = (add_asset_image(handle, name=f"DJI_000{i}.JPG") for i in (1, 2))
+    fid = add_asset_finding(
+        handle,
+        mid,
+        crack,
+        sightings=[
+            {"image_id": a, "center": (0.0, 1.0, 0.0), "id": "s-old"},
+            {"image_id": b, "center": (0.0, 2.0, 0.0), "coverage": 0.0, "id": "s-new"},
+        ],
+    )
+    with handle.session() as s:
+        rows = s.query(FindingSighting).filter(FindingSighting.finding_id == fid).all()
+        assert min(rows, key=sort_key).id == "s-old"
+        assert representative(s, fid).id == "s-old"
 
 
 def test_an_extra_where_narrows_the_page_and_the_count(handle):
