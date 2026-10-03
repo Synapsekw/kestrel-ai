@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.asset_models import store
+from app.asset_models.agent.plant import PLANT_MODES
 from app.asset_models.service import add_version, refresh_status
 from app.asset_models.spec import AssetSpec
 from app.db.models import AssetModel, AssetModelRun, AssetModelVersion
@@ -29,12 +30,19 @@ def sweep_interrupted(handle, runner) -> None:
 
 
 def _sweep_runs(handle, runner) -> None:
-    """A run still `running` whose job is gone was cut off: fail it, unstick its model, and keep what
-    the agent had built as a draft. Nothing here may stop the app from opening."""
+    """A run still `running` whose job is gone was cut off. Plant runs resume (spec 2026-10-03 §8.4);
+    M1 runs fail, unstick their model, and keep what the agent had built as a draft. Nothing here may
+    stop the app from opening."""
+    try:
+        from app.asset_models.agent.plant.resume import sweep_plant_runs
+
+        sweep_plant_runs(handle, runner)
+    except Exception as e:  # noqa: BLE001
+        log.error("plant run resume sweep failed (%s)", type(e).__name__)
     interrupted = []
     with handle.session() as s:
         for run in s.scalars(select(AssetModelRun).where(AssetModelRun.state == "running")):
-            if runner.is_live(run.job_id):
+            if run.mode in PLANT_MODES or runner.is_live(run.job_id):
                 continue
             run.state, run.stop_reason, run.summary, run.phase = "failed", "interrupted", INTERRUPTED, "done"
             run.ended_at = datetime.now(UTC)

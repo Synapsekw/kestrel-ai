@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.db.base import utcnow
 from app.db.models import Drawing
-from app.drawings import detect, footprint, pages, service, site, store, unimported, vtiles
+from app.drawings import detect, footprint, georef_service, pages, service, site, store, unimported, vtiles
 from app.drawings import georef as fitting
 from app.drawings import jobs as _jobs  # noqa: F401 - registers `drawing_import`
 from app.drawings import placement as placing
@@ -345,39 +345,9 @@ def put_drawing_georef(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> DrawingOut:
-    with handle.session() as s:
-        service.require(s, drawingId)
-    frame = site.current_frame(handle)
-    with handle.session() as s:
-        row = service.require(s, drawingId)
-        if row.status != "ready":
-            raise AppError("not_ready", "the drawing is still importing or failed", 409)
-        units_scale = unit_to_m(row.units) if row.format in VECTOR and row.units else None
-        f = _fit(body.model, body.points, dst_unit_m=site.frame_unit_m(frame), units_scale=units_scale)
-        fit_json = f.to_json()
-        row.georef = {
-            "method": "control_points",
-            "crs_wkt": None,
-            "epsg": None,
-            "model": body.model,
-            "points": [
-                {"id": p.id or f"p{i + 1}", "src": p.src, "dst": p.dst} for i, p in enumerate(body.points)
-            ],
-            "dst_crs_wkt": frame.crs_wkt,
-            "transform": fit_json["transform"],
-            "rmse_m": fit_json["rmse_m"],
-            "residuals_m": fit_json["residuals_m"],
-            "warnings": fit_json["warnings"],
-        }
-        row.georef_version = (row.georef_version or 0) + 1
-        row.bounds_site = footprint.bounds_site_value(row, frame)
-        row.updated_at = utcnow()
-        if row.format not in VECTOR:
-            from app.drawings import raster_io
-
-            raster_io.write_plan_georef(store.plan_path(handle, drawingId), f.transform, frame.crs_wkt)
-        out = service.to_out(row, frame)
-    service.drop_caches(drawingId)
+    out = georef_service.apply_control_points(
+        handle, drawingId, body.model, [p.model_dump() for p in body.points]
+    )
     publish_drawings_changed(request, handle, [drawingId])
     return out
 

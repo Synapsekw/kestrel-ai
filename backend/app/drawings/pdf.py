@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import math
 import os
+import threading
 from pathlib import Path
 
 from app.drawings import store
@@ -25,6 +26,10 @@ STRIP_ROWS = 1024
 MAX_THUMB_PAGES = 50
 THUMB = 160
 MESSAGE = "Reading drawing"
+
+# PDFium is not thread-safe, and plant sub-runs read drawings from several threads: one process-wide
+# lock covers every open_pdf context. Re-entrant so nested use in one thread cannot deadlock.
+_PDFIUM_LOCK = threading.RLock()
 
 
 def unavailable_reason() -> str | None:
@@ -52,8 +57,25 @@ def effective_dpi(requested: int, w_pt: float, h_pt: float) -> int:
     return min(requested, max_dpi(w_pt, h_pt))
 
 
+class PdfBusy(Exception):
+    """open_pdf(wait_s=...) gave up waiting for the PDFium lock (another thread is rendering)."""
+
+
 @contextlib.contextmanager
-def open_pdf(path: Path):
+def open_pdf(path: Path, *, wait_s: float | None = None):
+    """Open `path` under the PDFium lock. Jobs block (wait_s None); a route passes wait_s so it never
+    waits behind an import's render, and gets PdfBusy instead."""
+    if wait_s is None:
+        _PDFIUM_LOCK.acquire()
+    elif not _PDFIUM_LOCK.acquire(timeout=wait_s):
+        raise PdfBusy
+    try:
+        yield from _open_pdf_locked(path)
+    finally:
+        _PDFIUM_LOCK.release()
+
+
+def _open_pdf_locked(path: Path):
     import pypdfium2 as pdfium
 
     try:
