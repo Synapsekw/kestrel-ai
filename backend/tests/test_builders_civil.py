@@ -8,7 +8,9 @@ import math
 import numpy as np
 import pytest
 from plant_b3_helpers import CTX, cowork, cowork_item, make_item
+from shapely.geometry import Polygon
 
+from app.asset_models.builders import civil
 from app.asset_models.builders.palette import PALETTE
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
 
@@ -115,3 +117,66 @@ def test_cowork_fixture_footprints_are_valid():
         poly = footprint_polygon(cowork_item(node).footprint)
         assert np.isfinite(np.asarray(poly)).all()
         assert not math.isnan(node["base_el"])
+
+
+# ------------------------------------------------------------------ helpers
+def test_clean_line_drops_repeated_points():
+    pts = civil.clean_line(np.array([[0, 0], [0, 0], [10, 0], [10, 0.0005], [20, 0]]))
+    assert pts.tolist() == [[0, 0], [10, 0], [20, 0]]
+
+
+def test_clean_line_rejects_non_finite():
+    with pytest.raises(ValueError, match="non-finite"):
+        civil.clean_line(np.array([[0, 0], [np.nan, 1]]))
+
+
+def test_stations_open_closed_lod_and_cap():
+    line = np.array([[0.0, 0.0], [30.0, 0.0]])
+    assert len(civil.stations(line, 3.0, 1.0)) == 11  # both ends
+    ring = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 20.0], [0.0, 20.0], [0.0, 0.0]])
+    assert len(civil.stations(ring, 3.0, 1.0)) == 4 + 7 + 4 + 7  # closing corner not doubled
+    assert len(civil.stations(line, 3.0, 0.5)) == 6  # half the detail: 6 m spacing
+    long = np.array([[0.0, 0.0], [100_000.0, 0.0]])
+    assert len(civil.stations(long, 3.0, 1.0)) <= civil.MAX_INSTANCES + 1
+
+
+def test_yaw_turns_x_onto_the_plan_direction():
+    d = np.array([3.0, 4.0]) / 5.0
+    v = civil.yaw(d[0], d[1]) @ np.array([1.0, 0.0, 0.0, 1.0])
+    assert v[[0, 2]] == pytest.approx(d)
+    assert v[1] == pytest.approx(0.0)
+
+
+def test_prism_of_a_concave_outline_is_closed_and_exact():
+    poly = Polygon([(0, 0), (10, 0), (10, 30), (0, 30), (0, 20), (5, 20), (5, 10), (0, 10)])  # notch
+    m = civil.prism(civil.largest_polygon(poly), 1.0, 4.0)
+    assert m.is_watertight
+    assert m.volume == pytest.approx(poly.area * 3.0)
+    assert m.bounds[:, 1].tolist() == pytest.approx([1.0, 4.0])
+
+
+def test_surface_faces_up_and_covers_the_area():
+    poly = civil.largest_polygon(Polygon([(0, 0), (10, 0), (10, 10), (5, 4), (0, 10)]))
+    m = civil.surface(poly, 2.0)
+    assert (m.face_normals[:, 1] > 0.99).all()
+    assert m.area == pytest.approx(poly.area)
+
+
+def test_largest_polygon_repairs_a_bow_tie():
+    poly = civil.largest_polygon(Polygon([(0, 0), (10, 10), (10, 0), (0, 10)]))
+    assert poly.is_valid and poly.area == pytest.approx(25.0)
+
+
+def test_bar_spans_its_segment_and_heights():
+    m = civil.bar([0.0, 0.0], [3.0, 4.0], 1.0, 2.0, 0.1)
+    assert m.is_watertight
+    assert m.volume == pytest.approx(5.0 * 1.0 * 0.1)
+    assert m.bounds[:, 1].tolist() == pytest.approx([1.0, 2.0])
+
+
+def test_outline_of_a_line_is_buffered_by_its_width_with_flat_ends():
+    poly = civil.outline(
+        make_item("road", {"kind": "line", "pts": [[E0, N0], [E0 + 10, N0]], "width": 4.0}), CTX
+    )
+    assert poly.area == pytest.approx(40.0)
+    assert poly.bounds == pytest.approx((-2.0, -5.0, 2.0, 5.0))  # (x=N, z=E) around the line's centroid
