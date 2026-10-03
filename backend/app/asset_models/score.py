@@ -244,9 +244,16 @@ def extent(ref: list[dict], margin_m: float = EXTENT_MARGIN_M) -> tuple[float, f
     return float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1])
 
 
+def _polygonal(geom: shapely.Geometry) -> shapely.Geometry:
+    """Only the polygon parts of a geometry: make_valid on a spiked ring also yields lines and points,
+    which have no boundary to measure."""
+    parts = [g for g in shapely.get_parts(geom) if isinstance(g, shapely.Polygon) and not g.is_empty]
+    return shapely.unary_union(parts) if parts else shapely.Polygon()
+
+
 def _land(polys: list) -> shapely.Geometry:
-    shapes = [shapely.make_valid(shapely.Polygon(p)) for p in polys if len(p) >= 3]
-    return shapely.unary_union(shapes) if shapes else shapely.Polygon()
+    shapes = [_polygonal(shapely.make_valid(shapely.Polygon(p))) for p in polys if len(p) >= 3]
+    return _polygonal(shapely.unary_union(shapes)) if shapes else shapely.Polygon()
 
 
 def landmask_hausdorff(
@@ -257,14 +264,17 @@ def landmask_hausdorff(
     a, b = _land(gen_land), _land(ref_land)
     if box is not None:
         clip = shapely.box(*box)
-        a, b = a.intersection(clip), b.intersection(clip)
+        a, b = _polygonal(a.intersection(clip)), _polygonal(b.intersection(clip))
     if a.is_empty and b.is_empty:
         return 0.0
     if a.is_empty or b.is_empty:
         return math.inf
     la = shapely.segmentize(a.boundary, LAND_SEGMENT_M)
     lb = shapely.segmentize(b.boundary, LAND_SEGMENT_M)
-    return float(shapely.hausdorff_distance(la, lb))
+    d = float(shapely.hausdorff_distance(la, lb))
+    if math.isnan(d):
+        raise ValueError("land outline distance is undefined (degenerate land geometry)")
+    return d
 
 
 def read_land(path: Path) -> list[list[list[float]]]:
@@ -273,9 +283,24 @@ def read_land(path: Path) -> list[list[list[float]]]:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if isinstance(data, list):
         return data
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: not a land file")
+    if isinstance(data.get("spec"), dict):
+        data = data["spec"]
     if "environment" in data:
         return land_from_environment(data["environment"])
-    return [*data.get("land", []), *data.get("main", [])]
+    if "land" in data or "main" in data:
+        return [*data.get("land", []), *data.get("main", [])]
+    raise ValueError(f"{path}: no `environment`, `land` or `main` in the land file")
+
+
+def spec_of(data: object) -> dict:
+    """A spec dict from a bare spec or a saved getAssetModelVersion response ({"spec": {...}})."""
+    if isinstance(data, dict) and isinstance(data.get("spec"), dict):
+        data = data["spec"]
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        raise ValueError("the spec JSON has no `items` list")
+    return data
 
 
 def land_from_environment(environment: list[dict]) -> list[list[list[float]]]:
@@ -385,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     gen = read_register(a.gen)
     if a.gen_spec:
-        gen = with_footprint_sizes(gen, json.loads(a.gen_spec.read_text(encoding="utf-8")))
+        gen = with_footprint_sizes(gen, spec_of(json.loads(a.gen_spec.read_text(encoding="utf-8"))))
     rep = score(
         gen,
         read_register(a.ref),

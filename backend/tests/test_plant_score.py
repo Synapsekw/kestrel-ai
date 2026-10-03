@@ -212,3 +212,52 @@ def test_cli_writes_json_and_prints_markdown(ref, tmp_path, capsys):
     d = json.loads(out.read_text(encoding="utf-8"))
     assert d["recall"] == 1.0 and d["landmask_hausdorff_m"] == 0.0
     assert "# Plant model score" in capsys.readouterr().out
+
+
+SQUARE = [[0, 0], [100, 0], [100, 100], [0, 100]]
+SPIKED = [[0, 0], [100, 0], [100, 50], [150, 50], [100, 50], [100, 100], [0, 100]]  # zero-width spike
+
+
+@pytest.mark.parametrize("box", [None, (-50.0, -50.0, 200.0, 200.0)])
+def test_a_spiked_land_ring_scores_like_the_clean_one(box):
+    clean = sc.landmask_hausdorff([SQUARE], [SQUARE], box)
+    spiked = sc.landmask_hausdorff([SPIKED], [SQUARE], box)
+    assert math.isfinite(spiked)
+    assert spiked == pytest.approx(clean, abs=1e-6)
+
+
+def test_read_land_unwraps_a_saved_version_response(tmp_path):
+    env = [{"id": "l1", "kind": "land", "pts": [[0, 0], [10, 0], [10, 10]]}]
+    f = tmp_path / "v.json"
+    f.write_text(json.dumps({"spec": {"environment": env}}), encoding="utf-8")
+    assert sc.read_land(f) == [[[0, 0], [10, 0], [10, 10]]]
+
+
+def test_read_land_rejects_an_unknown_shape(tmp_path):
+    f = tmp_path / "x.json"
+    f.write_text(json.dumps({"foo": 1}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        sc.read_land(f)
+
+
+def test_cli_gen_spec_applies_footprint_sizes_from_a_wrapped_spec(tmp_path):
+    cols = "tag,type,node,plant_E,plant_N\n"
+    ref_csv, gen_csv = tmp_path / "ref.csv", tmp_path / "gen.csv"
+    ref_csv.write_text(cols + "A-1,pump,n1,0,0\nA-2,pump,n2,0,0\n", encoding="utf-8")
+    gen_csv.write_text(cols + "A-1,pump,n1,3,0\nA-2,pump,n2,3,0\n", encoding="utf-8")
+    big = {"kind": "circle", "center": [0, 0], "d": 20}
+    spec = tmp_path / "spec.json"
+    spec.write_text(
+        json.dumps({"spec": {"items": [{"id": "n1", "footprint": big}, {"id": "n2", "footprint": big}]}}),
+        encoding="utf-8",
+    )
+    out, plain = tmp_path / "s.json", tmp_path / "p.json"
+    assert sc.main([str(gen_csv), str(ref_csv), "--json", str(plain)]) == 0
+    assert sc.main([str(gen_csv), str(ref_csv), "--gen-spec", str(spec), "--json", str(out)]) == 0
+    assert json.loads(plain.read_text(encoding="utf-8"))["within_tol"] == 1.0
+    assert json.loads(out.read_text(encoding="utf-8"))["within_tol"] == 0.0
+
+
+def test_gen_spec_without_items_is_an_error(tmp_path):
+    with pytest.raises(ValueError):
+        sc.spec_of({"foo": 1})

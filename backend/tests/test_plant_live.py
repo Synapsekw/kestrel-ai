@@ -37,13 +37,14 @@ RUN_FIELDS = (
 )
 
 
-def _wait_csv(client, url: str) -> str:
+def _wait_csv(client, url: str) -> bytes:
     """The version's register CSV, once the GLB job has written it."""
     deadline = time.monotonic() + CSV_TIMEOUT_S
     while time.monotonic() < deadline:
         r = client.get(url)
         if r.status_code == 200:
-            return r.text
+            return r.content
+        assert r.status_code == 409, f"register CSV request failed: {r.status_code} {r.text}"  # 409 not_ready
         time.sleep(5)
     raise AssertionError(f"no register CSV within {CSV_TIMEOUT_S} s")
 
@@ -73,13 +74,16 @@ def test_al_zour_plant_acceptance(client, app, wait_job, tmp_path):
     wait_job(pid, body["job"]["id"], timeout=RUN_TIMEOUT_S)
     seconds = time.monotonic() - started
     run = client.get(f"{base}/{mid}/runs/{body['run']['id']}").json()
+    tokens = run["usage"]["input_tokens"] + run["usage"]["output_tokens"]
+    facts = {k: run.get(k) for k in RUN_FIELDS} | {"seconds": round(seconds), "tokens": tokens}
+    EVIDENCE.mkdir(parents=True, exist_ok=True)
+    (EVIDENCE / "run.json").write_text(json.dumps(facts, indent=2), encoding="utf-8")
     assert run["version"] is not None, run["summary"]
     version = run["version"]
-    csv_text = _wait_csv(client, f"{base}/{mid}/versions/{version}/csv")
+    csv_bytes = _wait_csv(client, f"{base}/{mid}/versions/{version}/csv")
     spec = client.get(f"{base}/{mid}/versions/{version}").json()["spec"]
 
-    EVIDENCE.mkdir(parents=True, exist_ok=True)
-    (EVIDENCE / "register.csv").write_text(csv_text, encoding="utf-8")
+    (EVIDENCE / "register.csv").write_bytes(csv_bytes)
     gen = sc.with_footprint_sizes(sc.read_register(EVIDENCE / "register.csv"), spec)
     rep = sc.score(
         gen,
@@ -87,11 +91,8 @@ def test_al_zour_plant_acceptance(client, app, wait_job, tmp_path):
         gen_land=sc.land_from_environment(spec.get("environment", [])),
         ref_land=sc.read_land(DATA / "kipic_landmask.json"),
     )
-    tokens = run["usage"]["input_tokens"] + run["usage"]["output_tokens"]
     (EVIDENCE / "score.json").write_text(json.dumps(sc.report_dict(rep), indent=2), encoding="utf-8")
     (EVIDENCE / "score.md").write_text(sc.report_markdown(rep), encoding="utf-8")
-    facts = {k: run.get(k) for k in RUN_FIELDS} | {"seconds": round(seconds), "tokens": tokens}
-    (EVIDENCE / "run.json").write_text(json.dumps(facts, indent=2), encoding="utf-8")
 
     assert run["state"] == "finished", run["summary"]
     assert rep.type_accuracy >= 0.95, sc.report_markdown(rep)
