@@ -24,6 +24,7 @@ import json
 import math
 import os
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -48,6 +49,8 @@ FILL_ALPHA = 230
 TINT_ALPHA = 110  # the kit's tinted box
 PATCH_FORMAT = 1  # the index.json format
 INDEX_NAME = "index.json"
+REPLACE_TRIES = 4  # os.replace attempts when a reader holds the destination open
+REPLACE_WAIT_S = 0.05
 
 
 @dataclass(frozen=True)
@@ -350,9 +353,19 @@ def _atomic_write(path: Path, data: bytes) -> None:
     tmp = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
         tmp.write_bytes(data)
-        os.replace(tmp, path)
+        for attempt in range(REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:  # a reader holds the destination open (Windows): wait briefly
+                if attempt == REPLACE_TRIES - 1:
+                    raise
+                time.sleep(REPLACE_WAIT_S * (attempt + 1))
     finally:
-        tmp.unlink(missing_ok=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:  # a leftover .tmp is harmless; never mask the real outcome
+            pass
 
 
 def encode_patch(positions: np.ndarray, uvs: np.ndarray) -> bytes:
@@ -420,7 +433,8 @@ def read_index(dir: Path) -> dict:
     """`index.json`'s `items` (sighting id -> entry); {} when absent or unreadable (it is derived)."""
     try:
         data = json.loads((Path(dir) / INDEX_NAME).read_text("utf-8"))
-        return dict(data.get("items") or {})
+        items = data.get("items")
+        return dict(items) if isinstance(items, dict) else {}
     except (OSError, ValueError, AttributeError):
         return {}
 

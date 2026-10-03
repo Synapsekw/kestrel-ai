@@ -233,6 +233,10 @@ def test_the_index_round_trips_and_a_broken_one_reads_empty(tmp_path):
     (tmp_path / "index.json").write_text("{not json", "utf-8")
     assert place.read_index(tmp_path) == {}
     assert place.read_index(tmp_path / "absent") == {}
+    (tmp_path / "index.json").write_text('{"items": [1, 2]}', "utf-8")
+    assert place.read_index(tmp_path) == {}
+    (tmp_path / "index.json").write_text("[]", "utf-8")
+    assert place.read_index(tmp_path) == {}
 
 
 def test_a_patch_sighting_is_still_one_cast(monkeypatch):
@@ -241,3 +245,19 @@ def test_a_patch_sighting_is_still_one_cast(monkeypatch):
     monkeypatch.setattr(place, "cast", lambda mesh, o, d: calls.append(len(o)) or real(mesh, o, d))
     run(wall(), BOX, rv=review("patch", 4))
     assert calls == [25 + 4 * 2]
+
+
+def test_atomic_write_retries_a_sharing_violation(tmp_path, monkeypatch):
+    real, calls = place.os.replace, []
+
+    def flaky(a, b):
+        calls.append(1)
+        if len(calls) < 3:
+            raise PermissionError("in use")
+        return real(a, b)
+
+    monkeypatch.setattr(place.os, "replace", flaky)
+    monkeypatch.setattr(place, "REPLACE_WAIT_S", 0)
+    place._atomic_write(tmp_path / "f.bin", b"ok")
+    assert (tmp_path / "f.bin").read_bytes() == b"ok" and len(calls) == 3
+    assert list(tmp_path.glob("*.tmp")) == []

@@ -116,3 +116,11 @@ def test_limit_defaults_to_500_and_caps_at_2000(client):
     ]
     limit = next(p for p in op["parameters"] if p["name"] == "limit")["schema"]
     assert limit["default"] == 500 and limit["maximum"] == 2000 and limit["minimum"] == 1
+
+
+def test_a_malformed_index_size_never_breaks_the_list():
+    from app.asset_review.routes_placements import _entry_size
+
+    assert _entry_size({"size": [0.5, 2.0]}) == 2.0
+    for bad in (None, {}, {"size": "big"}, {"size": [None, 1]}, {"size": 3}, {"size": []}):
+        assert _entry_size(bad) == 0.0

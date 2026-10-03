@@ -330,3 +330,54 @@ def test_a_patch_write_failure_marks_that_sighting_none_and_the_job_succeeds(
     assert r.placement == "none" and r.patch_path is None
     folder = handle.folder / f"asset_models/{mid}/placements/v1"
     assert sids[0] not in json.loads((folder / "index.json").read_text("utf-8"))["items"]
+
+
+def test_sharing_errors_on_derived_files_never_fail_the_run(handle, tower, truth, crack, monkeypatch):
+    """Windows: a reader holding index.json, a patch or an old file raises PermissionError."""
+    from pathlib import Path
+
+    mid, sids = seed(handle, tower, truth[:2], crack["id"], profile="building_facade", polygons={0})
+    root = handle.folder / f"asset_models/{mid}/placements"
+    (root / "v1").mkdir(parents=True)
+    (root / "v1" / "ghost.png").write_bytes(b"x")
+    real_unlink, real_replace = Path.unlink, place.os.replace
+
+    def locked_unlink(self, *a, **k):
+        raise PermissionError("in use")
+
+    def locked_replace(a, b):
+        if str(b).endswith("index.json"):
+            raise PermissionError("in use")
+        return real_replace(a, b)
+
+    monkeypatch.setattr(place, "REPLACE_WAIT_S", 0)
+    monkeypatch.setattr(Path, "unlink", locked_unlink)
+    monkeypatch.setattr(place.os, "replace", locked_replace)
+    ctx = Ctx(handle, {"asset_model_id": mid})
+    result = jobs_place.run_place(ctx)
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    assert result["patch"] == 1 and result["point"] == 1 and result["group_job_id"] == "job-1"
+    assert row(handle, sids[0]).placement == "patch"
+
+
+def test_no_pose_sighting_gets_its_coverage_from_the_shape(handle, tower, truth, crack):
+    mid, _ = seed(handle, tower, truth[:1], crack["id"])
+    bare = add_photo(handle, mid, "bare.jpg", None)
+    sid = add_sighting(handle, mid, crack["id"], bare, place.SightingShape(700, 400, 200, 200))
+    jobs_place.run_place(Ctx(handle, {"asset_model_id": mid}))
+    r = row(handle, sid)
+    assert r.placement == "pending" and r.coverage and r.coverage > 0
+
+
+def test_a_bad_pose_row_stays_pending_and_the_others_place(handle, tower, truth, crack):
+    from app.db.models import ImagePose
+
+    mid, sids = seed(handle, tower, truth[:3], crack["id"])
+    with handle.session() as s:
+        sg = s.get(FindingSighting, sids[0])
+        s.query(ImagePose).filter_by(image_id=sg.image_id, asset_model_id=mid).one().source = "bogus"
+    result = jobs_place.run_place(Ctx(handle, {"asset_model_id": mid}))
+    assert result["no_pose"] >= 1 and result["group_job_id"] == "job-1"
+    r = row(handle, sids[0])
+    assert r.placement == "pending" and r.placed_version is None
+    assert any(row(handle, sid).placement == "point" for sid in sids[1:])

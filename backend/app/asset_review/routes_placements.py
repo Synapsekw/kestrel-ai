@@ -30,6 +30,14 @@ KINDS = {
 }
 
 
+def _entry_size(entry) -> float:
+    """The patch's longest side in metres; 0 for a missing or hand-damaged index entry."""
+    size = entry.get("size") if isinstance(entry, dict) else None
+    if isinstance(size, list | tuple) and size and all(isinstance(v, int | float) for v in size):
+        return float(max(size))
+    return 0.0
+
+
 def _model(s, asset_model_id: str) -> AssetModel:
     row = s.get(AssetModel, asset_model_id)
     if row is None:
@@ -76,7 +84,7 @@ def list_placements(
                 kind=sg.placement,
                 center=[sg.cx, sg.cy, sg.cz],
                 normal=[sg.nx, sg.ny, sg.nz],
-                size=float(max(entry["size"])) if entry and entry.get("size") else 0.0,
+                size=_entry_size(entry),
                 severity=severity,
                 type_id=type_id,
                 has_patch=patch and bool(sg.patch_path),

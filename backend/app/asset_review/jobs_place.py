@@ -11,6 +11,7 @@ what was written, and `only_dirty` picks up the rest. A sighting whose photo has
 
 from __future__ import annotations
 
+import logging
 import shutil
 import time
 from pathlib import Path
@@ -107,6 +108,9 @@ def _sighting_ids(s, asset_model_id: str, version: int, only_dirty: bool) -> lis
     return list(s.scalars(q.order_by(FindingSighting.image_id, FindingSighting.id)))
 
 
+log = logging.getLogger(__name__)
+
+
 def _geometry(box: Box) -> tuple:
     """What J4's hook reacts to: a change here makes the placement we are computing stale."""
     pts = None if box.points is None else [list(p) for p in box.points]
@@ -128,25 +132,31 @@ def _load_chunk(s, ids: list[str], asset_model_id: str) -> list[dict]:
     ).all()
     by_id = {}
     for sg, box, image, pose, finding_severity in rows:
-        by_id[sg.id] = {
+        item = {
             "id": sg.id,
             "geometry": _geometry(box),
             "image_id": image.id,
             "size": (int(image.width), int(image.height)),
-            "shape": place.SightingShape.from_box(box),
+            "shape": None,
             "severity": sg.severity if sg.severity is not None else finding_severity,
-            "pose": None
-            if pose is None
-            else PoseIn(
-                position=list(pose.position),
-                target=list(pose.target),
-                up=list(pose.up),
-                hfov_deg=float(pose.hfov_deg),
-                vfov_deg=float(pose.vfov_deg),
-                source=pose.source,
-                accuracy_m=pose.accuracy_m,
-            ),
+            "pose": None,
         }
+        try:  # one bad row (an unknown pose source, a broken shape) must not fail the run
+            item["shape"] = place.SightingShape.from_box(box)
+            if pose is not None:
+                item["pose"] = PoseIn(
+                    position=list(pose.position),
+                    target=list(pose.target),
+                    up=list(pose.up),
+                    hfov_deg=float(pose.hfov_deg),
+                    vfov_deg=float(pose.vfov_deg),
+                    source=pose.source,
+                    accuracy_m=pose.accuracy_m,
+                )
+        except Exception:
+            log.warning("sighting %s has unreadable geometry or pose; left pending", sg.id, exc_info=True)
+            item["pose"] = None
+        by_id[sg.id] = item
     return [by_id[i] for i in ids if i in by_id]
 
 
@@ -204,9 +214,19 @@ def _cleared(placement: str, version: int | None) -> dict:
     }
 
 
+def _save_index(folder: Path, mid: str, version: int, index: dict) -> None:
+    try:
+        place.write_index(folder, mid, version, index)
+    except OSError as e:  # derived and a reader may hold it; the next run rewrites it
+        log.warning("could not write the placements index: %s", e)
+
+
 def _remove_files(folder: Path, sid: str) -> None:
     for ext in (".bin", ".png", ".lbl"):
-        (folder / f"{sid}{ext}").unlink(missing_ok=True)
+        try:
+            (folder / f"{sid}{ext}").unlink(missing_ok=True)
+        except OSError as e:  # a reader holds it open (Windows): derived, the next run removes it
+            log.warning("could not remove %s%s: %s", sid, ext, e)
 
 
 @register_job_type(JOB_TYPE)
@@ -236,10 +256,10 @@ def run_place(ctx) -> dict:
         if ids:
             _place_all(ctx, handle, mid, version, ids, frame, review, folder, index, seen, counts)
     finally:
-        place.write_index(folder, mid, version, index)  # a cancel keeps the patches already written
+        _save_index(folder, mid, version, index)  # a cancel keeps the patches already written
     if not only_dirty:  # every sighting of the model was visited: drop what no longer exists
         index = {k: v for k, v in index.items() if k in seen}
-        place.write_index(folder, mid, version, index)
+        _save_index(folder, mid, version, index)
         _prune(folder, index)
     ctx.publish("asset_models.changed", {"asset_model_ids": [mid]})
     group_job_id = None
@@ -288,6 +308,8 @@ def _place_all(ctx, handle, mid, version, ids, frame, review, folder, index, see
                 if r["pose"] is None:  # stays dirty: `only_dirty` places it once the photo has a pose
                     counts["no_pose"] += 1
                     fields = _cleared("pending", None)
+                    if r["shape"] is not None:
+                        fields["coverage"] = r["shape"].area() / (r["size"][0] * r["size"][1])
                 else:
                     shape = r["shape"]
                     needs_photo = place.wants_patch(shape, review.placement) and shape.outline() is not None
@@ -341,7 +363,10 @@ def _prune(folder: Path, index: dict) -> None:
     folders (derived files, safe to delete, spec §5.7)."""
     for p in folder.iterdir():
         if p.suffix in (".bin", ".png", ".lbl") and p.stem not in index:
-            p.unlink(missing_ok=True)
+            try:
+                p.unlink(missing_ok=True)
+            except OSError as e:
+                log.warning("could not prune %s: %s", p.name, e)
     for other in folder.parent.iterdir():
         if other.is_dir() and other != folder and other.name.startswith("v"):
             shutil.rmtree(other, ignore_errors=True)
