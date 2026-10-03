@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   AssetModel,
   AssetModelRun,
   AssetSourceRef,
+  Job,
   KeyedProviderName,
   Provider,
 } from "@contract/client";
@@ -187,6 +188,35 @@ function PhotoGroup({
   );
 }
 
+/** An "Import and include" whose job is being watched: its drawings, and whether the job has ended. */
+interface ImportRun {
+  jobId: string;
+  name: string;
+  ids: string[];
+  ended: boolean;
+  failed: boolean;
+}
+
+/** Watches one import job (the store's copy, polled by `useTrackedJob`) and reports its end once. */
+function ImportWatch({
+  projectId,
+  run,
+  onEnd,
+}: {
+  projectId: string;
+  run: ImportRun;
+  onEnd(run: ImportRun, job: Job): void;
+}) {
+  const { job } = useTrackedJob(projectId, run.jobId);
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!job || isActiveJob(job) || fired.current) return;
+    fired.current = true;
+    onEnd(run, job);
+  }, [job, run, onEnd]);
+  return null;
+}
+
 /**
  * Starts an asset model run (M1 spec §8): the sources to read, the provider and model, and notes for
  * the agent. Build writes a new model from the sources; Refine starts from the current version.
@@ -202,15 +232,22 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const unimported = useUnimportedDrawings(projectId);
   const [importing, setImporting] = useState<string | null>(null);
   const [importErrors, setImportErrors] = useState<Record<string, string>>({});
-  const [importJob, setImportJob] = useState<string | null>(null);
-  const tracked = useTrackedJob(projectId, importJob);
+  const [importRuns, setImportRuns] = useState<ImportRun[]>([]);
+  const [importNotices, setImportNotices] = useState<string[]>([]);
   const { reload: reloadDrawings, add: addDrawings } = drawingList;
-  useEffect(() => {
-    if (tracked.job && !isActiveJob(tracked.job)) {
-      setImportJob(null);
+  const onImportEnd = useCallback(
+    (run: ImportRun, job: Job) => {
+      const failed = job.state !== "succeeded";
+      setImportRuns((rs) => rs.map((r) => (r.jobId === run.jobId ? { ...r, ended: true, failed } : r)));
+      if (failed) {
+        const why =
+          job.error ?? (job.state === "cancelled" ? "the import was cancelled" : "the import failed");
+        setImportNotices((n) => [...n, `${run.name} could not be imported: ${why}`]);
+      }
       reloadDrawings();
-    }
-  }, [tracked.job, reloadDrawings]);
+    },
+    [reloadDrawings],
+  );
   const clouds = useDataSources(projectId, "point_cloud");
 
   // Refine starts from the current version's sources unless the caller brought its own.
@@ -262,6 +299,31 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   useEffect(() => {
     chosenNow.current = chosen;
   }, [chosen]);
+  // Once an import's job has ended and the list re-reads, its failed pages leave the selection
+  // (a tick sends only ready pages, as DrawingFile.refs does).
+  useEffect(() => {
+    const items = drawingList.items;
+    if (!items) return;
+    const settled = importRuns.filter(
+      (r) => r.ended && !items.some((d) => r.ids.includes(d.id) && d.status === "importing"),
+    );
+    if (settled.length === 0) return;
+    const next = new Map(chosenNow.current);
+    const notes: string[] = [];
+    for (const r of settled) {
+      const failed = items.filter((d) => r.ids.includes(d.id) && d.status === "failed").map((d) => d.id);
+      for (const id of failed) next.delete(sourceKey({ type: "drawing", id }));
+      if (failed.length > 0 && !r.failed)
+        notes.push(
+          failed.length === r.ids.length
+            ? `${r.name} could not be imported.`
+            : `${failed.length} of ${r.ids.length} pages of ${r.name} could not be imported and were left out.`,
+        );
+    }
+    if (next.size !== chosenNow.current.size) setPicked(next);
+    if (notes.length > 0) setImportNotices((n) => [...n, ...notes]);
+    setImportRuns((rs) => rs.filter((r) => !settled.includes(r)));
+  }, [importRuns, drawingList.items]);
   const onToggle = (r: AssetSourceRef, on: boolean) => {
     const next = new Map(chosen);
     if (on) next.set(sourceKey(r), r);
@@ -284,13 +346,15 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
     });
     try {
       const { drawings: made, job } = await importDrawingFile(api, projectId, file.path);
-      useJobsStore.getState().upsert(job);
       addDrawings(made);
       const next = new Map(chosenNow.current);
       for (const d of made) next.set(sourceKey({ type: "drawing", id: d.id }), { type: "drawing", id: d.id });
       setPicked(next);
       unimported.drop(file.path);
-      setImportJob(job.id);
+      setImportRuns((rs) => [
+        ...rs,
+        { jobId: job.id, name: file.name, ids: made.map((d) => d.id), ended: false, failed: false },
+      ]);
     } catch (e) {
       setImportErrors((m) => ({ ...m, [file.path]: messageOf(e, "The file could not be imported.") }));
     } finally {
@@ -434,6 +498,16 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
                 : `${dropped} sources are no longer in the project and were left out.`}
             </p>
           )}
+          {importRuns
+            .filter((r) => !r.ended)
+            .map((r) => (
+              <ImportWatch key={r.jobId} projectId={projectId} run={r} onEnd={onImportEnd} />
+            ))}
+          {importNotices.map((n, i) => (
+            <p key={i} role="alert" className="text-xs text-danger">
+              {n}
+            </p>
+          ))}
           {waiting > 0 && (
             <p className="text-xs text-muted">
               {`Waiting for ${waiting} ${waiting === 1 ? "drawing" : "drawings"} to finish importing.`}

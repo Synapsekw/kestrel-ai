@@ -367,22 +367,33 @@ describe("BuildDialog: drawings not imported yet", () => {
 
   const T6 = { path: "E:\\LNG\\Drawings\\T0006.pdf", name: "T0006.pdf", format: "pdf", size: 2048, pages: 2 };
 
-  /** `pending`: the import job runs (and the pages stay importing) until `finish()`. */
-  function intake(opts: { inspectStatus?: number; pending?: boolean } = {}) {
+  /**
+   * `pending`: the import job runs (and the pages stay importing) until `finish()`. `pages`: each
+   * page's status once the job has ended; `jobFails`: the job ends failed.
+   */
+  function intake(
+    opts: { inspectStatus?: number; pending?: boolean; pages?: [string, string]; jobFails?: boolean } = {},
+  ) {
     let imported = false;
     let done = !opts.pending;
-    const made = (status: string) => [
-      drawing("n1", "T0006 · p1", T6.path, 1, status),
-      drawing("n2", "T0006 · p2", T6.path, 2, status),
+    const [s1, s2] = opts.pages ?? ["ready", "ready"];
+    const made = (status: string | null) => [
+      drawing("n1", "T0006 · p1", T6.path, 1, status ?? s1),
+      drawing("n2", "T0006 · p2", T6.path, 2, status ?? s2),
     ];
-    const jobState = () => (done ? "succeeded" : "running");
+    const ended = opts.jobFails ? "failed" : "succeeded";
+    const jobState = () => (done ? ended : "running");
+    const jobOf = () => ({
+      ...drawingJob(BUILD_JOB, jobState()),
+      error: done && opts.jobFails ? "the PDF could not be rendered" : null,
+    });
     const routes = [
       { method: "GET", path: /\/drawings\/unimported$/, body: () => ({ files: imported ? [] : [T6] }) },
       {
         method: "GET",
         path: /\/drawings$/,
         body: () => ({
-          items: [...drawingRows.items, ...(imported ? made(done ? "ready" : "importing") : [])],
+          items: [...drawingRows.items, ...(imported ? made(done ? null : "importing") : [])],
         }),
       },
       {
@@ -404,18 +415,18 @@ describe("BuildDialog: drawings not imported yet", () => {
         status: 202,
         body: () => {
           imported = true;
-          return { drawings: made("importing"), job: drawingJob(BUILD_JOB, jobState()) };
+          return { drawings: made("importing"), job: jobOf() };
         },
       },
       {
         method: "GET",
         path: new RegExp(`/jobs/${BUILD_JOB}$`),
-        body: () => drawingJob(BUILD_JOB, jobState()),
+        body: jobOf,
       },
     ];
     const finish = () => {
       done = true;
-      useJobsStore.getState().upsert(drawingJob(BUILD_JOB, "succeeded"));
+      useJobsStore.getState().upsert(jobOf());
     };
     return Object.assign(routes, { finish });
   }
@@ -455,6 +466,40 @@ describe("BuildDialog: drawings not imported yet", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /start build/i })).toBeEnabled());
     expect(screen.queryByText(/to finish importing/i)).toBeNull();
     expect(screen.getByRole("checkbox", { name: /T0006\.pdf/ })).toBeChecked();
+  });
+
+  it("an import job that fails says why and leaves its pages out of the build", async () => {
+    const { api, requests } = setup([...intake({ jobFails: true, pages: ["failed", "failed"] }), POSTED]);
+    open(api);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /ga drawing/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /import and include T0006\.pdf/i }));
+    expect(
+      await screen.findByText("T0006.pdf could not be imported: the PDF could not be rendered"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /T0006\.pdf/ })).not.toBeChecked());
+    await waitFor(() => expect(screen.getByRole("button", { name: /start build/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start build/i }));
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "POST" && /\/runs$/.test(r.url))).toBe(true),
+    );
+    const run = requests.find((r) => r.method === "POST" && /\/runs$/.test(r.url))!;
+    expect((run.body as { sources: unknown }).sources).toEqual([{ type: "drawing", id: "d1" }]);
+  });
+
+  it("a page that fails to import is left out, and the dialog says so", async () => {
+    const { api, requests } = setup([...intake({ pages: ["ready", "failed"] }), POSTED]);
+    open(api);
+    fireEvent.click(await screen.findByRole("button", { name: /import and include T0006\.pdf/i }));
+    expect(
+      await screen.findByText("1 of 2 pages of T0006.pdf could not be imported and were left out."),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: /start build/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /start build/i }));
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "POST" && /\/runs$/.test(r.url))).toBe(true),
+    );
+    const run = requests.find((r) => r.method === "POST" && /\/runs$/.test(r.url))!;
+    expect((run.body as { sources: unknown }).sources).toEqual([{ type: "drawing", id: "n1" }]);
   });
 
   it("shows why a file could not be imported, on its row", async () => {

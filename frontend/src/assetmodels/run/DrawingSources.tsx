@@ -48,22 +48,24 @@ export function DrawingSources({
       ) : files.length === 0 && !unimported?.length ? (
         <p className="px-1.5 text-xs text-dim">No drawings in this project.</p>
       ) : (
-        <ul className="flex max-h-32 flex-col overflow-y-auto">
-          {files.map((f) => {
-            const n = picked(f);
-            const usable = f.drawings.filter((d) => d.status !== "failed").length;
-            return (
-              <SourceRow
-                key={f.key}
-                label={f.label}
-                meta={n > 0 && n < usable ? `${n} of ${usable} pages` : f.meta}
-                status={f.status}
-                checked={n > 0}
-                onChange={(on) => onToggleFile(f, on)}
-              />
-            );
-          })}
-        </ul>
+        files.length > 0 && (
+          <ul className="flex max-h-32 flex-col overflow-y-auto">
+            {files.map((f) => {
+              const n = picked(f);
+              const usable = f.drawings.filter((d) => d.status !== "failed").length;
+              return (
+                <SourceRow
+                  key={f.key}
+                  label={f.label}
+                  meta={n > 0 && n < usable ? `${n} of ${usable} pages` : f.meta}
+                  status={f.status}
+                  checked={n > 0}
+                  onChange={(on) => onToggleFile(f, on)}
+                />
+              );
+            })}
+          </ul>
+        )
       )}
       {unimported && unimported.length > 0 && (
         <div className="mt-2 border-t border-line pt-2">
