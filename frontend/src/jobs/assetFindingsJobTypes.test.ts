@@ -16,11 +16,11 @@ const TYPES = ["asset_glb_import", "asset_pose", "asset_place", "asset_group", "
 
 describe("the asset findings job types", () => {
   it.each([
-    ["asset_glb_import", "GLB import", "Importing a GLB", "GLB imported"],
+    ["asset_glb_import", "GLB import", "Importing a GLB", "GLB imported as a new version"],
     ["asset_pose", "Photo poses", "Estimating photo poses", "Photo poses estimated"],
-    ["asset_place", "Sighting placement", "Placing sightings", "Sightings placed"],
-    ["asset_group", "Sighting grouping", "Grouping sightings", "Sightings grouped into findings"],
-    ["review_kit_import", "Review import", "Importing a review", "Review imported"],
+    ["asset_place", "Sighting placement", "Placing sightings", "Placements computed"],
+    ["asset_group", "Sighting grouping", "Grouping sightings", "Findings regrouped"],
+    ["review_kit_import", "Review import", "Importing a review", "Review job imported"],
   ] as const)("%s is titled, phrased and toasted", (type, title, verb, toast) => {
     expect(jobTitle(job(type))).toBe(title);
     expect(JOB_VERB[type]).toBe(verb);
@@ -45,13 +45,13 @@ describe("the asset findings job types", () => {
 
   it("treats a review dry run as a check, not an import", () => {
     const dry = { ...job("review_kit_import", { dry_run: true }), state: "succeeded" as const };
-    expect(jobToastText(dry)).toBe("Review checked");
+    expect(jobToastText(dry)).toBe("Review folder checked");
     expect(resultTarget(dry, "p")).toBeNull();
   });
 
   it("names the job in a failure toast", () => {
     expect(jobToastText({ ...job("asset_place"), state: "failed", error: "The GLB has no faces" })).toBe(
-      "Sighting placement failed: The GLB has no faces",
+      "Placement failed: The GLB has no faces",
     );
   });
 });

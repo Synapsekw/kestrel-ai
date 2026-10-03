@@ -84,6 +84,29 @@ export async function routeAssetReview(page: Page): Promise<{ posts: string[]; i
       finished_at: null,
     },
   });
+  // The contract's Project example lists only object types; the import maps the kit's "crack" to a defect type, so add it.
+  await page.route(
+    (u) => u.pathname === `/api/v1/projects/${P}`,
+    async (route) => {
+      if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      const res = await route.fetch();
+      const project = (await res.json()) as { classes: object[] };
+      project.classes = [
+        ...project.classes,
+        {
+          id: FINDINGS[0].type_id,
+          name: "crack",
+          colour: "#ff5a4f",
+          hotkey: "c",
+          order: project.classes.length,
+          kind: "defect",
+          default_severity: 2,
+          group: "Concrete defects",
+        },
+      ];
+      return json(route, project);
+    },
+  );
   await page.route(
     (u) => u.pathname === `/api/v1/projects/${P}/findings`,
     (route) =>
