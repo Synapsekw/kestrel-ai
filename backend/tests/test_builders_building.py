@@ -91,6 +91,16 @@ def test_a_low_building_shrinks_its_roof_stack_instead_of_failing():
     assert walls[1, 1] - walls[0, 1] == pytest.approx(0.5)
 
 
+def test_square_analyzer_house_keeps_hvac_off_the_door_wall():
+    item = make_item(
+        "analyzer_house", {"kind": "rect", "center": [E0, N0], "size": [3.0, 3.0], "rot_deg": 0}, top_el=103.5
+    )
+    nodes = by_name(build_ok(item))
+    door, hvac = nodes["doors"].geometry.bounds, nodes["hvac"].geometry.bounds
+    overlap = np.minimum(door[1], hvac[1]) - np.maximum(door[0], hvac[0])
+    assert (overlap <= 1e-9).any()  # the boxes are disjoint along at least one axis
+
+
 def test_low_lod_drops_glazing():
     nodes = by_name(build_ok(make_item("building", RECT, top_el=109.0), BuildCtx(grid=None, lod=0.4)))
     assert "glazing" not in nodes

@@ -114,9 +114,12 @@ def house(poly: Polygon, h: float, p: HouseParams, lod: float) -> list[MeshNode]
                 bands.append(bar(a + d * 0.5 + off, b - d * 0.5 + off, y0, y1, 0.04))
         if bands:
             nodes.append(MeshNode("glazing", "Glass", merge(bands)))
+    door_edges: set[int] = set()  # the HVAC unit keeps off these walls
     if p.doors:
         doors = []
-        for a, b, nrm, length in sorted(edges, key=lambda e: (-e[3], tuple(e[0])))[: p.doors]:
+        order = sorted(range(len(edges)), key=lambda i: (-edges[i][3], tuple(edges[i][0])))
+        for i in order[: p.doors]:
+            a, b, nrm, length = edges[i]
             w = min(p.door_w, length - 0.4)
             dh = min(p.door_h, wall_top - plinth - 0.1)
             if w <= 0.3 or dh <= 0.5:
@@ -125,10 +128,12 @@ def house(poly: Polygon, h: float, p: HouseParams, lod: float) -> list[MeshNode]
             d = (b - a) / length
             off = nrm * PROUD
             doors.append(bar(mid - d * w / 2 + off, mid + d * w / 2 + off, plinth, plinth + dh, 0.05))
+            door_edges.add(i)
         if doors:
             nodes.append(MeshNode("doors", "Steel_Dark", merge(doors)))
     if p.hvac:
-        a, b, nrm, length = min(edges, key=lambda e: (e[3], tuple(e[0])))
+        free = [e for i, e in enumerate(edges) if i not in door_edges] or edges
+        a, b, nrm, length = min(free, key=lambda e: (e[3], tuple(e[0])))
         d = (b - a) / length
         w = min(1.0, length - 0.4)
         y0 = plinth + min(1.5, max(wall_top - plinth - 1.0, 0.0))
