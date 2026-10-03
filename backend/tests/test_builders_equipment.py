@@ -718,3 +718,38 @@ def test_transformer_bays_fins_and_walls_are_instanced():
 def test_generator_doors_are_instanced():
     doors = next(n for n in built("generator") if n.name == "doors").geometry
     assert len(doors.transforms) == 6
+
+
+def test_compressor_floor_below_the_machinery_is_refused():
+    c = CASES["compressor"]
+    low = make_item("compressor", c.footprint, h=c.h, params={"operating_floor_m": 2.0})
+    with pytest.raises(ValueError, match="operating floor"):
+        REGISTRY["compressor"].fn(low, CTX)
+    _, flags = build_item(low, CTX)
+    assert [f for f in flags if f.code == "builder_fallback"]
+    assert "floor_deck" in {n.name for n in built("compressor")}
+
+
+@pytest.mark.parametrize(("size", "h"), [((20.0, 20.0), 20.0), ((30.0, 24.0), 30.0)])
+def test_compressor_large_units_stay_above_base(size, h):
+    nodes = REGISTRY["compressor"].fn(make_item("compressor", rect(*size), h=h), CTX)
+    assert bounds(nodes)[0][1] >= -0.01
+
+
+def test_generator_louvres_sit_on_the_radiator_face():
+    for along in (16.75, 3.0):
+        nodes = {
+            n.name: n for n in REGISTRY["generator"].fn(make_item("generator", rect(along, 2.0), h=3.0), CTX)
+        }
+        face = expanded(nodes["radiator"].geometry).bounds[1][0]
+        lo, hi = expanded(nodes["radiator_louvres"].geometry).bounds[:, 0]
+        assert lo == pytest.approx(face, abs=1e-6) and hi <= along / 2 + 1e-6
+
+
+def test_transformer_conservators_are_supported_from_the_tank():
+    nodes = {n.name: n for n in built("transformer")}
+    tank_top = expanded(nodes["tanks"].geometry).bounds[1][1]
+    sup = expanded(nodes["conservator_supports"].geometry).bounds
+    cons = expanded(nodes["conservators"].geometry).bounds
+    assert sup[0][1] == pytest.approx(tank_top, abs=1e-6) and sup[1][1] >= cons[0][1]
+    assert len(nodes["conservator_supports"].geometry.transforms) == 4

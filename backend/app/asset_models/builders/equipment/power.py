@@ -53,7 +53,8 @@ def build_generator(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     louvres = max(3, int(he / 0.25))
     door = k.box(0.9, min(2.1, 0.8 * he), 0.03)
     door_xf = [k.T(-s * 0.1 * L + o * L, 0.6, sz * 0.451 * W) for o in (-0.25, 0.0, 0.25) for sz in (-1, 1)]
-    louvre_xf = [k.T(s * 0.465 * L, 0.6 + (j + 0.5) * he / louvres, 0) for j in range(louvres)]
+    lx = min(0.46 * L + 0.02, 0.5 * L - 0.02)  # flush on the radiator face
+    louvre_xf = [k.T(s * lx, 0.6 + (j + 0.5) * he / louvres, 0) for j in range(louvres)]
     nodes = [
         k.node("plinth", "Concrete", k.box(L, 0.2, W)),
         k.node("fuel_base", "Steel_Dark", k.box(0.95 * L, 0.4, 0.9 * W, y0=0.2)),
@@ -107,6 +108,9 @@ def build_transformer(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         for j in range(6)
     ]
     bushings = [k.T(x, yt, z * W) for x in xs for z in (-0.1, 0.0, 0.1)]
+    supports = trimesh.util.concatenate(
+        [k.bar((0.12 * pb, yt, z), (0.12 * pb, yc, z), 0.08) for z in (-0.1 * W, 0.1 * W)]
+    )
     conservator = k.rod((0.12 * pb, yc, -0.15 * W), (0.12 * pb, yc, 0.15 * W), min(0.06 * H, 0.1 * pb), ctx)
     nodes = [
         MeshNode("plinths", "Concrete", per_bay(k.box(0.85 * pb, 0.3, 0.8 * W))),
@@ -114,6 +118,7 @@ def build_transformer(item: Item, ctx: BuildCtx) -> list[MeshNode]:
         MeshNode("radiator_fins", "Steel_Dark", k.inst(k.box(0.04, 0.4 * H, 0.1 * W), fins)),
         MeshNode("bushings", "Equipment_White", k.inst(k.vcyl(0.08, 0.18 * H, ctx), bushings)),
         MeshNode("conservators", "Steel_Dark", per_bay(conservator)),
+        MeshNode("conservator_supports", "Steel_Structure", per_bay(supports)),
         MeshNode("gantries", "Steel_Structure", per_bay(gantry)),
     ]
     if p.firewalls:

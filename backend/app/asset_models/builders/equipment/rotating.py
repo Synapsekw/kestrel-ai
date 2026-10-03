@@ -210,6 +210,8 @@ def build_pump_group(item: Item, ctx: BuildCtx) -> list[MeshNode]:
 
 
 H_COMP = 6.0
+FLOOR_CLEAR = 0.05  # m between the machinery top and the operating floor deck
+_UNDER_FLOOR = frozenset({"cylinders", "motor", "lube_oil_console", "casing", "gearbox"})
 
 
 class CompressorParams(Params):
@@ -262,7 +264,9 @@ def _recip(throws: int, L: float, W: float, y: float, top: float, ctx: BuildCtx)
         k.node(
             "flywheel",
             "Steel_Dark",
-            k.rod((-0.32 * L, y + rm, 0), (-0.29 * L, y + rm, 0), min(1.2 * rm, avail / 2 - 0.01), ctx),
+            k.rod(
+                (-0.32 * L, y + rm, 0), (-0.29 * L, y + rm, 0), min(1.2 * rm, avail / 2 - 0.01, y + rm), ctx
+            ),
         ),
         k.node(
             "lube_oil_console",
@@ -327,6 +331,9 @@ def build_compressor(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     )
     f = p.operating_floor_m
     if f is not None and 0.5 < f < top - k.RAIL_H - 0.1:
+        below = [n.geometry.bounds[1][1] for n in nodes if n.name in _UNDER_FLOOR]
+        if f < max(below) + FLOOR_CLEAR:
+            raise ValueError("compressor: operating floor would cut through the machinery")
         nodes += _floor(L, W, f)
     if p.enclosure:
         cols = [k.T(sx * (L / 2 - 0.15), 0.0, sz * (W / 2 - 0.15)) for sx in (-1, 1) for sz in (-1, 1)]
