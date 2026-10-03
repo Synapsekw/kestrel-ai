@@ -189,6 +189,16 @@ describe("ReportPreview", () => {
     expect(within(cover).getByRole("img", { name: "Logo" })).toHaveAttribute("src", "asset://logo1");
   });
 
+  it("draws the cover in the brand it is given", async () => {
+    const { container } = setup({
+      brand: { gradient: ["#141D2D", "#141D2D", "#9E0000"], fontFamily: null, logoSrc: null },
+    });
+    act(() => io.show(section("cover")));
+    await screen.findByText("North yard inspection");
+    const band = container.querySelector("[data-cover-band]") as HTMLElement;
+    expect(band.style.background).toContain("rgb(158, 0, 0)");
+  });
+
   it("requests a figure only when it is near, through the given resolver", async () => {
     setup();
     act(() => io.show(section("finding_pages")));

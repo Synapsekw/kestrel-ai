@@ -7,6 +7,8 @@ import { ApiContext, type ApiContextValue } from "@/api/client";
 import type { ReportConfig } from "@/api/reports";
 import { errorBody, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { LOGO_ASSET_ID, reportConfig } from "@/test/reportBuilderFixtures";
+import { EAND_ID, exampleBrands } from "@/test/brandFixtures";
+import type { Brand } from "@/api/brands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ReportSettings } from "./ReportSettings";
 
@@ -24,16 +26,19 @@ function Provider({ api, mode, children }: { api: ApiClient; mode: "mock" | "tau
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
 }
 
-function setup(opts: { mode?: "mock" | "tauri"; logoStatus?: number } = {}) {
+function setup(
+  opts: { mode?: "mock" | "tauri"; logoStatus?: number; brands?: Brand[] | null; config?: ReportConfig } = {},
+) {
   const onEdit = vi.fn();
-  let latest: ReportConfig = reportConfig();
+  let latest: ReportConfig = opts.config ?? reportConfig();
   function Harness() {
-    const [config, setConfig] = useState(reportConfig());
+    const [config, setConfig] = useState(opts.config ?? reportConfig());
     return (
       <ReportSettings
         projectId={PROJECT_ID}
         config={config}
         matchCount={38}
+        brands={opts.brands}
         onEdit={(change) => {
           setConfig((c) => {
             latest = change(c);
@@ -146,5 +151,32 @@ describe("ReportSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add logo" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The logo is not a PNG, JPEG or WebP image");
     expect(latest().cover.logo_asset_id).toBeNull();
+  });
+});
+
+describe("ReportSettings brand picker (spec 2026-10-02-asset-findings §5.8)", () => {
+  it("offers the Kestrel theme and every brand, and writes brand_id", () => {
+    const { latest } = setup({ brands: exampleBrands });
+    const select = screen.getByLabelText("Brand");
+    expect(
+      within(select)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Kestrel theme", "e&", "White label", "Orbit Aerials"]);
+    fireEvent.change(select, { target: { value: EAND_ID } });
+    expect(latest().brand_id).toBe(EAND_ID);
+    fireEvent.change(select, { target: { value: "" } });
+    expect(latest().brand_id).toBeNull();
+  });
+
+  it("keeps a deleted brand's id visible as not found", () => {
+    setup({ brands: exampleBrands, config: reportConfig({ brand_id: "gone" }) });
+    expect(screen.getByRole("option", { name: "Brand not found (Kestrel theme)" })).toBeDisabled();
+    expect(screen.getByLabelText("Brand")).toHaveValue("gone");
+  });
+
+  it("shows only the Kestrel theme while brands load", () => {
+    setup({ brands: null });
+    expect(within(screen.getByLabelText("Brand")).getAllByRole("option")).toHaveLength(1);
   });
 });

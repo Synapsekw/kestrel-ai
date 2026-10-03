@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useBrandLogoSrc, useBrands, type Brand } from "@/api/brands";
 import { ApiFailure, codeOf, messageOf } from "@/api/errors";
 import { useReportActions, versionOutline, type ReportConfig, type ReportVersion } from "@/api/reports";
 import { pushLog } from "@/app/diagnostics";
 import { Alert, Button, Icon, Input, Skeleton, cx, focusRing, toast } from "@/ui";
 import { normaliseSections, type RenderFormat } from "./builderModel";
 import { versionName, withoutStop } from "./format";
+import { coverBrandOf } from "./preview/coverBrand";
 import { ReportPreview, type ReportPreviewHandle } from "./ReportPreview";
 import { RenderButton } from "./RenderButton";
 import { ReportHistory } from "./ReportHistory";
@@ -29,6 +31,12 @@ const SAVE_TEXT: Partial<Record<SaveState, string>> = {
  */
 export function ReportBuilder({ projectId, reportId }: { projectId: string; reportId: string }) {
   const draft = useReportDraft(projectId, reportId);
+  const brandList = useBrands();
+  const brandLogo = useBrandLogoSrc();
+  const coverOf = (brandId: string | null | undefined) => {
+    const b: Brand | undefined = brandList.brands.find((x) => x.id === brandId);
+    return b ? coverBrandOf(b, brandLogo(b, "on_dark")) : null;
+  };
   const versions = useVersionHistory(projectId, reportId);
   const actions = useReportActions(projectId);
   const previewRef = useRef<ReportPreviewHandle>(null);
@@ -230,6 +238,7 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
                 loadBlocks={actions.versionLoader(reportId, viewed.n)}
                 pageCount={viewed.v.stats.page_count}
                 paper={viewed.v.config.paper.size}
+                brand={coverOf(viewed.v.config.brand_id)}
                 className="min-h-0 flex-1"
               />
             </>
@@ -242,12 +251,19 @@ export function ReportBuilder({ projectId, reportId }: { projectId: string; repo
               loadBlocks={actions.blocksLoader(reportId)}
               pageCount={versions.lastPages}
               paper={config.paper.size}
+              brand={coverOf(config.brand_id)}
               className="min-h-0 flex-1"
             />
           )}
         </div>
         <aside aria-label="Report settings" className="min-h-0 overflow-y-auto border-l border-line p-4">
-          <ReportSettings projectId={projectId} config={config} onEdit={edit} matchCount={matchCount} />
+          <ReportSettings
+            projectId={projectId}
+            config={config}
+            onEdit={edit}
+            matchCount={matchCount}
+            brands={brandList.loading ? null : brandList.brands}
+          />
         </aside>
       </div>
       <ReportHistory
