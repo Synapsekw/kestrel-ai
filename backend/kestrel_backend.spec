@@ -97,6 +97,9 @@ datas = (
     # Report fonts (spec 2026-09-26-reports §5): Space Grotesk + JetBrains Mono TTFs and their OFL texts,
     # read from disk by app/reports/pdf/fonts.py (Path(__file__)-relative, like the Alembic folders).
     + [(str(Path(SPECPATH) / "app" / "reports" / "fonts"), "app/reports/fonts")]
+    # Brand fonts (spec 2026-10-02-asset-findings §5.8): Nunito Sans, Poppins, Inter TTFs and their OFL
+    # texts, read from disk by app/brands/fonts.py (Path(__file__)-relative, like the report fonts).
+    + [(str(Path(SPECPATH) / "app" / "brands" / "fonts"), "app/brands/fonts")]
 )
 
 # PotreeConverter 2.1.5 + laszip.dll + the MSVC runtime + licence texts (spec §14), fetched by

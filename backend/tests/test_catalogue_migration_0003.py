@@ -341,7 +341,7 @@ def test_a_failure_after_the_rebuild_rolls_back_and_the_next_open_recovers(tmp_p
     cat = open_catalogue(data)
     try:
         with cat.engine.connect() as conn:
-            assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
+            assert conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() >= "0003"
         with cat.session() as s:
             assert sorted(s.execute(select(ProjectTemplate.id)).scalars()) == sorted(BUILTIN_IDS)
     finally:

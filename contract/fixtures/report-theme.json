@@ -48,5 +48,16 @@
   "chart": {
     "height_mm": 70,
     "palette": ["#6A5CFF", "#0F8F76", "#8F7BFF", "#5FE3C0", "#5E5C7A", "#3B2A7A"]
+  },
+  "brand": {
+    "colours": {
+      "ink": "ink",
+      "rule": "line",
+      "head_fill": "pale",
+      "violet": "accent",
+      "violet_print": "accent_dark"
+    },
+    "cover_gradient": ["navy", "navy", "accent_dark"],
+    "chart_lead": "accent"
   }
 }

@@ -156,7 +156,7 @@ for _module in (
     # A unit inserts its own router module above its stubs module and deletes its tuples there.
     "app.asset_review.review_router",
     "app.asset_review.stubs",
-    "app.brands.stubs",
+    "app.brands.router",  # report brands: app level, in catalogue.db (plan D2)
 ):
     try:
         api_router.include_router(importlib.import_module(_module).router)
