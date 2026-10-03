@@ -12,6 +12,7 @@ from app.reports.context import PAGE, ComposeContext, FindingRow, SectionStats, 
 from app.reports.figures import cloud, image
 from app.reports.figures import map as map_figures
 from app.reports.schemas import Block, ReportSectionDoc
+from app.reports.sections import asset_pages
 
 KEY = "finding_pages"
 TITLE = "Finding details"
@@ -36,7 +37,16 @@ def finding_kv(row: FindingRow) -> list[tuple[str, str]]:
     return rows
 
 
+def min_where(ctx: ComposeContext):
+    """`min_severity` (spec 2026-10-02-asset-findings §10): pages only for severity >= n; ungraded
+    findings are left out while it is set. The findings table still lists every finding."""
+    m = getattr(ctx.options(KEY), "min_severity", None)
+    return None if m is None else Finding.severity >= int(m)
+
+
 def finding_block(ctx: ComposeContext, row: FindingRow) -> Block:
+    if row.anchor_kind == "asset":
+        return asset_pages.asset_finding_block(ctx, row)
     opts = ctx.options(KEY)
     figures = []
     for kind in opts.snapshots:
@@ -47,7 +57,7 @@ def finding_block(ctx: ComposeContext, row: FindingRow) -> Block:
 
 
 def page(ctx: ComposeContext, cursor: str | None, limit: int) -> tuple[list[Block], str | None]:
-    rows, nxt = findings_page(ctx, "number", cursor, limit)
+    rows, nxt = findings_page(ctx, "number", cursor, limit, where=min_where(ctx))
     if not rows and cursor is None:
         return [blocks.para(blocks.EMPTY, style="note")], None
     return [finding_block(ctx, r) for r in rows], nxt
@@ -68,7 +78,7 @@ def outline(ctx: ComposeContext) -> SectionStats:
         hook = getattr(FIGURE_MODULES[str(kind)], "warnings", None)
         if hook is not None:
             hook(ctx)
-    n = count_findings(ctx)
+    n = count_findings(ctx, where=min_where(ctx))
     return SectionStats(block_count=max(n, 1), estimated_pages=max(n, 1))
 
 
@@ -93,4 +103,4 @@ def fingerprint(ctx: ComposeContext) -> str:
     for kind in hooks:  # a figure module's optional `fingerprint(ctx) -> str` joins the etag
         fp = getattr(FIGURE_MODULES[kind], "fingerprint", None)
         extra.append(f"{kind}:{fp(ctx)}" if fp is not None else kind)
-    return f"{tuple(com)}|{tuple(att)}|{'|'.join(extra)}"
+    return f"{tuple(com)}|{tuple(att)}|{'|'.join(extra)}|{asset_pages.fingerprint(ctx)}"
