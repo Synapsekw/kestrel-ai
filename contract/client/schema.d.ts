@@ -14096,7 +14096,7 @@ export interface components {
             attachment_id: string;
             out: number[];
         };
-        SnapshotSpec: components["schemas"]["ImageCropSpec"] | components["schemas"]["MapSpec"] | components["schemas"]["ElevationSpec"] | components["schemas"]["PairSpec"] | components["schemas"]["View3dSpec"] | components["schemas"]["VolumePlanSpec"] | components["schemas"]["AttachmentSpec"];
+        SnapshotSpec: components["schemas"]["ImageCropSpec"] | components["schemas"]["MapSpec"] | components["schemas"]["ElevationSpec"] | components["schemas"]["PairSpec"] | components["schemas"]["View3dSpec"] | components["schemas"]["VolumePlanSpec"] | components["schemas"]["AttachmentSpec"] | components["schemas"]["AssetLocatorSpec"];
         /**
          * @description a figure's snapshot: fetch it at `/projects/{projectId}/report-snapshots/{key}?spec=<base64url canonical JSON of spec>`
          * @example {
@@ -14286,6 +14286,7 @@ export interface components {
             note: string;
             photos: components["schemas"]["Figure"][];
             comments: components["schemas"]["Comment"][];
+            asset: components["schemas"]["FindingAsset"] | null;
         };
         PageBreakBlock: {
             /**
@@ -14328,7 +14329,96 @@ export interface components {
             logo: components["schemas"]["CoverLogo"] | null;
             locator: components["schemas"]["Figure"] | null;
         };
-        Block: components["schemas"]["Heading"] | components["schemas"]["Para"] | components["schemas"]["Kv"] | components["schemas"]["Kpis"] | components["schemas"]["Table"] | components["schemas"]["Figure"] | components["schemas"]["FigureRow"] | components["schemas"]["Chart"] | components["schemas"]["FindingBlock"] | components["schemas"]["PageBreakBlock"] | components["schemas"]["VolumeBlock"] | components["schemas"]["CoverBlock"];
+        AssetDrawingRect: {
+            x0: number;
+            y0: number;
+            x1: number;
+            y1: number;
+        };
+        /** @description a zone band across the plot; y0 is its top edge (drawing units, y grows down) */
+        AssetDrawingBand: {
+            y0: number;
+            y1: number;
+            label: string;
+            shaded: boolean;
+        };
+        AssetDrawingLevel: {
+            x0: number;
+            x1: number;
+            y: number;
+        };
+        /** @description a grid line at `at` (x for x_ticks, y for y_ticks) with its label */
+        AssetDrawingTick: {
+            at: number;
+            label: string;
+        };
+        AssetDrawingDot: {
+            x: number;
+            y: number;
+            r: number;
+            colour: string;
+            label: string;
+        };
+        /** @description the height locator's level line */
+        AssetDrawingMarker: {
+            y: number;
+            x0: number;
+            x1: number;
+            colour: string;
+        };
+        /** @description vector primitives in drawing units (y grows down) that the PDF and the preview draw the same way: the asset findings map and the height locator */
+        AssetDrawing: {
+            width: number;
+            height: number;
+            font_size: number;
+            plot: components["schemas"]["AssetDrawingRect"];
+            silhouette: number[][];
+            bands: components["schemas"]["AssetDrawingBand"][];
+            levels: components["schemas"]["AssetDrawingLevel"][];
+            x_ticks: components["schemas"]["AssetDrawingTick"][];
+            y_ticks: components["schemas"]["AssetDrawingTick"][];
+            x_title: string;
+            dots: components["schemas"]["AssetDrawingDot"][];
+            marker: components["schemas"]["AssetDrawingMarker"] | null;
+        };
+        /** @description the asset findings map (spec 2026-10-02-asset-findings §10): x is the side, y the height */
+        AssetMapBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset_map";
+            title: string;
+            drawing: components["schemas"]["AssetDrawing"];
+            caption: string;
+            width_mm: number;
+            height_mm: number;
+        };
+        /** @description an asset finding page's extras: the kicker line and the height locator on the silhouette */
+        FindingAsset: {
+            kicker: string;
+            height_locator: components["schemas"]["AssetDrawing"] | null;
+        };
+        /** @description a finding on its asset model, rendered on the server: orthographic along the normal, a pin or the patch outline (decision A9) */
+        AssetLocatorSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset_locator";
+            asset_model_id: string;
+            version: number;
+            sighting_id: string | null;
+            /** @enum {string} */
+            mark: "pin" | "patch";
+            center: number[];
+            normal: number[];
+            half_extent_m: number;
+            oblique_deg: number;
+            colour: string;
+            out: number[];
+        };
+        Block: components["schemas"]["Heading"] | components["schemas"]["Para"] | components["schemas"]["Kv"] | components["schemas"]["Kpis"] | components["schemas"]["Table"] | components["schemas"]["Figure"] | components["schemas"]["FigureRow"] | components["schemas"]["Chart"] | components["schemas"]["FindingBlock"] | components["schemas"]["PageBreakBlock"] | components["schemas"]["VolumeBlock"] | components["schemas"]["CoverBlock"] | components["schemas"]["AssetMapBlock"];
         ReportSectionDoc: {
             key: components["schemas"]["SectionKey"];
             title: string;

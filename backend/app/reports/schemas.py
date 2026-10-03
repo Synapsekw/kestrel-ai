@@ -69,7 +69,9 @@ ColumnAlign = Literal["left", "center", "right"]
 ColumnStyle = Literal["text", "mono"]
 KpiTone = Literal["neutral", "good", "bad", "warn"]
 ChartKind = Literal["bar", "stacked_bar", "line"]
-SnapshotKind = Literal["image_crop", "map", "elevation", "pair", "view3d", "volume_plan", "attachment"]
+SnapshotKind = Literal[
+    "image_crop", "map", "elevation", "pair", "view3d", "volume_plan", "attachment", "asset_locator"
+]
 SNAPSHOT_KINDS: tuple[SnapshotKind, ...] = (
     "image_crop",
     "map",
@@ -78,6 +80,7 @@ SNAPSHOT_KINDS: tuple[SnapshotKind, ...] = (
     "view3d",
     "volume_plan",
     "attachment",
+    "asset_locator",
 )
 BlockKind = Literal[
     "heading",
@@ -92,6 +95,7 @@ BlockKind = Literal[
     "page_break",
     "volume",
     "cover",
+    "asset_map",
 ]
 BLOCK_KINDS: tuple[BlockKind, ...] = (
     "heading",
@@ -106,6 +110,7 @@ BLOCK_KINDS: tuple[BlockKind, ...] = (
     "page_break",
     "volume",
     "cover",
+    "asset_map",
 )
 
 Colour = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
@@ -368,8 +373,32 @@ class AttachmentSpec(_Strict):
     out: OutSize = Field(default_factory=lambda: [800, 600])
 
 
+Vec3 = Annotated[list[float], Field(min_length=3, max_length=3)]
+
+
+class AssetLocatorSpec(_Strict):
+    kind: Literal["asset_locator"] = "asset_locator"
+    asset_model_id: str
+    version: int = Field(ge=1)
+    sighting_id: str | None = None
+    mark: Literal["pin", "patch"]
+    center: Vec3
+    normal: Vec3
+    half_extent_m: float = Field(gt=0, le=10000)
+    oblique_deg: float = Field(0.0, ge=-89, le=89)
+    colour: Colour
+    out: OutSize = Field(default_factory=lambda: [900, 900])
+
+
 SnapshotSpec = Annotated[
-    ImageCropSpec | MapSpec | ElevationSpec | PairSpec | View3dSpec | VolumePlanSpec | AttachmentSpec,
+    ImageCropSpec
+    | MapSpec
+    | ElevationSpec
+    | PairSpec
+    | View3dSpec
+    | VolumePlanSpec
+    | AttachmentSpec
+    | AssetLocatorSpec,
     Field(discriminator="kind"),
 ]
 
@@ -481,6 +510,77 @@ class Comment(BaseModel):
     created_at: datetime
 
 
+class AssetDrawingRect(BaseModel):
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+class AssetDrawingBand(BaseModel):
+    y0: float
+    y1: float
+    label: str
+    shaded: bool
+
+
+class AssetDrawingLevel(BaseModel):
+    x0: float
+    x1: float
+    y: float
+
+
+class AssetDrawingTick(BaseModel):
+    at: float
+    label: str
+
+
+class AssetDrawingDot(BaseModel):
+    x: float
+    y: float
+    r: float = Field(gt=0)
+    colour: Colour
+    label: str
+
+
+class AssetDrawingMarker(BaseModel):
+    y: float
+    x0: float
+    x1: float
+    colour: Colour
+
+
+class AssetDrawing(BaseModel):
+    """Vector primitives in drawing units, y down: the PDF and the preview draw the same ones."""
+
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    font_size: float = Field(gt=0)
+    plot: AssetDrawingRect
+    silhouette: list[Point2] = Field(default_factory=list)
+    bands: list[AssetDrawingBand] = Field(default_factory=list)
+    levels: list[AssetDrawingLevel] = Field(default_factory=list)
+    x_ticks: list[AssetDrawingTick] = Field(default_factory=list)
+    y_ticks: list[AssetDrawingTick] = Field(default_factory=list)
+    x_title: str = ""
+    dots: list[AssetDrawingDot] = Field(default_factory=list)
+    marker: AssetDrawingMarker | None = None
+
+
+class AssetMapBlock(BaseModel):
+    kind: Literal["asset_map"] = "asset_map"
+    title: str = ""
+    drawing: AssetDrawing
+    caption: str = ""
+    width_mm: float = Field(gt=0, le=300)
+    height_mm: float = Field(gt=0, le=300)
+
+
+class FindingAsset(BaseModel):
+    kicker: str
+    height_locator: AssetDrawing | None = None
+
+
 class FindingBlock(BaseModel):
     kind: Literal["finding"] = "finding"
     finding_id: str
@@ -491,6 +591,7 @@ class FindingBlock(BaseModel):
     note: str = ""
     photos: list[Figure] = Field(default_factory=list)
     comments: list[Comment] = Field(default_factory=list)
+    asset: FindingAsset | None = None
 
 
 class PageBreakBlock(BaseModel):
@@ -537,7 +638,8 @@ Block = Annotated[
     | FindingBlock
     | PageBreakBlock
     | VolumeBlock
-    | CoverBlock,
+    | CoverBlock
+    | AssetMapBlock,
     Field(discriminator="kind"),
 ]
 

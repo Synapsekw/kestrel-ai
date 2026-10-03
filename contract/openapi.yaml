@@ -15412,6 +15412,7 @@ components:
         - $ref: "#/components/schemas/View3dSpec"
         - $ref: "#/components/schemas/VolumePlanSpec"
         - $ref: "#/components/schemas/AttachmentSpec"
+        - $ref: "#/components/schemas/AssetLocatorSpec"
       discriminator:
         propertyName: kind
         mapping:
@@ -15422,6 +15423,7 @@ components:
           view3d: "#/components/schemas/View3dSpec"
           volume_plan: "#/components/schemas/VolumePlanSpec"
           attachment: "#/components/schemas/AttachmentSpec"
+          asset_locator: "#/components/schemas/AssetLocatorSpec"
     SnapshotRef:
       type: object
       description: "a figure's snapshot: fetch it at `/projects/{projectId}/report-snapshots/{key}?spec=<base64url canonical JSON of spec>`"
@@ -15553,7 +15555,7 @@ components:
     FindingBlock:
       type: object
       description: "one finding page (spec §7.3)"
-      required: [kind, finding_id, number, head, figures, kv, note, photos, comments]
+      required: [kind, finding_id, number, head, figures, kv, note, photos, comments, asset]
       properties:
         kind: { type: string, enum: [finding] }
         finding_id: { type: string }
@@ -15564,6 +15566,10 @@ components:
         note: { type: string }
         photos: { type: array, items: { $ref: "#/components/schemas/Figure" } }
         comments: { type: array, items: { $ref: "#/components/schemas/Comment" } }
+        asset:
+          oneOf:
+            - $ref: "#/components/schemas/FindingAsset"
+            - type: "null"
     PageBreakBlock:
       type: object
       required: [kind]
@@ -15608,6 +15614,113 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Figure"
             - type: "null"
+    AssetDrawingRect:
+      type: object
+      required: [x0, y0, x1, y1]
+      properties:
+        x0: { type: number }
+        y0: { type: number }
+        x1: { type: number }
+        y1: { type: number }
+    AssetDrawingBand:
+      type: object
+      description: "a zone band across the plot; y0 is its top edge (drawing units, y grows down)"
+      required: [y0, y1, label, shaded]
+      properties:
+        y0: { type: number }
+        y1: { type: number }
+        label: { type: string }
+        shaded: { type: boolean }
+    AssetDrawingLevel:
+      type: object
+      required: [x0, x1, y]
+      properties:
+        x0: { type: number }
+        x1: { type: number }
+        y: { type: number }
+    AssetDrawingTick:
+      type: object
+      description: "a grid line at `at` (x for x_ticks, y for y_ticks) with its label"
+      required: [at, label]
+      properties:
+        at: { type: number }
+        label: { type: string }
+    AssetDrawingDot:
+      type: object
+      required: [x, y, r, colour, label]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        r: { type: number, exclusiveMinimum: 0 }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        label: { type: string }
+    AssetDrawingMarker:
+      type: object
+      description: "the height locator's level line"
+      required: [y, x0, x1, colour]
+      properties:
+        y: { type: number }
+        x0: { type: number }
+        x1: { type: number }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+    AssetDrawing:
+      type: object
+      description: "vector primitives in drawing units (y grows down) that the PDF and the preview draw the same way: the asset findings map and the height locator"
+      required: [width, height, font_size, plot, silhouette, bands, levels, x_ticks, y_ticks, x_title, dots, marker]
+      properties:
+        width: { type: number, exclusiveMinimum: 0 }
+        height: { type: number, exclusiveMinimum: 0 }
+        font_size: { type: number, exclusiveMinimum: 0 }
+        plot: { $ref: "#/components/schemas/AssetDrawingRect" }
+        silhouette: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: number } } }
+        bands: { type: array, items: { $ref: "#/components/schemas/AssetDrawingBand" } }
+        levels: { type: array, items: { $ref: "#/components/schemas/AssetDrawingLevel" } }
+        x_ticks: { type: array, items: { $ref: "#/components/schemas/AssetDrawingTick" } }
+        y_ticks: { type: array, items: { $ref: "#/components/schemas/AssetDrawingTick" } }
+        x_title: { type: string }
+        dots: { type: array, items: { $ref: "#/components/schemas/AssetDrawingDot" } }
+        marker:
+          oneOf:
+            - $ref: "#/components/schemas/AssetDrawingMarker"
+            - type: "null"
+    AssetMapBlock:
+      type: object
+      description: "the asset findings map (spec 2026-10-02-asset-findings §10): x is the side, y the height"
+      required: [kind, title, drawing, caption, width_mm, height_mm]
+      properties:
+        kind: { type: string, enum: [asset_map] }
+        title: { type: string }
+        drawing: { $ref: "#/components/schemas/AssetDrawing" }
+        caption: { type: string }
+        width_mm: { type: number, exclusiveMinimum: 0, maximum: 300 }
+        height_mm: { type: number, exclusiveMinimum: 0, maximum: 300 }
+    FindingAsset:
+      type: object
+      description: "an asset finding page's extras: the kicker line and the height locator on the silhouette"
+      required: [kicker, height_locator]
+      properties:
+        kicker: { type: string }
+        height_locator:
+          oneOf:
+            - $ref: "#/components/schemas/AssetDrawing"
+            - type: "null"
+    AssetLocatorSpec:
+      type: object
+      additionalProperties: false
+      description: "a finding on its asset model, rendered on the server: orthographic along the normal, a pin or the patch outline (decision A9)"
+      required: [kind, asset_model_id, version, sighting_id, mark, center, normal, half_extent_m, oblique_deg, colour, out]
+      properties:
+        kind: { type: string, enum: [asset_locator] }
+        asset_model_id: { type: string }
+        version: { type: integer, minimum: 1 }
+        sighting_id: { type: [string, "null"] }
+        mark: { type: string, enum: [pin, patch] }
+        center: { type: array, minItems: 3, maxItems: 3, items: { type: number } }
+        normal: { type: array, minItems: 3, maxItems: 3, items: { type: number } }
+        half_extent_m: { type: number, exclusiveMinimum: 0, maximum: 10000 }
+        oblique_deg: { type: number, minimum: -89, maximum: 89 }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        out: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 16, maximum: 2400 } }
     Block:
       oneOf:
         - $ref: "#/components/schemas/Heading"
@@ -15622,6 +15735,7 @@ components:
         - $ref: "#/components/schemas/PageBreakBlock"
         - $ref: "#/components/schemas/VolumeBlock"
         - $ref: "#/components/schemas/CoverBlock"
+        - $ref: "#/components/schemas/AssetMapBlock"
       discriminator:
         propertyName: kind
         mapping:
@@ -15637,6 +15751,7 @@ components:
           page_break: "#/components/schemas/PageBreakBlock"
           volume: "#/components/schemas/VolumeBlock"
           cover: "#/components/schemas/CoverBlock"
+          asset_map: "#/components/schemas/AssetMapBlock"
     ReportSectionDoc:
       type: object
       required: [key, title, blocks]

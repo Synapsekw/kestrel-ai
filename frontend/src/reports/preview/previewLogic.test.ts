@@ -29,6 +29,7 @@ const finding = (finding_id: string, number: number): Block =>
     note: "",
     photos: [],
     comments: [],
+    asset: null,
   }) as Block;
 
 const appendixBlocks: Block[] = [

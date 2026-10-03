@@ -24,6 +24,7 @@ export const ALL_BLOCK_KINDS = {
   page_break: true,
   volume: true,
   cover: true,
+  asset_map: true,
 } satisfies Record<BlockKind, true>;
 
 export function snap(key: string, missing_reason: string | null = null): SnapshotRef {
@@ -45,6 +46,45 @@ export function figure(
 ): BlockOf<"figure"> {
   return { kind: "figure", snapshot: snap(key, missing), caption, width_mm, height_mm };
 }
+
+export const MAP_FIXTURE: BlockOf<"asset_map"> = {
+  kind: "asset_map",
+  title: "Tower A",
+  caption: "Each dot is one finding at its height and side of the asset.",
+  width_mm: 174,
+  height_mm: 92,
+  drawing: {
+    width: 760,
+    height: 400,
+    font_size: 11,
+    plot: { x0: 110, y0: 10, x1: 622, y1: 362 },
+    silhouette: [
+      [20, 362],
+      [24, 10],
+      [40, 10],
+      [44, 362],
+    ],
+    bands: [
+      { y0: 10, y1: 120, label: "Upper floors", shaded: true },
+      { y0: 120, y1: 362, label: "Lower floors", shaded: false },
+    ],
+    levels: [{ x0: 18, x1: 46, y: 200 }],
+    x_ticks: [
+      { at: 110, label: "N" },
+      { at: 238, label: "E" },
+    ],
+    y_ticks: [
+      { at: 362, label: "0 m" },
+      { at: 10, label: "60 m" },
+    ],
+    x_title: "Side of the asset",
+    dots: [
+      { x: 300, y: 90, r: 5.5, colour: "#FF7A2D", label: "F-0042" },
+      { x: 400, y: 200, r: 5.5, colour: "#FAD34B", label: "F-0043" },
+    ],
+    marker: null,
+  },
+};
 
 const finding42: BlockOf<"finding"> = {
   kind: "finding",
@@ -71,6 +111,7 @@ const finding42: BlockOf<"finding"> = {
   note: "Hairline crack along the joint.",
   photos: [figure("p1", "", 40, 30), figure("p2", "North face", 40, 30)],
   comments: [{ author: "D. Jovanovic", text: "Checked on site.", created_at: "2026-09-24T09:12:00Z" }],
+  asset: null,
 };
 
 const finding43: BlockOf<"finding"> = {
@@ -90,6 +131,7 @@ const finding43: BlockOf<"finding"> = {
   note: "",
   photos: [],
   comments: [],
+  asset: null,
 };
 
 export const FIXTURE_BLOCKS: Record<SectionKey, Block[]> = {
@@ -147,6 +189,7 @@ export const FIXTURE_BLOCKS: Record<SectionKey, Block[]> = {
       unit: "",
     },
     { kind: "para", text: "Work progressed on the north face.\n\nTwo cracks need review.", style: "body" },
+    MAP_FIXTURE,
   ],
   findings_table: [
     {

@@ -62,6 +62,7 @@ INDEX_BLOCK_KINDS = {
     "page_break",
     "volume",
     "cover",
+    "asset_map",
 }
 INDEX_SNAPSHOT_KINDS = {
     "image_crop",
@@ -71,6 +72,7 @@ INDEX_SNAPSHOT_KINDS = {
     "view3d",
     "volume_plan",
     "attachment",
+    "asset_locator",
 }
 
 
@@ -140,6 +142,14 @@ def _members(union) -> tuple:
 def test_every_reports_schema_is_in_the_contract(spec):
     missing = REPORT_SCHEMAS - set(_schemas(spec))
     assert missing == set(), sorted(missing)
+
+
+def test_the_asset_shapes_are_in_the_contract(spec):
+    s = _schemas(spec)
+    for name in ("AssetDrawing", "AssetMapBlock", "FindingAsset", "AssetLocatorSpec"):
+        assert name in s, name
+    assert s["FindingBlock"]["properties"]["asset"]["oneOf"][1] == {"type": "null"}
+    assert s["AssetLocatorSpec"]["properties"]["mark"]["enum"] == ["pin", "patch"]
 
 
 @pytest.mark.parametrize("name", sorted(MODELS))

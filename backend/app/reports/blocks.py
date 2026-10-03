@@ -44,8 +44,13 @@ def kv(rows: Sequence[tuple[str, str]]) -> Block:
     return _block("kv", rows=[[a, b] for a, b in rows])
 
 
-def kpi(label: str, value: str, *, tone: str = "neutral", delta: str | None = None) -> dict:
-    return {"label": label, "value": value, "tone": tone, "delta": delta}
+def kpi(
+    label: str, value: str, *, tone: str = "neutral", delta: str | None = None, colour: str | None = None
+) -> dict:
+    out = {"label": label, "value": value, "tone": tone, "delta": delta}
+    if colour:
+        out["colour"] = colour
+    return out
 
 
 def kpis(items: Sequence[dict]) -> Block:
@@ -76,7 +81,13 @@ def page_break() -> Block:
     return _block("page_break")
 
 
-def finding(row: FindingRow, *, figures, kv_rows, photos, comments) -> Block:
+def asset_map(drawing: dict, *, title: str, caption: str, width_mm: float, height_mm: float) -> Block:
+    return _block(
+        "asset_map", title=title, drawing=drawing, caption=caption, width_mm=width_mm, height_mm=height_mm
+    )
+
+
+def finding(row: FindingRow, *, figures, kv_rows, photos, comments, asset: dict | None = None) -> Block:
     head = {
         "type_name": row.type_name,
         "type_colour": row.type_colour,
@@ -96,6 +107,7 @@ def finding(row: FindingRow, *, figures, kv_rows, photos, comments) -> Block:
         note=row.note,
         photos=list(photos),
         comments=[dict(c) for c in comments],
+        asset=asset,
     )
 
 
