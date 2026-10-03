@@ -157,6 +157,7 @@ for _module in (
     "app.asset_review.review_router",
     "app.asset_review.routes_poses",  # asset findings J2: photo poses (spec 2026-10-02-asset-findings §6.2)
     "app.asset_review.routes_glb",  # asset findings J1: GLB import
+    "app.asset_review.group_router",  # asset findings J4: Regroup (spec 2026-10-02-asset-findings §6.4)
     "app.asset_review.stubs",
     "app.brands.router",  # report brands: app level, in catalogue.db (plan D2)
 ):
