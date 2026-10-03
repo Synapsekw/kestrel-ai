@@ -1,4 +1,4 @@
-import type { AssetModel } from "@contract/client";
+import type { AssetModel, components } from "@contract/client";
 import type { Finding } from "@/api/findings";
 import type { ProjectOverview } from "@/api/overview";
 import { MODEL } from "./assetModelFixtures";
@@ -59,7 +59,7 @@ export const exampleAssetModel: AssetModel = {
       title: "Side",
       noun: "side",
     },
-    focus: { frustum: [4], oblique_deg: 0 },
+    focus: { frustum: [0.05, 0.125], oblique_deg: 0 },
     report: { pages: "finding", min_severity: 1 },
     component_map: [],
     facts: [],
@@ -158,7 +158,10 @@ export const FRAME = {
   levels: [3, 6, 9],
   presets: [],
 };
-export const REVIEW = {
+
+/** A resolved profile for the workspace's model `m1`: two zones, four faces. */
+export const REVIEW: NonNullable<AssetModel["review"]> = {
+  ...exampleAssetModel.review!,
   profile_id: "building_facade",
   finding_unit: "region",
   placement: "mixed",
@@ -168,18 +171,27 @@ export const REVIEW = {
     { id: "podium", label: "Podium", min_m: 0, max_m: 10 },
     { id: "middle", label: "Middle", min_m: 10, max_m: 50 },
   ],
-  sides: { type: "faces", labels: ["North", "East", "South", "West"], basis: "normal" },
+  sides: {
+    type: "faces",
+    labels: ["North", "East", "South", "West"],
+    basis: "normal",
+    title: "Side",
+    noun: "side",
+  },
   focus: { frustum: [0.05, 0.125], oblique_deg: 20 },
   report: { pages: "finding", min_severity: 2 },
 };
+
 /** The workspace's model `m1` with a frame and a resolved review profile. */
-export const MODEL_REVIEWED = { ...MODEL, frame: FRAME, review: REVIEW };
+export const MODEL_REVIEWED: AssetModel = { ...MODEL, frame: FRAME, review: REVIEW };
+
 const onM1 = {
   asset_model_id: "m1",
-  anchor: { ...exampleAssetFinding.anchor, asset_model_id: "m1" },
+  anchor: { kind: "asset" as const, asset_model_id: "m1", asset_version: 1, point: null, normal: null },
   data_id: "m1",
   type_id: "t-crack",
 };
+
 export const ASSET_FINDINGS: Finding[] = [
   {
     ...exampleAssetFinding,
@@ -196,7 +208,10 @@ export const ASSET_FINDINGS: Finding[] = [
   },
   { ...exampleUnplacedAssetFinding, ...onM1, id: "f2", number: 43, severity: 1 },
 ];
-export const PLACEMENTS = {
+
+type Placement = components["schemas"]["Placement"];
+
+export const PLACEMENTS: { version: number; items: Placement[]; next: string | null } = {
   version: 2,
   items: [
     {
@@ -207,7 +222,8 @@ export const PLACEMENTS = {
       normal: [0, 0, -1],
       size: 1.2,
       severity: 2,
-      patch_url: "x",
+      type_id: "t-crack",
+      has_patch: true,
     },
     {
       sighting_id: "s2",
@@ -215,9 +231,10 @@ export const PLACEMENTS = {
       kind: "point",
       center: [10, 12.5, -3],
       normal: [0, 0, -1],
-      size: null,
+      size: 0,
       severity: 2,
-      patch_url: null,
+      type_id: "t-crack",
+      has_patch: false,
     },
   ],
   next: null,
