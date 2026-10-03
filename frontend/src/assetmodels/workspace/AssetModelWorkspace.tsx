@@ -756,7 +756,7 @@ export function AssetModelWorkspace() {
     setDeleted((d) => new Set(d).add(m.id));
     toast("ok", `Deleted ${m.name}`);
     reload();
-    navigate(`/p/${projectId}/models`);
+    if (m.id === modelId) navigate(`/p/${projectId}/models`);
   };
 
   if (!all)

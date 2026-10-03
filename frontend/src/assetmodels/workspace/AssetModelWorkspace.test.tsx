@@ -361,6 +361,23 @@ describe("AssetModelWorkspace", () => {
     expect(await screen.findByText(/build a 3d model of the asset/i)).toBeInTheDocument();
   });
 
+  it("deleting another model from the picker keeps the open model", async () => {
+    const other = { ...MODEL, id: "m2", name: "Stack", tag: null, current_version: null, status: "empty" as const };
+    const { requests } = open([
+      { method: "GET", path: /\/asset-models$/, body: { items: [MODEL, other] } },
+      { method: "DELETE", path: /\/asset-models\/m2$/, status: 204 },
+    ]);
+    await screen.findByTestId("model-workspace");
+    fireEvent.click(screen.getByRole("button", { name: /asset model: feed tank/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Stack" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }));
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "DELETE" && /\/asset-models\/m2$/.test(r.url))).toBe(true),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models/m1`);
+    expect(screen.getByRole("button", { name: /asset model: feed tank/i })).toBeInTheDocument();
+  });
+
   it("a failed versions read offers a retry instead of saying there are none", async () => {
     const { requests } = open([
       {
