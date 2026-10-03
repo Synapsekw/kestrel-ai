@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { SPLIT_DEFAULT, SPLIT_KEY, SPLIT_MAX, SPLIT_MIN, clampSplit, readSplit, splitFromKey, splitFromPointer, writeSplit } from "./split";
+import {
+  SPLIT_DEFAULT,
+  SPLIT_KEY,
+  SPLIT_MAX,
+  SPLIT_MIN,
+  clampSplit,
+  readSplit,
+  splitFromKey,
+  splitFromPointer,
+  writeSplit,
+} from "./split";
 
 afterEach(() => localStorage.clear());
 

@@ -9,7 +9,10 @@ export function stepId(ids: readonly string[], current: string | null, dir: 1 | 
   return ids[i + dir] ?? null;
 }
 
-export function currentSighting(sightings: readonly FindingSighting[], wanted: string | null): FindingSighting | null {
+export function currentSighting(
+  sightings: readonly FindingSighting[],
+  wanted: string | null,
+): FindingSighting | null {
   return (
     sightings.find((s) => s.id === wanted) ?? sightings.find((s) => s.representative) ?? sightings[0] ?? null
   );
@@ -34,7 +37,9 @@ export function overlayRings(
     if (s.image_id !== imageId || !s.annotation_id) continue;
     const b = boxes[s.annotation_id];
     if (!b) continue;
-    const points = b.points?.length ? b.points.flat() : cornersOf(orientedRectOf(b)).flatMap((p) => [p.x, p.y]);
+    const points = b.points?.length
+      ? b.points.flat()
+      : cornersOf(orientedRectOf(b)).flatMap((p) => [p.x, p.y]);
     out.push({ id: s.id, points, colour: colourOf(s.severity ?? null) });
   }
   return out;
@@ -44,5 +49,11 @@ export function captureText(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return null;
-  return t.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return t.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

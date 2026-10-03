@@ -121,7 +121,11 @@ export const GLOBAL_KEYS: KeyEntry[] = [
   g("Delete", "delete", "Delete the selection"),
   g("Ctrl+Z", "undo", "Undo (while drawing, remove the last vertex)"),
   g("Ctrl+Y", "redo", "Redo"),
-  g("Space", "pan-hold", "Hold to pan from any tool; in split inspection, hold to compare with the bare photo"),
+  g(
+    "Space",
+    "pan-hold",
+    "Hold to pan from any tool; in split inspection, hold to compare with the bare photo",
+  ),
   g("V", "tool-select", "Select tool (Orbit in point clouds)"),
   g("H", "tool-pan", "Pan tool"),
   g("F", "fit", "Fit the image, the site or the cloud"),

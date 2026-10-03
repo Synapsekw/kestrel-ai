@@ -53,7 +53,10 @@ export function Splitter({
         focusRing,
       )}
     >
-      <span aria-hidden className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong group-hover:bg-accent" />
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong group-hover:bg-accent"
+      />
     </div>
   );
 }
