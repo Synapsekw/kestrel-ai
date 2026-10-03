@@ -144,7 +144,7 @@ export const assetOverview: ProjectOverview = {
 };
 
 // Shared with U2 (same exports; the coordinator keeps one copy at merge).
-export const FRAME = {
+export const FRAME: NonNullable<AssetModel["frame"]> = {
   origin: { lat: 25.2, lon: 55.3, ground_alt_m: 4 },
   north_offset_deg: 0,
   height_m: 74.4,
