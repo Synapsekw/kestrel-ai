@@ -20,9 +20,9 @@ def test_one_row_per_data_item_in_type_order(handle):
     )
     assert [b["kind"] for b in out] == ["table"]
     assert out[0]["rows"] == [
-        ["Image set", "Flight", "10 Sep 2026", "0 images", "—"],
+        ["Image set", "Flight", "10 Sep 2026", "0 images", "-"],
         ["Map", "Ortho", "20 Sep 2026", "100×80 px · GSD 2.5 cm", "EPSG:32633"],
-        ["Point cloud", "Scan", "—", "1,000 points", "EPSG:32633"],
+        ["Point cloud", "Scan", "-", "1,000 points", "EPSG:32633"],
     ]
 
 

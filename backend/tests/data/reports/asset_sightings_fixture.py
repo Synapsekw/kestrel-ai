@@ -1,0 +1,22 @@
+"""Writes asset_sightings.csv, the byte-exact expectation for the asset_sightings layout. The text is
+written by hand from the kit's records.csv_text rules, never by the writer under test: BOM, the 21
+columns, CRLF after every row, quotes only around values holding a quote, a comma or a newline.
+Run it once from backend/: python tests/data/reports/asset_sightings_fixture.py"""
+
+# ruff: noqa: E501
+from pathlib import Path
+
+LINES = [
+    "finding_id,defect_id,photo_id,file_name,severity,severity_label,class,component,zone,height_m_approx,"
+    "side_approx,bearing_deg_approx,placed_on_model,coverage_pct_of_photo,note,subject,flight,captured,"
+    "gps_lat,gps_lon,gps_alt_m",
+    'F01,F-0007,img-1,DJI_0001.JPG,2,Moderate,Sealant failure,"Panel, east",Level 07,41.20,West elevation,268,'
+    'yes,1.2500,"Gap ""wide"", 3 mm",,1,2026-02-14 10:22:31,25.08,55.14,120.5',
+    "F02,F-0007,img-2,DJI_0002.JPG,1,Minor,Sealant failure,,,,Not placed,,no,0.5000,"
+    '"line one\nline two",,1,2026-02-14 10:23:00,25.081,55.141,121.0',
+    ",,img-3,DJI_0003.JPG,,Uncertain,,,,38.00,,,no,0.0000,,,2,,,,",
+]
+
+if __name__ == "__main__":
+    out = Path(__file__).with_name("asset_sightings.csv")
+    out.write_bytes(("\ufeff" + "\r\n".join(LINES) + "\r\n").encode("utf-8"))

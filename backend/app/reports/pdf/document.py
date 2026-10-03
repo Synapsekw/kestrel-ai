@@ -11,8 +11,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import threading
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -32,7 +33,15 @@ from reportlab.platypus import (
 )
 
 from app.jobs.cancellation import JobCancelled
-from app.reports.pdf.canvas import PageMeta, band_height, canvas_class, draw_cover_band
+from app.reports.pdf import active
+from app.reports.pdf.canvas import (
+    COVER_LOGO_MM,
+    Furniture,
+    PageMeta,
+    band_height,
+    canvas_class,
+    draw_cover_band,
+)
 from app.reports.pdf.flowables import (
     FindingEnd,
     RenderContext,
@@ -42,11 +51,13 @@ from app.reports.pdf.flowables import (
     snapshot_refs,
 )
 from app.reports.pdf.flowables_text import text
-from app.reports.pdf.fonts import register_fonts
+from app.reports.pdf.fonts import brand_fonts, register_fonts
+from app.reports.pdf.logos import flat_logo
 from app.reports.pdf.styles import Styles, build_styles
 from app.reports.theme import THEME
 
 if TYPE_CHECKING:
+    from app.reports.brand import ResolvedBrand
     from app.reports.schemas import ReportDocument, SnapshotRef, VolumeBlock
 
 log = logging.getLogger(__name__)
@@ -72,6 +83,7 @@ class DocMeta:
     version_label: str
     generated_at: datetime
     paper: str
+    author: str = "Kestrel AI"
 
 
 @dataclass(frozen=True)
@@ -234,12 +246,13 @@ class _Doc(BaseDocTemplate):
         self.check()
 
 
-def _cover_frames(w: float, h: float) -> tuple[Frame, Frame]:
+def _cover_frames(w: float, h: float, brand_logo: bool = False) -> tuple[Frame, Frame]:
     m = THEME["page"]["margin_mm"] * mm
     chip_h = THEME["cover"]["logo_chip_mm"][1] * mm
     y0 = h - band_height(h)
     pad = dict(leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    band = Frame(m, y0 + 6 * mm, w - 2 * m, h - y0 - 6 * mm - m - chip_h - 4 * mm, id="band", **pad)
+    bottom = y0 + (m + COVER_LOGO_MM[1] * mm + 4 * mm if brand_logo else 6 * mm)
+    band = Frame(m, bottom, w - 2 * m, h - bottom - m - chip_h - 4 * mm, id="band", **pad)
     below = Frame(m, m, w - 2 * m, y0 - 8 * mm - m, id="below", **pad)
     return band, below
 
@@ -320,6 +333,7 @@ def _build(
     total: int | None,
     progress: Callable[[float], None],
     check_cancelled: Callable[[], None],
+    furniture: Furniture,
 ) -> PageMeta:
     w, h = PAGE_SIZES.get(meta.paper, A4)
     m = THEME["page"]["margin_mm"] * mm
@@ -327,17 +341,20 @@ def _build(
     body = Frame(m, m, w - 2 * m, h - 2 * m, id="body", **pad)
     ctx = RenderContext(styles, snapshot_path, volume_flowables, w - 2 * m, h - 2 * m)
     page_meta = PageMeta(meta.title, meta.version_label, meta.project, meta.generated_at, offset, total)
+    page_meta.furniture = furniture
     cover = _cover(doc)
     has_cover = bool(cover is not None and part and part[0].section_index == 0 and part[0].start == 0)
     templates = [PageTemplate(id="body", frames=[body])]
     band = None
     if has_cover:
-        band, below = _cover_frames(w, h)
+        band, below = _cover_frames(w, h, furniture.cover_logo is not None)
         logo = cover_logo(cover, out_dir)
         templates.insert(
             0,
             PageTemplate(
-                id="cover", frames=[band, below], onPage=lambda canv, _doc: draw_cover_band(canv, logo)
+                id="cover",
+                frames=[band, below],
+                onPage=lambda canv, _doc: draw_cover_band(canv, logo, furniture.cover_logo),
             ),
         )
         page_meta.cover_pages = frozenset({1})
@@ -348,7 +365,7 @@ def _build(
         invariant=1,
         pageCompression=1,
         title=meta.title,
-        author="Kestrel AI",
+        author=meta.author,
         creator="Kestrel AI",
         subject=meta.project,
         initialFontName=styles.fonts.sans,
@@ -371,6 +388,9 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+_BUILD_LOCK = threading.Lock()  # reportlab's font registry and default cell font are process-wide
+
+
 def render_pdf(
     doc: ReportDocument,
     out_dir: Path,
@@ -381,9 +401,53 @@ def render_pdf(
     progress: Callable[[float], None],
     check_cancelled: Callable[[], None],
     part_budget: int = PART_BUDGET,
+    brand: ResolvedBrand | None = None,
 ) -> list[PdfPart]:
-    styles = build_styles(register_fonts())
-    meta = doc_meta(doc)
+    with _BUILD_LOCK:
+        fonts = register_fonts()
+        theme = THEME
+        if brand is not None:
+            fonts = brand_fonts(brand.text_family, brand.numerals_family, fonts)
+            theme = brand.theme
+        with active.using(theme, fonts.sans):
+            furniture = Furniture()
+            if brand is not None:
+                furniture = Furniture(
+                    footer_left=brand.footer_left,
+                    footer_right=brand.footer_right,
+                    header_logo=flat_logo(brand.header_logo),
+                    cover_logo=flat_logo(brand.cover_logo, theme["cover"]["gradient"][0]),
+                )
+            return _render_parts(
+                doc,
+                out_dir,
+                base_name,
+                styles=build_styles(fonts),
+                furniture=furniture,
+                author=brand.author if brand is not None else "Kestrel AI",
+                snapshot_path=snapshot_path,
+                volume_flowables=volume_flowables,
+                progress=progress,
+                check_cancelled=check_cancelled,
+                part_budget=part_budget,
+            )
+
+
+def _render_parts(
+    doc,
+    out_dir,
+    base_name,
+    *,
+    styles,
+    furniture,
+    author,
+    snapshot_path,
+    volume_flowables,
+    progress,
+    check_cancelled,
+    part_budget,
+) -> list[PdfPart]:
+    meta = replace(doc_meta(doc), author=author)
     sizes: dict[str, int] = {}
     parts = plan_parts(doc, lambda b: _estimate(b, snapshot_path, sizes), part_budget)
     n = len(parts)
@@ -393,6 +457,7 @@ def render_pdf(
     common = dict(
         meta=meta,
         styles=styles,
+        furniture=furniture,
         out_dir=out_dir,
         snapshot_path=snapshot_path,
         volume_flowables=volume_flowables,

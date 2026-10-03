@@ -10,6 +10,8 @@ export interface CoverBrand {
   fontFamily: string | null;
   /** The brand's `on_dark` logo src, or null. */
   logoSrc: string | null;
+  /** The brand's table head and finding band fill (D2 overlay `colours.head_fill`); absent is the theme's. */
+  headFill?: string;
 }
 
 export interface PreviewEnv {

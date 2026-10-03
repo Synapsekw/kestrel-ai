@@ -9,7 +9,7 @@ import { KvBlock } from "./KvBlock";
  * The cover section's one block (spec §7.1, Ruling R-6): a full-bleed gradient band with the title,
  * subtitle and (when resolvable) the logo, in the report's brand when the preview has one
  * (spec 2026-10-02-asset-findings §9), then the rows and the site locator inside the page margins.
- * The sheet gives this block no padding of its own — it lays out the band and margins itself.
+ * The sheet gives this block no padding of its own, it lays out the band and margins itself.
  */
 export function CoverBlock({ block }: { block: BlockOf<"cover"> }) {
   const env = usePreviewEnv();

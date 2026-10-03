@@ -15678,7 +15678,7 @@ components:
     SectionKey:
       type: string
       description: "a report section kind; a config lists each exactly once and its order is print order"
-      enum: [cover, summary, findings_table, finding_pages, measurements, comparison, object_counts, appendix]
+      enum: [cover, summary, asset_summary, findings_table, finding_pages, measurements, comparison, object_counts, appendix]
     ReportCover:
       type: object
       additionalProperties: false
@@ -15736,6 +15736,14 @@ components:
       properties:
         narrative: { type: string, maxLength: 20000, description: "plain text; blank lines separate paragraphs" }
         show_deltas: { type: boolean }
+    AssetSummaryOptions:
+      type: object
+      additionalProperties: false
+      required: [asset_model_id, show_map, show_tables]
+      properties:
+        asset_model_id: { type: [string, "null"], description: "the asset model to summarise; null is the first asset model with findings in the filter" }
+        show_map: { type: boolean, description: "the asset findings map" }
+        show_tables: { type: boolean, description: "the zone and side breakdown tables" }
     FindingsTableOptions:
       type: object
       additionalProperties: false
@@ -15744,14 +15752,14 @@ components:
         columns:
           type: array
           minItems: 1
-          maxItems: 7
+          maxItems: 11
           uniqueItems: true
-          items: { type: string, enum: [number, type, severity, status, data_item, observed, note] }
+          items: { type: string, enum: [number, type, severity, status, data_item, observed, note, zone, side, height, sightings] }
         sort: { type: string, enum: [severity_desc, number, type, observed] }
     FindingPagesOptions:
       type: object
       additionalProperties: false
-      required: [snapshots, photos_max, comments, context_inset]
+      required: [snapshots, photos_max, comments, context_inset, min_severity]
       properties:
         snapshots:
           type: array
@@ -15761,6 +15769,7 @@ components:
         photos_max: { type: integer, minimum: 0, maximum: 6 }
         comments: { type: string, enum: [none, last, all] }
         context_inset: { type: boolean }
+        min_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "only findings at this severity or above get a page; null is every finding" }
     MeasurementsOptions:
       type: object
       additionalProperties: false
@@ -15824,6 +15833,14 @@ components:
         key: { type: string, enum: [summary] }
         enabled: { type: boolean }
         options: { $ref: "#/components/schemas/SummaryOptions" }
+    ReportSectionAssetSummary:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, options]
+      properties:
+        key: { type: string, enum: [asset_summary] }
+        enabled: { type: boolean }
+        options: { $ref: "#/components/schemas/AssetSummaryOptions" }
     ReportSectionFindingsTable:
       type: object
       additionalProperties: false
@@ -15876,6 +15893,7 @@ components:
       oneOf:
         - $ref: "#/components/schemas/ReportSectionCover"
         - $ref: "#/components/schemas/ReportSectionSummary"
+        - $ref: "#/components/schemas/ReportSectionAssetSummary"
         - $ref: "#/components/schemas/ReportSectionFindingsTable"
         - $ref: "#/components/schemas/ReportSectionFindingPages"
         - $ref: "#/components/schemas/ReportSectionMeasurements"
@@ -15887,6 +15905,7 @@ components:
         mapping:
           cover: "#/components/schemas/ReportSectionCover"
           summary: "#/components/schemas/ReportSectionSummary"
+          asset_summary: "#/components/schemas/ReportSectionAssetSummary"
           findings_table: "#/components/schemas/ReportSectionFindingsTable"
           finding_pages: "#/components/schemas/ReportSectionFindingPages"
           measurements: "#/components/schemas/ReportSectionMeasurements"
@@ -15897,7 +15916,7 @@ components:
       type: object
       additionalProperties: false
       description: "a report's configuration (spec §7.1); PATCH sends it whole. Each section key appears exactly once (a repeat is `invalid_report` / `invalid_template`); an enabled cover prints first"
-      required: [cover, paper, filters, sections, brand_id]
+      required: [cover, paper, filters, sections, brand_id, csv_layout]
       properties:
         cover: { $ref: "#/components/schemas/ReportCover" }
         paper: { $ref: "#/components/schemas/ReportPaper" }
@@ -15905,9 +15924,11 @@ components:
         sections:
           type: array
           minItems: 8
-          maxItems: 8
+          maxItems: 9
+          description: "a config saved before asset_summary existed lists eight; it reads as disabled"
           items: { $ref: "#/components/schemas/ReportSection" }
         brand_id: { type: [string, "null"], maxLength: 64, description: "a `Brand` id; null, or a brand since deleted, prints with the Kestrel theme" }
+        csv_layout: { type: string, enum: [findings, asset_sightings], description: "`asset_sightings`: the kit's 21 columns, UTF-8 with BOM, CRLF, then photos without findings" }
       example:
         cover: { title: "Harbour wall inspection", subtitle: "September survey", site: "North quay", client: "Port authority", author: "D. Operator", logo_asset_id: null, report_date: null }
         paper: { size: A4, orientation: portrait }
@@ -15919,11 +15940,13 @@ components:
           data_item_ids: null
           date: { rule: all, from: null, to: null, days: null }
         brand_id: null
+        csv_layout: findings
         sections:
           - { key: cover, enabled: true, options: { show_locator: true } }
           - { key: summary, enabled: true, options: { narrative: "", show_deltas: true } }
+          - { key: asset_summary, enabled: false, options: { asset_model_id: null, show_map: true, show_tables: true } }
           - { key: findings_table, enabled: true, options: { columns: [number, type, severity, status, data_item, observed, note], sort: severity_desc } }
-          - { key: finding_pages, enabled: true, options: { snapshots: [image, map, cloud], photos_max: 4, comments: last, context_inset: true } }
+          - { key: finding_pages, enabled: true, options: { snapshots: [image, map, cloud], photos_max: 4, comments: last, context_inset: true, min_severity: null } }
           - { key: measurements, enabled: true, options: { kinds: [length, area, height, lean, profile, volume], snapshots: true, measurement_ids: null } }
           - { key: comparison, enabled: true, options: { pairs: auto, mode: both, counts_chart: true } }
           - { key: object_counts, enabled: true, options: { type_ids: null, per_area: true, verified_only: false } }
@@ -16044,6 +16067,7 @@ components:
         - $ref: "#/components/schemas/View3dSpec"
         - $ref: "#/components/schemas/VolumePlanSpec"
         - $ref: "#/components/schemas/AttachmentSpec"
+        - $ref: "#/components/schemas/AssetLocatorSpec"
       discriminator:
         propertyName: kind
         mapping:
@@ -16054,6 +16078,7 @@ components:
           view3d: "#/components/schemas/View3dSpec"
           volume_plan: "#/components/schemas/VolumePlanSpec"
           attachment: "#/components/schemas/AttachmentSpec"
+          asset_locator: "#/components/schemas/AssetLocatorSpec"
     SnapshotRef:
       type: object
       description: "a figure's snapshot: fetch it at `/projects/{projectId}/report-snapshots/{key}?spec=<base64url canonical JSON of spec>`"
@@ -16185,7 +16210,7 @@ components:
     FindingBlock:
       type: object
       description: "one finding page (spec §7.3)"
-      required: [kind, finding_id, number, head, figures, kv, note, photos, comments]
+      required: [kind, finding_id, number, head, figures, kv, note, photos, comments, asset]
       properties:
         kind: { type: string, enum: [finding] }
         finding_id: { type: string }
@@ -16196,6 +16221,10 @@ components:
         note: { type: string }
         photos: { type: array, items: { $ref: "#/components/schemas/Figure" } }
         comments: { type: array, items: { $ref: "#/components/schemas/Comment" } }
+        asset:
+          oneOf:
+            - $ref: "#/components/schemas/FindingAsset"
+            - type: "null"
     PageBreakBlock:
       type: object
       required: [kind]
@@ -16240,6 +16269,113 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Figure"
             - type: "null"
+    AssetDrawingRect:
+      type: object
+      required: [x0, y0, x1, y1]
+      properties:
+        x0: { type: number }
+        y0: { type: number }
+        x1: { type: number }
+        y1: { type: number }
+    AssetDrawingBand:
+      type: object
+      description: "a zone band across the plot; y0 is its top edge (drawing units, y grows down)"
+      required: [y0, y1, label, shaded]
+      properties:
+        y0: { type: number }
+        y1: { type: number }
+        label: { type: string }
+        shaded: { type: boolean }
+    AssetDrawingLevel:
+      type: object
+      required: [x0, x1, y]
+      properties:
+        x0: { type: number }
+        x1: { type: number }
+        y: { type: number }
+    AssetDrawingTick:
+      type: object
+      description: "a grid line at `at` (x for x_ticks, y for y_ticks) with its label"
+      required: [at, label]
+      properties:
+        at: { type: number }
+        label: { type: string }
+    AssetDrawingDot:
+      type: object
+      required: [x, y, r, colour, label]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        r: { type: number, exclusiveMinimum: 0 }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        label: { type: string }
+    AssetDrawingMarker:
+      type: object
+      description: "the height locator's level line"
+      required: [y, x0, x1, colour]
+      properties:
+        y: { type: number }
+        x0: { type: number }
+        x1: { type: number }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+    AssetDrawing:
+      type: object
+      description: "vector primitives in drawing units (y grows down) that the PDF and the preview draw the same way: the asset findings map and the height locator"
+      required: [width, height, font_size, plot, silhouette, bands, levels, x_ticks, y_ticks, x_title, dots, marker]
+      properties:
+        width: { type: number, exclusiveMinimum: 0 }
+        height: { type: number, exclusiveMinimum: 0 }
+        font_size: { type: number, exclusiveMinimum: 0 }
+        plot: { $ref: "#/components/schemas/AssetDrawingRect" }
+        silhouette: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: number } } }
+        bands: { type: array, items: { $ref: "#/components/schemas/AssetDrawingBand" } }
+        levels: { type: array, items: { $ref: "#/components/schemas/AssetDrawingLevel" } }
+        x_ticks: { type: array, items: { $ref: "#/components/schemas/AssetDrawingTick" } }
+        y_ticks: { type: array, items: { $ref: "#/components/schemas/AssetDrawingTick" } }
+        x_title: { type: string }
+        dots: { type: array, items: { $ref: "#/components/schemas/AssetDrawingDot" } }
+        marker:
+          oneOf:
+            - $ref: "#/components/schemas/AssetDrawingMarker"
+            - type: "null"
+    AssetMapBlock:
+      type: object
+      description: "the asset findings map (spec 2026-10-02-asset-findings §10): x is the side, y the height"
+      required: [kind, title, drawing, caption, width_mm, height_mm]
+      properties:
+        kind: { type: string, enum: [asset_map] }
+        title: { type: string }
+        drawing: { $ref: "#/components/schemas/AssetDrawing" }
+        caption: { type: string }
+        width_mm: { type: number, exclusiveMinimum: 0, maximum: 300 }
+        height_mm: { type: number, exclusiveMinimum: 0, maximum: 300 }
+    FindingAsset:
+      type: object
+      description: "an asset finding page's extras: the kicker line and the height locator on the silhouette"
+      required: [kicker, height_locator]
+      properties:
+        kicker: { type: string }
+        height_locator:
+          oneOf:
+            - $ref: "#/components/schemas/AssetDrawing"
+            - type: "null"
+    AssetLocatorSpec:
+      type: object
+      additionalProperties: false
+      description: "a finding on its asset model, rendered on the server: orthographic along the normal, a pin or the patch outline (decision A9)"
+      required: [kind, asset_model_id, version, sighting_id, mark, center, normal, half_extent_m, oblique_deg, colour, out]
+      properties:
+        kind: { type: string, enum: [asset_locator] }
+        asset_model_id: { type: string }
+        version: { type: integer, minimum: 1 }
+        sighting_id: { type: [string, "null"] }
+        mark: { type: string, enum: [pin, patch] }
+        center: { type: array, minItems: 3, maxItems: 3, items: { type: number } }
+        normal: { type: array, minItems: 3, maxItems: 3, items: { type: number } }
+        half_extent_m: { type: number, exclusiveMinimum: 0, maximum: 10000 }
+        oblique_deg: { type: number, minimum: -89, maximum: 89 }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        out: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 16, maximum: 2400 } }
     Block:
       oneOf:
         - $ref: "#/components/schemas/Heading"
@@ -16254,6 +16390,7 @@ components:
         - $ref: "#/components/schemas/PageBreakBlock"
         - $ref: "#/components/schemas/VolumeBlock"
         - $ref: "#/components/schemas/CoverBlock"
+        - $ref: "#/components/schemas/AssetMapBlock"
       discriminator:
         propertyName: kind
         mapping:
@@ -16269,6 +16406,7 @@ components:
           page_break: "#/components/schemas/PageBreakBlock"
           volume: "#/components/schemas/VolumeBlock"
           cover: "#/components/schemas/CoverBlock"
+          asset_map: "#/components/schemas/AssetMapBlock"
     ReportSectionDoc:
       type: object
       required: [key, title, blocks]

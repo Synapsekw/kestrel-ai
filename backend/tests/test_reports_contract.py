@@ -62,6 +62,7 @@ INDEX_BLOCK_KINDS = {
     "page_break",
     "volume",
     "cover",
+    "asset_map",
 }
 INDEX_SNAPSHOT_KINDS = {
     "image_crop",
@@ -71,6 +72,7 @@ INDEX_SNAPSHOT_KINDS = {
     "view3d",
     "volume_plan",
     "attachment",
+    "asset_locator",
 }
 
 
@@ -142,6 +144,14 @@ def test_every_reports_schema_is_in_the_contract(spec):
     assert missing == set(), sorted(missing)
 
 
+def test_the_asset_shapes_are_in_the_contract(spec):
+    s = _schemas(spec)
+    for name in ("AssetDrawing", "AssetMapBlock", "FindingAsset", "AssetLocatorSpec"):
+        assert name in s, name
+    assert s["FindingBlock"]["properties"]["asset"]["oneOf"][1] == {"type": "null"}
+    assert s["AssetLocatorSpec"]["properties"]["mark"]["enum"] == ["pin", "patch"]
+
+
 @pytest.mark.parametrize("name", sorted(MODELS))
 def test_the_pydantic_model_mirrors_the_contract_schema(spec, name):
     assert _names(MODELS[name]) == set(_schemas(spec)[name]["properties"]), name
@@ -201,9 +211,9 @@ def test_a_chart_names_its_type_chart_since_kind_is_the_discriminator(spec):
     assert chart["chart"]["enum"] == ["bar", "stacked_bar", "line"]
 
 
-def test_a_config_always_lists_the_eight_sections(spec):
+def test_a_config_lists_eight_or_nine_sections(spec):
     sections = _schemas(spec)["ReportConfig"]["properties"]["sections"]
-    assert (sections["minItems"], sections["maxItems"]) == (8, 8)
+    assert (sections["minItems"], sections["maxItems"]) == (8, 9)
     assert [s.key for s in schemas.default_sections()] == list(schemas.SECTION_KEYS)
 
 

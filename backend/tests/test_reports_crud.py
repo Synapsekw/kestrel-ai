@@ -163,3 +163,13 @@ def test_patch_lists_one_entry_per_path(client, project_id):
     r = client.patch(f"{reports_url(project_id)}/{rep['id']}", json={"title": "", "config": raw})
     paths = [e["path"] for e in _errors(r)]
     assert len(paths) == len(set(paths)) and set(paths) == {"title", "config.filters.statuses.1"}
+
+
+def test_a_report_from_the_seeded_full_template_lists_the_asset_summary(client, project_id):
+    """The frozen 0002 seed has eight sections; the API answers nine, asset_summary disabled."""
+    rep = create_report(client, project_id, template_id="builtin-full")
+    got = client.get(f"{reports_url(project_id)}/{rep['id']}").json()
+    for config in (rep["config"], got["config"]):
+        assert len(config["sections"]) == 9
+        summary = next(s for s in config["sections"] if s["key"] == "asset_summary")
+        assert summary["enabled"] is False and summary["options"]["show_map"] is True

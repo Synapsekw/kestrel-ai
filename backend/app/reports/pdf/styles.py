@@ -11,6 +11,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import TableStyle
 
+from app.reports.pdf import active
 from app.reports.pdf.fonts import FontSet
 from app.reports.theme import THEME
 
@@ -19,7 +20,7 @@ TONES = {"neutral": "tone_neutral", "good": "tone_good", "bad": "tone_bad", "war
 
 
 def colour(name: str) -> colors.Color:
-    return colors.HexColor(THEME["colours"][name])
+    return colors.HexColor(active.theme()["colours"][name])
 
 
 def safe_colour(value: object, fallback: str = "ungraded") -> colors.Color:

@@ -4,7 +4,8 @@ sections 7.1, 7.2, 8, 9.1, 14; plan 2026-09-30-reports-r0).
 R0 owns this module. The other R units import from it and never add a model here: a unit that
 needs a contract change edits openapi.yaml and this module together, minimally, and lists it as a
 hand-off (index, "Rules while Reports is in flight"). The models express exactly what the contract
-expresses and no more - no cross-field validators - so a schema-valid body is never answered
+expresses and no more - no cross-field validators (ReportConfig's one normaliser adds a missing
+section and never refuses) - so a schema-valid body is never answered
 `validation_error`; a rule the schema cannot state is its owner's `invalid_report` or
 `invalid_template` (R1). Config and request models forbid extra keys; the config models carry the
 defaults of a new report. Configs are dumped with `by_alias=True` (`ReportDateFilter.from`).
@@ -13,13 +14,14 @@ defaults of a new report. Configs are dumped with `by_alias=True` (`ReportDateFi
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ------------------------------------------------------------------------------ literals
 
 SectionKey = Literal[
     "cover",
     "summary",
+    "asset_summary",
     "findings_table",
     "finding_pages",
     "measurements",
@@ -30,6 +32,7 @@ SectionKey = Literal[
 SECTION_KEYS: tuple[SectionKey, ...] = (
     "cover",
     "summary",
+    "asset_summary",
     "findings_table",
     "finding_pages",
     "measurements",
@@ -39,7 +42,19 @@ SECTION_KEYS: tuple[SectionKey, ...] = (
 )
 FindingStatus = Literal["open", "reviewed", "closed"]
 DateRule = Literal["all", "range", "last_days", "since_last_issued"]
-FindingsTableColumn = Literal["number", "type", "severity", "status", "data_item", "observed", "note"]
+FindingsTableColumn = Literal[
+    "number",
+    "type",
+    "severity",
+    "status",
+    "data_item",
+    "observed",
+    "note",
+    "zone",
+    "side",
+    "height",
+    "sightings",
+]
 FINDINGS_TABLE_COLUMNS: tuple[FindingsTableColumn, ...] = (
     "number",
     "type",
@@ -69,7 +84,9 @@ ColumnAlign = Literal["left", "center", "right"]
 ColumnStyle = Literal["text", "mono"]
 KpiTone = Literal["neutral", "good", "bad", "warn"]
 ChartKind = Literal["bar", "stacked_bar", "line"]
-SnapshotKind = Literal["image_crop", "map", "elevation", "pair", "view3d", "volume_plan", "attachment"]
+SnapshotKind = Literal[
+    "image_crop", "map", "elevation", "pair", "view3d", "volume_plan", "attachment", "asset_locator"
+]
 SNAPSHOT_KINDS: tuple[SnapshotKind, ...] = (
     "image_crop",
     "map",
@@ -78,6 +95,7 @@ SNAPSHOT_KINDS: tuple[SnapshotKind, ...] = (
     "view3d",
     "volume_plan",
     "attachment",
+    "asset_locator",
 )
 BlockKind = Literal[
     "heading",
@@ -92,6 +110,7 @@ BlockKind = Literal[
     "page_break",
     "volume",
     "cover",
+    "asset_map",
 ]
 BLOCK_KINDS: tuple[BlockKind, ...] = (
     "heading",
@@ -106,6 +125,7 @@ BLOCK_KINDS: tuple[BlockKind, ...] = (
     "page_break",
     "volume",
     "cover",
+    "asset_map",
 )
 
 Colour = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
@@ -166,9 +186,15 @@ class SummaryOptions(_Strict):
     show_deltas: bool = True
 
 
+class AssetSummaryOptions(_Strict):
+    asset_model_id: str | None = None
+    show_map: bool = True
+    show_tables: bool = True
+
+
 class FindingsTableOptions(_Strict):
     columns: list[FindingsTableColumn] = Field(
-        default_factory=lambda: list(FINDINGS_TABLE_COLUMNS), min_length=1, max_length=7
+        default_factory=lambda: list(FINDINGS_TABLE_COLUMNS), min_length=1, max_length=11
     )
     sort: FindingsTableSort = "severity_desc"
 
@@ -178,6 +204,7 @@ class FindingPagesOptions(_Strict):
     photos_max: int = Field(4, ge=0, le=6)
     comments: CommentsMode = "last"
     context_inset: bool = True
+    min_severity: int | None = Field(None, ge=1, le=9)
 
 
 class MeasurementsOptions(_Strict):
@@ -222,6 +249,12 @@ class ReportSectionSummary(_Strict):
     options: SummaryOptions = Field(default_factory=SummaryOptions)
 
 
+class ReportSectionAssetSummary(_Strict):
+    key: Literal["asset_summary"] = "asset_summary"
+    enabled: bool = False
+    options: AssetSummaryOptions = Field(default_factory=AssetSummaryOptions)
+
+
 class ReportSectionFindingsTable(_Strict):
     key: Literal["findings_table"] = "findings_table"
     enabled: bool = True
@@ -261,6 +294,7 @@ class ReportSectionAppendix(_Strict):
 ReportSection = Annotated[
     ReportSectionCover
     | ReportSectionSummary
+    | ReportSectionAssetSummary
     | ReportSectionFindingsTable
     | ReportSectionFindingPages
     | ReportSectionMeasurements
@@ -272,10 +306,11 @@ ReportSection = Annotated[
 
 
 def default_sections() -> list[ReportSection]:
-    """The eight sections in canonical order, every one enabled with its default options."""
+    """The nine sections in canonical order with default options; asset_summary starts disabled."""
     return [
         ReportSectionCover(),
         ReportSectionSummary(),
+        ReportSectionAssetSummary(),
         ReportSectionFindingsTable(),
         ReportSectionFindingPages(),
         ReportSectionMeasurements(),
@@ -289,10 +324,35 @@ class ReportConfig(_Strict):
     cover: ReportCover = Field(default_factory=ReportCover)
     paper: ReportPaper = Field(default_factory=ReportPaper)
     filters: ReportFilters = Field(default_factory=ReportFilters)
-    sections: list[ReportSection] = Field(default_factory=default_sections, min_length=8, max_length=8)
+    sections: list[ReportSection] = Field(default_factory=default_sections, min_length=8, max_length=9)
     # Spec 2026-10-02-asset-findings §5.8: a `Brand` id; None (or a brand since deleted) is the
     # Kestrel theme. Configs saved before it existed read None.
     brand_id: str | None = Field(None, max_length=64)
+    csv_layout: Literal["findings", "asset_sightings"] = "findings"
+
+    @model_validator(mode="after")
+    def _add_missing_sections(self) -> "ReportConfig":
+        """Normalise on read: a config saved before a section existed (the frozen catalogue 0002
+        seed predates asset_summary) gains it, disabled and with its default options, so the
+        builder can list it. It joins the disabled sections in canonical order (at the end when none
+        is disabled), which is where the code built-ins put it. This adds, never refuses: a
+        config with a repeated section is left as sent for `invalid_report`'s duplicate check."""
+        keys = [s.key for s in self.sections]
+        if len(set(keys)) != len(keys) or len(keys) == len(SECTION_KEYS):
+            return self
+        rank = {k: i for i, k in enumerate(SECTION_KEYS)}
+        defaults = {s.key: s for s in default_sections()}
+        sections = list(self.sections)
+        for key in SECTION_KEYS:
+            if key in keys:
+                continue
+            pool = [i for i, s in enumerate(sections) if not s.enabled]
+            before = [i for i in pool if rank[sections[i].key] < rank[key]]
+            after = [i for i in pool if rank[sections[i].key] > rank[key]]
+            at = max(before) + 1 if before else min(after) if after else len(sections)
+            sections.insert(at, defaults[key].model_copy(update={"enabled": False}))
+        self.sections = sections
+        return self
 
 
 # ------------------------------------------------------------------------------ snapshots (spec 9.1)
@@ -368,8 +428,32 @@ class AttachmentSpec(_Strict):
     out: OutSize = Field(default_factory=lambda: [800, 600])
 
 
+Vec3 = Annotated[list[float], Field(min_length=3, max_length=3)]
+
+
+class AssetLocatorSpec(_Strict):
+    kind: Literal["asset_locator"] = "asset_locator"
+    asset_model_id: str
+    version: int = Field(ge=1)
+    sighting_id: str | None = None
+    mark: Literal["pin", "patch"]
+    center: Vec3
+    normal: Vec3
+    half_extent_m: float = Field(gt=0, le=10000)
+    oblique_deg: float = Field(0.0, ge=-89, le=89)
+    colour: Colour
+    out: OutSize = Field(default_factory=lambda: [900, 900])
+
+
 SnapshotSpec = Annotated[
-    ImageCropSpec | MapSpec | ElevationSpec | PairSpec | View3dSpec | VolumePlanSpec | AttachmentSpec,
+    ImageCropSpec
+    | MapSpec
+    | ElevationSpec
+    | PairSpec
+    | View3dSpec
+    | VolumePlanSpec
+    | AttachmentSpec
+    | AssetLocatorSpec,
     Field(discriminator="kind"),
 ]
 
@@ -481,6 +565,77 @@ class Comment(BaseModel):
     created_at: datetime
 
 
+class AssetDrawingRect(BaseModel):
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+class AssetDrawingBand(BaseModel):
+    y0: float
+    y1: float
+    label: str
+    shaded: bool
+
+
+class AssetDrawingLevel(BaseModel):
+    x0: float
+    x1: float
+    y: float
+
+
+class AssetDrawingTick(BaseModel):
+    at: float
+    label: str
+
+
+class AssetDrawingDot(BaseModel):
+    x: float
+    y: float
+    r: float = Field(gt=0)
+    colour: Colour
+    label: str
+
+
+class AssetDrawingMarker(BaseModel):
+    y: float
+    x0: float
+    x1: float
+    colour: Colour
+
+
+class AssetDrawing(BaseModel):
+    """Vector primitives in drawing units, y down: the PDF and the preview draw the same ones."""
+
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    font_size: float = Field(gt=0)
+    plot: AssetDrawingRect
+    silhouette: list[Point2] = Field(default_factory=list)
+    bands: list[AssetDrawingBand] = Field(default_factory=list)
+    levels: list[AssetDrawingLevel] = Field(default_factory=list)
+    x_ticks: list[AssetDrawingTick] = Field(default_factory=list)
+    y_ticks: list[AssetDrawingTick] = Field(default_factory=list)
+    x_title: str = ""
+    dots: list[AssetDrawingDot] = Field(default_factory=list)
+    marker: AssetDrawingMarker | None = None
+
+
+class AssetMapBlock(BaseModel):
+    kind: Literal["asset_map"] = "asset_map"
+    title: str = ""
+    drawing: AssetDrawing
+    caption: str = ""
+    width_mm: float = Field(gt=0, le=300)
+    height_mm: float = Field(gt=0, le=300)
+
+
+class FindingAsset(BaseModel):
+    kicker: str
+    height_locator: AssetDrawing | None = None
+
+
 class FindingBlock(BaseModel):
     kind: Literal["finding"] = "finding"
     finding_id: str
@@ -491,6 +646,7 @@ class FindingBlock(BaseModel):
     note: str = ""
     photos: list[Figure] = Field(default_factory=list)
     comments: list[Comment] = Field(default_factory=list)
+    asset: FindingAsset | None = None
 
 
 class PageBreakBlock(BaseModel):
@@ -537,7 +693,8 @@ Block = Annotated[
     | FindingBlock
     | PageBreakBlock
     | VolumeBlock
-    | CoverBlock,
+    | CoverBlock
+    | AssetMapBlock,
     Field(discriminator="kind"),
 ]
 

@@ -88,7 +88,7 @@ def make_ctx(handle):
     snapshots ["image", "map", "cloud"]); built over R2's `reports_rows.config`/`ctx_for` merged
     helpers (the plan's BUILTIN_TEMPLATES construction predates the merge). `key_for=None` so
     `ctx.ref` falls back to the real engine `snapshot_key` (R2's `ctx_for` otherwise defaults to its
-    own `fake_key`) — the R9-C figure tests assert the printed key against `snapshot_key` directly."""
+    own `fake_key`), the R9-C figure tests assert the printed key against `snapshot_key` directly."""
     from reports_rows import config, ctx_for
 
     return ctx_for(handle, config(sections=("finding_pages",)), report_id="r-test", key_for=None)

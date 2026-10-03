@@ -11,6 +11,7 @@ export const PATCH_DEBOUNCE_MS = 400;
 export const SECTION_LABEL: Record<SectionKey, string> = {
   cover: "Cover",
   summary: "Executive summary",
+  asset_summary: "Asset summary",
   findings_table: "Findings table",
   finding_pages: "Finding pages",
   measurements: "Measurements",
@@ -86,7 +87,7 @@ const orAll = (list: string[]): string[] | null => (list.length === 0 ? null : l
  * choosing a level excludes ungraded findings by default (`include_ungraded: false`); clearing the
  * level (back to "every level") restores `include_ungraded: true`. The control (Task 5) is a
  * Checkbox named "Include ungraded findings", shown only while a level is chosen, and can still
- * flip `include_ungraded` back on without changing `severity_min` — this function only sets the
+ * flip `include_ungraded` back on without changing `severity_min`, this function only sets the
  * default that follows a floor change.
  */
 export const setSeverityMin = (f: Filters, level: number | null): Filters => ({

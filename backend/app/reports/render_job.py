@@ -35,7 +35,7 @@ from app.reports.service import PAGE_COUNT_KEY
 from app.reports.snapshots import render_to_cache
 from app.reports.snapshots.cache import prune
 from app.reports.theme import THEME_VERSION
-from app.reports.writers import csv_out, rows, xlsx_out
+from app.reports.writers import asset_csv, asset_rows, csv_out, rows, xlsx_out
 
 PHASES = {"compose": (0.0, 0.05), "snapshots": (0.05, 0.60), "pdf": (0.60, 0.95), "tables": (0.95, 1.0)}
 TABLE_CHECK_EVERY = 200
@@ -171,7 +171,7 @@ def _render_snapshots(
 
 
 def _render_pdf(
-    handle, doc, partial: Path, base_name: str, paths: dict[str, Path], ctx, progress
+    handle, doc, partial: Path, base_name: str, paths: dict[str, Path], ctx, progress, brand=None
 ) -> list[dict]:
     from app.reports.pdf import document as pdf_document  # reportlab loads here (index rule)
     from app.reports.volume_hook import volume_flowables_for
@@ -187,6 +187,7 @@ def _render_pdf(
         volume_flowables=volume_flowables_for(handle, snapshot_path),
         progress=lambda f: progress.phase("pdf", f, "writing the PDF"),
         check_cancelled=ctx.check_cancelled,
+        brand=brand,
     )
     return [
         {"name": p.name, "kind": "pdf", "bytes": p.bytes, "sha256": p.sha256, "pages": p.pages} for p in parts
@@ -206,6 +207,17 @@ def _counts_tables(doc: ReportDocument) -> list[list[list]]:
     return tables
 
 
+def write_csv_file(handle, partial: Path, config, *, where, ids, scale, number, on_row) -> Path:
+    """`sightings.csv` in the kit's columns for `asset_sightings`, else today's `findings.csv`."""
+    if str(config.csv_layout) == "asset_sightings":
+        path = partial / "sightings.csv"
+        asset_csv.write_asset_sightings(path, asset_rows.csv_rows(handle, where, scale=scale), on_row=on_row)
+        return path
+    path = partial / "findings.csv"
+    csv_out.write_csv(path, rows.export_rows(handle, ids, scale=scale, version_number=number), on_row=on_row)
+    return path
+
+
 def _write_tables(
     handle,
     ctx,
@@ -214,6 +226,7 @@ def _write_tables(
     *,
     formats,
     ids,
+    where,
     doc,
     config,
     scale,
@@ -239,11 +252,12 @@ def _write_tables(
     enabled = [s.key for s in config.sections if s.enabled]
     for fmt in wanted:
         ctx.check_cancelled()
-        source = rows.export_rows(handle, ids, scale=scale, version_number=number)
         if fmt == "csv":
-            path = partial / "findings.csv"
-            csv_out.write_csv(path, source, on_row=on_row)
+            path = write_csv_file(
+                handle, partial, config, where=where, ids=ids, scale=scale, number=number, on_row=on_row
+            )
         else:
+            source = rows.export_rows(handle, ids, scale=scale, version_number=number)
             path = partial / "findings.xlsx"
             xlsx_out.write_xlsx(
                 path,
@@ -295,6 +309,11 @@ def _run_pipeline(ctx: JobContext) -> dict:
     doc = compose_in(cctx, theme_version=str(THEME_VERSION))
     ids = finding_ids(cctx)
     warnings: list[dict] = [w.model_dump() for w in cctx.warnings]
+    from app.reports.brand import BRAND_MISSING, resolve_brand
+
+    brand = resolve_brand(handle, config, generated_at)
+    if config.brand_id and brand is None:
+        warnings.append({"code": "brand_missing", "message": BRAND_MISSING, "count": 1, "link": None})
     scale = {lv.level: lv for lv in cctx.scale}  # read_scale(handle), read once by the ctx
     progress.phase("compose", 1.0, f"composed: {len(ids)} findings")
     base_name = (
@@ -327,7 +346,7 @@ def _run_pipeline(ctx: JobContext) -> dict:
             )
         pdf_files: list[dict] = []
         if "pdf" in formats:
-            pdf_files = _render_pdf(handle, doc, partial, base_name, paths, ctx, progress)
+            pdf_files = _render_pdf(handle, doc, partial, base_name, paths, ctx, progress, brand=brand)
         progress.phase("pdf", 1.0, "PDF written" if pdf_files else "no PDF requested")
         table_files = _write_tables(
             handle,
@@ -336,6 +355,7 @@ def _run_pipeline(ctx: JobContext) -> dict:
             partial,
             formats=formats,
             ids=ids,
+            where=cctx.where,
             doc=doc,
             config=config,
             scale=scale,

@@ -173,7 +173,7 @@ def warnings(ctx: ComposeContext) -> None:
 
 def fingerprint(ctx: ComposeContext) -> str:
     """sha256 over, per cloud finding in `ctx.where`: finding_id + the stored view's sha256 (or "-")
-    + its stale flag (Ruling A6) — a capture/re-capture changes no finding row, so this is what
+    + its stale flag (Ruling A6), a capture/re-capture changes no finding row, so this is what
     moves the finding_pages section etag."""
     h = hashlib.sha256()
     for finding_id, _cloud_id, _x, _y in _cloud_rows(ctx):

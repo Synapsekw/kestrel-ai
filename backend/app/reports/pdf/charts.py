@@ -12,6 +12,7 @@ from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.lib.units import mm
 
+from app.reports.pdf import active
 from app.reports.pdf.styles import Styles, colour, safe_colour
 from app.reports.theme import THEME
 
@@ -27,7 +28,8 @@ class ChartSeries:
 
 
 def _series_colour(s: ChartSeries, i: int):
-    return safe_colour(s.colour, "violet") if s.colour else safe_colour(PALETTE[i % len(PALETTE)])
+    palette = active.theme()["chart"]["palette"]
+    return safe_colour(s.colour, "violet") if s.colour else safe_colour(palette[i % len(palette)])
 
 
 def chart_drawing(
@@ -44,6 +46,7 @@ def chart_drawing(
         raise ValueError(f"unknown chart kind {kind!r}")
     font, muted, rule = styles.fonts.sans, colour("muted"), colour("rule")
     d = Drawing(width, height)
+    d.initialFontName = font
     n = len(x_labels)
     rows = [[*list(s.values)[:n], *([None] * max(0, n - len(s.values)))] for s in series]
     if not rows or n == 0 or all(v is None for r in rows for v in r):

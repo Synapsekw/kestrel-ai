@@ -1,5 +1,7 @@
 import type { BlockOf } from "@/api/reports";
 import { PRINT, findingLabel, mm, pt, textStyle } from "../../printTheme";
+import { usePreviewEnv } from "../PreviewContext";
+import { AssetDrawingSvg } from "./AssetDrawingSvg";
 import { FigureBlock } from "./FigureBlock";
 import { FigureRowBlock } from "./FigureRowBlock";
 import { KvBlock } from "./KvBlock";
@@ -14,12 +16,19 @@ export function FindingBlock({ block }: { block: BlockOf<"finding"> }) {
   const label = findingLabel(block.number);
   const [main, ...secondary] = block.figures;
   const head = block.head;
+  const headFill = usePreviewEnv().brand?.headFill ?? PRINT.head;
+  const asset = block.asset ?? null;
   return (
     <article data-block="finding" aria-label={`${label} ${head.type_name}`}>
+      {asset?.kicker ? (
+        <p data-kicker style={{ ...textStyle(PRINT.size.small, PRINT.muted), margin: `0 0 ${mm(1)}` }}>
+          {asset.kicker}
+        </p>
+      ) : null}
       <header
         className="flex flex-wrap items-center justify-between"
         style={{
-          background: PRINT.head,
+          background: headFill,
           borderRadius: mm(2),
           padding: `${mm(2.5)} ${mm(3)}`,
           marginBottom: mm(3),
@@ -48,7 +57,17 @@ export function FindingBlock({ block }: { block: BlockOf<"finding"> }) {
       </header>
       {main ? <FigureBlock block={main} /> : null}
       {secondary.length > 0 ? <FigureRowBlock block={{ kind: "figure_row", figures: secondary }} /> : null}
-      {block.kv.length > 0 ? <KvBlock block={{ kind: "kv", rows: block.kv }} /> : null}
+      {asset?.height_locator ? (
+        <div
+          className="grid items-start"
+          style={{ gridTemplateColumns: `${mm(22)} 1fr`, gap: mm(0), marginTop: mm(3) }}
+        >
+          <AssetDrawingSvg drawing={asset.height_locator} label="Height on the asset" widthMm={18} />
+          {block.kv.length > 0 ? <KvBlock block={{ kind: "kv", rows: block.kv }} /> : <span />}
+        </div>
+      ) : block.kv.length > 0 ? (
+        <KvBlock block={{ kind: "kv", rows: block.kv }} />
+      ) : null}
       {block.note ? <ParaBlock block={{ kind: "para", text: block.note, style: "note" }} /> : null}
       {block.photos.length > 0 ? (
         <>

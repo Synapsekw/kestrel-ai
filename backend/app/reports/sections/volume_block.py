@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.db.models import VolumeMeasurement
+from app.reports import blocks
 from app.reports.figures import map_specs
 from app.reports.figures.map_geo import day_text
 from app.reports.schemas import VolumeBlock
@@ -37,7 +38,7 @@ def _why(s, row: VolumeMeasurement) -> str:
 def _calculated(value) -> str:
     """The calculation day as the report prints dates (`2 Sep 2026`); the raw text if unparseable."""
     if not value:
-        return "—"
+        return blocks.NONE
     try:
         return day_text(datetime.fromisoformat(str(value)).date())
     except ValueError:
@@ -45,11 +46,11 @@ def _calculated(value) -> str:
 
 
 def m3(v) -> str:
-    return "—" if v is None else f"{v:,.1f} m³"
+    return blocks.NONE if v is None else f"{v:,.1f} m³"
 
 
 def m2(v) -> str:
-    return "—" if v is None else f"{v:,.1f} m²"
+    return blocks.NONE if v is None else f"{v:,.1f} m²"
 
 
 def volume_block(ctx, measurement_id: str, *, with_figure: bool) -> VolumeBlock:
@@ -92,7 +93,7 @@ def volume_block(ctx, measurement_id: str, *, with_figure: bool) -> VolumeBlock:
         ["Net", m3(r.get("net_m3"))],
         ["± (indicative)", m3((r.get("uncertainty") or {}).get("total_m3"))],
         ["Area", m2(r.get("area_m2"))],
-        ["Top surface", (r.get("top_surface") or {}).get("name", "—")],
+        ["Top surface", (r.get("top_surface") or {}).get("name", blocks.NONE)],
         ["Base", item.base_detail],
         ["Calculated", _calculated(r.get("computed_at"))],
     ]

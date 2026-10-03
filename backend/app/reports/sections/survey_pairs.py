@@ -130,7 +130,7 @@ def _own_footprints(ctx: ComposeContext, a: SurveyMap, b: SurveyMap) -> list[Blo
                     map_id=m.id,
                     geometry=map_geo.polygon(m.ring),
                     colour=map_specs.MEASURE_COLOUR,
-                    caption=f"{_label(m)} — {NO_COMMON}",
+                    caption=f"{_label(m)}: {NO_COMMON}",
                     size_mm=map_specs.HALF_MM,
                 )
                 for m in (a, b)
