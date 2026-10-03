@@ -5,13 +5,13 @@ small tuples."""
 
 from __future__ import annotations
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 
 from app.db.models import AssetModel, Finding, ImagePose, ImageReview
 from app.findings.numbers import format_number
 from app.reports import blocks
 from app.reports.asset_drawing import map_drawing
-from app.reports.asset_info import ASSET, NOT_PLACED
+from app.reports.asset_info import ASSET, NOT_PLACED, PLACED
 from app.reports.context import ComposeContext, SectionStats
 from app.reports.schemas import Block, ReportSectionDoc
 
@@ -133,6 +133,23 @@ def _map(ctx: ComposeContext, info) -> Block:
     return blocks.asset_map(drawing, title="", caption=MAP_CAPTION, width_mm=MAP_MM[0], height_mm=MAP_MM[1])
 
 
+PLACED_NO_VALUE = ""  # the breakdown key of a placed finding with no zone (or side)
+
+
+def placed_key(column):
+    """`column` for a placed finding (PLACED_NO_VALUE when it is null), None for an unplaced one:
+    "Not placed" is keyed on the placement, not on a null zone (a profile may have no zones)."""
+    return case((Finding.placement.in_(PLACED), func.coalesce(column, PLACED_NO_VALUE)), else_=None)
+
+
+def _label(info, k) -> str:
+    if k is None:
+        return NOT_PLACED
+    if k == PLACED_NO_VALUE:
+        return blocks.NONE
+    return (info.zone_label(k) if info is not None else k) or blocks.NONE
+
+
 def breakdown(ctx: ComposeContext, model_id: str, column) -> dict[tuple, int]:
     with ctx.session() as s:
         rows = s.execute(
@@ -162,16 +179,16 @@ def _breakdown_table(ctx: ComposeContext, head: str, keys: list, label_of, count
 def _zone_keys(info, counts: dict) -> list:
     listed = [z.id for z in info.review.zones] if info is not None and info.review is not None else []
     seen = {k for k, _ in counts}
-    keys = listed + sorted(k for k in seen if k is not None and k not in listed)
-    return keys + ([None] if None in seen else [])
+    keys = listed + sorted(k for k in seen if k not in (None, PLACED_NO_VALUE) and k not in listed)
+    return keys + [k for k in (PLACED_NO_VALUE, None) if k in seen]
 
 
 def _side_keys(counts: dict) -> list:
     totals: dict = {}
     for (k, _), n in counts.items():
         totals[k] = totals.get(k, 0) + n
-    keys = sorted((k for k in totals if k is not None), key=lambda k: (-totals[k], k))
-    return keys + ([None] if None in totals else [])
+    keys = sorted((k for k in totals if k not in (None, PLACED_NO_VALUE)), key=lambda k: (-totals[k], k))
+    return keys + [k for k in (PLACED_NO_VALUE, None) if k in totals]
 
 
 def compose(ctx: ComposeContext) -> ReportSectionDoc:
@@ -189,20 +206,12 @@ def compose(ctx: ComposeContext) -> ReportSectionDoc:
         ready = info is not None and info.frame is not None and info.review is not None
         out.append(_map(ctx, info) if ready else blocks.para(NO_FRAME, style="note"))
     if opts.show_tables:
-        zones = breakdown(ctx, mid, Finding.zone)
+        zones = breakdown(ctx, mid, placed_key(Finding.zone))
         out.append(blocks.heading("Findings by zone", 3))
-        out.append(
-            _breakdown_table(
-                ctx,
-                "Zone",
-                _zone_keys(info, zones),
-                lambda k: (info.zone_label(k) if info is not None else k) if k is not None else NOT_PLACED,
-                zones,
-            )
-        )
-        sides = breakdown(ctx, mid, Finding.side)
+        out.append(_breakdown_table(ctx, "Zone", _zone_keys(info, zones), lambda k: _label(info, k), zones))
+        sides = breakdown(ctx, mid, placed_key(Finding.side))
         out.append(blocks.heading("Findings by side", 3))
-        out.append(_breakdown_table(ctx, "Side", _side_keys(sides), lambda k: k or NOT_PLACED, sides))
+        out.append(_breakdown_table(ctx, "Side", _side_keys(sides), lambda k: _label(None, k), sides))
     return ReportSectionDoc(key=KEY, title=TITLE, blocks=out)
 
 

@@ -131,3 +131,25 @@ def test_outline_is_one_page(handle):
     ctx, doc = _compose(handle)
     stats = asset_summary.outline(ctx)
     assert (stats.block_count, stats.estimated_pages) == (len(doc.blocks), 1)
+
+
+def test_a_placed_finding_with_no_zone_counts_apart_from_the_unplaced(handle):
+    mid, review = _seed(handle)
+    img = add_asset_image(handle, name="DJI_0099.JPG")
+    add_asset_finding(
+        handle,
+        mid,
+        add_type(handle, "spall"),
+        sightings=[{"image_id": img}],
+        severity=1,
+        side="West elevation",
+        height=20.0,
+        bearing=270.0,
+        center=(-5.0, 20.0, 0.0),
+    )
+    _, doc = _compose(handle)
+    zones, _ = [b for b in doc.blocks if b.kind == "table"]
+    labels = [r[0] for r in zones.rows]
+    assert labels == [z.label for z in review.zones] + ["-", "Not placed"]
+    totals = {r[0]: r[-1] for r in zones.rows}
+    assert (totals["-"], totals["Not placed"]) == ("1", "1")

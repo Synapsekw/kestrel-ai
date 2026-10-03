@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 
 from app.reports import blocks
-from app.reports.asset_info import NOT_PLACED
+from app.reports.asset_info import NOT_PLACED, PLACED
 from app.reports.context import PAGE, ComposeContext, FindingRow, SectionStats, count_findings, findings_page
 from app.reports.schemas import Block, ReportSectionDoc
 
@@ -45,14 +45,18 @@ def _asset_cell(row: FindingRow, key: str, ctx: ComposeContext | None) -> str:
         return ""
     if key == "sightings":
         return str(row.sighting_count)
-    if key == "height":
-        return f"{row.height_m:.1f} m" if row.height_m is not None else NOT_PLACED
-    if key == "side":
-        return row.side or NOT_PLACED
-    if row.zone is None:
+    # "Not placed" is keyed on the placement: a placed finding in a profile with no zones has
+    # zone None, and that is a missing value, not an unplaced finding.
+    if row.placement not in PLACED:
         return NOT_PLACED
+    if key == "height":
+        return f"{row.height_m:.1f} m" if row.height_m is not None else blocks.NONE
+    if key == "side":
+        return row.side or blocks.NONE
+    if row.zone is None:
+        return blocks.NONE
     info = ctx.asset_models.get(row.asset_model_id) if ctx is not None and row.asset_model_id else None
-    return (info.zone_label(row.zone) if info is not None else row.zone) or NOT_PLACED
+    return (info.zone_label(row.zone) if info is not None else row.zone) or blocks.NONE
 
 
 def cell(row: FindingRow, key: str, ctx: ComposeContext | None = None) -> str:

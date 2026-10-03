@@ -48,3 +48,22 @@ def test_the_asset_columns_are_blank_for_other_anchors(handle):
     t = add_type(handle, "crack")
     add_findings(handle, [{"type_id": t, "anchor": "cloud", "target": add_cloud(handle)}])
     assert _table(handle).rows == [["F-0001", "", "", "", ""]]
+
+
+def test_a_placed_finding_with_no_zone_is_not_called_not_placed(handle):
+    """A profile with no zones gives a placed finding zone None: that is a missing value, not
+    "Not placed", which is keyed on the placement."""
+    crack = add_type(handle, "crack")
+    mid, _, _ = add_asset_model(handle)
+    img = add_asset_image(handle, name="DJI_0001.JPG")
+    add_asset_finding(
+        handle,
+        mid,
+        crack,
+        sightings=[{"image_id": img}],
+        side="West elevation",
+        height=12.0,
+        bearing=270.0,
+        center=(-5.0, 12.0, 0.0),
+    )
+    assert _table(handle).rows == [["F-0001", "-", "West elevation", "12.0 m", "1"]]
