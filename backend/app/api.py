@@ -153,13 +153,13 @@ for _module in (
     "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
     "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
-    # A unit inserts its own router module above its stubs module and deletes its tuples there.
+    # Every unit has landed; the stubs module is gone.
     "app.asset_review.review_router",
     "app.asset_review.routes_poses",  # asset findings J2: photo poses (spec 2026-10-02-asset-findings §6.2)
     "app.asset_review.routes_glb",  # asset findings J1: GLB import
     "app.asset_review.group_router",  # asset findings J4: Regroup (spec 2026-10-02-asset-findings §6.4)
     "app.asset_review.routes_placements",  # asset findings J3: placements and asset_place
-    "app.asset_review.stubs",
+    "app.asset_review.kit_routes",  # review kit import (spec 2026-10-02-asset-findings §6.5)
     "app.brands.router",  # report brands: app level, in catalogue.db (plan D2)
 ):
     try:

@@ -18,7 +18,6 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
-from app.asset_review.stubs import stub_operation_ids as asset_review_stub_operation_ids
 from app.reports.router import stub_operation_ids as reports_stub_operation_ids
 from app.setup.router import stub_operation_ids as setup_stub_operation_ids
 from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
@@ -106,10 +105,7 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
-# Asset findings (plan 2026-10-03-asset-findings-c0): the unit lists of app/asset_review/stubs.py
-# (D1, J1 to J5); D2's module is gone. An owner deletes its tuples; nothing here changes. The last
-# owner of a module deletes the module, its line in app/api.py and its line here.
-EXPECTED_STUBS |= asset_review_stub_operation_ids()
+# Asset findings (plan 2026-10-03-asset-findings-c0): every unit has landed, so no 501 stubs are left.
 
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
@@ -159,6 +155,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
     "getBasemapTile": {422},  # tile_outside_grid: x or y >= 2**z (a schema cannot relate them)
     "startTrainingRun": {422},  # task_mismatch: a base model of another task
+    "startReviewImport": {422},  # kit_invalid: a generated folder is never a kit job folder
     "createSurface": {422},
     # asset models U3: a schema-valid spec with duplicate ids is `invalid_spec`; a GLB not built yet is
     # `not_ready`; a model with a live run or GLB build refuses deletion (`job_running`).
