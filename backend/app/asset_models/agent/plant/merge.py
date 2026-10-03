@@ -2,8 +2,9 @@
 
 Later lists are newer (a later package, or a re-run over a version). Same normalised tag: one item
 survives (highest confidence, then newest); a loser of another type or more than 2 m away flags the
-survivor `straddles_package`. Untagged items of one type whose footprints overlap more than 60 % of
-the smaller one merge the same way, unflagged. Ids are made unique."""
+survivor `straddles_package`. Untagged items of one type from different lists whose footprints overlap
+more than 60 % of the smaller one merge the same way, unflagged; a survivor absorbs at most one item
+from each other list, and items of one list never merge with each other. Ids are made unique."""
 
 from __future__ import annotations
 
@@ -88,16 +89,21 @@ def _merge_untagged(entries) -> list[Item]:
         tree = STRtree(polys)
         alive = [True] * len(group)
         order = sorted(range(len(group)), key=lambda i: _rank(group[i]), reverse=True)
-        for i in order:  # strongest first: it absorbs the weaker items it overlaps
+        pos = {i: k for k, i in enumerate(order)}
+        for i in order:  # strongest first: it absorbs the weaker duplicates it overlaps
             if not alive[i]:
                 continue
+            best: dict[int, tuple[float, int]] = {}  # per other list: its most-overlapping item
             for j in tree.query(polys[i]):
                 j = int(j)
-                if j == i or not alive[j]:
-                    continue
+                if pos[j] <= pos[i] or not alive[j] or group[j][0] == group[i][0]:
+                    continue  # only weaker items; one list's own items are distinct (R10)
                 smaller = min(polys[i].area, polys[j].area)
-                if smaller > 0 and polys[i].intersection(polys[j]).area / smaller > OVERLAP:
-                    alive[j] = False
+                share = polys[i].intersection(polys[j]).area / smaller if smaller > 0 else 0.0
+                if share > OVERLAP and share > best.get(group[j][0], (0.0, -1))[0]:
+                    best[group[j][0]] = (share, j)
+            for _share, j in best.values():
+                alive[j] = False
         kept.extend(group[i][1] for i in range(len(group)) if alive[i])
     return kept
 

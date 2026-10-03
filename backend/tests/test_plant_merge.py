@@ -66,3 +66,19 @@ def test_many_untagged_items_merge_quickly():
     t0 = time.monotonic()
     out = merge_items([items, items])
     assert len(out) == 2000 and time.monotonic() - t0 < 10
+
+
+def test_untagged_items_from_one_list_never_merge_with_each_other():
+    """A plant_package re-run's base version is one list: two of its overlapping items both survive
+    (ruling R10: a re-run never deletes). Across lists they still merge."""
+    a, b = it("a", n=0), it("b", n=2)  # 80 % overlap, same type, same list
+    assert sorted(i.id for i in merge_items([[a, b]])) == ["a", "b"]
+    assert sorted(i.id for i in merge_items([[a, b], []], ["version 3", "P1"])) == ["a", "b"]
+    assert len(merge_items([[a], [b]])) == 1
+
+
+def test_one_survivor_absorbs_at_most_one_item_per_other_list():
+    a, b = it("a", n=0), it("b", n=2)  # one list: both kept
+    p = it("p", n=1, conf="high")  # overlaps both from the newer list
+    out = sorted(i.id for i in merge_items([[a, b], [p]], ["version 3", "P1"]))
+    assert len(out) == 2 and "p" in out
