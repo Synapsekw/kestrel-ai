@@ -168,14 +168,18 @@ def test_a_box_with_a_finding_cannot_be_deleted_behind_its_back(engine):
 
 def test_0010_freezes_its_anchor_check_instead_of_importing_the_model():
     """A later model edit must not rewrite 0010's history: the revision carries its own copy of the
-    CHECK text, identical to the model's today."""
+    CHECK text. Revision 0016 widened the model's CHECK and froze 0010's text for its downgrade; the
+    two frozen copies agree."""
     import importlib.util
 
-    from app.db.models import ANCHOR_CHECK
+    def load(name: str):
+        path = MIGRATIONS / "versions" / name
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return path, module
 
-    path = MIGRATIONS / "versions" / "0010_foundation.py"
+    path, module = load("0010_foundation.py")
     assert "from app.db.models" not in path.read_text(encoding="utf-8")
-    spec = importlib.util.spec_from_file_location("rev_0010", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert module.ANCHOR_CHECK == ANCHOR_CHECK
+    _, later = load("0016_asset_findings.py")
+    assert module.ANCHOR_CHECK == later.ANCHOR_CHECK_0010

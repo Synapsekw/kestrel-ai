@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 
 from sqlalchemy import case, exists, func, or_, select
 
-from app.db.models import Box, Finding, Image, ImageSummary
+from app.asset_review.effective import effective_status
+from app.db.models import IMAGE_REVIEW_STATUSES, Box, Finding, Image, ImageSummary
 from app.errors import AppError
 
 STATUSES = ("open", "reviewed", "closed")
@@ -17,6 +18,8 @@ EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 # I-C0's `imageSeverity` / `imageFindingStatus` patterns, verbatim.
 SEVERITY_PATTERN = r"^[1-9](,[1-9])*$"
 STATUS_PATTERN = r"^(open|reviewed|closed)(,(open|reviewed|closed))*$"
+# C0's `imageReviewStatus` pattern, verbatim.
+REVIEW_PATTERN = r"^(finding|none|uncertain|not_assessed)(,(finding|none|uncertain|not_assessed))*$"
 
 
 @dataclass
@@ -33,6 +36,7 @@ class ImageFilters:
     severity: list[str] | None = None  # "1".."9" (I-C0 `imageSeverity`)
     finding_status: list[str] | None = None
     type_ids: list[str] | None = None
+    review_status: list[str] | None = None  # photo review statuses (asset findings spec §5.4)
 
 
 def parse_csv(value: str | None) -> list[str] | None:
@@ -108,6 +112,16 @@ def _bool(q, cond, value: bool | None):
     return q if value is None else q.where(cond if value else ~cond)
 
 
+def review_condition(values: list[str]):
+    """Photos whose effective review status is one of `values` (asset findings spec §5.4): the
+    `image_review` row's status, else `none` when marked empty, else `not_assessed`. The same
+    expression `GET /images/{id}/review` answers with (coordinator ruling for D1)."""
+    for v in values:
+        if v not in IMAGE_REVIEW_STATUSES:
+            raise _invalid(f"review_status {v!r} is not one of {', '.join(IMAGE_REVIEW_STATUSES)}")
+    return effective_status().in_(values)
+
+
 def where(q, f: ImageFilters, st: Stats):
     if f.source_id:
         q = q.where(Image.source_id == f.source_id)
@@ -136,6 +150,8 @@ def where(q, f: ImageFilters, st: Stats):
                 Box.image_id == Image.id, Box.class_id.in_(f.type_ids), Box.review_state != "rejected"
             )
         )
+    if f.review_status:
+        q = q.where(review_condition(f.review_status))
     return q
 
 

@@ -15,6 +15,7 @@ from app.migration.backup import (
     backup_project_db,
     latest_backup,
     needs_backup,
+    needs_rebuild_backup,
     quick_check,
     ro_uri,
 )
@@ -163,3 +164,31 @@ def test_a_project_reached_by_a_unc_path_is_backed_up(tmp_path):
     copy = backup_project_db(unc)
     assert quick_check(copy) == "ok" and revision_of(folder / "backups" / copy.name) == "0008"
     assert probe_schema_version(unc) == 1
+
+
+def test_a_rebuild_revision_asks_for_its_own_copy():
+    script = project_script()
+    assert needs_rebuild_backup("0015", script) == "0016"
+    assert needs_rebuild_backup("0010", script) == "0016"
+    assert needs_rebuild_backup("0009", script) is None  # the foundation copy covers it; no findings yet
+    assert needs_rebuild_backup(None, script) is None
+    assert needs_rebuild_backup(head_revision(), script) is None
+    assert needs_rebuild_backup("not-a-revision", script) is None
+
+
+def test_opening_a_0015_project_takes_an_r0016_copy_first(tmp_path):
+    folder = at_revision(tmp_path / "p", "0015")
+    open_project_db(folder).dispose()
+    copy = latest_backup(folder)
+    assert copy is not None and copy.name.startswith("project.db.r0016-") and copy.name.endswith(".bak")
+    assert quick_check(copy) == "ok" and revision_of(copy) == "0015"
+    open_project_db(folder).dispose()  # at head now: no second copy
+    assert [p.name for p in (folder / "backups").iterdir()] == [copy.name]
+
+
+def test_a_failed_rebuild_copy_leaves_the_database_at_0015(tmp_path):
+    folder = at_revision(tmp_path / "p", "0015")
+    (folder / "backups").write_text("a file where the folder should be", "utf-8")
+    with pytest.raises(BackupFailed):
+        open_project_db(folder)
+    assert revision_of(folder / "project.db") == "0015"

@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.migration.backup import backup_project_db, needs_backup
+from app.migration.backup import backup_project_db, needs_backup, needs_rebuild_backup
 
 MIGRATIONS = Path(__file__).parent / "migrations"
 
@@ -50,11 +50,16 @@ def open_project_db(folder: Path):
 
     Copy-first (foundation spec §11.2): when the upgrade will apply the foundation revision, the
     database is backed up before Alembic runs, and a failed backup raises `BackupFailed` with the
-    database untouched. Every path that opens a project comes through here.
+    database untouched. A later revision that rebuilds a table of records (`REBUILD_GUARDS`, asset
+    findings spec §5.5) takes its own copy the same way; one open takes at most one copy. Every
+    path that opens a project comes through here.
     """
     folder = Path(folder)
-    if needs_backup(current_revision(folder), project_script()):
+    current, script = current_revision(folder), project_script()
+    if needs_backup(current, script):
         backup_project_db(folder)
+    elif (guard := needs_rebuild_backup(current, script)) is not None:
+        backup_project_db(folder, label=f"r{guard}")
     engine = create_engine(_db_url(folder), future=True, connect_args={"check_same_thread": False})
 
     @event.listens_for(engine, "connect")

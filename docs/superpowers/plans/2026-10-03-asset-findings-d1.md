@@ -1927,7 +1927,7 @@ def put_image_review(
     return out
 ```
 
-`ImageReviewIn` does not forbid extra keys, while the contract's `ImageReviewPut` has `additionalProperties: false`. That matches how the other routers here treat the contract: a stricter input schema would answer 422 to bodies that schemathesis's positive cases never send.
+`ImageReviewIn` forbids extra keys (`extra="forbid"`), matching the contract's `ImageReviewPut` `additionalProperties: false` and the sibling asset model schemas.
 
 - [ ] **Step 4: Keep `marked_empty` and the review row in step from the Data Manager side**
 
