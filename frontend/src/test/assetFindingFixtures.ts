@@ -1,6 +1,7 @@
 import type { AssetModel } from "@contract/client";
 import type { Finding } from "@/api/findings";
 import type { ProjectOverview } from "@/api/overview";
+import { MODEL } from "./assetModelFixtures";
 import { exampleFinding, fullOverview, TYPE_CRACK, TYPE_SPALLING } from "./findingFixtures";
 
 export const ASSET_MODEL_ID = "a0000000-9999-4000-8000-000000000001";
@@ -140,4 +141,84 @@ export const assetOverview: ProjectOverview = {
   hero_map_id: null,
   hero: { kind: "asset_model", id: ASSET_MODEL_ID },
   photo_review: examplePhotoReview,
+};
+
+// Shared with U2 (same exports; the coordinator keeps one copy at merge).
+export const FRAME = {
+  origin: { lat: 25.2, lon: 55.3, ground_alt_m: 4 },
+  north_offset_deg: 0,
+  height_m: 74.4,
+  datum_label: "Ground",
+  datum_note: "",
+  line_azimuth_deg: null,
+  silhouette: [
+    [0, 12],
+    [74.4, 12],
+  ],
+  levels: [3, 6, 9],
+  presets: [],
+};
+export const REVIEW = {
+  profile_id: "building_facade",
+  finding_unit: "region",
+  placement: "mixed",
+  patch_grid: 14,
+  cluster_m: 1.5,
+  zones: [
+    { id: "podium", label: "Podium", min_m: 0, max_m: 10 },
+    { id: "middle", label: "Middle", min_m: 10, max_m: 50 },
+  ],
+  sides: { type: "faces", labels: ["North", "East", "South", "West"], basis: "normal" },
+  focus: { frustum: [0.05, 0.125], oblique_deg: 20 },
+  report: { pages: "finding", min_severity: 2 },
+};
+/** The workspace's model `m1` with a frame and a resolved review profile. */
+export const MODEL_REVIEWED = { ...MODEL, frame: FRAME, review: REVIEW };
+const onM1 = {
+  asset_model_id: "m1",
+  anchor: { ...exampleAssetFinding.anchor, asset_model_id: "m1" },
+  data_id: "m1",
+  type_id: "t-crack",
+};
+export const ASSET_FINDINGS: Finding[] = [
+  {
+    ...exampleAssetFinding,
+    ...onM1,
+    id: "f1",
+    number: 42,
+    severity: 2,
+    height_m: 12.43,
+    bearing_deg: 271,
+    side: "West",
+    zone: "middle",
+    placement: "patch",
+    sighting_count: 3,
+  },
+  { ...exampleUnplacedAssetFinding, ...onM1, id: "f2", number: 43, severity: 1 },
+];
+export const PLACEMENTS = {
+  version: 2,
+  items: [
+    {
+      sighting_id: "s1",
+      finding_id: "f1",
+      kind: "patch",
+      center: [10, 12.4, -3],
+      normal: [0, 0, -1],
+      size: 1.2,
+      severity: 2,
+      patch_url: "x",
+    },
+    {
+      sighting_id: "s2",
+      finding_id: "f1",
+      kind: "point",
+      center: [10, 12.5, -3],
+      normal: [0, 0, -1],
+      size: null,
+      severity: 2,
+      patch_url: null,
+    },
+  ],
+  next: null,
 };

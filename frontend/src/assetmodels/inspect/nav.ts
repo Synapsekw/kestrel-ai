@@ -13,8 +13,12 @@ export function currentSighting(
   sightings: readonly FindingSighting[],
   wanted: string | null,
 ): FindingSighting | null {
+  // The contract lists the representative sighting first; the flag is read only when a row carries it.
   return (
-    sightings.find((s) => s.id === wanted) ?? sightings.find((s) => s.representative) ?? sightings[0] ?? null
+    sightings.find((s) => s.id === wanted) ??
+    sightings.find((s) => (s as { representative?: boolean }).representative) ??
+    sightings[0] ??
+    null
   );
 }
 
