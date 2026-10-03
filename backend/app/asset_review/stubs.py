@@ -28,9 +28,7 @@ M = "/asset-models/{assetModelId}"
 D1_STUBS: list[Stub] = []
 
 # J1: GLB import (spec §6.1).
-J1_STUBS: list[Stub] = [
-    ("POST", M + "/versions/import-glb", "importAssetModelGlb"),
-]
+J1_STUBS: list[Stub] = []
 
 # J2: photo poses (spec §6.2).
 J2_STUBS: list[Stub] = [
