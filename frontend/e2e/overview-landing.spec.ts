@@ -27,7 +27,7 @@ for (const size of [
 }
 
 test("a short laptop window scrolls instead of crushing the panes", async ({ page }) => {
-  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.setViewportSize({ width: 1366, height: 600 });
   await page.goto(`/p/${P}/overview`);
   const hero = page.getByTestId("overview-grid").locator('[data-pane="hero"]');
   await expect(hero).toBeVisible();
