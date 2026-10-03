@@ -91,9 +91,12 @@ def test_rate_limit_retries_then_fails_package_only(handle, app, monkeypatch):
     assert res.state == "failed" and res.summary == _RATE_LIMITED and len(fake2.of("P1")) == 3
 
 
-def test_rate_limit_backs_off_20_40_80_and_reads_the_key_on_each_attempt(handle, app, monkeypatch):
+def test_rate_limit_backs_off_20_40_80_and_reads_the_key_on_each_attempt(handle, app, monkeypatch, caplog):
     """Review Focus #3: the default waits are 20/40/80 s, and each retry reads the key from the
     KeyStore again (a key changed during the wait is the one the retry sends)."""
+    import logging
+
+    caplog.set_level(logging.DEBUG)
     waits = []
     monkeypatch.setattr(M, "_sleep", lambda rc, seconds: waits.append(seconds))
     keys = ["KEY-A", "KEY-B", "KEY-C", "KEY-D"]
@@ -106,8 +109,14 @@ def test_rate_limit_backs_off_20_40_80_and_reads_the_key_on_each_attempt(handle,
     res = run_package(rc, w)
     assert waits == [20.0, 40.0, 80.0]
     assert res.state == "failed" and res.summary == _RATE_LIMITED
-    assert [c["api_key"] for c in fake.of("P1")] == [KEY, "KEY-A", "KEY-B", "KEY-C"]
-    assert all(KEY not in st["summary"] for st in _steps(handle, rc))
+    sent = [c["api_key"] for c in fake.of("P1")]
+    assert sent == [KEY, "KEY-A", "KEY-B", "KEY-C"]
+    with handle.session() as s:
+        row = s.get(AssetModelRun, rc.run_id)
+        recorded = repr((row.steps, row.usage, row.summary))
+    assert "plant package P1 failed on a provider error" in caplog.text  # something was logged
+    for key in sent:  # every key the retries read, in every place the failure is recorded
+        assert key not in caplog.text and key not in res.summary and key not in recorded
 
 
 def test_rate_limit_wait_stops_on_cancel(handle, app):
