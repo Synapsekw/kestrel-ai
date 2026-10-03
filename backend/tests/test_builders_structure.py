@@ -2,22 +2,44 @@
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pytest
 import trimesh
+from PIL import Image
+from shapely.geometry import Point, Polygon
 
 from app.asset_models.builders import structure_kit as k
-from app.asset_models.builders.base import REGISTRY, BuildCtx, Instanced, MeshNode, build_item, load_all
+from app.asset_models.builders.base import (
+    REGISTRY,
+    BuildCtx,
+    Instanced,
+    MeshNode,
+    build_item,
+    catalogue,
+    load_all,
+)
 from app.asset_models.builders.palette import PALETTE
+from app.asset_models.raster import View, render
 from app.asset_models.siteframe import footprint_polygon
 from app.asset_models.spec import Item
 
 load_all()
 
+DATA = Path(__file__).parent / "data" / "plant"
+GOLDEN = DATA / "structure_golden"
+REF = json.loads((DATA / "cowork_nodes" / "structure.json").read_text(encoding="utf-8"))
+REGEN = os.environ.get("KESTREL_REGEN_GOLDEN") == "1"
+ALL_TYPES = {
+    "trestle", "jetty_platform", "dolphin", "pipe_rack", "pipe_sleeper", "catwalk",
+    "walkway", "stair_tower", "overbridge", "platform", "gangway",
+}  # fmt: skip
 CTX = BuildCtx(grid=None)
 
 
@@ -458,3 +480,56 @@ def test_stair_tower_flights_and_landings():
     ys = sorted(node(nodes, "landings").geometry.transforms[:, 1, 3])
     assert ys == pytest.approx([2.975, 5.975, 8.975, 11.975])
     assert instances(build(case("stair_tower", levels=[104.0, 108.0])), "landings") == 3
+
+
+# ---------------------------------------------------------------- catalogue and realism (task 7)
+def test_all_eleven_structure_types_are_registered():
+    assert {t for t, d in REGISTRY.items() if d.family == "structure"} == ALL_TYPES == set(SPECS)
+    for t in ALL_TYPES:
+        assert len(REGISTRY[t].doc) >= 120, t
+        assert REGISTRY[t].default_height_m > 0, t
+
+
+def test_catalogue_publishes_structure_schemas():
+    rows = {r["type"]: r for r in catalogue() if r["family"] == "structure"}
+    assert set(rows) == ALL_TYPES
+    assert "bay_spacing_m" in rows["trestle"]["params_schema"]["properties"]
+    assert "lines" in rows["pipe_rack"]["params_schema"]["properties"]
+
+
+def ref_item(n) -> Item:
+    return item(n["type"], n["footprint"], n["base_el"], n["top_el"], levels=n["levels"])
+
+
+@pytest.mark.parametrize("ref", REF["nodes"], ids=lambda n: n["node"])
+def test_triangles_in_range_of_the_cowork_node(ref):
+    it = ref_item(ref)
+    nodes = build(it)
+    tris, cw = k.triangles(nodes), ref["triangles"]
+    assert 0.35 * cw <= tris <= max(3.0 * cw, cw + 600), (tris, cw)
+    assert SPECS[ref["type"]].required <= {n.name for n in nodes}
+    outline = Polygon(footprint_local(it)).buffer(0.01)  # Cowork's notched, many-sided outlines
+    for name in ("piles", "columns"):
+        for hit in (n for n in nodes if n.name == name):
+            assert all(outline.contains(Point(p)) for p in hit.geometry.transforms[:, [0, 2], 3]), name
+
+
+def test_structure_family_stays_inside_the_triangle_budget():
+    ratios: dict[str, list[float]] = {}
+    for ref in REF["nodes"]:
+        ratios.setdefault(ref["type"], []).append(k.triangles(build(ref_item(ref))) / ref["triangles"])
+    est = sum(REF["per_type"][t]["triangles"] * float(np.mean(r)) for t, r in ratios.items())
+    cowork = sum(v["triangles"] for v in REF["per_type"].values())
+    assert est <= 1.2 * cowork, (est, cowork)  # spec §7: plant <= 1.5 x Cowork; structures keep headroom
+
+
+@pytest.mark.parametrize("type_", sorted(ALL_TYPES))
+def test_matches_golden_render(type_):
+    img = render(expand(build(case(type_))), View("iso"), size=256)
+    path = GOLDEN / f"{type_}.png"
+    if REGEN:
+        GOLDEN.mkdir(parents=True, exist_ok=True)
+        img.save(path)
+    golden = np.asarray(Image.open(path).convert("RGB"), dtype=np.int16)
+    diff = np.abs(np.asarray(img, dtype=np.int16) - golden)
+    assert (diff > 40).mean() < 0.01  # under 1 % of pixels differ visibly
