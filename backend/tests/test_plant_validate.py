@@ -223,10 +223,10 @@ def test_a_build_failure_after_validation_keeps_the_report(
 ):
     from app.asset_models import jobs_glb
 
-    def boom(_spec):
+    def boom(*_a, **_k):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(jobs_glb, "build_glb", boom)
+    monkeypatch.setattr(jobs_glb, "assemble", boom)
     items = [item(i) for i in range(ASYNC_VALIDATE_ITEMS + 1)]
     items[5] = item(5, params={"material": "Chrome"})  # invalid_params: an error that does not block
     r = client.post(f"{model_url}/versions", json={"spec": {"items": items}})

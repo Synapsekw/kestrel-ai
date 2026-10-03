@@ -25,6 +25,14 @@ def version_glb_path(handle, model_id: str, version: int) -> Path:
     return model_dir(handle, model_id) / f"v{int(version)}.glb"
 
 
+def version_csv_path(handle, model_id: str, version: int) -> Path:
+    return model_dir(handle, model_id) / f"v{int(version)}.csv"
+
+
+def version_meta_path(handle, model_id: str, version: int) -> Path:
+    return model_dir(handle, model_id) / f"v{int(version)}.meta.json"
+
+
 def run_dir(handle, model_id: str, run_id: str) -> Path:
     if not ID_RE.fullmatch(run_id or ""):
         raise not_found("asset model run", run_id)

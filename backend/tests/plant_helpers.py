@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import struct
 
 import numpy as np
+
+from app.db.models import AssetModel, AssetModelVersion
+from app.jobs.cancellation import JobCancelled
 
 KIPIC_SITE = {
     "crs": {"epsg": 32639},
@@ -52,3 +56,53 @@ def by_name(doc: dict, name: str) -> dict:
     hits = [n for n in doc["nodes"] if n.get("name") == name]
     assert len(hits) == 1, f"{len(hits)} nodes named {name!r}"
     return hits[0]
+
+
+class Ctx:
+    """A stand-in job context; `cancel_after` makes the n+1-th cancel check raise."""
+
+    def __init__(self, handle, params, cancel_after: int | None = None):
+        self.project, self.params, self.job_id = handle, params, "job-glb"
+        self.published: list = []
+        self.messages: list = []
+        self._checks = 0
+        self._cancel_after = cancel_after
+
+    def progress(self, fraction, message=""):
+        self.messages.append((fraction, message))
+
+    def publish(self, type_, payload):
+        self.published.append((type_, payload))
+
+    def check_cancelled(self):
+        self._checks += 1
+        if self._cancel_after is not None and self._checks > self._cancel_after:
+            raise JobCancelled()
+
+
+def seed_version(
+    handle, spec: dict, *, model_id: str | None = None, version: int = 1, glb_status="pending"
+) -> str:
+    with handle.session() as s:
+        if model_id is None:
+            model = AssetModel(name="Plant", status="ready", current_version=version)
+            s.add(model)
+            s.flush()
+            model_id = model.id
+        s.add(
+            AssetModelVersion(
+                model_id=model_id,
+                version=version,
+                spec=spec,
+                kind="manual",
+                glb_status=glb_status,
+                source_ids=[],
+                part_count=len(spec.get("parts", [])),
+            )
+        )
+    return model_id
+
+
+def read_csv(path) -> list[dict]:
+    with open(path, encoding="utf-8", newline="") as fh:
+        return list(csv.DictReader(fh))

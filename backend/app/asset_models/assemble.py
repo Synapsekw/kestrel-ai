@@ -20,6 +20,8 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
+from sqlalchemy import delete, insert
+from sqlalchemy.orm import Session
 
 from app.asset_models.builders import geom
 from app.asset_models.builders.base import REGISTRY, BuildCtx, Instanced, MeshNode, build_item, load_all
@@ -29,6 +31,7 @@ from app.asset_models.placement import part_transform
 from app.asset_models.shapes import build_shape
 from app.asset_models.siteframe import GridError, PlantGrid, footprint_ref
 from app.asset_models.spec import AssetSpec, EnvFeature, Item, ItemFlag, PolygonFootprint
+from app.db.models import AssetItem
 
 CSV_COLUMNS = [
     "node", "tag", "name", "type", "area", "group", "plant_E", "plant_N", "utm39_E", "utm39_N", "base_EL",
@@ -565,3 +568,39 @@ def assemble_glb(
 ) -> tuple[bytes, dict]:
     a = assemble(spec, lod=lod, progress=progress, sheet_names=sheet_names, invalid=invalid)
     return a.glb, a.meta
+
+
+INDEX_CHUNK = 500
+
+
+def index_items(s: Session, model_id: str, version: int, rows: list[dict]) -> int:
+    """Replace the version's `asset_item` rows with `rows` (spec §9). Returns the count written."""
+    s.execute(delete(AssetItem).where(AssetItem.model_id == model_id, AssetItem.version == version))
+    payload = [
+        {
+            "model_id": model_id,
+            "version": version,
+            "node": r["node"],
+            "tag": r["tag"],
+            "name": r["name"],
+            "type": r["type"],
+            "area": r["area"],
+            "plant_e": r["plant_E"],
+            "plant_n": r["plant_N"],
+            "site_x": r["utm39_E"],
+            "site_y": r["utm39_N"],
+            "lon": r["lon"],
+            "lat": r["lat"],
+            "base_el": r["base_EL"],
+            "top_el": r["top_EL"],
+            "height_source": r["height_source"],
+            "confidence": r["confidence"],
+            "flags": r["flags"],
+            "source_sheet": r["source_sheet"],
+            "has_geometry": bool(r["has_geometry"]),
+        }
+        for r in rows
+    ]
+    for k in range(0, len(payload), INDEX_CHUNK):
+        s.execute(insert(AssetItem), payload[k : k + INDEX_CHUNK])
+    return len(payload)
