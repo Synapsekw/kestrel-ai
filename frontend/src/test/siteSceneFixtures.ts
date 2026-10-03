@@ -1,4 +1,5 @@
-import type { SiteScene } from "@/api/siteScene";
+import type { SceneCloud, SiteScene } from "@/api/siteScene";
+import type { SiteFrameT } from "@/site3d/engine/siteTransform";
 
 export const SCENE_PROJECT = "p1";
 export const SCENE_MODEL = "m1";
@@ -68,3 +69,33 @@ export const TILE_SCENE: SiteScene = {
     },
   ],
 };
+
+/** Al-Zour's plant grid: UTM 39N, theta 17.9991 deg, datum HPFS 100. */
+export const FRAME: SiteFrameT = {
+  crs: { epsg: 32639, wkt: null },
+  origin_crs: [244338.089, 3179515.69],
+  plant_north_deg: 17.9991,
+  datum: { label: "HPFS", el_m: 100 },
+};
+
+export const cloudRow = (o: Partial<SceneCloud> = {}): SceneCloud => ({
+  id: "c1",
+  name: "May survey",
+  octree_url: "/api/v1/projects/p/pointclouds/c1/octree/metadata.json",
+  crs_epsg: 32639,
+  same_crs: true,
+  // plant EL = cloud z + 120.45 (Al-Zour's cloud ground is z = -20.45 at EL 100)
+  z_offset_m: 120.45,
+  ...o,
+});
+
+export const sceneWith = (o: Partial<SiteScene> = {}): SiteScene => ({
+  frame: { ...FRAME },
+  model: null,
+  orthos: [],
+  clouds: [],
+  drawings: [],
+  photos: { count: 0, url: "" },
+  findings: { count: 0, url: "" },
+  ...o,
+});

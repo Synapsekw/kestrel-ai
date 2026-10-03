@@ -46,7 +46,8 @@ export class SiteEngine {
   readonly camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100_000);
   readonly renderer: THREE.WebGLRenderer;
   readonly tiles: TileCache;
-  private readonly canvas: HTMLCanvasElement;
+  /** S2/S3 read it; do not replace it. */
+  readonly canvas: HTMLCanvasElement;
   private readonly host: HTMLElement;
   private readonly controls: OrbitControls;
   private readonly ro: ResizeObserver;
