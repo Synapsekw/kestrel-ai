@@ -1,9 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAgentPanel } from "@/agent/panelStore";
-import { isActiveJob, useJobsStore } from "@/store/jobs";
-import { Button, Icon, IconButton, KeyChord, StatusDot, Tooltip, buttonClass, cx, focusRing } from "@/ui";
+import { Button, Icon, IconButton, KeyChord, Tooltip, buttonClass, cx, focusRing } from "@/ui";
 import { useRouteActions, type RouteAction } from "./routeActions";
-import { SECTION_LABEL, routeInfo } from "./routeModel";
+import { routeInfo, topBarTitle } from "./routeModel";
 import { RunningPill } from "./RunningPill";
 
 function ActionControl({ action }: { action: RouteAction }) {
@@ -35,98 +34,23 @@ function ActionControl({ action }: { action: RouteAction }) {
   );
 }
 
-function Crumbs({
-  projectId,
-  projectName,
-  busy,
-}: {
-  projectId?: string;
-  projectName: string | null;
-  busy: boolean;
-}) {
-  const { pathname } = useLocation();
-  const info = routeInfo(pathname);
-  const sep = (
-    <li aria-hidden="true" className="text-dim">
-      /
-    </li>
-  );
-  if (projectId) {
-    return (
-      <nav aria-label="Breadcrumb" className="min-w-0">
-        <ol className="flex min-w-0 items-center gap-2 text-sm text-muted">
-          <li>
-            <Link to="/projects" className="hover:text-ink">
-              Projects
-            </Link>
-          </li>
-          {sep}
-          <li className="flex min-w-0 items-center gap-2">
-            <StatusDot
-              status={busy ? "running" : "idle"}
-              live={busy}
-              label={busy ? "Jobs running" : "Idle"}
-            />
-            <Link to={`/p/${projectId}/overview`} className="truncate font-semibold text-ink">
-              {projectName ?? "Project"}
-            </Link>
-          </li>
-          {info.page && (
-            <>
-              {sep}
-              <li aria-current="page" className="truncate text-ink">
-                {info.page}
-              </li>
-            </>
-          )}
-        </ol>
-      </nav>
-    );
-  }
-  const section = info.section ? SECTION_LABEL[info.section] : null;
-  const sub = info.page && info.page !== section ? info.page : null;
-  return (
-    <nav aria-label="Breadcrumb" className="min-w-0">
-      <ol className="flex min-w-0 items-center gap-2 text-sm text-muted">
-        {section && (
-          <li aria-current={sub ? undefined : "page"} className={sub ? undefined : "font-semibold text-ink"}>
-            {section}
-          </li>
-        )}
-        {sub && (
-          <>
-            {sep}
-            <li aria-current="page" className="text-ink">
-              {sub}
-            </li>
-          </>
-        )}
-      </ol>
-    </nav>
-  );
-}
-
 /**
- * The top bar (spec 2026-09-26-foundation section 5.1): breadcrumb, the palette field (Ctrl K), the
- * route's context actions, the running pill and the agent button.
+ * The top bar (spec 2026-09-26-foundation section 5.1, title per 2026-10-03-sidebar section 5): the page
+ * title, the palette field (Ctrl K), the route's context actions, the running pill and the agent button.
  */
 export function TopBar({
   projectId,
-  projectName,
   onOpenPalette,
 }: {
   projectId: string | undefined;
-  projectName: string | null;
   onOpenPalette: () => void;
 }) {
+  const { pathname } = useLocation();
   const actions = useRouteActions();
   const agentOpen = useAgentPanel((s) => s.open);
-  const busy = useJobsStore(
-    (s) => !!projectId && Object.values(s.jobs).some((j) => j.project_id === projectId && isActiveJob(j)),
-  );
   return (
     <header className="flex h-14 shrink-0 items-center gap-3.5 border-b border-line px-5">
-      <Crumbs projectId={projectId} projectName={projectName} busy={busy} />
+      <p className="min-w-0 truncate text-lg text-ink">{topBarTitle(routeInfo(pathname))}</p>
       <RunningPill projectId={projectId} />
       <button
         type="button"

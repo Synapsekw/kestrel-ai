@@ -24,10 +24,10 @@ test("with no project open the rail reaches App settings, which holds the provid
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const IMG = "10000000-5555-4000-8000-000000000001";
 
-test("a project opens on Overview with counts in the tabs", async ({ page }) => {
+test("a project opens on Overview with counts in the sidebar", async ({ page }) => {
   await page.goto(`/p/${P}`);
   await expect(page).toHaveURL(/overview$/);
-  await expect(page.getByRole("tablist").getByRole("tab", { name: /^Images/ })).toContainText(/\d/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /^Images/ })).toHaveAccessibleName(/^Images [\d,]+$/);
   await expect(page.getByRole("banner")).toContainText("Overview");
 });
 
