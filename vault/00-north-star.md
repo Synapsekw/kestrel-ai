@@ -91,7 +91,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Workspace rail for Maps and Point clouds** (2026-10-03, `e9317f74..f2671c28`, merged as `8340215a` on `main`, **not pushed**). Both workspaces share one left rail: Layers · Findings · Measure, then AI · Drawings (map) or Clip · Photos (cloud). One topic panel is open at a time (`\` toggles it), and the inspector shows only the selection. Each concept has one home; there is one "All surveys" switch on the timeline. Merged-tree gate: lint 0, vitest 4283, build ok, e2e 189/8 skipped (backend and contract unchanged; the branch gate had pytest 5306). The installer was rebuilt from `8340215a` and **installed**; it carries M1 am-u1..u7 and the basemap (the frozen sidecar from `914c4d5b` has no backend diff to it). Known bug: after `\` opens the panel, Space/Enter press the panel's eye (§5). See [[2026-10-03-1016-workspace-rail]].
+**Shipped last:** **Cleanup pass** (2026-10-03, `fe56752d` on `main`, **not pushed**). `frontend/tsconfig.json` no longer trips TS5069 (`tsBuildInfoFile` without `incremental`; seen only on TypeScript < 5.6, because `tsc -b` implies incremental) and drops `baseUrl` (deprecated in TS 6, removed in TS 7). Frontend lint is down from 22 warnings to 0. Gate: pytest 5462, vitest 4283, e2e 189/8 skipped, build ok. No user-observable change. See [[2026-10-03-1107-cleanup-pass]].
+
+Before that: **Workspace rail for Maps and Point clouds** (2026-10-03, `e9317f74..f2671c28`, merged as `8340215a` on `main`, **not pushed**). Both workspaces share one left rail: Layers · Findings · Measure, then AI · Drawings (map) or Clip · Photos (cloud). One topic panel is open at a time (`\` toggles it), and the inspector shows only the selection. Each concept has one home; there is one "All surveys" switch on the timeline. Merged-tree gate: lint 0, vitest 4283, build ok, e2e 189/8 skipped (backend and contract unchanged; the branch gate had pytest 5306). The installer was rebuilt from `8340215a` and **installed**; it carries M1 am-u1..u7 and the basemap (the frozen sidecar from `914c4d5b` has no backend diff to it). Known bug: after `\` opens the panel, Space/Enter press the panel's eye (§5). See [[2026-10-03-1016-workspace-rail]].
 
 Before that: **Site basemap under the Overview's Location pane** (2026-10-03, `31a1a5ab`, on `main`, pushed). Keyless Esri satellite / OSM street tiles, proxied and cached by the backend (`GET /basemap/{source}/{z}/{x}/{y}`), drawn inside the existing SVG with a Satellite/Map switch. Offline falls back to the plain outline. Gate green (5313 backend, 587 vitest files, 180 browser). The installer was rebuilt from `31a1a5ab` and **installed**; it has M1 am-u1..u4 but **not** am-u5..u7. Nobody has looked at it with real tiles yet. See [[2026-10-03-0723-site-basemap]].
 
@@ -280,6 +282,13 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Cleanup pass (opened 2026-10-03)
+
+- **Build warning:** the main chunk is 2.27 MB (`engine` 0.86 MB), over Vite's 500 kB limit; route-level lazy loading would split it.
+- **Decision:** React Router `v7_startTransition` / `v7_relativeSplatPath` future flags (vitest prints both notices; the splat flag changes how relative links resolve).
+- **pytest warnings:** 502 per run, not yet reviewed; one known source is `backend/app/workspace/views.py:72` (Affine `*` → `@`).
+- **Untracked:** `.superpowers/installer-*.log` on `main`; add to `.gitignore`.
 
 ### Workspace rail (opened 2026-10-03)
 
