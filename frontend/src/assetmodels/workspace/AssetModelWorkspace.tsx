@@ -19,7 +19,15 @@ import { stopReasonText } from "@/assetmodels/run/runText";
 import { endedEarly, runEndToast, tryAgainOf } from "@/assetmodels/run/runView";
 import { useLiveRun } from "@/assetmodels/run/useLiveRun";
 import { useAssetModelList, useVersionDetail, useVersions } from "@/assetmodels/useAssetModels";
-import type { ModelPart, ModelView } from "@/assetmodels/viewer/engine";
+import { FindingsTopic } from "@/assetmodels/review/FindingsTopic";
+import { ImportGlbDialog } from "@/assetmodels/review/ImportGlbDialog";
+import { PhotosTopic } from "@/assetmodels/review/PhotosTopic";
+import { useFindingsLayer } from "@/assetmodels/review/useFindingsLayer";
+import { useGroundTiles } from "@/assetmodels/review/useGroundTiles";
+import { usePhotosLayer } from "@/assetmodels/review/usePhotosLayer";
+import { useReviewActions } from "@/assetmodels/review/useReviewActions";
+import type { CameraPose } from "@/assetmodels/viewer/cameras";
+import type { ModelPart, ModelView, PickHit } from "@/assetmodels/viewer/engine";
 import { ModelViewer, type ModelViewerHandle, type ModelViewState } from "@/assetmodels/viewer/ModelViewer";
 import { NOTICE_INSET } from "@/clouds/workspace/layout";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
@@ -33,6 +41,7 @@ import {
   MenuButton,
   Progress,
   Skeleton,
+  WorkspaceRail,
   claimJobOutcome,
   stagger,
   toast,
@@ -46,7 +55,8 @@ import { NewModelDialog } from "./NewModelDialog";
 import { PartTab, type Deviation } from "./PartTab";
 import { PartsTab, type ListedPart } from "./PartsTab";
 import { VersionsTab } from "./VersionsTab";
-import { CutBearing, VIEWS, ViewTools, modelKey, type ViewToolState } from "./ViewTools";
+import { showTopic, useModelRail } from "./useModelRail";
+import { CutBearing, VIEWS, modelKey, type ViewToolState } from "./ViewTools";
 
 /** The fields of `AssetModelRun.comparison` the workspace reads (the contract types it loosely). */
 interface Comparison {
@@ -57,6 +67,11 @@ const comparisonOf = (run: AssetModelRun) => run.comparison as unknown as Compar
 
 /** The notice band: between the model panel and the inspector, below the Download button. */
 const NOTICE_STYLE = { left: NOTICE_INSET.left, right: NOTICE_INSET.right, top: NOTICE_INSET.top } as const;
+/**
+ * The topic panel stops above the build bar: the slot sits 14 px from the bottom and the bar is at
+ * most 86 px tall (a live run with its step preview), plus a 14 px gap.
+ */
+const RAIL_BOTTOM_INSET = 114;
 
 /** The model's runs, newest first. A failing read (a 501 from an older backend, say) is "no runs". */
 function useRuns(projectId: string, modelId: string) {
@@ -136,7 +151,7 @@ interface ModelWorkspaceProps {
 function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelChanged }: ModelWorkspaceProps) {
   const api = useApi();
   const backend = useBackend();
-  const viewer = useRef<ModelViewerHandle>(null);
+  const viewer = useRef<ModelViewerHandle | null>(null);
   const { versions, error: versionsError, reload: reloadVersions } = useVersions(projectId, model.id);
   const [picked, setPicked] = useState<number | null>(null);
   const shown = picked ?? model.current_version ?? versions?.[0]?.version ?? null;
@@ -387,6 +402,63 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     };
   }, [overlayOn, overlayRunId, overlayCloud, backend.baseUrl, backend.token, projectId, model.id]);
   const deviation = comparison?.parts?.find((p) => p.id === selected) ?? null;
+
+  // Findings on the asset (asset findings spec §9): pins, patches and cameras stay in the view
+  // whatever topic is open, so their data lives here and the topics only show it.
+  const findingsLayer = useFindingsLayer({ projectId, model, viewer });
+  const photosLayer = usePhotosLayer(projectId, model.id, viewer);
+  const actions = useReviewActions(projectId, model.id);
+  const ground = useGroundTiles(model);
+  const [view3d, setView3d] = useState({ ghost: false, rotate: false, ground: false });
+  const onViewSwitch = (k: "ghost" | "rotate" | "ground", on: boolean) => {
+    setView3d((s) => ({ ...s, [k]: on }));
+    const v = viewer.current;
+    if (k === "ghost") v?.setGhost(on);
+    else if (k === "rotate") v?.setAutoRotate(on);
+    else v?.setGround(on ? ground : null);
+  };
+  // Focusing a finding or looking from a photo stops the slow turn (U1 hand-off): the engine stops
+  // on focus, but the viewer's replay state and the switch must follow, and a pose does not stop it.
+  const stopTurning = () => {
+    viewer.current?.setAutoRotate(false);
+    setView3d((s) => (s.rotate ? { ...s, rotate: false } : s));
+  };
+  const findingsShown = {
+    ...findingsLayer,
+    focus: (id: string) => {
+      stopTurning();
+      return findingsLayer.focus(id);
+    },
+  };
+  const photosShown = {
+    ...photosLayer,
+    viewFrom: (p: CameraPose | null) => {
+      if (p) stopTurning();
+      photosLayer.viewFrom(p);
+    },
+  };
+  const [importOpen, setImportOpen] = useState(false);
+
+  // A new viewer element (the first, or one mounted again after a failed or still-building version)
+  // starts empty: it gets the layers and the view switches once, before its engine loads. A reload
+  // of its engine replays them from the viewer's own state, so nothing is sent again then (R-P6:
+  // each setPlacements drops the loaded patches).
+  const onViewerMount = useRef<() => void>(() => {});
+  useEffect(() => {
+    onViewerMount.current = () => {
+      const v = viewer.current;
+      if (!v) return;
+      v.setGhost(view3d.ghost);
+      v.setAutoRotate(view3d.rotate);
+      v.setGround(view3d.ground ? ground : null);
+      findingsLayer.push();
+      photosLayer.push();
+    };
+  });
+  const viewerRef = useCallback((h: ModelViewerHandle | null) => {
+    viewer.current = h;
+    if (h) onViewerMount.current();
+  }, []);
   useEffect(() => {
     replay.current = () => {
       const v = viewer.current;
@@ -435,7 +507,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
   };
 
   const noVersion = versions !== null && versions.length === 0 && shown === null;
-  const panel = (
+  const panelBody = (
     <ModelPanel
       projectId={projectId}
       model={model}
@@ -448,9 +520,55 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
       overlay={versions !== null && versions.length === 0 ? null : overlayOn}
       overlayAvailable={!!overlayRun}
       onOverlay={setOverlayWanted}
+      view={view3d}
+      onViewSwitch={onViewSwitch}
+      groundAvailable={ground !== null}
+      onImportGlb={() => setImportOpen(true)}
     >
       {tools.cut && <CutBearing bearing={bearing} onBearing={onBearing} />}
     </ModelPanel>
+  );
+  const rail = useModelRail({
+    running,
+    tools,
+    onToggle: toggle,
+    onView: setViewTo,
+    modelBody: panelBody,
+    findingsBody: (
+      <FindingsTopic projectId={projectId} model={model} layer={findingsShown} actions={actions} />
+    ),
+    photosBody: <PhotosTopic projectId={projectId} layer={photosShown} actions={actions} />,
+  });
+  const onPick = (hit: PickHit) => {
+    if (hit.kind === "finding") {
+      findingsLayer.select(hit.id);
+      showTopic(rail.store, "findings");
+    } else if (hit.kind === "camera") {
+      photosLayer.select(hit.id);
+      showTopic(rail.store, "photos");
+    }
+  };
+  const panel = (
+    <WorkspaceRail
+      label="Model view tools"
+      store={rail.store}
+      nav={rail.nav}
+      topics={rail.topics}
+      inspectorOpen
+      bottomInset={RAIL_BOTTOM_INSET}
+    />
+  );
+  const importDialog = importOpen && (
+    <ImportGlbDialog
+      projectId={projectId}
+      modelId={model.id}
+      onClose={() => setImportOpen(false)}
+      onStarted={(version, jobId) => {
+        setImportOpen(false);
+        toast("ok", `Importing the GLB as version ${version}`);
+        opened(version, jobId);
+      }}
+    />
   );
   if (noVersion)
     return (
@@ -478,10 +596,17 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
                 </div>
               </>
             ) : (
-              <p className="text-sm text-muted">
-                {model.name} has no 3D model yet. Each build or edit saves a version, and the first one opens
-                here.
-              </p>
+              <>
+                <p className="text-sm text-muted">
+                  {model.name} has no 3D model yet. Each build or edit saves a version, and the first one
+                  opens here.
+                </p>
+                <div>
+                  <Button size="sm" icon="import" onClick={() => setImportOpen(true)}>
+                    Import a GLB…
+                  </Button>
+                </div>
+              </>
             )}
           </CentreCard>
         )}
@@ -532,6 +657,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
             }}
           />
         )}
+        {importDialog}
       </>
     );
 
@@ -540,11 +666,12 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
     <>
       {viewerUrl && (
         <ModelViewer
-          ref={viewer}
+          ref={viewerRef}
           glbUrl={viewerUrl}
           onParts={onParts}
           onSelect={onViewerSelect}
           onState={onState}
+          onPick={onPick}
           noticeInset={NOTICE_STYLE}
         />
       )}
@@ -584,7 +711,6 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
           </Alert>
         </ViewNotice>
       ) : null}
-      <ViewTools state={tools} disabled={!running} onToggle={toggle} onView={setViewTo} />
       {panel}
       <GlassPanel
         variant="float"
@@ -664,6 +790,7 @@ function ModelWorkspace({ projectId, model, models, onNew, onDetails, onModelCha
       >
         {buildBar(true)}
       </div>
+      {importDialog}
     </>
   );
 }
