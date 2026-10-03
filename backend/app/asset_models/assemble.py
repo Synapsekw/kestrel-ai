@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import math
 from collections import Counter
 from collections.abc import Callable
@@ -39,7 +40,8 @@ CSV_COLUMNS = [
 ]  # fmt: skip
 UTM39_EPSG = 32639
 UNASSIGNED_GROUP = "Area_unassigned"
-_FORMULA_START = ("=", "+", "@")
+log = logging.getLogger(__name__)
+_FORMULA_START = ("=", "+", "@", "-", "\t", "\r")
 _TEXT_COLUMNS = frozenset({"node", "tag", "name", "type", "area", "group", "source_sheet", "notes"})
 
 
@@ -397,6 +399,9 @@ def _env_builder():
     try:
         from app.asset_models.builders.environment import build_environment
     except ImportError:
+        return None
+    except Exception as exc:  # a broken B3 module must not fail every plant build
+        log.warning("environment builder unavailable: %s", type(exc).__name__)
         return None
     return build_environment
 

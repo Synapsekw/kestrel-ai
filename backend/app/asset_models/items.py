@@ -129,5 +129,5 @@ def get_asset_model_csv(
         path,
         media_type="text/csv; charset=utf-8",
         filename=f"register-v{version}.csv",
-        headers={"Cache-Control": "private, max-age=3600"},
+        headers={"Cache-Control": "no-cache"},
     )

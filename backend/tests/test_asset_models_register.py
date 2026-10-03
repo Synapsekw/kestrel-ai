@@ -118,6 +118,10 @@ def test_formula_like_text_is_neutralised(tmp_path):
     write_csv(rows, p)
     [cells] = list(csv.DictReader(p.open(encoding="utf-8", newline="")))
     assert cells["name"] == '\'=HYPERLINK("http://x")' and cells["notes"] == "'+1 note"
+    rows = register_rows(spec_of([item("a", name="\tTAB", notes="-2+3")]))
+    write_csv(rows, p)
+    [cells] = list(csv.DictReader(p.open(encoding="utf-8", newline="")))
+    assert cells["name"] == "'\tTAB" and cells["notes"] == "'-2+3"
 
 
 def test_quotes_and_commas_round_trip(tmp_path):

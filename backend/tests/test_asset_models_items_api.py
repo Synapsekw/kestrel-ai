@@ -110,6 +110,7 @@ def test_csv_route(client, project_id, plant, handle):
     mid, spec = plant
     r = client.get(url(project_id, mid, "/csv"))
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert r.headers["cache-control"] == "no-cache"
     lines = r.content.decode("utf-8").splitlines()
     assert lines[0].startswith("node,tag,name,type,area,group,plant_E,plant_N,utm39_E,utm39_N")
     assert len(lines) == 1 + len(spec["items"])

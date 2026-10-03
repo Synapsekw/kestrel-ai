@@ -222,6 +222,21 @@ def test_env_builder_failure_falls_back(monkeypatch):
     assert a.meta["environment"] == 1 and a.meta["env_skipped"] == []
 
 
+def test_env_module_non_import_error_falls_back(monkeypatch, caplog):
+    import sys
+    import types
+
+    class Broken(types.ModuleType):
+        def __getattr__(self, name):
+            raise NameError("secret-detail")
+
+    monkeypatch.setitem(sys.modules, "app.asset_models.builders.environment", Broken("environment"))
+    with caplog.at_level("WARNING"):
+        a = assemble(spec_of([], [SEA]))
+    assert a.meta["environment"] == 1 and a.meta["env_skipped"] == []
+    assert "NameError" in caplog.text and "secret-detail" not in caplog.text
+
+
 def test_env_builder_nodes_sit_under_environment_untranslated(monkeypatch):
     calls = []
 
