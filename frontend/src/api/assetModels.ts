@@ -103,3 +103,7 @@ export async function stopRun(
 ): Promise<AssetModelRun> {
   return unwrap(api.POST(`${P}/{assetModelId}/runs/{runId}/stop`, rPath(projectId, id, runId)));
 }
+
+export async function getAssetModel(api: ApiClient, projectId: string, id: string): Promise<AssetModel> {
+  return unwrap(api.GET(`${P}/{assetModelId}`, path(projectId, id)));
+}
