@@ -28,6 +28,7 @@ import trimesh
 from PIL import Image, ImageDraw
 
 from app.asset_review.frame import Frame, Origin, Preset
+from app.asset_review.raycast import first_hits
 
 LAT0, LON0, ALT0 = 24.4539, 54.3773, 5.0
 EARTH_R = 6378137.0
@@ -328,19 +329,11 @@ def _poses() -> list[dict]:
 
 
 def _first_hit(tris: np.ndarray, origin: np.ndarray, direction: np.ndarray) -> float:
-    """Distance along a unit ray to the nearest triangle (Moller-Trumbore over every triangle), or inf."""
-    v0, e1, e2 = tris[:, 0], tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]
-    p = np.cross(direction, e2)
-    det = np.einsum("ij,ij->i", e1, p)
-    ok = np.abs(det) > 1e-12
-    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
-    s = origin - v0
-    u = np.einsum("ij,ij->i", s, p) * inv
-    q = np.cross(s, e1)
-    v = (q @ direction) * inv
-    t = np.einsum("ij,ij->i", e2, q) * inv
-    hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 1e-9)
-    return float(t[hit].min()) if hit.any() else math.inf
+    """Distance along a unit ray to the nearest triangle, or inf (`app.asset_review.raycast`)."""
+    t, _ = first_hits(
+        tris.reshape(-1, 3), np.arange(len(tris) * 3).reshape(-1, 3), origin[None, :], direction[None, :]
+    )
+    return float(t[0])
 
 
 def _sightings(tris: np.ndarray, poses: list[dict], truth: list[dict]) -> dict[str, list[TruthSighting]]:

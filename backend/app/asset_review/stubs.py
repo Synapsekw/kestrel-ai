@@ -34,13 +34,7 @@ J1_STUBS: list[Stub] = []
 J2_STUBS: list[Stub] = []
 
 # J3: placement and its files (spec §6.3, §5.7).
-J3_STUBS: list[Stub] = [
-    ("GET", M + "/placements", "listPlacements"),
-    ("POST", M + "/placements/compute", "computePlacements"),
-    ("GET", M + "/placements/{sightingId}/mesh", "getPlacementMesh"),
-    ("GET", M + "/placements/{sightingId}/texture", "getPlacementTexture"),
-    ("GET", M + "/placements/{sightingId}/labels", "getPlacementLabels"),
-]
+J3_STUBS: list[Stub] = []
 
 # J4: grouping, merge, split and sightings (spec §6.4).
 J4_STUBS: list[Stub] = []
