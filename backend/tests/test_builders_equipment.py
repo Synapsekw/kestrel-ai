@@ -269,6 +269,22 @@ CASES: dict[str, Case] = {
         golden=("iso", "top"),
     ),
     # --- tanks (Tasks 5, 6)
+    "storage_tank_small": Case(  # Cowork 70-T-0002 fire water tank: R 5.3, 10 m
+        "storage_tank_small",
+        circle(10.6),
+        10.0,
+        margin=0.7,
+        tris=(1952, 4000),
+        parts=frozenset({"foundation", "shell", "roof", "roof_posts", "roof_rails", "ladder_rungs"}),
+    ),
+    "storage_tank_small_horizontal": Case(  # Cowork 20-A-0009-V-01 diesel tank skid: 5.8 x 3.8, 3 m
+        "storage_tank_small",
+        rect(5.8, 3.8),
+        3.0,
+        margin=0.3,
+        tris=(200, 4000),
+        parts=frozenset({"bund", "saddles", "shell", "heads"}),
+    ),
     # --- rotating (Tasks 7, 8)
     # --- power (Task 8)
     # --- process (Tasks 9, 10)
@@ -480,3 +496,18 @@ def test_vessel_v_lod_lowers_triangles():
 def test_vessel_v_heads_too_tall_for_height_raise():
     with pytest.raises(ValueError, match="height"):
         REGISTRY["vessel_v"].fn(make_item("vessel_v", circle(6.0), h=2.0), CTX)
+
+
+# ------------------------------------------------------------------ tanks
+def test_storage_tank_small_form_follows_the_footprint():
+    assert built("storage_tank_small")[0].extras["derived"]["form"] == "vertical"
+    assert built("storage_tank_small_horizontal")[0].extras["derived"]["form"] == "horizontal"
+
+
+def test_storage_tank_small_roof_posts_are_instanced():
+    posts = next(n for n in built("storage_tank_small") if n.name == "roof_posts").geometry
+    assert isinstance(posts, Instanced) and len(posts.transforms) >= 20
+
+
+def test_storage_tank_small_lod_lowers_triangles():
+    assert tris(built("storage_tank_small", 0.25)) < tris(built("storage_tank_small"))
