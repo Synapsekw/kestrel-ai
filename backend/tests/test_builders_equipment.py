@@ -248,6 +248,26 @@ class Case:
 
 CASES: dict[str, Case] = {
     # --- vessels (Task 4)
+    "vessel_v": Case(  # Cowork 30-V-0001 recondenser: D 5.9, 25 m
+        "vessel_v",
+        circle(5.9),
+        25.0,
+        margin=1.2,
+        tris=(480, 4000),
+        parts=frozenset({"plinth", "shell", "head_top", "head_bottom", "skirt", "nozzles", "ladder_rungs"}),
+    ),
+    "vessel_v_drum": Case(  # Cowork 30-V-0002A vent drum on PF 104.5: D ~1.0, 1.8 m
+        "vessel_v", circle(1.0), 1.8, margin=0.4, tris=(100, 4000), golden=()
+    ),
+    "vessel_h": Case(  # Cowork 10-V-0001 jetty KO drum: L 17.4, W 3.86, rot 96
+        "vessel_h",
+        rect(17.4, 3.86, 96.0),
+        3.86,
+        margin=0.5,
+        tris=(408, 2000),
+        parts=frozenset({"shell", "head_a", "head_b", "saddles", "piers"}),
+        golden=("iso", "top"),
+    ),
     # --- tanks (Tasks 5, 6)
     # --- rotating (Tasks 7, 8)
     # --- power (Task 8)
@@ -421,3 +441,42 @@ def test_golden_render(cid, view):
     golden = np.asarray(Image.open(path).convert("RGB"), dtype=np.int16)
     diff = np.abs(np.asarray(img, dtype=np.int16) - golden)
     assert (diff > 40).mean() < 0.01  # under 1 % of pixels differ visibly
+
+
+# ------------------------------------------------------------------ vessels
+def test_tiny_vessel_v_has_no_ladder_or_platform():  # Review Focus 2
+    names = {n.name for n in built("vessel_v_drum")}
+    assert not any(n.startswith(("ladder", "platform")) for n in names)
+    assert {"shell", "head_top", "head_bottom"} <= names
+
+
+def test_tall_vessel_v_gets_ladder_and_platform_by_default():
+    names = {n.name for n in built("vessel_v")}
+    assert {"ladder_rungs", "platform_deck", "platform_posts"} <= names
+
+
+@pytest.mark.parametrize(
+    ("footprint", "orient", "expected"),
+    [
+        (rect(17.4, 3.86, 0.0), None, 0.0),
+        (rect(17.4, 3.86, 30.0), None, 30.0),
+        (rect(17.4, 3.86, 0.0), "ew", 90.0),
+        (rect(3.86, 17.4, 0.0), "ns", 0.0),
+        (circle(6.0), "ew", 90.0),
+    ],
+)
+def test_vessel_h_orientation(footprint, orient, expected):
+    params = {"orient": orient} if orient else {}
+    nodes = REGISTRY["vessel_h"].fn(make_item("vessel_h", footprint, h=3.0, params=params), CTX)
+    got = principal_bearing(nodes, "shell")
+    assert min(abs(got - expected), 180 - abs(got - expected)) < 0.5
+    assert nodes[0].extras["derived"]["axis_bearing_deg"] == pytest.approx(expected % 360)
+
+
+def test_vessel_v_lod_lowers_triangles():
+    assert tris(built("vessel_v", 0.25)) < tris(built("vessel_v"))
+
+
+def test_vessel_v_heads_too_tall_for_height_raise():
+    with pytest.raises(ValueError, match="height"):
+        REGISTRY["vessel_v"].fn(make_item("vessel_v", circle(6.0), h=2.0), CTX)
