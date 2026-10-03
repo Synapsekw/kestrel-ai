@@ -12,11 +12,13 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import ijson
 from sqlalchemy import func, select
 
 from app.asset_models import store as asset_store
 from app.asset_review import glb_import
-from app.asset_review.kit_children import InlineRunner
+from app.asset_review.kit_children import InlineRunner, run_child
+from app.asset_review.kit_finish import finding_counts, finish_findings, group_imported
 from app.asset_review.kit_format import STATUSES, UNCLASSIFIED, Kit, KitError, preview_size, read_kit
 from app.asset_review.kit_match import Match, load_candidates, match_photos
 from app.asset_review.kit_records import write_frame, write_poses, write_statuses
@@ -28,6 +30,8 @@ from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 
 JOB = "review_kit_import"
+PLACE_JOB = "asset_place"  # J3
+GROUP_JOB = "asset_group"  # J4: asset_place queues it; the import groups in-process instead
 MAX_LISTED = 2000  # unmatched reasons and skipped lists in a job result; the counts are always whole
 MAX_NAMES = 500  # C0's `ReviewImportPreview.unmatched` maxItems
 LIVE_STATES = ("queued", "running")
@@ -318,6 +322,34 @@ def _scales(prep: Prepared, written: list[Written]) -> dict[str, tuple[float, fl
     return out
 
 
+def _place(ctx, asset_model_id: str, version: int, kit: Kit, prep: Prepared, written: list[Written]) -> dict:
+    """Replay the kit's placements when it has surface.json (spec §6.5 step 6), else run J3's
+    `asset_place` here, in this job, with its chained grouping swallowed. Without surface.json the
+    `part` J3 derives from the GLB hit stands (the kit's component is not re-applied)."""
+    ids = [w.sighting_id for w in written]
+    if kit.surface_path is not None:
+        ctx.progress(0.5, "Replaying the kit's placements")
+        keys = {w.kit_key: w.sighting_id for w in written if w.primary}
+        try:
+            extra = replay(
+                ctx.project, ctx, asset_model_id, version, kit, keys, 0.5, 0.8, scales=_scales(prep, written)
+            )
+        except ijson.JSONError as e:
+            raise JobFailure(f"The kit's surface.json is damaged or incomplete: {e}") from None
+        mark_unplaced(ctx.project, [w.sighting_id for w in written if not w.primary], version)
+        return {"mode": "replay", **placement_counts(ctx.project, ids), **extra}
+    ctx.progress(0.5, "Placing the sightings on the model")
+    run_child(
+        ctx,
+        PLACE_JOB,
+        {"asset_model_id": asset_model_id, "only_dirty": False},
+        0.5,
+        0.8,
+        swallow=frozenset({GROUP_JOB}),
+    )
+    return {"mode": "computed", **placement_counts(ctx.project, ids)}
+
+
 def _import(ctx, kit: Kit, prep: Prepared) -> dict:
     handle, params = ctx.project, ctx.params
     class_map = _validate(handle, kit, prep, params)
@@ -334,19 +366,20 @@ def _import(ctx, kit: Kit, prep: Prepared) -> dict:
         planned = plan_sightings(ctx, kit, prep.matches, prep.previews, class_map, skipped)
         write_sightings(handle, ctx, mid, planned, written, skipped)
         statuses = write_statuses(handle, ctx, kit, prep.matches, skipped)
+        placement = _place(ctx, mid, version, kit, prep, written)
     except Exception:
         undo_records(handle, mid, written, pose_ids)  # cancel included: JobCancelled is an Exception
         raise
-    ids = [w.sighting_id for w in written]
-    placement: dict = {"mode": "none"}
-    if kit.surface_path is not None:
-        ctx.progress(0.5, "Replaying the kit's placements")
-        keys = {w.kit_key: w.sighting_id for w in written if w.primary}
-        extra = replay(handle, ctx, mid, version, kit, keys, 0.5, 0.8, scales=_scales(prep, written))
-        mark_unplaced(handle, [w.sighting_id for w in written if not w.primary], version)
-        placement = {"mode": "replay", **extra}
-    placement.update(placement_counts(handle, ids))
-    ctx.progress(1, f"Imported {len(written):,} sightings")
+    # From here the records and placements stand: a later failure leaves sightings ungrouped, and
+    # "Regroup" finishes them.
+    ctx.check_cancelled()
+    ctx.progress(0.8, "Grouping sightings into findings")
+    grouping = group_imported(handle, mid, kit.unit)
+    finished = finish_findings(handle, ctx, kit, written)
+    ctx.publish("findings.changed", {"all": True})
+    ctx.publish("asset_models.changed", {"asset_model_ids": [mid]})
+    findings = finding_counts(handle, mid)
+    ctx.progress(1, f"Imported {len(written):,} sightings as {findings['total']:,} findings")
     return _result(
         kit,
         prep,
@@ -357,4 +390,7 @@ def _import(ctx, kit: Kit, prep: Prepared) -> dict:
         sightings=len(written),
         skipped=skipped[:MAX_LISTED],
         placement=placement,
+        grouping=grouping,
+        findings=findings,
+        **finished,
     )
