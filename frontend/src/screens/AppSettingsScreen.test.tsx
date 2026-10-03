@@ -30,4 +30,13 @@ describe("AppSettingsScreen", () => {
     renderWithProviders(<AppSettingsScreen />, { api, route: "/settings", path: "/settings" });
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
   });
+
+  it("has the report brands section", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "GET", path: /\/api\/v1\/brands$/, body: { items: [] } },
+    ]);
+    renderWithProviders(<AppSettingsScreen />, { api, route: "/settings", path: "/settings" });
+    expect(screen.getByRole("heading", { name: "Report brands" })).toBeInTheDocument();
+  });
 });
