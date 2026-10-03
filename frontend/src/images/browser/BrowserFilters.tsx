@@ -24,11 +24,13 @@ import {
 } from "@/ui";
 import {
   moreFilterCount,
+  REVIEW_LABEL,
   SORT_LABEL,
   toggleSeverity,
   type BrowserFilterState,
   type BrowserSort,
   type FindingStatusFilter,
+  type ReviewStatusFilter,
   type TriState,
 } from "./filters";
 import type { ImageIndexState } from "./useImageIndex";
@@ -50,6 +52,7 @@ export function severityHistogram(sev: readonly number[]): Map<number, number> {
 }
 
 const SORTS = Object.keys(SORT_LABEL) as BrowserSort[];
+const REVIEW_OPTIONS = Object.keys(REVIEW_LABEL) as ReviewStatusFilter[];
 
 function useSources(projectId: string): Source[] {
   const api = useApi();
@@ -229,6 +232,18 @@ export function BrowserFilters({ projectId, value, onChange, index }: BrowserFil
             ]}
           />
           <Switch label="Unlabeled" checked={value.unlabeled} onChange={(v) => set({ unlabeled: v })} />
+          <Select
+            dense
+            aria-label="Photo review"
+            value={value.reviewStatus}
+            onChange={(e) => set({ reviewStatus: e.target.value as ReviewStatusFilter })}
+          >
+            {REVIEW_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {REVIEW_LABEL[r]}
+              </option>
+            ))}
+          </Select>
           {types.length > 0 && (
             <fieldset className="flex max-h-40 flex-col gap-1 overflow-auto">
               <legend className="mb-1 text-2xs text-muted">Types</legend>

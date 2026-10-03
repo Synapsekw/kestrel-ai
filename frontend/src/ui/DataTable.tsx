@@ -84,6 +84,8 @@ export function DataTable<T>({
   const askedAt = useRef(-1);
 
   useEffect(() => {
+    // A replaced list (filter change) passes through empty; forget the old ask so paging resumes.
+    if (rows.length === 0) askedAt.current = -1;
     if (!onEndReached || loading || rows.length === 0) return;
     if (win.end >= rows.length - endThreshold && askedAt.current !== rows.length) {
       askedAt.current = rows.length;

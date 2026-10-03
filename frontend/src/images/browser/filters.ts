@@ -5,6 +5,18 @@ export type BrowserSort = "capture_time" | "path" | "worst_severity" | "max_pend
 export type FindingStatusFilter = "all" | FindingStatus;
 export type TriState = "all" | "yes" | "no";
 
+/** Spec §5.4: a photo's review status. `not_assessed` also matches a photo never reviewed. */
+export type PhotoReviewStatus = "finding" | "none" | "uncertain" | "not_assessed";
+export type ReviewStatusFilter = "all" | PhotoReviewStatus;
+
+export const REVIEW_LABEL: Record<ReviewStatusFilter, string> = {
+  all: "Any review status",
+  finding: "Has a finding",
+  none: "No finding",
+  uncertain: "Uncertain",
+  not_assessed: "Not assessed",
+};
+
 /** The left pane's filters (spec §6.1). One value object; `filtersToIndexQuery` is its only reader. */
 export interface BrowserFilterState {
   /** "" = every source. */
@@ -17,6 +29,7 @@ export interface BrowserFilterState {
   hasSuggestions: boolean;
   reviewed: TriState;
   unlabeled: boolean;
+  reviewStatus: ReviewStatusFilter;
   search: string;
   sort: BrowserSort;
   order: "asc" | "desc";
@@ -31,6 +44,7 @@ export const DEFAULT_BROWSER_FILTERS: BrowserFilterState = {
   hasSuggestions: false,
   reviewed: "all",
   unlabeled: false,
+  reviewStatus: "all",
   search: "",
   sort: "capture_time",
   order: "asc",
@@ -54,6 +68,7 @@ export function filtersToIndexQuery(f: BrowserFilterState): ImageIndexQuery {
   if (f.hasSuggestions) q.has_suggestions = true;
   if (f.reviewed !== "all") q.reviewed = f.reviewed === "yes";
   if (f.unlabeled) q.unlabeled = true;
+  if (f.reviewStatus !== "all") q.review_status = f.reviewStatus;
   const search = f.search.trim();
   if (search) q.search = search;
   return q;
@@ -81,6 +96,7 @@ export function moreFilterCount(f: BrowserFilterState): number {
     (f.hasSuggestions ? 1 : 0) +
     (f.reviewed !== "all" ? 1 : 0) +
     (f.unlabeled ? 1 : 0) +
+    (f.reviewStatus !== "all" ? 1 : 0) +
     (f.search.trim() ? 1 : 0)
   );
 }

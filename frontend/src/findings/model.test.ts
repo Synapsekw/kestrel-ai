@@ -11,8 +11,17 @@ import {
   findingsListPath,
   isFiltered,
   parseFilters,
+  clearedFilters,
 } from "./filters";
 import { findingLocation } from "./location";
+import {
+  exampleAssetFinding,
+  exampleAssetModel,
+  exampleUnplacedAssetFinding,
+  ASSET_MODEL_ID,
+} from "@/test/assetFindingFixtures";
+import { assetZoneLabels, zoneKey } from "./assetLookups";
+import { assetFacts, formatHeight } from "./format";
 
 const NOW = Date.parse("2026-09-26T12:00:00Z");
 
@@ -84,6 +93,12 @@ describe("finding links (F §8.7)", () => {
     );
     expect(findingsTabPath(PROJECT_ID, new URLSearchParams())).toBe(`/p/${PROJECT_ID}/findings`);
   });
+
+  it("links an asset finding to its asset model workspace", () => {
+    expect(findingHref(PROJECT_ID, exampleAssetFinding)).toBe(
+      `/p/${PROJECT_ID}/models/${ASSET_MODEL_ID}?finding=${exampleAssetFinding.id}`,
+    );
+  });
 });
 
 describe("filters ↔ URL ↔ query", () => {
@@ -100,8 +115,70 @@ describe("filters ↔ URL ↔ query", () => {
       source: ["map"],
       q: "crack",
       sort: "-severity",
+      assetModelId: null,
+      zone: [],
+      side: [],
+      placed: "all",
+      view: "table",
     });
     expect(parseFilters(new URLSearchParams("status=weird")).status).toBeNull();
+  });
+
+  it("reads and writes the asset filters and the view", () => {
+    const f = parseFilters(
+      new URLSearchParams(
+        `anchor_kind=asset&asset_model_id=${ASSET_MODEL_ID}&zone=shaft&zone=head&zone=shaft&side=E&placed=false&sort=-height&view=gallery`,
+      ),
+    );
+    expect(f).toMatchObject({
+      source: ["asset"],
+      assetModelId: ASSET_MODEL_ID,
+      zone: ["shaft", "head"],
+      side: ["E"],
+      placed: "unplaced",
+      sort: "-height",
+      view: "gallery",
+    });
+    expect(filtersToSearch(f).toString()).toBe(
+      `anchor_kind=asset&asset_model_id=${ASSET_MODEL_ID}&zone=shaft&zone=head&side=E&placed=false&sort=-height&view=gallery`,
+    );
+    expect(parseFilters(new URLSearchParams("placed=true")).placed).toBe("placed");
+    expect(parseFilters(new URLSearchParams("placed=maybe&view=cards")).placed).toBe("all");
+    expect(parseFilters(new URLSearchParams("view=cards")).view).toBe("table");
+  });
+
+  it("sends the asset filters to the API, never the view", () => {
+    expect(
+      filtersToQuery({
+        ...DEFAULT_FILTERS,
+        source: ["asset"],
+        assetModelId: ASSET_MODEL_ID,
+        zone: ["shaft"],
+        side: ["E", "W"],
+        placed: "placed",
+        sort: "zone",
+        view: "gallery",
+      }),
+    ).toEqual({
+      sort: "zone",
+      anchor_kind: ["asset"],
+      asset_model_id: ASSET_MODEL_ID,
+      zone: ["shaft"],
+      side: ["E", "W"],
+      placed: true,
+    });
+  });
+
+  it("counts asset filters as filtering, the view as not, and Clear keeps sort and view", () => {
+    expect(isFiltered({ ...DEFAULT_FILTERS, zone: ["head"] })).toBe(true);
+    expect(isFiltered({ ...DEFAULT_FILTERS, placed: "unplaced" })).toBe(true);
+    expect(isFiltered({ ...DEFAULT_FILTERS, assetModelId: ASSET_MODEL_ID })).toBe(true);
+    expect(isFiltered({ ...DEFAULT_FILTERS, view: "gallery" })).toBe(false);
+    expect(clearedFilters({ ...DEFAULT_FILTERS, zone: ["head"], sort: "number", view: "gallery" })).toEqual({
+      ...DEFAULT_FILTERS,
+      sort: "number",
+      view: "gallery",
+    });
   });
 
   it("round-trips and omits defaults", () => {
@@ -146,5 +223,31 @@ describe("finding location", () => {
       primary: "Map",
       secondary: null,
     });
+  });
+
+  it("names an asset finding by its model, with the Asset model fallback", () => {
+    expect(findingLocation(exampleAssetFinding, new Map([[ASSET_MODEL_ID, "Flare stack F-1"]]))).toEqual({
+      icon: "cube",
+      primary: "Flare stack F-1",
+      secondary: null,
+    });
+    expect(findingLocation(exampleAssetFinding, new Map()).primary).toBe("Asset model");
+  });
+});
+
+describe("asset facts", () => {
+  const zones = assetZoneLabels([exampleAssetModel]);
+
+  it("labels zones per model", () => {
+    expect(zones.get(zoneKey(ASSET_MODEL_ID, "shaft"))).toBe("Shaft");
+    expect(zones.size).toBe(3);
+  });
+
+  it("formats zone, side and height, and says Unplaced without a height", () => {
+    expect(formatHeight(42.5)).toBe("42.5 m");
+    expect(assetFacts(exampleAssetFinding, zones)).toBe("Shaft · E · 42.5 m");
+    expect(assetFacts(exampleUnplacedAssetFinding, zones)).toBe("Unplaced");
+    expect(assetFacts({ ...exampleAssetFinding, zone: "z9" }, zones)).toBe("z9 · E · 42.5 m");
+    expect(assetFacts(exampleFinding, zones)).toBeNull();
   });
 });

@@ -219,11 +219,13 @@ export function ImagesWorkspace() {
   const [entryHandled, setEntryHandled] = useState<string | null>(null);
   if (entry && entryHandled !== search) {
     setEntryHandled(search);
-    const { preset, sourceId } = entry;
-    if (preset || sourceId)
+    const { preset, sourceId, review } = entry;
+    if (preset || sourceId || review)
       setFilters((f) => {
-        const base = preset ? filtersFor(preset) : f;
-        return sourceId ? { ...base, sourceId } : base;
+        // A review link starts from the default filters, so the browser shows exactly that outcome.
+        const base = preset ? filtersFor(preset) : review ? DEFAULT_BROWSER_FILTERS : f;
+        const sourced = sourceId ? { ...base, sourceId } : base;
+        return review ? { ...sourced, reviewStatus: review } : sourced;
       });
     if (entry.batch) setBatch({ ids: null });
   } else if (!entry && entryHandled !== null) setEntryHandled(null);
