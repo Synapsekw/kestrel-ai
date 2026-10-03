@@ -1,6 +1,13 @@
 import type { Brand, BrandColors, BrandPatch } from "@/api/brands";
 
-export const COLOUR_KEYS: readonly (keyof BrandColors)[] = ["accent", "accent_dark", "navy", "ink", "pale", "line"];
+export const COLOUR_KEYS: readonly (keyof BrandColors)[] = [
+  "accent",
+  "accent_dark",
+  "navy",
+  "ink",
+  "pale",
+  "line",
+];
 
 export const COLOUR_LABELS: Record<keyof BrandColors, string> = {
   accent: "Accent",

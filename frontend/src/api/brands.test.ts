@@ -42,7 +42,11 @@ describe("brand requests", () => {
 
   it("sets and clears a logo slot", async () => {
     const { api, requests } = fakeClient([
-      { method: "PUT", path: /\/logos\/on_dark$/, body: { ...partnerBrand, logo_on_dark: "logo-1111111111111111" } },
+      {
+        method: "PUT",
+        path: /\/logos\/on_dark$/,
+        body: { ...partnerBrand, logo_on_dark: "logo-1111111111111111" },
+      },
       { method: "DELETE", path: /\/logos\/flat$/, body: partnerBrand },
     ]);
     const b = await setBrandLogo(api, EAND_ID, "on_dark", "C:\\logos\\white.png");
@@ -77,9 +81,9 @@ describe("brand helpers", () => {
     expect(brandLogoUrl(EAND_ID, "on_dark", "logo-aa")).toBe(
       `/api/v1/brands/${EAND_ID}/logos/on_dark?v=logo-aa`,
     );
-    expect(brandLogoUrl(EAND_ID, "flat", "logo-bb", { baseUrl: "http://127.0.0.1:8000/", token: "t k" })).toBe(
-      `http://127.0.0.1:8000/api/v1/brands/${EAND_ID}/logos/flat?v=logo-bb&token=t+k`,
-    );
+    expect(
+      brandLogoUrl(EAND_ID, "flat", "logo-bb", { baseUrl: "http://127.0.0.1:8000/", token: "t k" }),
+    ).toBe(`http://127.0.0.1:8000/api/v1/brands/${EAND_ID}/logos/flat?v=logo-bb&token=t+k`);
   });
 
   it("fills year and customer, and says the client when there is none", () => {

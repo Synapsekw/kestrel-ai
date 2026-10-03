@@ -35,7 +35,12 @@ export async function deleteBrand(api: ApiClient, brandId: string): Promise<void
 }
 
 /** A local PNG, JPEG or WebP; the backend keeps a copy beside catalogue.db (D2). */
-export function setBrandLogo(api: ApiClient, brandId: string, slot: BrandLogoSlot, path: string): Promise<Brand> {
+export function setBrandLogo(
+  api: ApiClient,
+  brandId: string,
+  slot: BrandLogoSlot,
+  path: string,
+): Promise<Brand> {
   return unwrap(
     api.PUT("/api/v1/brands/{brandId}/logos/{slot}", { params: { path: { brandId, slot } }, body: { path } }),
   );
