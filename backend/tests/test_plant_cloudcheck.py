@@ -133,7 +133,7 @@ def test_sample_memory_is_bounded_by_the_chunk_not_the_file(tmp_path, handle, ma
     )
     cid = make_cloud(make_las(tmp_path / "big.las", 0, points=big, rgb=False))
     del big
-    monkeypatch.setattr(cc, "CHUNK", 100_000)
+    monkeypatch.setattr(cc, "CHUNK", 99_991)  # not a multiple of the stride: the carry is exercised
     tracemalloc.start()
     try:
         s = cc.sample_plant_cloud(handle, cid, (244000, 3179000, 245000, 3180000), max_points=60_000)
@@ -142,6 +142,38 @@ def test_sample_memory_is_bounded_by_the_chunk_not_the_file(tmp_path, handle, ma
         tracemalloc.stop()
     assert len(s.xyz) == 60_000
     assert peak < 25_000_000
+
+
+def test_sample_build_peak_is_not_twice_the_kept_array(tmp_path, handle, make_cloud, monkeypatch):
+    rng = np.random.default_rng(2)
+    n = 1_200_000
+    big = np.column_stack(
+        [rng.uniform(244000, 245000, n), rng.uniform(3179000, 3180000, n), rng.uniform(-20, 10, n)]
+    )
+    cid = make_cloud(make_las(tmp_path / "big.las", 0, points=big, rgb=False))
+    del big
+    monkeypatch.setattr(cc, "CHUNK", 50_000)
+    tracemalloc.start()
+    try:
+        s = cc.sample_plant_cloud(handle, cid, (244000, 3179000, 245000, 3180000), max_points=n)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    kept = s.xyz.nbytes
+    assert len(s.xyz) == n and kept == n * 12
+    assert peak < kept * 1.5  # one buffer filled in place, not a list of parts plus their concatenation
+
+
+def test_a_damaged_cloud_file_is_a_look_error_without_the_path(tmp_path, handle, make_cloud):
+    bad = tmp_path / "damaged.las"
+    good = make_las(tmp_path / "good.las", 5_000).read_bytes()
+    for body in (b"not a point cloud at all" * 50, good[: len(good) // 2]):
+        bad.write_bytes(body)
+        cid = make_cloud(bad)
+        with pytest.raises(LookError) as err:
+            cc.sample_plant_cloud(handle, cid, (0, 0, 1e7, 1e7))
+        assert str(tmp_path) not in str(err.value) and "damaged.las" not in str(err.value)
+        assert err.value.__cause__ is None
 
 
 def test_sample_round_trips_through_npz(scene, tmp_path):
@@ -225,6 +257,23 @@ def test_fit_datum_fits_a_tilt_over_a_wide_site():
     assert np.allclose(el, pc.GROUND_EL, atol=0.05)
 
 
+def test_fit_datum_fits_no_tilt_along_a_narrow_row():
+    g = pc.grid()
+    places = [(1000 + 60 * k, 300 + (3 if k % 2 else -3)) for k in range(6)]  # 300 m long, 6 m wide
+    items = [
+        pc.item(f"d{k}", "package", pc.rect(e, n, 10, 10), base=pc.GROUND_EL, source="drawing")
+        for k, (e, n) in enumerate(places)
+    ]
+    pts = pc.ground(950, 270, 1350, 330, step=2.0)
+    x, _ = g.plant_to_site(pts[:, 0], pts[:, 1])
+    pts[:, 2] = -20.0 - 0.002 * (x - g.frame.origin_crs[0])
+    d = cc.fit_datum(pc.to_sample(g, pts), g, items)
+    assert d.tilt is None  # the cross-row tilt would be a guess
+    ex, _ = g.plant_to_site(np.array([p[0] for p in places], float), np.array([p[1] for p in places], float))
+    expected = np.median(pc.GROUND_EL - (-20.0 - 0.002 * (ex - g.frame.origin_crs[0])))
+    assert d.offset_m == pytest.approx(expected, abs=0.1)
+
+
 def test_fit_datum_falls_back_to_base_elevations(scene):
     pts, items = scene
     g = pc.grid()
@@ -293,6 +342,22 @@ def test_offset_item_is_flagged_with_the_shift(checked):
     assert chk.top_el == pytest.approx(108.5, abs=0.05)
 
 
+def test_small_items_on_a_sparse_sample_are_not_missing(scene):
+    pts, items = scene
+    g = pc.grid()
+    places = [(1300, 505), (1340, 505), (1375, 505), (1340, 600), (1375, 600)]
+    small = [
+        pc.item(f"s{k}", "package", pc.rect(e + 0.75, n + 0.75, 1.5, 1.5)) for k, (e, n) in enumerate(places)
+    ]
+    bodies = [pc.box(e, n, e + 1.5, n + 1.5, 3) for e, n in places]
+    full = np.vstack([pts, *bodies])
+    keep = np.random.default_rng(5).random(len(full)) < 1 / 8  # ~0.5 points per square metre of ground
+    r = cc.check_items(pc.to_sample(g, full[keep]), g, [*items, *small], None)
+    for it in small:
+        assert "missing_in_cloud" not in [f.code for f in r.items[it.id].flags], it.id
+    assert [f.code for f in r.items["pad-missing"].flags] == ["missing_in_cloud"]
+
+
 def test_check_without_a_datum_flags_but_gives_no_heights(scene):
     pts, items = scene
     g = pc.grid()
@@ -352,6 +417,16 @@ def test_unregistered_cluster_is_the_one_candidate(checked):
     assert cand.top_el == pytest.approx(109.5, abs=0.1)
 
 
+def test_a_flat_type_footprint_does_not_hide_a_candidate(scene):
+    pts, items = scene
+    g = pc.grid()
+    paved = pc.item("pv", "paved", pc.rect(1400, 520, 12, 12))  # over the unregistered 6 x 6 m cluster
+    r = cc.check_items(pc.to_sample(g, pts), g, [*items, paved], None)
+    (cand,) = r.candidates
+    assert abs(np.mean([p[0] for p in cand.pts]) - 1400) < 1.5
+    assert abs(np.mean([p[1] for p in cand.pts]) - 520) < 1.5
+
+
 def test_candidates_survive_a_sparse_sample(scene, tmp_path, handle, make_cloud):
     pts, items = scene
     g = pc.grid()
@@ -399,11 +474,34 @@ def test_apply_check_replaces_stale_cloud_flags(checked):
     assert [f.code for f in out["tank-a"].flags] == ["builder_fallback"]
 
 
+def test_apply_check_refreshes_cloud_heights_on_a_rerun(checked):
+    items, datum, r = checked
+    once = cc.apply_check(items, r)
+    again = cc.CheckResult(
+        datum,
+        {
+            "tank-b": cc.ItemCheck("tank-b", 105.0, 131.0, 1.0, 0.0, []),
+            "tank-a": cc.ItemCheck("tank-a", 100.0, 140.0, 1.0, 0.0, []),
+        },
+        [],
+    )
+    by = {it.id: it for it in cc.apply_check(once, again)}
+    assert by["tank-b"].height_source == "cloud"
+    assert (by["tank-b"].base_el, by["tank-b"].top_el) == (105.0, 131.0)
+    a = next(it for it in items if it.id == "tank-a")
+    assert by["tank-a"].height_source == "drawing" and (by["tank-a"].base_el, by["tank-a"].top_el) == (
+        a.base_el,
+        a.top_el,
+    )
+
+
 def test_summarise_is_bounded_and_flagged_first(checked):
     _, _, r = checked
     s = cc.summarise(r, limit=2)
     assert s["checked"] == 5 and s["truncated"] is True and len(s["items"]) == 2
     assert all(row["flags"] for row in s["items"])
+    (offset_row,) = [row for row in s["items"] if row["id"] == "pkg-offset"]
+    assert "+3.0 m east" in offset_row["flags"][0]["note"]
     assert s["flag_counts"] == {"height_mismatch": 1, "missing_in_cloud": 1, "plan_offset": 1}
     assert s["candidates_total"] == 1 and s["datum"]["offset_m"] == pytest.approx(pc.EL_OFFSET, abs=0.05)
     import json

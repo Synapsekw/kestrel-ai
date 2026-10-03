@@ -46,6 +46,8 @@ CAND_BLOCK = 10  # ground blocks of 10 x 10 candidate cells
 CAND_EXCLUDE_M = 2.0  # footprints grow this much before clusters are tested against them
 CAND_LIMIT = 200
 CAND_MAX_GRID = 16_000_000
+MISSING_MIN_EXPECTED = 20  # sample points the footprint should hold before "nothing there" is believed
+TILT_MIN_WIDTH_M = 50.0  # items narrower than this across their main axis cannot fix a cross tilt
 CLOUD_CODES = frozenset({"plan_offset", "height_mismatch", "missing_in_cloud"})
 # Types with no body above grade: only coverage is reported for them.
 NO_BODY_TYPES = frozenset(
@@ -72,6 +74,7 @@ SKIP_NO_CRS = (
 )
 NO_POINTS = "The point cloud has no points inside the plant extent."
 NO_DATUM = "No cloud datum could be fitted: item heights are not given and candidate tops are cloud z."
+UNREADABLE = "That point cloud's file could not be read: it may be damaged or incomplete."
 
 
 @dataclass
@@ -220,11 +223,12 @@ def sample_plant_cloud(
     progress: Callable[[int, int], None] | None = None,
 ) -> PlantSample:
     """One streamed laspy pass in <= CHUNK-point chunks. Uniform decimation (every k-th point, k from
-    the header count) keeps at most `max_points` before the box filter, so memory is bounded by the
-    cap, not the file. Raises LookError (fixed sentence) for a missing, unready or changed cloud and
-    JobCancelled when `cancel()` turns true."""
+    the header count) keeps at most `max_points` before the box filter, in one preallocated float32
+    buffer, so memory is bounded by the cap, not the file. Raises LookError (fixed sentence) for a
+    missing, unready, changed or unreadable cloud and JobCancelled when `cancel()` turns true."""
     import laspy
 
+    from app.asset_models.look import LookError
     from app.asset_models.look.cloud import source_of
     from app.pointclouds import rows
 
@@ -234,27 +238,39 @@ def sample_plant_cloud(
     if not all(math.isfinite(v) for v in (x0, y0, x1, y1)) or x1 <= x0 or y1 <= y0:
         raise ValueError("bbox_site must be (xmin, ymin, xmax, ymax) with max > min")
     cap = max(1, min(int(max_points), MAX_POINTS))
-    parts: list[np.ndarray] = []
-    with laspy.open(str(source)) as reader:
-        total = int(reader.header.point_count)
-        stride = max(1, math.ceil(total / cap))
-        done = 0
-        for chunk in reader.chunk_iterator(CHUNK):
-            if cancel is not None and cancel():
-                raise JobCancelled()
-            n = len(chunk)
-            sel = np.arange((-done) % stride, n, stride)
-            if len(sel):
-                x = np.asarray(chunk.x)[sel]
-                y = np.asarray(chunk.y)[sel]
-                z = np.asarray(chunk.z)[sel]
-                keep = (x >= x0) & (x <= x1) & (y >= y0) & (y <= y1)
-                if keep.any():
-                    parts.append(np.column_stack([x[keep] - x0, y[keep] - y0, z[keep]]).astype(np.float32))
-            done += n
-            if progress is not None:
-                progress(done, total)
-    xyz = np.concatenate(parts) if parts else np.zeros((0, 3), np.float32)
+    try:
+        with laspy.open(str(source)) as reader:
+            total = int(reader.header.point_count)
+            stride = max(1, math.ceil(total / cap))
+            buf = np.empty((min(cap, -(-total // stride)), 3), np.float32)
+            kept = done = 0
+            for chunk in reader.chunk_iterator(CHUNK):
+                if cancel is not None and cancel():
+                    raise JobCancelled()
+                n = len(chunk)
+                sel = np.arange((-done) % stride, n, stride)
+                if len(sel):
+                    x = np.asarray(chunk.x)[sel]
+                    y = np.asarray(chunk.y)[sel]
+                    z = np.asarray(chunk.z)[sel]
+                    keep = (x >= x0) & (x <= x1) & (y >= y0) & (y <= y1)
+                    m = min(int(keep.sum()), len(buf) - kept)  # never past the cap, even if the header lies
+                    if m:
+                        dst = buf[kept : kept + m]
+                        dst[:, 0] = x[keep][:m] - x0
+                        dst[:, 1] = y[keep][:m] - y0
+                        dst[:, 2] = z[keep][:m]
+                        kept += m
+                done += n
+                if progress is not None:
+                    progress(done, total)
+    except (JobCancelled, MemoryError):
+        raise
+    except Exception:  # laspy / lazrs messages can carry the local path: a fixed sentence only
+        raise LookError(UNREADABLE) from None
+    if done < total:
+        raise LookError(UNREADABLE)  # fewer points than the header says: a truncated file
+    xyz = buf[:kept]
     if progress is not None:
         progress(total, total)
     return PlantSample(
@@ -282,10 +298,12 @@ class _Index:
             self.nx = self.ny = 0
             return
         self.lo = xy.min(axis=0).astype(np.float64)
-        ix = ((xy[:, 0] - np.float32(self.lo[0])) / np.float32(self.CELL)).astype(np.int64)
-        iy = ((xy[:, 1] - np.float32(self.lo[1])) / np.float32(self.CELL)).astype(np.int64)
+        ix = ((xy[:, 0] - np.float32(self.lo[0])) / np.float32(self.CELL)).astype(np.int32)
+        iy = ((xy[:, 1] - np.float32(self.lo[1])) / np.float32(self.CELL)).astype(np.int32)
         self.nx, self.ny = int(ix.max()) + 1, int(iy.max()) + 1
-        key = iy * self.nx + ix
+        key = iy.astype(np.int64)  # the one transient int64 array, built in place
+        key *= self.nx
+        key += ix
         del ix, iy
         self.order = np.argsort(key, kind="stable").astype(np.int32 if self.n < 2**31 else np.int64)
         self.starts = np.concatenate([[0], np.cumsum(np.bincount(key, minlength=self.nx * self.ny))])
@@ -370,7 +388,8 @@ def fit_datum(sample: PlantSample, grid: PlantGrid, items: list[Item]) -> CloudD
     """plant EL = cloud z + offset_m (+ tilt . [x - origin_x, y - origin_y]).
 
     From the ground ring around items with drawing base elevations (median; a tilt when 6+ of them
-    span 200 m+ and a plane explains the spread clearly better). With fewer than 3 such items, the
+    span 200 m+, spread at least TILT_MIN_WIDTH_M across their main axis, and a plane explains the
+    spread clearly better). With fewer than 3 such items, the
     median base_el of every item that has one, against the sample's 5th z percentile. Else None.
     """
     frame = grid.frame
@@ -402,7 +421,11 @@ def fit_datum(sample: PlantSample, grid: PlantGrid, items: list[Item]) -> CloudD
 def _fit_offsets(a: np.ndarray, frame: SiteFrame, cloud_id: str) -> CloudDatum:
     off = a[:, 2]
     med = float(np.median(off))
-    if len(a) >= 6 and math.hypot(np.ptp(a[:, 0]), np.ptp(a[:, 1])) >= 200.0:
+    if (
+        len(a) >= 6
+        and math.hypot(np.ptp(a[:, 0]), np.ptp(a[:, 1])) >= 200.0
+        and _minor_width(a[:, :2]) >= TILT_MIN_WIDTH_M
+    ):
         A = np.column_stack([np.ones(len(a)), a[:, 0] - frame.origin_crs[0], a[:, 1] - frame.origin_crs[1]])
         sol = np.linalg.lstsq(A, off, rcond=None)[0]
         r_plane = float(np.sqrt(np.mean((off - A @ sol) ** 2)))
@@ -414,6 +437,14 @@ def _fit_offsets(a: np.ndarray, frame: SiteFrame, cloud_id: str) -> CloudDatum:
                 tilt=(round(float(sol[1]), 7), round(float(sol[2]), 7)),
             )
     return CloudDatum(cloud_id=cloud_id, offset_m=round(med, 3))
+
+
+def _minor_width(xy: np.ndarray) -> float:
+    """How far the points spread across their main axis: the ptp of the centred points projected on
+    the minor principal axis. Near-collinear items leave a plane's cross tilt undetermined."""
+    c = xy - xy.mean(axis=0)
+    vt = np.linalg.svd(c, full_matrices=False)[2]
+    return float(np.ptp(c @ vt[-1]))
 
 
 # ---------------------------------------------------------------- per item
@@ -482,9 +513,11 @@ def _check_one(
     hit2, mask2 = _raster(loc, cover_cell, in_above)
     cells = int(mask2.sum())
     occupancy = float((hit2 & mask2).sum()) / cells if cells else (1.0 if int(in_above.sum()) >= 3 else 0.0)
+    # A sparse sample can miss a small body entirely: "missing" needs enough points expected in it.
+    expected = len(loc.z) / max((e1 - e0) * (n1 - n0), 1e-9) * float(loc.poly.area)
     flags: list[ItemFlag] = []
     offset_m = None
-    if coverage >= COVER_MIN and occupancy < OCCUPANCY_MAX:
+    if coverage >= COVER_MIN and occupancy < OCCUPANCY_MAX and expected >= MISSING_MIN_EXPECTED:
         flags.append(
             ItemFlag(
                 code="missing_in_cloud",
@@ -564,6 +597,8 @@ def _cells(sample: PlantSample, grid: PlantGrid, e0: float, n0: float, cell: flo
 def _footprint_mask(items: list[Item], e0: float, n0: float, cell: float, h: int, w: int) -> np.ndarray:
     m = np.zeros((h, w), bool)
     for it in items:
+        if it.type in NO_BODY_TYPES:
+            continue  # a road or a paved area does not account for what stands on it
         try:
             poly = _poly(it)
         except (ValueError, ArithmeticError, shapely.errors.ShapelyError):
@@ -667,7 +702,8 @@ def _candidates(
 
 
 def apply_check(items: list[Item], result: CheckResult) -> list[Item]:
-    """Heights where the item's are indicative become cloud heights; cloud flags are replaced by this
+    """Heights where the item's are indicative, or came from an earlier cloud check, become this
+    check's cloud heights; drawing heights are never changed. Cloud flags are replaced by this
     check's. Footprints, ids and every other field are never changed (D5)."""
     out: list[Item] = []
     for it in items:
@@ -677,7 +713,7 @@ def apply_check(items: list[Item], result: CheckResult) -> list[Item]:
             continue
         update: dict = {"flags": [f for f in it.flags if f.code not in CLOUD_CODES] + list(chk.flags)}
         if (
-            it.height_source == "indicative"
+            it.height_source in ("indicative", "cloud")
             and chk.ground_el is not None
             and chk.top_el is not None
             and chk.top_el > chk.ground_el
@@ -703,7 +739,7 @@ def summarise(result: CheckResult, *, limit: int = 300) -> dict:
                 "top_el": c.top_el,
                 "coverage": c.coverage,
                 "offset_m": c.offset_m,
-                "flags": [{"code": f.code, "value": f.value} for f in c.flags],
+                "flags": [{"code": f.code, "value": f.value, "note": f.note} for f in c.flags],
             }
             for c in rows[:limit]
         ],
