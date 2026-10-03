@@ -333,7 +333,38 @@ CASES: dict[str, Case] = {
         tris=(140, 6000),
         parts=frozenset({"plinth", "casing", "motor"}),
     ),
+    "compressor": Case(  # Cowork 40-K-0001D BOG compressor with operating floor PF 103.8
+        "compressor",
+        rect(11.4, 11.2),
+        8.5,
+        params={"operating_floor_m": 3.8},
+        tris=(104, 3000),
+        parts=frozenset(
+            {"plinth", "crankcase", "cylinders", "bottles", "motor", "lube_oil_console", "floor_deck"}
+        ),
+    ),
     # --- power (Task 8)
+    "generator": Case(  # Cowork 70-A-0012-G-01 containerised genset: 16.75 x 4.3, 4 m
+        "generator",
+        rect(16.75, 4.3, 90.0),
+        4.0,
+        tris=(36, 1500),
+        parts=frozenset({"plinth", "fuel_base", "enclosure", "radiator", "radiator_louvres", "exhaust"}),
+    ),
+    "generator_polygon": Case(  # Cowork 10-A-0003-G-01: a rotated 4-point polygon
+        "generator",
+        poly([(992.0, 502.28), (992.64, 496.11), (1008.06, 497.74), (1007.42, 503.88)]),
+        4.0,
+        tris=(36, 1500),
+        golden=("top",),
+    ),
+    "transformer": Case(  # Cowork 70-SS-01-tx-n1: 4 walled bays, 24.5 x 10.9, 4 m
+        "transformer",
+        rect(24.5, 10.9, 90.0),
+        4.0,
+        tris=(36, 4000),
+        parts=frozenset({"plinths", "tanks", "radiator_fins", "bushings", "conservators", "firewalls"}),
+    ),
     # --- process (Tasks 9, 10)
     # --- jetty (Task 11)
 }
@@ -660,3 +691,30 @@ def test_pump_engine_driver_has_engine_and_radiator():
     it = make_item("pump", rect(3.5, 1.2), h=1.8, params={"driver": "engine"})
     names = {n.name for n in REGISTRY["pump"].fn(it, CTX)}
     assert {"engine", "radiator"} <= names and "motor" not in names
+
+
+def test_compressor_centrifugal_and_enclosure():
+    it = make_item("compressor", rect(8.0, 4.0), h=5.0, params={"kind": "centrifugal", "enclosure": True})
+    names = {n.name for n in REGISTRY["compressor"].fn(it, CTX)}
+    assert {"casing", "gearbox", "motor", "nozzles", "enclosure_columns", "enclosure_roof"} <= names
+
+
+# ------------------------------------------------------------------ power
+def test_polygon_footprint_follows_long_axis():  # Review Focus 1
+    pts = CASES["generator_polygon"].footprint["pts"]
+    de, dn = pts[2][0] - pts[1][0], pts[2][1] - pts[1][1]  # the long side, plant [E, N]
+    expected = math.degrees(math.atan2(de, dn)) % 180.0
+    got = principal_bearing(built("generator_polygon"), "enclosure")
+    assert min(abs(got - expected), 180 - abs(got - expected)) < 2.0
+
+
+def test_transformer_bays_fins_and_walls_are_instanced():
+    nodes = {n.name: n.geometry for n in built("transformer")}
+    assert len(nodes["radiator_fins"].transforms) == 4 * 12  # round(24.5 / 6) bays x 12 fins
+    assert len(nodes["firewalls"].transforms) == 5
+    assert len(nodes["tanks"].transforms) == 4
+
+
+def test_generator_doors_are_instanced():
+    doors = next(n for n in built("generator") if n.name == "doors").geometry
+    assert len(doors.transforms) == 6

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
+import numpy as np
 from pydantic import Field
 
 from app.asset_models.builders.base import BuildCtx, MeshNode, Params, builder
 from app.asset_models.builders.equipment import _kit as k
-from app.asset_models.spec import Item, Pos
+from app.asset_models.spec import Item, NonNeg, Pos
 
 H_PUMP, H_GROUP = 2.0, 2.5
 UNIT_PLINTH = 0.15
@@ -205,3 +207,131 @@ def build_pump_group(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     nodes = [k.node("plinth", "Concrete", k.box(row, 0.2, deep))]
     nodes += [MeshNode(u.name, u.material, k.inst(u.geometry, xf)) for u in unit]
     return k.finish(k.turn(nodes, plan.place()), item, p, {"n": n, "pitch_m": pitch})
+
+
+H_COMP = 6.0
+
+
+class CompressorParams(Params):
+    kind: Literal["reciprocating", "centrifugal"] = "reciprocating"
+    throws: int = Field(
+        4, ge=1, le=8, description="Reciprocating cylinders, half on each side of the crankcase"
+    )
+    operating_floor_m: NonNeg | None = Field(
+        None,
+        description=(
+            "Grating operating floor height above base, m (Cowork BOG compressors: 3.8). None = none."
+        ),
+    )
+    enclosure: bool = False
+
+
+DOC_COMP = (
+    "Compressor package on a concrete block, crank along the footprint's long axis. reciprocating: "
+    "crankcase, opposed cylinders, pulsation bottles, motor and flywheel, lube oil console. centrifugal: "
+    "casing, gearbox, motor, nozzles. Optional grating operating floor with handrail, and an open "
+    "enclosure roof."
+)
+
+
+def _recip(throws: int, L: float, W: float, y: float, top: float, ctx: BuildCtx) -> list[MeshNode]:
+    avail = top - y
+    rc = min(0.09 * W, 0.12 * avail)
+    yc = y + max(0.2 * avail, rc + 0.1)
+    rb = min(0.06 * W, 0.08 * avail)
+    yb = top - rb
+    per_side = math.ceil(throws / 2)
+    xs = np.linspace(-0.2 * L, 0.2 * L, per_side) if per_side > 1 else np.array([0.0])
+    sides = (1, -1) if throws > 1 else (1,)
+    cyl, ties = [], []
+    for i in range(throws):
+        s = 1 if i % 2 == 0 else -1
+        x = float(xs[i // 2])
+        cyl.append(k.rod((x, yc, s * 0.125 * W), (x, yc, s * 0.42 * W), rc, ctx))
+        if yb - 0.8 * rb > yc + 0.8 * rc:
+            ties.append(
+                k.rod((x, yc + 0.8 * rc, s * 0.33 * W), (x, yb - 0.8 * rb, s * 0.33 * W), 0.3 * rc, ctx)
+            )
+    rm = min(0.15 * W, 0.2 * avail)
+    bottles = [k.rod((-0.3 * L, yb, s * 0.33 * W), (0.3 * L, yb, s * 0.33 * W), rb, ctx) for s in sides]
+    nodes = [
+        k.node("crankcase", "Machine_Green", k.box(0.55 * L, 0.3 * avail, 0.25 * W, y0=y)),
+        k.node("cylinders", "Machine_Green", *cyl),
+        k.node("bottles", "Equipment_Grey", *bottles),
+        k.node("motor", "Equipment_Grey", k.rod((-0.47 * L, y + rm, 0), (-0.32 * L, y + rm, 0), rm, ctx)),
+        k.node(
+            "flywheel",
+            "Steel_Dark",
+            k.rod((-0.32 * L, y + rm, 0), (-0.29 * L, y + rm, 0), min(1.2 * rm, avail / 2 - 0.01), ctx),
+        ),
+        k.node(
+            "lube_oil_console",
+            "Equipment_Grey",
+            k.box(0.12 * L, 0.25 * avail, 0.2 * W, x=0.4 * L, z=0.3 * W, y0=y),
+        ),
+    ]
+    if ties:
+        nodes.append(k.node("pulsation_piping", "Pipe", *ties))
+    return nodes
+
+
+def _centrifugal(L: float, W: float, y: float, top: float, ctx: BuildCtx) -> list[MeshNode]:
+    avail = top - y
+    rc = min(0.3 * W, 0.3 * avail)
+    yc = y + rc
+    return [
+        k.node("casing", "Machine_Green", k.rod((0.05 * L, yc, 0), (0.4 * L, yc, 0), rc, ctx)),
+        k.node("gearbox", "Equipment_Grey", k.box(0.15 * L, 1.6 * rc, 0.5 * W, x=-0.05 * L, y0=y)),
+        k.node("motor", "Equipment_Grey", k.rod((-0.45 * L, yc, 0), (-0.15 * L, yc, 0), 0.8 * rc, ctx)),
+        k.node(
+            "nozzles",
+            "Pipe",
+            *[k.rod((x, yc + 0.8 * rc, 0), (x, top, 0), 0.25 * rc, ctx) for x in (0.15 * L, 0.3 * L)],
+        ),
+    ]
+
+
+def _floor(L: float, W: float, f: float) -> list[MeshNode]:
+    s = min(1.2, 0.2 * W, 0.2 * L)
+    deck = [
+        k.box(L, k.DECK_T, s, z=-(W / 2 - s / 2), y0=f),
+        k.box(L, k.DECK_T, s, z=W / 2 - s / 2, y0=f),
+        k.box(s, k.DECK_T, W - 2 * s, x=-(L / 2 - s / 2), y0=f),
+        k.box(s, k.DECK_T, W - 2 * s, x=L / 2 - s / 2, y0=f),
+    ]
+    a, b = L / 2 - s / 2, W / 2 - s / 2
+    inset = [(-a, -b), (a, -b), (a, b), (-a, b)]
+    legs = [k.T(float(p[0]), 0.0, float(p[1])) @ k.S(1.0, f, 1.0) for p in k.edge_points(inset, True, 4.0)]
+    ea, eb = L / 2 - 0.05, W / 2 - 0.05
+    edge = [(-ea, -eb), (ea, -eb), (ea, eb), (-ea, eb)]
+    return [
+        k.node("floor_deck", "Grating", *deck),
+        MeshNode("floor_legs", "Steel_Structure", k.inst(k.box(0.2, 1.0, 0.2), legs)),
+        *k.handrail("floor", edge, f + k.DECK_T),
+    ]
+
+
+@builder("compressor", family="equipment", params=CompressorParams, doc=DOC_COMP, default_height_m=H_COMP)
+def build_compressor(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = k.params(item, CompressorParams)
+    plan = k.plan_of(item, ctx)
+    H, _ = k.height(item, ctx, H_COMP)
+    if H < 1.5:
+        raise ValueError("compressor: height too small")
+    L, W = plan.along, plan.across
+    y = 0.5
+    top = H - 0.35 if p.enclosure else H
+    nodes = [k.node("plinth", "Concrete", k.box(L, y, W))]
+    nodes += (
+        _recip(p.throws, L, W, y, top, ctx) if p.kind == "reciprocating" else _centrifugal(L, W, y, top, ctx)
+    )
+    f = p.operating_floor_m
+    if f is not None and 0.5 < f < top - k.RAIL_H - 0.1:
+        nodes += _floor(L, W, f)
+    if p.enclosure:
+        cols = [k.T(sx * (L / 2 - 0.15), 0.0, sz * (W / 2 - 0.15)) for sx in (-1, 1) for sz in (-1, 1)]
+        nodes.append(
+            MeshNode("enclosure_columns", "Steel_Structure", k.inst(k.box(0.25, H - 0.3, 0.25), cols))
+        )
+        nodes.append(k.node("enclosure_roof", "Shelter_Roof", k.box(L, 0.3, W, y0=H - 0.3)))
+    return k.finish(k.turn(nodes, plan.place()), item, p, {"kind": p.kind, "along_m": L, "across_m": W})
