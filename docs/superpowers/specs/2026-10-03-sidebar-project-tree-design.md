@@ -32,7 +32,7 @@ https://claude.ai/artifact/T39pC8fR9KxwRJAJLCssWG. The other options were reject
 2. Every page that the tabs or the More menu reached today is reachable from the sidebar.
 3. The tab strip and the breadcrumb are gone.
 4. Collapse works by button and by Ctrl+B, and the state survives a restart.
-5. Maps, Point clouds and Asset models open collapsed.
+5. Maps, Point clouds, Asset models, Images and the report builder open collapsed.
 
 ### Non-goals
 
@@ -105,7 +105,7 @@ From top to bottom:
 The collapsed state is derived in one pure function, `sidebarCollapsed(stored, forced, override)`:
 
 - `stored` is the operator's preference from `kestrel.sidebar`.
-- `forced` is true on full-bleed layouts (`layoutOf(...) === "fullbleed"`: Maps, Asset models and the point cloud workspace) and when the window is narrower than 1100px. The 1100px threshold is the same one the inspector already uses.
+- `forced` is true on the full-bleed and workspace layouts (`layoutOf(...)` is `"fullbleed"` or `"workspace"`: Maps, Asset models, the point cloud workspace, Images and the report builder) and when the window is narrower than 1100px. The 1100px threshold is the same one the inspector already uses.
 - `override` is a per-visit choice. It is cleared whenever `routeInfo(...).transitionKey` changes.
 
 The rules:
@@ -114,12 +114,14 @@ The rules:
 - Elsewhere, the stored preference applies.
 - The toggle (the button or Ctrl+B) sets `override` on a forced route. Elsewhere it flips and persists `stored`.
 - Expanding on a forced route pushes the content over; it does not overlay it.
-- The width animates over `--dur-fast`. Under `prefers-reduced-motion` or the Reduced effects setting it is instant.
+- The width animates over `--dur-base`, which is 0 under reduced motion, so it is instant there. (`--dur-fast` is not reduced, so it would keep animating.)
 
 Ctrl+B is added to `GLOBAL_KEYS` in `ui/keymap.ts` as `toggle-sidebar`, "Show or hide the sidebar", so the `?` sheet lists it.
 
 - Plain `B` (the Box tool in Images) is untouched.
 - Like the palette shortcut, Ctrl+B is ignored while focus is in a text field.
+
+Amended 2026-10-03 during implementation: the workspace layout is forced too (see the ADR).
 
 ## 5. Top bar
 
