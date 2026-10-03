@@ -68,7 +68,11 @@ function assetColumns(ctx: ColumnContext): Column<Finding>[] {
   ];
 }
 
-/** The Findings table (F §8.6): select (from DataTable), thumbnail, number, type, severity, location, status, updated. */
+/**
+ * The Findings table (F §8.6): select (from DataTable), thumbnail, number, type, severity, location,
+ * status, updated. When the project has asset findings, the asset columns (height, side, zone,
+ * component, sightings) follow location.
+ */
 export function findingColumns(ctx: ColumnContext): Column<Finding>[] {
   const head: Column<Finding>[] = [
     {

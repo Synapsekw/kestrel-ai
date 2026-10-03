@@ -115,6 +115,8 @@ export function FindingGallery({
   const win = computeWindow(scrollTop, height, geo.rowH, rowCount, OVERSCAN_ROWS);
   const askedAt = useRef(-1);
   useEffect(() => {
+    // A replaced list (filter change) passes through empty; forget the old ask so paging resumes.
+    if (items.length === 0) askedAt.current = -1;
     if (!onEndReached || loading || rowCount === 0) return;
     if (win.end >= rowCount - END_ROWS && askedAt.current !== items.length) {
       askedAt.current = items.length;

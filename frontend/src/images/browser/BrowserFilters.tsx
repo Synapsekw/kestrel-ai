@@ -52,6 +52,7 @@ export function severityHistogram(sev: readonly number[]): Map<number, number> {
 }
 
 const SORTS = Object.keys(SORT_LABEL) as BrowserSort[];
+const REVIEW_OPTIONS = Object.keys(REVIEW_LABEL) as ReviewStatusFilter[];
 
 function useSources(projectId: string): Source[] {
   const api = useApi();
@@ -127,8 +128,6 @@ function SearchField({ value, onCommit }: { value: string; onCommit: (v: string)
 }
 
 /** Spec §6.1: flight, has findings + status, severity chips, and "More". */
-const REVIEW_OPTIONS = Object.keys(REVIEW_LABEL) as ReviewStatusFilter[];
-
 export function BrowserFilters({ projectId, value, onChange, index }: BrowserFiltersProps) {
   const sources = useSources(projectId);
   const { all: types } = useProjectTypes(projectId);

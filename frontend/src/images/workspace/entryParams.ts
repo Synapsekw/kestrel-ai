@@ -1,5 +1,7 @@
+import { REVIEW_LABEL, type ReviewStatusFilter } from "@/images/browser/filters";
+
 /** A photo review status, or `all` (every photo, the review filter off). */
-export type ReviewEntry = "all" | "finding" | "none" | "uncertain" | "not_assessed";
+export type ReviewEntry = ReviewStatusFilter;
 
 /**
  * Ruling 4: the redirects' parameters; handled once by the workspace, then dropped. m2: `source`
@@ -15,7 +17,7 @@ export interface Entry {
   review: ReviewEntry | null;
 }
 
-const REVIEWS: readonly ReviewEntry[] = ["all", "finding", "none", "uncertain", "not_assessed"];
+const REVIEWS = Object.keys(REVIEW_LABEL) as ReviewEntry[];
 
 export function parseEntry(q: URLSearchParams): Entry | null {
   if (!ENTRY_KEYS.some((k) => q.has(k))) return null;
