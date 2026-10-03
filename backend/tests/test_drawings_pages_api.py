@@ -2,6 +2,7 @@
 Review Focus 1, 2 and 5)."""
 
 import math
+import threading
 import time
 import uuid
 
@@ -17,12 +18,14 @@ def _pages(client, project_id, inspection_id, **body):
     return client.post(f"{BASE}/{project_id}/drawings/pages", json={**body, "inspection_id": inspection_id})
 
 
-def _spy(monkeypatch, *, fail_page=None, block=False):
+def _spy(monkeypatch, *, fail_page=None, block=False, entered=None):
     calls = []
     real = pdf.render_page_to_plan
 
     def spy(path, page_n, dpi, dst, *, progress, check_cancelled, **kw):
         calls.append((page_n, dpi))
+        if entered is not None:
+            entered.set()
         if page_n == fail_page:
             raise JobFailure(f"page {page_n} is broken")
         while block:
@@ -103,8 +106,11 @@ def test_a_build_while_pages_run_is_409_both_ways(client, project_id, wait_job, 
 
 def test_cancel_fails_every_page_left(client, project_id, wait_job, handle, tmp_path, monkeypatch):
     insp = inspect_ready(client, project_id, wait_job, write_pdf(tmp_path / "s.pdf", [(200.0, 200.0)] * 3))
-    _spy(monkeypatch, block=True)
+    entered = threading.Event()
+    _spy(monkeypatch, block=True, entered=entered)
     body = _pages(client, project_id, insp["id"]).json()
+    # Cancel only once page 1 is inside the build: the run-path cancel, not cancelled-before-start.
+    assert entered.wait(10)
     client.post(f"{BASE}/{project_id}/jobs/{body['job']['id']}/cancel")
     assert wait_job(project_id, body["job"]["id"])["state"] == "cancelled"
     for d in body["drawings"]:
@@ -177,12 +183,23 @@ def test_startup_sweep_fails_every_page_left_of_an_interrupted_job(handle, app):
             )
             for p in (2, 3)
         ]
-        s.add_all(rows)
+        built = Drawing(
+            name="Set · p1",
+            format="pdf",
+            source_path="C:/x/set.pdf",
+            source_size=1,
+            page=1,
+            status="ready",
+            job_id=dead,
+        )
+        s.add_all([*rows, built])
         s.flush()
         ids = {r.id for r in rows}
+        built_id = built.id
     assert set(startup.sweep_interrupted(handle, app.state.jobs)) == ids
     with handle.session() as s:
         assert {s.get(Drawing, i).status for i in ids} == {"failed"}
+        assert s.get(Drawing, built_id).status == "ready"
 
 
 def test_cancelled_before_start_fails_every_page(handle):

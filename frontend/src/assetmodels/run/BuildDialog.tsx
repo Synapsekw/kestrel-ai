@@ -399,6 +399,10 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tooMany = chosen.size > MAX_SOURCES;
+  // One chosen file that alone passes the cap: name it, so the fix is plain (untick that file).
+  const oversized = tooMany
+    ? files?.find((f) => f.refs.filter((r) => chosen.has(sourceKey(r))).length > MAX_SOURCES)
+    : undefined;
   const canStart = chosen.size > 0 && !tooMany && waiting === 0 && provider !== null && !busy;
 
   const submit = async () => {
@@ -488,7 +492,9 @@ export function BuildDialog({ open, onClose, projectId, model, mode, onStarted, 
           <PhotoGroup projectId={projectId} chosen={photosChosen} isChosen={isChosen} onToggle={onToggle} />
           {tooMany && (
             <p role="alert" className="text-xs text-danger">
-              {`A run reads at most ${MAX_SOURCES} sources; untick ${chosen.size - MAX_SOURCES}.`}
+              {oversized
+                ? `${oversized.label} has ${oversized.refs.length} pages; a run reads at most ${MAX_SOURCES} sources.`
+                : `A run reads at most ${MAX_SOURCES} sources; untick ${chosen.size - MAX_SOURCES}.`}
             </p>
           )}
           {dropped > 0 && (

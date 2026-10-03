@@ -7,8 +7,8 @@ import { messageOf } from "@/api/errors";
 import { IMAGE_PAGE_SIZE, fetchImagePage } from "@/api/images";
 import { useChangesStore } from "@/store/changes";
 
-/** A run takes at most this many sources (`AssetModelRunStart.sources`, 1..50). */
-export const MAX_SOURCES = 50;
+/** A run takes at most this many sources (`AssetModelRunStart.sources`, 1..200). */
+export const MAX_SOURCES = 200;
 /** Drawings and clouds per project are few; one bounded page of each. */
 export const DATA_LIMIT = 200;
 

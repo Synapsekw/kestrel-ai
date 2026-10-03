@@ -91,21 +91,21 @@ async function routes(page: Page) {
         )
       : r.fallback(),
   );
-     await page.route(`**/api/v1/projects/${P}/drawings/pages`, (r) =>
-       r.fulfill(
-         jsonReply(
-           {
-             drawings: [
-               { id: "d1", name: "foundation-plan · p1", status: "importing" },
-               { id: "d2", name: "foundation-plan · p2", status: "importing" },
-             ],
-             job: job(BJ, "queued"),
-           },
-           202,
-         ),
-       ),
-     );
-   
+  await page.route(`**/api/v1/projects/${P}/drawings/pages`, (r) =>
+    r.fulfill(
+      jsonReply(
+        {
+          drawings: [
+            { id: "d1", name: "foundation-plan · p1", status: "importing" },
+            { id: "d2", name: "foundation-plan · p2", status: "importing" },
+          ],
+          job: job(BJ, "queued"),
+        },
+        202,
+      ),
+    ),
+  );
+
   await page.route(`**/api/v1/projects/${P}/elevations`, (r) =>
     r.fulfill(
       jsonReply(

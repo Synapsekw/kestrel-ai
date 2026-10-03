@@ -271,6 +271,21 @@ describe("BuildDialog", () => {
     ]);
   });
 
+  it("names a single file whose pages alone pass the source cap", async () => {
+    const pages = {
+      items: Array.from({ length: 201 }, (_, i) =>
+        drawing(`p${i + 1}`, `T0005 · p${i + 1}`, "E:\\LNG\\T0005.pdf", i + 1, "ready"),
+      ),
+    };
+    const { api } = setup([{ method: "GET", path: /\/drawings$/, body: pages }]);
+    open(api);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /T0005\.pdf/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "T0005.pdf has 201 pages; a run reads at most 200 sources.",
+    );
+    expect(screen.getByRole("button", { name: /start build/i })).toBeDisabled();
+  });
+
   it("a refine that used one page shows the file partly chosen; unticking drops every page", async () => {
     const pages = {
       items: [
