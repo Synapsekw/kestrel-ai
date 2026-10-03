@@ -12,7 +12,7 @@ from pathlib import PureWindowsPath
 from sqlalchemy import func, select
 
 from app.asset_review.frame import Frame
-from app.asset_review.poses import has_gps, pose_from_exif
+from app.asset_review.poses import has_alt, has_gps, pose_from_exif
 from app.db.base import utcnow
 from app.db.models import AssetModel, Image, ImagePose, Job, Source
 from app.jobs.cancellation import JobFailure
@@ -100,9 +100,18 @@ def run_asset_pose(ctx) -> dict:
                 if image is not None and old is not None and old.source in KEEP_SOURCES:
                     counts["kept"] += 1
                     continue
-                pose = pose_from_exif(image, frame) if image is not None else None
+                reason = None
+                pose = None
+                if image is not None:
+                    try:
+                        pose = pose_from_exif(image, frame)
+                    except (ValueError, ArithmeticError):  # one junk photo never fails the job
+                        reason = "bad_metadata"
                 if pose is None:
-                    reason = "not_found" if image is None else ("no_gps" if not has_gps(image) else "on_axis")
+                    if reason is None:
+                        reason = (
+                            "not_found" if image is None else ("no_gps" if not has_gps(image) else "on_axis")
+                        )
                     skipped_count += 1
                     if len(skipped) < MAX_REPORTED:
                         name = (image.original_name or image.path) if image is not None else None
@@ -125,7 +134,7 @@ def run_asset_pose(ctx) -> dict:
                     for k, v in values.items():
                         setattr(old, k, v)
                 counts["posed" if pose.source == "exif_gimbal" else "axis_aimed"] += 1
-                if image.alt is None:
+                if not has_alt(image):
                     counts["no_altitude"] += 1
         ctx.progress(
             done / max(total, 1), f"Posed {counts['posed'] + counts['axis_aimed']:,} of {total:,} photos"

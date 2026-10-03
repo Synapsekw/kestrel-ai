@@ -23,6 +23,8 @@ from app.asset_review.frame import Frame, true_to_plant
 
 R_EARTH_M = 6378137.0
 DEFAULT_LONG_FOV_DEG = 70.0
+MIN_FOV_DEG = 1.0
+MAX_FOV_DEG = 170.0
 MIN_ROLL_DEG = 0.5
 MIN_HORIZONTAL = 1e-6
 EXIF_ACCURACY_M = 3.0  # uncorrected GNSS, as app/pointclouds/cameras.py SIGMA_M
@@ -60,36 +62,63 @@ def _pos(value) -> float | None:
     return f if f is not None and f > 0 else None
 
 
+def _gps(image) -> tuple[float, float] | None:
+    """(lat, lon) when both are finite and on the globe, else None (junk EXIF DMS is not range-checked)."""
+    lat, lon = _num(image.lat), _num(image.lon)
+    if lat is None or lon is None or not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+    return lat, lon
+
+
 def has_gps(image) -> bool:
-    return _num(image.lat) is not None and _num(image.lon) is not None
+    return _gps(image) is not None
+
+
+def has_alt(image) -> bool:
+    return _num(image.alt) is not None
+
+
+def _sane(long_fov: float) -> bool:
+    return MIN_FOV_DEG < long_fov < MAX_FOV_DEG
 
 
 def fov_deg(image) -> tuple[float, float]:
-    """(hfov, vfov), rounded to 4 decimals. The lens angle spans the long side of the photo."""
+    """(hfov, vfov), rounded to 4 decimals, strictly inside (0, 180). The lens angle spans the long
+    side of the photo. A lens rule whose angle is not sane (junk EXIF) falls through to the next."""
     focal_mm, sensor_w = _pos(image.focal_mm), _pos(image.sensor_w_mm)
     focal_px, ow, oh = _pos(image.focal_px), _pos(image.orig_w), _pos(image.orig_h)
+    long_fov = None
     if focal_mm and sensor_w:
-        long_fov = 2 * math.degrees(math.atan(sensor_w / (2 * focal_mm)))
-    elif focal_px and ow and oh:
-        long_fov = 2 * math.degrees(math.atan(max(ow, oh) / (2 * focal_px)))
-    else:
+        cand = 2 * math.degrees(math.atan(sensor_w / (2 * focal_mm)))
+        long_fov = cand if _sane(cand) else None
+    if long_fov is None and focal_px and ow and oh:
+        cand = 2 * math.degrees(math.atan(max(ow, oh) / (2 * focal_px)))
+        long_fov = cand if _sane(cand) else None
+    if long_fov is None:
         long_fov = DEFAULT_LONG_FOV_DEG
-    w, h = float(image.width), float(image.height)
+    w, h = _num(image.width) or 0.0, _num(image.height) or 0.0
     half = math.tan(math.radians(long_fov / 2))
-    if w >= h:
+    if w <= 0 or h <= 0:  # unknown shape: the lens angle on both axes
+        hf = vf = long_fov
+    elif w >= h:
         hf, vf = long_fov, 2 * math.degrees(math.atan(half * h / w))
     else:
         vf, hf = long_fov, 2 * math.degrees(math.atan(half * w / h))
-    return round(hf, 4), round(vf, 4)
+    return _clamp_fov(hf), _clamp_fov(vf)
+
+
+def _clamp_fov(v: float) -> float:
+    return min(max(round(v, 4), 0.0001), 179.9999)
 
 
 def pose_from_exif(image, frame: Frame) -> PoseIn | None:
     """The kit's `pose()` on `image`'s columns, in `frame`. None without an origin or GPS, or with
     no yaw while the camera stands on the asset axis (no direction to aim)."""
     origin = frame.origin
-    lat, lon = _num(image.lat), _num(image.lon)
-    if origin is None or lat is None or lon is None:
+    gps = _gps(image)
+    if origin is None or gps is None:
         return None
+    lat, lon = gps
     lat0, lon0, alt0 = origin.lat, origin.lon, origin.ground_alt_m
     north = math.radians(lat - lat0) * R_EARTH_M
     east = math.radians(lon - lon0) * R_EARTH_M * math.cos(math.radians(lat0))

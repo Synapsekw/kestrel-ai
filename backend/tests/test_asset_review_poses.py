@@ -257,3 +257,39 @@ def test_parity_with_the_kit_formula_on_500_seeded_records():
         assert p is not None
         assert list(p.position) == kit["position"] and list(p.target) == kit["target"]
         assert list(p.up) == kit["up"] and (p.hfov_deg, p.vfov_deg) == (kit["hfov"], kit["vfov"])
+
+
+# ----- junk metadata never raises (final review I1, M1)
+
+_JUNK_FOV_ROWS = [
+    dict(focal_mm=1e-6, sensor_w_mm=36.0),
+    dict(focal_mm=1e9, sensor_w_mm=36.0),
+    dict(focal_mm=None, focal_px=1e-4, orig_w=5472, orig_h=3648),
+    dict(focal_mm=None, focal_px=1e12, orig_w=5472, orig_h=3648),
+    dict(width=0, height=0),
+    dict(width=0),
+    dict(height=0),
+    dict(width=None, height=None),
+]
+
+
+@pytest.mark.parametrize("cols", _JUNK_FOV_ROWS)
+def test_junk_lens_or_size_still_gives_a_valid_pose(cols):
+    row = dict(lat=LAT0 + 0.0001, lon=LON0, alt=25.0, gimbal_yaw=180.0, **cols)
+    pose = pose_from_exif(image(**row), frame())
+    assert pose is not None
+    assert 0 < pose.hfov_deg < 180 and 0 < pose.vfov_deg < 180
+
+
+def test_insane_lens_rule_falls_through_to_the_next_rule():
+    # focal_mm rule gives ~180 degrees: skipped; focal_px rule (long side 5472, f 3000 px) is used
+    hf, _ = fov_deg(image(focal_mm=1e-6, sensor_w_mm=36.0, focal_px=3000.0, orig_w=5472, orig_h=3648))
+    assert abs(hf - 2 * math.degrees(math.atan(5472 / 6000))) < 1e-3
+    assert fov_deg(image(focal_mm=1e-6, sensor_w_mm=36.0))[0] == 70.0
+
+
+@pytest.mark.parametrize("lat,lon", [(4e9, LON0), (LAT0, 181.0), (-90.5, LON0), (LAT0, -1e6)])
+def test_out_of_range_coordinates_are_no_gps(lat, lon):
+    img = image(lat=lat, lon=lon, alt=25.0, gimbal_yaw=180.0)
+    assert not has_gps(img)
+    assert pose_from_exif(img, frame()) is None

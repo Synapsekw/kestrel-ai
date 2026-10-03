@@ -237,3 +237,52 @@ def test_synthetic_tower_poses_round_trip(handle, tmp_path):
         _, position, target, _ = got[image_id]
         assert position == pytest.approx(p["position"], abs=2e-3)
         assert target == pytest.approx(p["target"], abs=2e-3)  # same nearest-to-axis rule as shoot.py
+
+
+def test_one_junk_photo_never_fails_the_job(handle, monkeypatch):
+    import app.asset_review.pose_job as pj
+
+    mid = seed_model(handle)
+    good = dict(lat=LAT0 + 0.0001, lon=LON0, alt=25.0, gimbal_yaw=180.0)
+    # the middle row has junk lens metadata: it must come out posed with a valid FOV
+    a, junk, c = seed_images(handle, [good, {**good, "focal_mm": 1e-6, "sensor_w_mm": 36.0}, good])
+    result = run_asset_pose(Ctx(handle, {"asset_model_id": mid, "image_ids": None}))
+    assert result["posed"] == 3 and result["skipped"] == 0
+    # and if the pose function still raised for one photo, that photo is skipped as bad_metadata
+    real = pj.pose_from_exif
+
+    def flaky(image, frame):
+        if image.id == junk:
+            raise ValueError("junk")
+        return real(image, frame)
+
+    monkeypatch.setattr(pj, "pose_from_exif", flaky)
+    with handle.session() as s:
+        for p in s.scalars(select(ImagePose)):
+            s.delete(p)
+    result = run_asset_pose(Ctx(handle, {"asset_model_id": mid, "image_ids": None}))
+    assert result["posed"] == 2 and result["skipped"] == 1
+    assert [r["reason"] for r in result["skipped_images"]] == ["bad_metadata"]
+    assert result["skipped_images"][0]["image_id"] == junk
+    assert set(poses(handle, mid)) == {a, c}
+
+
+def test_cancel_is_not_swallowed_by_the_photo_guard(handle):
+    mid = seed_model(handle)
+    seed_images(handle, [dict(lat=LAT0 + 0.0001, lon=LON0, alt=25.0, gimbal_yaw=180.0)] * 2)
+    with pytest.raises(JobCancelled):
+        run_asset_pose(Ctx(handle, {"asset_model_id": mid, "image_ids": None}, cancel_after=1))
+
+
+def test_nan_altitude_counts_as_missing_and_out_of_range_gps_is_skipped(handle):
+    mid = seed_model(handle)
+    seed_images(
+        handle,
+        [
+            dict(lat=LAT0 + 0.0001, lon=LON0, alt=float("nan"), gimbal_yaw=180.0),
+            dict(lat=4e9, lon=LON0, alt=25.0, gimbal_yaw=180.0),
+        ],
+    )
+    result = run_asset_pose(Ctx(handle, {"asset_model_id": mid, "image_ids": None}))
+    assert result["posed"] == 1 and result["no_altitude"] == 1
+    assert [r["reason"] for r in result["skipped_images"]] == ["no_gps"]
