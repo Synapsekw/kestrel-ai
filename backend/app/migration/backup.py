@@ -1,8 +1,10 @@
 """Copy-first backup of a project database before a schema change (foundation spec §11.2).
 
-`open_project_db` asks `needs_backup` before Alembic runs. When the upgrade will apply
-`BACKUP_BEFORE`, it takes a backup with SQLite's own online backup API, which is consistent under
-WAL. A backup that cannot be written, or that does not pass `PRAGMA quick_check`, raises
+`open_project_db` asks `needs_backup` and `needs_rebuild_backup` before Alembic runs. When the
+upgrade will apply `BACKUP_BEFORE`, it takes a backup labelled `v1`; when it will apply a revision
+of `REBUILD_GUARDS` (one that rebuilds a table of the operator's records, 0016 for `finding`), it
+takes a second copy labelled `r<revision>`. Both use SQLite's own online backup API, which is
+consistent under WAL. A backup that cannot be written, or that does not pass `PRAGMA quick_check`, raises
 `BackupFailed`, and the upgrade does not run: the project's data is left logically unchanged (not
 byte-identical: the `wal_checkpoint(TRUNCATE)` taken before the copy may already have moved pages
 from `project.db-wal` into `project.db`). The app never deletes a backup and never restores one by
@@ -25,7 +27,7 @@ from alembic.script.revision import ResolutionError
 from alembic.util import CommandError
 
 BACKUP_BEFORE = "0010"  # the foundation revision (foundation spec §11.1)
-BACKUP_LABEL = "v1"  # the schema generation the copy holds
+BACKUP_LABEL = "v1"  # the schema generation the foundation copy holds; rebuild-guard copies use r<revision>
 # The foundation revision itself, never patched by tests (they patch BACKUP_BEFORE): a database
 # older than it has no `finding` table yet, and the foundation copy is the one that open takes.
 FOUNDATION_REVISION = "0010"

@@ -229,7 +229,14 @@ def upgrade() -> None:
 def downgrade() -> None:
     for table in NEW_TABLES:
         op.drop_table(table)
-    op.execute("DELETE FROM finding WHERE anchor_kind = 'asset'")  # foreign keys on: children cascade
+    # Plain Alembic never sets PRAGMA foreign_keys, so nothing cascades here: delete the children of
+    # the asset findings explicitly, or they would be orphaned.
+    asset = "SELECT id FROM finding WHERE anchor_kind = 'asset'"
+    op.execute(f"DELETE FROM finding_comment WHERE finding_id IN ({asset})")
+    op.execute(f"DELETE FROM finding_attachment WHERE finding_id IN ({asset})")
+    op.execute(f"DELETE FROM cloud_view WHERE finding_id IN ({asset})")
+    op.execute(f"UPDATE cloud_measurement SET finding_id = NULL WHERE finding_id IN ({asset})")
+    op.execute("DELETE FROM finding WHERE anchor_kind = 'asset'")
     with _foreign_keys_off():
         with op.batch_alter_table("finding", recreate="always") as b:
             b.drop_index("ix_finding_asset_zone")

@@ -119,6 +119,12 @@ def test_an_unknown_photo_is_404_and_an_unknown_status_422(client, project_id, h
     assert client.put(_url(project_id, image_id), json={"status": "maybe"}).status_code == 422
 
 
+def test_an_unknown_key_in_the_put_body_is_422(client, project_id, handle):
+    image_id = _photo(handle)
+    r = client.put(_url(project_id, image_id), json={"status": "none", "notes": "x"})
+    assert r.status_code == 422
+
+
 def test_set_status_writes_in_the_callers_session(handle):
     image_id = _photo(handle)
     with handle.session() as s:

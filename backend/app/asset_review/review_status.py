@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -44,6 +44,8 @@ class ImageReviewOut(BaseModel):
 
 
 class ImageReviewIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # the contract's ImageReviewPut: additionalProperties false
+
     status: ReviewStatus
     note: str = Field("", max_length=4000)
 

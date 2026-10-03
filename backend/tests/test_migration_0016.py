@@ -71,6 +71,10 @@ INSERT INTO finding_comment (id, finding_id, author, text, created_at)
   VALUES ('c1', 'f1', 'D', 'seen twice', '{T0}');
 INSERT INTO finding_attachment (id, finding_id, path, original_name, width, height, bytes, created_at)
   VALUES ('a1', 'f2', 'findings/f2/a1.jpg', 'a.jpg', 1, 1, 1, '{T0}');
+INSERT INTO cloud_view (id, point_cloud_id, finding_id, pose, render, path, sha256, bytes, width, height,
+  anchor_hash, captured_at)
+  VALUES ('cv1', 'pc1', 'f3', '{{}}', '{{}}', 'pointclouds/pc1/views/finding-f3.png', 'x', 1, 1, 1, 'h',
+  '{T0}');
 INSERT INTO cloud_measurement (id, point_cloud_id, kind, name, points, results, created_at, updated_at,
   status, finding_id)
   VALUES ('cm1', 'pc1', 'point', 'P1', '[]', '{{}}', '{T0}', '{T0}', 'ready', 'f3');
@@ -103,6 +107,7 @@ def _children(folder) -> tuple:
             con.execute("SELECT id, finding_id, text FROM finding_comment").fetchall(),
             con.execute("SELECT id, finding_id FROM finding_attachment").fetchall(),
             con.execute("SELECT id, finding_id FROM cloud_measurement").fetchall(),
+            con.execute("SELECT id, finding_id FROM cloud_view").fetchall(),
         )
     finally:
         con.close()
@@ -113,6 +118,7 @@ KEPT = (
     [("c1", "f1", "seen twice")],
     [("a1", "f2")],
     [("cm1", "f3")],
+    [("cv1", "f3")],
 )
 
 
@@ -415,3 +421,30 @@ def test_0016_downgrades_to_0015_and_keeps_the_older_findings(tmp_path):
     assert not set(NEW_TABLES) & tables
     assert not {"asset_model_id", "ax", "zone", "sighting_count"} & finding_cols
     assert not {"frame", "review"} & model_cols
+
+
+def test_the_downgrade_removes_asset_findings_and_their_children_without_foreign_keys(tmp_path):
+    """Plain Alembic runs with foreign keys off, so the downgrade must delete the children itself."""
+    folder = _at(tmp_path / "old", "0015")
+    open_project_db(folder).dispose()
+    con = sqlite3.connect(folder / "project.db")  # foreign keys off, as under Alembic
+    con.execute(
+        "INSERT INTO asset_model (id, name, status, created_at, updated_at)"
+        " VALUES ('m1', 'Stack', 'ready', ?, ?)",
+        (T0, T0),
+    )
+    con.execute(
+        "INSERT INTO finding (id, number, type_id, status, note, created_by, anchor_kind, asset_model_id,"
+        " data_type, data_id, created_at, updated_at)"
+        " VALUES ('fa', 4, 't1', 'open', '', 'human', 'asset', 'm1', 'asset_model', 'm1', ?, ?)",
+        (T0, T0),
+    )
+    con.execute(
+        "INSERT INTO finding_comment (id, finding_id, author, text, created_at)"
+        " VALUES ('ca', 'fa', 'D', 'on the stack', ?)",
+        (T0,),
+    )
+    con.commit()
+    con.close()
+    command.downgrade(alembic_config(folder), "0015")
+    assert _children(folder) == KEPT
