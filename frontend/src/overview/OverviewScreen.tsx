@@ -34,6 +34,7 @@ const SKELETON = composeOverview({
   hasCloud: true,
   hasImages: true,
   hasSite: true,
+  hasAssetMap: false,
   findingsTotal: 1,
   runningJobs: false,
 });
@@ -155,6 +156,7 @@ export function OverviewScreen() {
       ? // SiteLocation draws nothing without bounds, so only bounds make a location pane.
         site?.bounds_wgs84 != null
       : d.maps + d.point_clouds + d.images > 0,
+    hasAssetMap: false,
     findingsTotal: total,
     runningJobs,
   };

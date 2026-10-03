@@ -7,6 +7,7 @@ const everything: OverviewFacts = {
   hasCloud: true,
   hasImages: true,
   hasSite: true,
+  hasAssetMap: false,
   findingsTotal: 38,
   runningJobs: false,
 };
@@ -24,6 +25,23 @@ describe("composeOverview", () => {
     expect(pane(everything, "findings")?.col).toBe("1 / span 5");
     expect(pane(everything, "imagery")?.col).toBe("6 / span 4");
     expect(pane(everything, "status")?.col).toBe("10 / span 3");
+  });
+
+  it("asset hero: the findings map takes the side column, over location", () => {
+    const f = { ...everything, heroKind: "asset_model" as const, hasAssetMap: true, hasCloud: false };
+    expect(ids(f)).toEqual(["header", "hero", "assetMap", "location", "findings", "imagery", "status"]);
+    expect(pane(f, "assetMap")).toEqual({ id: "assetMap", col: "9 / -1", row: "2" });
+    expect(pane(f, "location")).toEqual({ id: "location", col: "9 / -1", row: "3" });
+  });
+
+  it("asset hero alone: the findings map spans both side rows", () => {
+    const f = { ...everything, heroKind: "asset_model" as const, hasAssetMap: true, hasCloud: false, hasSite: false };
+    expect(pane(f, "assetMap")).toEqual({ id: "assetMap", col: "9 / -1", row: "2 / span 2" });
+  });
+
+  it("the side column holds two panes at most: the asset map first, then the cloud", () => {
+    const f = { ...everything, heroKind: "asset_model" as const, hasAssetMap: true };
+    expect(ids(f)).toEqual(["header", "hero", "assetMap", "cloud", "findings", "imagery", "status"]);
   });
 
   it("no ortho: the cloud is the hero, so there is no cloud tile and location fills the column", () => {
