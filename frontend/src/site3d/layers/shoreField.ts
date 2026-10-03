@@ -42,19 +42,29 @@ export function rasterTriangles(tris: ArrayLike<number>, box: Box2, size: number
   return out;
 }
 
-/** Two-pass 3-4 chamfer distance (metres) to the nearest source cell; exact along rows and columns. */
-export function chamferDistance(source: Uint8Array, size: number, cellM: number): Float32Array {
+/**
+ * Two-pass chamfer distance (metres) to the nearest source cell. Steps along x (columns) weigh `cellM`,
+ * along z (rows) `cellZ` (default `cellM`), diagonals `Math.hypot(cellM, cellZ)`; exact along rows and
+ * columns, within about 8 % elsewhere.
+ */
+export function chamferDistance(
+  source: Uint8Array,
+  size: number,
+  cellM: number,
+  cellZ = cellM,
+): Float32Array {
   const d = new Float32Array(size * size);
   for (let k = 0; k < d.length; k++) d[k] = source[k] ? 0 : 1e9;
   const a = cellM;
-  const b = cellM * Math.SQRT2;
+  const c = cellZ;
+  const b = Math.hypot(cellM, cellZ);
   for (let j = 0; j < size; j++)
     for (let i = 0; i < size; i++) {
       const k = j * size + i;
       let v = d[k];
       if (i > 0) v = Math.min(v, d[k - 1] + a);
       if (j > 0) {
-        v = Math.min(v, d[k - size] + a);
+        v = Math.min(v, d[k - size] + c);
         if (i > 0) v = Math.min(v, d[k - size - 1] + b);
         if (i < size - 1) v = Math.min(v, d[k - size + 1] + b);
       }
@@ -66,7 +76,7 @@ export function chamferDistance(source: Uint8Array, size: number, cellM: number)
       let v = d[k];
       if (i < size - 1) v = Math.min(v, d[k + 1] + a);
       if (j < size - 1) {
-        v = Math.min(v, d[k + size] + a);
+        v = Math.min(v, d[k + size] + c);
         if (i < size - 1) v = Math.min(v, d[k + size + 1] + b);
         if (i > 0) v = Math.min(v, d[k + size - 1] + b);
       }
@@ -84,8 +94,10 @@ export function shoreField(land: ArrayLike<number>, box: Box2, size = SHORE_GRID
   if (land.length === 0) return null;
   const landMask = rasterTriangles(land, box, size);
   if (!landMask.some((v) => v === 1)) return null;
-  const cell = Math.max((box.maxX - box.minX) / size, (box.maxZ - box.minZ) / size);
-  const dist = chamferDistance(landMask, size, cell);
+  // A texel spans sx metres in x and sz in z: the shader maps u and v separately.
+  const sx = (box.maxX - box.minX) / size;
+  const sz = (box.maxZ - box.minZ) / size;
+  const dist = chamferDistance(landMask, size, sx, sz);
   const out = new Uint8Array(size * size);
   for (let k = 0; k < out.length; k++) out[k] = Math.round(255 * Math.min(1, dist[k] / SHORE_MAX_M));
   return out;

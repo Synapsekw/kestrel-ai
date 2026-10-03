@@ -10,6 +10,7 @@ import { SUN_COLOUR, sunDirection } from "./sun";
 
 export const NO_MODEL = "Water shows once the plant model has loaded.";
 export const NO_SEA = "This model has no sea.";
+export const WATER_SHADER_CHANGED = "Water can't be drawn: three's water shader has changed.";
 export const WATER_NORMALS_URL = `${import.meta.env.BASE_URL}textures/waternormals.jpg`;
 /** Physical scene colours (a Gulf shallow sea and its foam), not UI colours. */
 const WATER_COLOUR = 0x0b3d4a;
@@ -196,6 +197,8 @@ export function createWaterLayer(
         distortionScale: 3.7,
         fog: false,
       });
+      // Assigned before the foam splice, so a failure below disposes it (and its 512² mirror target).
+      mesh = water;
       const land = collectTriangles(root, isLand);
       const field = shoreField(land.tris, sea.box, SHORE_GRID);
       if (field) {
@@ -208,9 +211,16 @@ export function createWaterLayer(
         );
         shoreTex.minFilter = shoreTex.magFilter = THREE.LinearFilter;
         shoreTex.needsUpdate = true;
-        addFoam(water.material as THREE.ShaderMaterial, shoreTex, sea.box);
+        try {
+          addFoam(water.material as THREE.ShaderMaterial, shoreTex, sea.box);
+        } catch {
+          // Review Focus 2 "nothing throws": free what was built, leave the model's own sea showing.
+          clear();
+          status.set({ kind: "error", message: WATER_SHADER_CHANGED });
+          parts.requestRender();
+          return;
+        }
       }
-      mesh = water;
     }
     mesh.name = "site-water";
     mesh.rotation.x = -Math.PI / 2;

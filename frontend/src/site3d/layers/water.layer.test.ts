@@ -1,8 +1,31 @@
 import * as THREE from "three";
 import { Water } from "three/examples/jsm/objects/Water.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeSiteEngine } from "@/test/fakeSiteEngine";
-import { NO_MODEL, NO_SEA, collectTriangles, createWaterLayer, flatGeometry } from "./water.layer";
+const shader = vi.hoisted(() => ({ broken: false }));
+vi.mock("three/examples/jsm/objects/Water.js", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("three/examples/jsm/objects/Water.js")>();
+  /** three's Water, with its shader text optionally changed, as a future three release might. */
+  class TestWater extends mod.Water {
+    constructor(...args: ConstructorParameters<typeof mod.Water>) {
+      super(...args);
+      if (shader.broken) {
+        const m = this.material as THREE.ShaderMaterial;
+        m.fragmentShader = m.fragmentShader.replace("uniform vec3 waterColor;", "uniform vec3 seaColour;");
+      }
+    }
+  }
+  return { ...mod, Water: TestWater };
+});
+
+import {
+  WATER_SHADER_CHANGED,
+  NO_MODEL,
+  NO_SEA,
+  collectTriangles,
+  createWaterLayer,
+  flatGeometry,
+} from "./water.layer";
 
 /** A GLB root like A1's: environment nodes carry `extras.env` (GLTFLoader puts extras in userData). */
 function plantRoot({ sea = true, land = true } = {}) {
@@ -26,6 +49,9 @@ function plantRoot({ sea = true, land = true } = {}) {
   }
   return root;
 }
+afterEach(() => {
+  shader.broken = false;
+});
 const opts = { normals: () => new THREE.Texture(), reduced: () => false };
 
 describe("water layer", () => {
@@ -133,6 +159,23 @@ describe("water layer", () => {
     expect(scene.getObjectByName("site-water")).toBeInstanceOf(Water);
     expect(s.visible).toBe(false);
     expect(layer.status.get()).toEqual({ kind: "ready" });
+  });
+
+  it("a changed Water shader: no throw, nothing leaked, the sea shown, an error status", () => {
+    shader.broken = true;
+    const { engine, scene } = fakeSiteEngine();
+    const root = plantRoot();
+    const layer = createWaterLayer(opts);
+    const disposeTarget = vi.spyOn(THREE.WebGLRenderTarget.prototype, "dispose");
+    layer.attach(engine);
+    expect(() => {
+      layer.setModel(root);
+    }).not.toThrow();
+    expect(scene.getObjectByName("site-water")).toBeUndefined();
+    expect(root.getObjectByName("environment/sea-1")!.visible).toBe(true);
+    expect(disposeTarget).toHaveBeenCalledTimes(1); // the mirror's 512² target
+    expect(layer.status.get()).toEqual({ kind: "error", message: WATER_SHADER_CHANGED });
+    disposeTarget.mockRestore();
   });
 
   it("collects a Cowork-style 'Sea' node by name and the land by an ancestor's extras", () => {
