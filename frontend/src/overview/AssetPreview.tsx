@@ -41,7 +41,7 @@ function Notice({
           to={assetModelPath(projectId, modelId)}
           className={cx("rounded-sm text-xs text-accent-ink", focusRing)}
         >
-          Open Asset models
+          Open in Asset models
         </Link>
       </div>
     </GlassPanel>
@@ -108,6 +108,7 @@ export function AssetPreview({
   const wantLive = Boolean(model) && !reduced && !failed;
   // Until the first intersection callback, or while the probe measures, hold the skeleton.
   const waiting = !model || (wantLive && (inView === null || !probeSettled));
+  const liveShown = Boolean(model) && !waiting && wantLive && Boolean(inView) && version !== null;
   const onState = (s: ModelViewState) => {
     if (s === "running") {
       viewer.current?.setAutoRotate(true);
@@ -122,7 +123,7 @@ export function AssetPreview({
       ref={box}
       aria-label="Asset preview"
       aria-busy={waiting || undefined}
-      data-rotating={rotatingKey === key ? "true" : undefined}
+      data-rotating={rotatingKey === key && liveShown ? "true" : undefined}
       className={cx("relative min-h-0 overflow-hidden", className)}
     >
       {!model || waiting ? (

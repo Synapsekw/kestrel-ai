@@ -253,6 +253,30 @@ def test_photo_review_counts_by_status(client, project, handle):
     }
 
 
+def test_photo_review_counts_unreviewed_photos_as_not_assessed(client, project, handle):
+    from image_summary_helpers import new_image
+    from sqlalchemy import select
+
+    from app.asset_review.review_status import set_status
+    from app.db.models import Source
+
+    source = new_image(handle)  # makes the source row; the rest share it
+    with handle.session() as s:
+        src = s.execute(select(Source)).scalar_one()
+        src.image_count = 4  # what an import records: four photos in the set
+        src_id = src.id
+    ids = [source, *(new_image(handle, source_id=src_id) for _ in range(3))]
+    with handle.session() as s:
+        set_status(s, ids[0], "finding")
+        set_status(s, ids[1], "none")
+    assert _overview(client, project)["photo_review"] == {
+        "finding": 1,
+        "none": 1,
+        "uncertain": 0,
+        "not_assessed": 2,
+    }
+
+
 def test_the_asset_reads_keep_the_overview_cost_flat(client, project, handle):
     """The two new reads run on every call, so the statement count does not depend on the project."""
     from image_summary_helpers import new_image

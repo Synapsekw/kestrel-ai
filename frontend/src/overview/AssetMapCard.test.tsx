@@ -69,7 +69,7 @@ describe("AssetMapCard", () => {
     expect(
       await screen.findByText("Set the asset frame and review profile to see the findings map."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Asset models" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Open in Asset models" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/models/${ASSET_MODEL_ID}`,
     );

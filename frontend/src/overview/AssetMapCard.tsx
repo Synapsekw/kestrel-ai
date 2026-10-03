@@ -41,7 +41,7 @@ export function AssetMapCard({
             to={assetModelPath(projectId, modelId)}
             className={cx("rounded-sm text-xs text-accent-ink", focusRing)}
           >
-            Open Asset models
+            Open in Asset models
           </Link>
         </span>
       </Note>

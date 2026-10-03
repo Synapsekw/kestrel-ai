@@ -69,7 +69,7 @@ export function FindingsMap({ review, frame, dots, onOpen, className }: Findings
   return (
     <div ref={host} className={cx("relative min-h-0", className)}>
       <svg
-        role="img"
+        role="group"
         aria-label={`Findings map, ${g.dots.length} ${g.dots.length === 1 ? "finding" : "findings"} by height and side`}
         viewBox={`0 0 ${g.width} ${g.height}`}
         preserveAspectRatio="xMidYMid meet"

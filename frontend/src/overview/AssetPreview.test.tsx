@@ -55,7 +55,7 @@ describe("AssetPreview", () => {
   it("says the preview could not be loaded when the read fails, with a way to Asset models", async () => {
     renderPreview(null, 500);
     expect(await screen.findByText("Couldn't load the asset preview.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Asset models" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Open in Asset models" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/models/${ASSET_MODEL_ID}`,
     );

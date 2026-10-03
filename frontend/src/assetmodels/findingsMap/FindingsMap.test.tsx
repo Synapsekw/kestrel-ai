@@ -72,8 +72,9 @@ describe("FindingsMap", () => {
   it("draws the silhouette, levels, zone bands and one dot per finding", () => {
     draw();
     expect(
-      screen.getByRole("img", { name: "Findings map, 2 findings by height and side" }),
+      screen.getByRole("group", { name: "Findings map, 2 findings by height and side" }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /F-\d+/ })).toHaveLength(2);
     expect(screen.getByTestId("silhouette")).toHaveAttribute("d", "M 20 10 L 52 10 L 56 362 L 16 362 Z");
     expect(screen.getAllByTestId("level")).toHaveLength(1);
     expect(screen.getAllByTestId("zone-band").map((z) => z.textContent)).toEqual(["Head", "Shaft", "Base"]);

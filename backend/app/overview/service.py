@@ -98,14 +98,16 @@ def hero_asset_model_id(s: Session) -> str | None:
     ).scalar_one_or_none()
 
 
-def photo_review(s: Session) -> dict | None:
-    """Photos by review status; None until any photo has one (spec section 5.4)."""
+def photo_review(s: Session, images: int) -> dict | None:
+    """Photos by review status; None until any photo has one (spec section 5.4). A photo with no
+    review row is not assessed, so the project's image count tops that bucket up (no extra read)."""
     rows = s.execute(select(ImageReview.status, func.count()).group_by(ImageReview.status)).all()
     if not rows:
         return None
     out = dict.fromkeys(REVIEW_STATUSES, 0)
     for status, n in rows:
         out[status] = n
+    out["not_assessed"] += max(0, images - sum(n for _, n in rows))
     return out
 
 
@@ -216,7 +218,7 @@ def build(handle) -> dict:
             "latest_volume": latest_volume(s),
             "hero_map_id": map_id,
             "hero": hero(s, data, map_id),
-            "photo_review": photo_review(s),
+            "photo_review": photo_review(s, data["images"]),
         }
     banners: list[dict] = []
     for provider in BANNER_PROVIDERS:
