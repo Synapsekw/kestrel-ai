@@ -94,6 +94,8 @@ export interface RouteInfo {
   /** The human name of the page, for the breadcrumb; null when unknown. */
   page: string | null;
   layout: Layout;
+  /** A screen inside a tab with keys of its own (the split inspection). */
+  sheet?: WorkspaceScope;
   /** Changes when the page transition should play: the tab in a project, two segments elsewhere. */
   transitionKey: string;
 }
@@ -141,6 +143,7 @@ export function routeInfo(pathname: string): RouteInfo {
       page: tab?.label ?? secondary?.label ?? null,
       layout: layoutOf(seg, parts.length > 3, parts[3]),
       transitionKey: `p/${second}/${seg}`,
+      ...(seg === "models" && parts[4] === "inspect" ? { sheet: "inspect" as const } : {}),
     };
   }
   if (head === "models") return app("models", second ? (MODELS_PAGES[second] ?? null) : "Library");
@@ -157,6 +160,7 @@ const WORKSPACE_TABS: readonly WorkspaceScope[] = ["images", "maps", "clouds", "
 
 /** The `?` sheet's keymap scope for a route: the workspace tab's own, else none (global only). */
 export function sheetScope(info: RouteInfo): WorkspaceScope | null {
+  if (info.sheet) return info.sheet;
   return info.tab && (WORKSPACE_TABS as readonly string[]).includes(info.tab)
     ? (info.tab as WorkspaceScope)
     : null;

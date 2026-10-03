@@ -12,6 +12,7 @@ import {
   sidebarCollapsed,
   topBarTitle,
   secondaryOf,
+  sheetScope,
 } from "./routeModel";
 
 describe("routeInfo", () => {
@@ -158,4 +159,12 @@ describe("sidebar rules", () => {
     expect(secondaryOf("/p/p1/findings")).toBeNull();
     expect(secondaryOf("/settings")).toBeNull();
   });
+});
+
+it("the split inspection's ? sheet shows the inspect keys", () => {
+  const info = routeInfo("/p/p1/models/m1/inspect");
+  expect(info.tab).toBe("models");
+  expect(info.layout).toBe("fullbleed");
+  expect(sheetScope(info)).toBe("inspect");
+  expect(sheetScope(routeInfo("/p/p1/models/m1"))).toBe("models");
 });
