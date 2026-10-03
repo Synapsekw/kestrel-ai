@@ -32,13 +32,17 @@ R1_STUBS: list[Stub] = [
     ("GET", M + "/runs/{runId}/packages", "listAssetModelRunPackages"),
 ]
 
+# S1: the Site 3D manifest (spec §10, §11). Built: `GET /site-scene` is routed by
+# `app.asset_models.site_scene`. The empty list stays so per-unit tests can still name it.
+S1_STUBS: list[Stub] = []
+
 # I1: intake (spec §8.1). Mounted with the drawings routes (the maps stack), before them.
 I1_STUBS: list[Stub] = [
     ("POST", "/drawings/pages", "createDrawingPages"),
     ("GET", "/drawings/unimported", "listUnimportedDrawings"),
 ]
 
-STUBS: list[Stub] = [*A1_STUBS, *R1_STUBS]
+STUBS: list[Stub] = [*A1_STUBS, *R1_STUBS, *S1_STUBS]
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["assetmodels"])
 add_stubs(router, STUBS)
