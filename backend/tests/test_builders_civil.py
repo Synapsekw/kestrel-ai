@@ -3,6 +3,7 @@ channel, basin, wall, fence, revetment, and the B3 footprint helpers in `builder
 
 from __future__ import annotations
 
+import collections
 import math
 
 import numpy as np
@@ -17,12 +18,13 @@ from plant_b3_helpers import (
     cowork_item,
     make_item,
     materials,
+    same_geometry,
     tri_count,
 )
 from shapely.geometry import Point, Polygon
 
 from app.asset_models.builders import civil
-from app.asset_models.builders.base import REGISTRY, BuildCtx, Instanced
+from app.asset_models.builders.base import REGISTRY, BuildCtx, Instanced, build_item
 from app.asset_models.builders.palette import PALETTE
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
 
@@ -388,3 +390,59 @@ def test_civil_types_are_registered():
     for t in CIVIL:
         assert REGISTRY[t].family == "civil"
     assert REGISTRY["fence"].default_height_m == 2.5
+
+
+# ------------------------------------------------------------------ defaults, determinism, failure
+def test_defaults_are_recorded_on_the_first_node():
+    nodes = build_ok(make_item("fence", FENCE_30, top_el=None, params={"post_spacing": 2.0}))
+    assert nodes[0].extras["defaults"] == ["post", "height"]
+    nodes = build_ok(make_item("road", ROAD, params={"markings": False, "dash_m": 3.0, "gap_m": 6.0}))
+    assert nodes[0].extras["defaults"] == []
+
+
+@pytest.mark.parametrize("type_", CIVIL)
+def test_builds_are_deterministic(type_):
+    assert same_geometry(build_ok(sample(type_)), build_ok(sample(type_)))
+
+
+@pytest.mark.parametrize("type_", CIVIL)
+def test_meshes_are_finite_and_use_palette_materials(type_):
+    nodes = build_ok(sample(type_))
+    assert materials(nodes) <= set(PALETTE)
+    assert np.isfinite(bounds(nodes)).all()
+
+
+def test_zero_length_road_falls_back_instead_of_raising():
+    item = make_item("road", {"kind": "line", "pts": [[E0, N0], [E0, N0]], "width": 8.0})
+    _, flags = build_item(item, CTX)
+    assert [f.code for f in flags] == ["builder_fallback"]
+
+
+def test_bow_tie_paved_area_still_builds():
+    fp = {"kind": "polygon", "pts": [[E0, N0], [E0 + 10, N0 + 10], [E0 + 10, N0], [E0, N0 + 10]]}
+    nodes = build_ok(make_item("paved", fp))
+    assert tri_count(nodes) > 0
+
+
+# ------------------------------------------------------------------ Cowork realism floor and budget
+COWORK_TYPES = CIVIL + ["building", "substation", "analyzer_house", "shelter", "gate"]
+
+
+def test_every_cowork_b3_node_builds_with_at_least_its_materials():
+    missing = []
+    for node in cowork()["nodes"]:
+        nodes = build_ok(cowork_item(node))
+        if not set(node["materials"]) <= materials(nodes):
+            missing.append((node["id"], node["materials"], sorted(materials(nodes))))
+    assert not missing
+
+
+def test_realism_floor_and_family_budget_against_cowork():
+    ours, ref = collections.Counter(), collections.Counter()
+    for node in cowork()["nodes"]:
+        ours[node["type"]] += tri_count(build_ok(cowork_item(node)))
+        ref[node["type"]] += node["tris"]
+    low = {t: (ours[t], ref[t]) for t in ref if ours[t] < 0.8 * ref[t]}
+    assert not low, f"below the Cowork realism floor: {low}"
+    assert sum(ours.values()) <= 1.5 * sum(ref.values())  # spec §7: at most 1.5x Cowork's triangles
+    assert set(ref) == set(COWORK_TYPES)
