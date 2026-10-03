@@ -46,6 +46,61 @@ describe("jobToastText", () => {
   });
 });
 
+describe("asset review job toasts", () => {
+  const done = (
+    type: string,
+    result: Record<string, unknown> | null = null,
+    params: Record<string, unknown> = {},
+  ) =>
+    ({
+      id: "j",
+      project_id: "p",
+      type,
+      state: "succeeded",
+      progress: 1,
+      message: "",
+      log_path: "",
+      params,
+      result,
+      error: null,
+      created_at: "",
+      started_at: null,
+      finished_at: null,
+    }) as unknown as Job;
+
+  it("says what each asset job did", () => {
+    expect(jobToastText(done("asset_glb_import"))).toBe("GLB imported as a new version");
+    expect(jobToastText(done("asset_pose", { estimated: 296, kept: 0, skipped: 3 }))).toBe(
+      "Photo poses estimated: 296 photos (3 skipped)",
+    );
+    expect(jobToastText(done("asset_pose", { estimated: 1, kept: 0, skipped: 0 }))).toBe(
+      "Photo poses estimated: 1 photo",
+    );
+    expect(jobToastText(done("asset_place", { patch: 715, point: 625, none: 101 }))).toBe(
+      "Placements computed: 715 patches, 625 pins, 101 not placed",
+    );
+    expect(jobToastText(done("asset_place"))).toBe("Placements computed");
+    expect(jobToastText(done("asset_group", { created: 4, kept: 650, merged: 2, split: 0 }))).toBe(
+      "Findings regrouped: 650 kept, 4 new, 2 merged",
+    );
+    expect(jobToastText(done("asset_group", { created: 656, kept: 0, merged: 0, split: 0 }))).toBe(
+      "Findings regrouped: 0 kept, 656 new",
+    );
+    expect(jobToastText(done("asset_group"))).toBe("Findings regrouped");
+    expect(jobToastText(done("review_kit_import"))).toBe("Review job imported");
+    expect(jobToastText(done("review_kit_import", null, { dry_run: true }))).toBe("Review folder checked");
+  });
+
+  it("names the job when it fails", () => {
+    const failed = {
+      ...done("asset_place"),
+      state: "failed",
+      error: "the GLB has no faces",
+    } as unknown as Job;
+    expect(jobToastText(failed)).toBe("Placement failed: the GLB has no faces");
+  });
+});
+
 describe("reportedInline", () => {
   it("is true only on the screen that shows the job's outcome", () => {
     expect(reportedInline(base, "/p/p1/images")).toBe(true);

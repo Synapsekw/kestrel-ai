@@ -43,9 +43,9 @@ const TYPE_NAME: Record<Job["type"], string> = {
   asset_model_glb: "Build asset model",
   asset_model_run: "Run asset model agent",
   asset_glb_import: "GLB import",
-  asset_pose: "Photo poses",
-  asset_place: "Sighting placement",
-  asset_group: "Sighting grouping",
+  asset_pose: "Pose estimate",
+  asset_place: "Placement",
+  asset_group: "Regroup",
   review_kit_import: "Review import",
 };
 
@@ -157,15 +157,29 @@ export function jobToastText(job: Job): string {
     case "asset_model_run":
       return "Asset model run finished";
     case "asset_glb_import":
-      return "GLB imported";
-    case "asset_pose":
-      return "Photo poses estimated";
-    case "asset_place":
-      return "Sightings placed";
-    case "asset_group":
-      return "Sightings grouped into findings";
+      return "GLB imported as a new version";
+    case "asset_pose": {
+      const posed = num(r.estimated);
+      const skipped = num(r.skipped) ?? 0;
+      if (posed === null) return "Photo poses estimated";
+      return `Photo poses estimated: ${posed} ${posed === 1 ? "photo" : "photos"}${skipped > 0 ? ` (${skipped} skipped)` : ""}`;
+    }
+    case "asset_place": {
+      const patch = num(r.patch);
+      const point = num(r.point);
+      const none = num(r.none) ?? 0;
+      if (patch === null || point === null) return "Placements computed";
+      return `Placements computed: ${patch} patches, ${point} pins${none > 0 ? `, ${none} not placed` : ""}`;
+    }
+    case "asset_group": {
+      const kept = num(r.kept);
+      const created = num(r.created);
+      const merged = num(r.merged) ?? 0;
+      if (kept === null || created === null) return "Findings regrouped";
+      return `Findings regrouped: ${kept} kept, ${created} new${merged > 0 ? `, ${merged} merged` : ""}`;
+    }
     case "review_kit_import":
-      return job.params?.dry_run === true ? "Review checked" : "Review imported";
+      return job.params?.dry_run === true ? "Review folder checked" : "Review job imported";
   }
 }
 
