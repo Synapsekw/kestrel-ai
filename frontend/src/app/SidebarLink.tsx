@@ -64,11 +64,9 @@ export function SidebarLink({
       ) : null}
     </Link>
   );
-  return collapsed ? (
-    <Tooltip label={label} side="right">
+  return (
+    <Tooltip label={label} side="right" disabled={!collapsed}>
       {link}
     </Tooltip>
-  ) : (
-    link
   );
 }

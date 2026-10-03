@@ -86,13 +86,9 @@ export function SidebarView({ section, projectId, collapsed, activeJobs, onToggl
         active={section === "settings"}
         collapsed={collapsed}
       />
-      {collapsed ? (
-        <Tooltip label="Expand sidebar" side="right" shortcut="Ctrl+B">
-          {toggle}
-        </Tooltip>
-      ) : (
-        toggle
-      )}
+      <Tooltip label="Expand sidebar" side="right" shortcut="Ctrl+B" disabled={!collapsed}>
+        {toggle}
+      </Tooltip>
     </nav>
   );
 }

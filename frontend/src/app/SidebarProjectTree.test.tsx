@@ -118,4 +118,35 @@ describe("SidebarProjectTree", () => {
     expect(projectInitials("tank")).toBe("T");
     expect(projectInitials("  ")).toBe("P");
   });
+
+  it("keeps the project row mounted across a collapse", () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <SidebarProjectTree
+          projectId="p1"
+          projectName="Al Khail"
+          busy={false}
+          counts={COUNTS}
+          tab="images"
+          secondary={null}
+          collapsed={false}
+        />
+      </MemoryRouter>,
+    );
+    const row = screen.getByRole("link", { name: "Al Khail" });
+    rerender(
+      <MemoryRouter>
+        <SidebarProjectTree
+          projectId="p1"
+          projectName="Al Khail"
+          busy={false}
+          counts={COUNTS}
+          tab="images"
+          secondary={null}
+          collapsed
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Al Khail" })).toBe(row);
+  });
 });

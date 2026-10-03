@@ -87,15 +87,9 @@ export function SidebarProjectTree({
           : "mb-1 ml-[19px] flex flex-col gap-px border-l border-line pl-2"
       }
     >
-      {collapsed ? (
-        <Tooltip label={name} side="right">
-          {head}
-        </Tooltip>
-      ) : (
-        <Tooltip label={name} side="right" delay={800}>
-          {head}
-        </Tooltip>
-      )}
+      <Tooltip label={name} side="right" delay={collapsed ? 400 : 800}>
+        {head}
+      </Tooltip>
       <ul className={cx("flex flex-col gap-px", collapsed && "items-center")}>
         {PROJECT_TABS.map((t) => (
           <li key={t.id}>

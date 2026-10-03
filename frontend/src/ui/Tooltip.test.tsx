@@ -119,3 +119,20 @@ describe("Tooltip floating explanations", () => {
     expect(screen.getByRole("tooltip").style.left).toBe("46px");
   });
 });
+
+describe("Tooltip disabled", () => {
+  it("keeps its wrapper and child but never shows the label", () => {
+    vi.useFakeTimers();
+    render(
+      <Tooltip label="Help" disabled>
+        <button>Action</button>
+      </Tooltip>,
+    );
+    const button = screen.getByRole("button");
+    fireEvent.focus(button);
+    fireEvent.mouseEnter(button.parentElement!);
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(button).not.toHaveAttribute("aria-describedby");
+  });
+});

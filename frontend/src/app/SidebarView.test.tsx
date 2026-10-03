@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { SidebarView } from "./SidebarView";
 
@@ -56,5 +57,48 @@ describe("SidebarView", () => {
     const button = within(nav).getByRole("button", { name: "Collapse sidebar" });
     expect(button).toHaveAttribute("aria-expanded", "true");
     expect(button).toHaveAttribute("aria-keyshortcuts", "Control+B");
+  });
+
+  it("keeps keyboard focus on the toggle when the sidebar collapses and expands", () => {
+    function Harness() {
+      const [collapsed, setCollapsed] = useState(false);
+      return (
+        <SidebarView
+          section="models"
+          collapsed={collapsed}
+          activeJobs={0}
+          onToggle={() => setCollapsed((c) => !c)}
+        />
+      );
+    }
+    render(
+      <MemoryRouter>
+        <Harness />
+      </MemoryRouter>,
+    );
+    const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+    toggle.focus();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
+    fireEvent.click(toggle);
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it("keeps a link's focus across a collapse", () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <SidebarView section="models" collapsed={false} activeJobs={0} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    const jobs = screen.getByRole("link", { name: "Jobs" });
+    jobs.focus();
+    rerender(
+      <MemoryRouter>
+        <SidebarView section="models" collapsed activeJobs={0} onToggle={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Jobs" })).toBe(jobs);
+    expect(document.activeElement).toBe(jobs);
   });
 });
