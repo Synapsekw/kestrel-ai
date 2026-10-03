@@ -321,7 +321,9 @@ export class SiteEngine {
         if (dt > 0) {
           const forward = this.controls.target.clone().sub(this.camera.position);
           const diag = this.contentBox()?.getSize(new THREE.Vector3()).length() ?? 1000;
-          const step = flyDelta(this.held, forward, flySpeed(forward.length(), diag, this.shift), dt);
+          // scene y is the height above the datum (index frame rule)
+          const speed = flySpeed(this.camera.position.y, diag, this.shift);
+          const step = flyDelta(this.held, forward, speed, dt);
           this.camera.position.add(step);
           this.controls.target.add(step);
         }

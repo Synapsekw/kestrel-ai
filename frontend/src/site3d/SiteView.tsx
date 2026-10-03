@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useBackend } from "@/api/client";
 import { absUrl, type SiteScene } from "@/api/siteScene";
 import { NoWebGlError } from "@/clouds/viewer/engine";
@@ -8,12 +8,11 @@ import { createSiteEngine } from "./engine/create";
 import type { NavMode, SiteEngine } from "./engine/SiteEngine";
 import type { SiteFrameT } from "./engine/siteTransform";
 import { createDrawingLayer } from "./layers/drawing.layer";
-import { createModelLayer, type ModelLoadInfo } from "./layers/model.layer";
+import { createModelLayer, type ModelLayer, type ModelLoadInfo } from "./layers/model.layer";
 import { createOrthoLayer } from "./layers/ortho.layer";
 import type { PickHit, SiteLayer } from "./layers/types";
 import { ViewTools } from "./panels/ViewTools";
 
-export type LayerGroup = "model" | "ortho" | "drawing";
 export interface ModelStatus {
   url: string;
   state: "ready" | "error";
@@ -25,35 +24,61 @@ export interface SiteViewHandle {
   /** Moves focus to the view (after a card over it closes). */
   focus(): void;
 }
+/** The live engine and its layers, for S3's panels (ruling R-S3-4). */
+export interface SiteEngineInfo {
+  engine: SiteEngine;
+  model: ModelLayer | null;
+  layers: SiteLayer[];
+}
 export interface SiteViewProps {
   scene: SiteScene;
   frame: SiteFrameT;
-  hidden: ReadonlySet<LayerGroup>;
+  /** The plant model's GLB (`siteModelUrl`); a new URL for the same model swaps it in place. */
+  modelUrl: string | null;
+  /** Hidden layer ids: the model layer's and each drape's (`ortho:<id>`, `drawing:<id>`). */
+  hidden: ReadonlySet<string>;
   onSelect(hit: PickHit | null): void;
   onModel(s: ModelStatus): void;
   /** The 3D view could not start (null once a reload starts it). */
   onFailure?(kind: "no-webgl" | "failed" | null): void;
+  /** Fired when the engine starts, whenever its layer set changes, and with null when it goes. */
+  onEngine?(e: SiteEngineInfo | null): void;
+  /** A drape whose tiles are gone (the map or drawing was removed); only while that layer is attached. */
+  onLayerGone?(id: string): void;
 }
 
 /** The canvas, the engine's lifecycle, the layers from the manifest, and the view tools. */
 export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteView(props, ref) {
-  const { scene, frame, hidden } = props;
+  const { scene, frame, hidden, modelUrl } = props;
   const backend = useBackend();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const engine = useRef<SiteEngine | null>(null);
-  const layers = useRef(new Map<string, { group: LayerGroup; layer: SiteLayer }>());
+  const layers = useRef(new Map<string, SiteLayer>());
+  const model = useRef<ModelLayer | null>(null);
   const cbs = useRef(props);
   useEffect(() => {
     cbs.current = props;
   });
+  const announced = useRef<SiteEngine | null>(null);
+  const announce = useCallback(() => {
+    const eng = engine.current;
+    if (!eng) {
+      if (announced.current === null) return;
+      announced.current = null;
+      cbs.current.onEngine?.(null);
+      return;
+    }
+    announced.current = eng;
+    cbs.current.onEngine?.({ engine: eng, model: model.current, layers: [...layers.current.values()] });
+  }, []);
   const [generation, setGeneration] = useState(0);
   const frameKey = JSON.stringify(frame);
   const engineKey = `${frameKey}#${generation}`;
   const [failure, setFailure] = useState<{ key: string; kind: "no-webgl" | "failed" } | null>(null);
   const failed = failure?.key === engineKey ? failure.kind : null;
   const [nav, setNav] = useState<NavMode>("orbit");
-  const modelUrl = scene.model ? absUrl(backend, scene.model.glb_url) : null;
+  const modelId = scene.model?.id ?? null;
   const [areas, setAreas] = useState<{ url: string; list: string[] } | null>(null);
 
   useEffect(() => {
@@ -72,6 +97,7 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     engine.current = eng;
     const off = eng.onSelect((hit) => cbs.current.onSelect(hit));
     const map = layers.current;
+    announce();
     return () => {
       off();
       // dispose() drops listeners without emitting, so say the selection is gone.
@@ -79,30 +105,45 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
       eng.dispose();
       if (engine.current === eng) engine.current = null;
       map.clear();
+      model.current = null;
+      announce();
     };
-  }, [frameKey, engineKey]);
+  }, [frameKey, engineKey, announce]);
 
+  // One layer per model id; a new version of the same model swaps in place (the next effect).
   useEffect(() => {
     const eng = engine.current;
-    if (!eng || !modelUrl) return;
+    const url = cbs.current.modelUrl;
+    if (!eng || !modelId || !url) return;
     const layer = createModelLayer({
-      url: modelUrl,
-      onLoad: (info) => {
-        setAreas({ url: modelUrl, list: info.areas });
-        cbs.current.onModel({ url: modelUrl, state: "ready", info });
+      url,
+      onLoad: (info, u) => {
+        setAreas({ url: u, list: info.areas });
+        cbs.current.onModel({ url: u, state: "ready", info });
       },
-      onError: () => cbs.current.onModel({ url: modelUrl, state: "error", info: null }),
+      onError: (_err, u) => cbs.current.onModel({ url: u, state: "error", info: null }),
     });
-    layer.setVisible(!cbs.current.hidden.has("model"));
-    layers.current.set(layer.id, { group: "model", layer });
+    layer.setVisible(!cbs.current.hidden.has(layer.id));
+    layers.current.set(layer.id, layer);
+    model.current = layer;
     eng.addLayer(layer);
+    announce();
     const map = layers.current;
     return () => {
       eng.removeLayer(layer.id);
-      map.delete(layer.id);
+      if (map.get(layer.id) === layer) map.delete(layer.id);
+      if (model.current === layer) model.current = null;
       cbs.current.onSelect(null);
+      announce();
     };
-  }, [modelUrl, engineKey]);
+  }, [modelId, engineKey, announce]);
+
+  // Ruling R-S3-10, the one swap path: the old model stays (onModel says "error") if the new one fails.
+  useEffect(() => {
+    const layer = model.current;
+    if (!layer || !modelUrl || layer.url === modelUrl) return;
+    layer.load(modelUrl).catch(() => {});
+  }, [modelUrl]);
 
   const tileKey = JSON.stringify([
     scene.orthos.map((o) => [o.id, o.tile_url_template]),
@@ -113,27 +154,37 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
     if (!eng) return;
     const url = (rel: string) => absUrl(backend, rel);
     const { orthos, drawings } = cbs.current.scene;
-    const made: Array<{ group: LayerGroup; layer: SiteLayer }> = [
-      ...orthos.map((o) => ({ group: "ortho" as const, layer: createOrthoLayer(o, url) })),
-      ...drawings.map((d) => ({ group: "drawing" as const, layer: createDrawingLayer(d, url) })),
-    ];
-    for (const m of made) {
-      m.layer.setVisible(!cbs.current.hidden.has(m.group));
-      layers.current.set(m.layer.id, m);
-      eng.addLayer(m.layer);
-    }
     const map = layers.current;
-    return () => {
-      for (const m of made) {
-        eng.removeLayer(m.layer.id);
-        map.delete(m.layer.id);
-      }
+    // onGone from a layer that was since detached or replaced is ignored.
+    const make = (create: (onGone: () => void) => SiteLayer): SiteLayer => {
+      let self: SiteLayer | null = null;
+      self = create(() => {
+        if (self && map.get(self.id) === self) cbs.current.onLayerGone?.(self.id);
+      });
+      return self;
     };
-  }, [tileKey, engineKey, backend]);
+    const made = [
+      ...orthos.map((o) => make((gone) => createOrthoLayer(o, url, gone))),
+      ...drawings.map((d) => make((gone) => createDrawingLayer(d, url, gone))),
+    ];
+    for (const l of made) {
+      l.setVisible(!cbs.current.hidden.has(l.id));
+      map.set(l.id, l);
+      eng.addLayer(l);
+    }
+    if (made.length > 0) announce();
+    return () => {
+      for (const l of made) {
+        eng.removeLayer(l.id);
+        if (map.get(l.id) === l) map.delete(l.id);
+      }
+      if (made.length > 0) announce();
+    };
+  }, [tileKey, engineKey, backend, announce]);
 
   const hiddenKey = [...hidden].sort().join(",");
   useEffect(() => {
-    for (const { group, layer } of layers.current.values()) layer.setVisible(!cbs.current.hidden.has(group));
+    for (const l of layers.current.values()) l.setVisible(!cbs.current.hidden.has(l.id));
   }, [hiddenKey]);
 
   useEffect(() => {

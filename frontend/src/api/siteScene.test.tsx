@@ -4,8 +4,16 @@ import type { ReactNode } from "react";
 import { createApiClient } from "@contract/client";
 import { fakeClient, fakeFetch } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
-import { EMPTY_SCENE, MODEL_SCENE, TEST_FRAME } from "@/test/siteSceneFixtures";
-import { absUrl, getSiteScene, listAssetItems, toFrameT, useAssetItems, useSiteScene } from "./siteScene";
+import { EMPTY_SCENE, FRAME_ONLY_SCENE, MODEL_SCENE, TEST_FRAME } from "@/test/siteSceneFixtures";
+import {
+  absUrl,
+  getSiteScene,
+  listAssetItems,
+  siteModelUrl,
+  toFrameT,
+  useAssetItems,
+  useSiteScene,
+} from "./siteScene";
 
 const row = (node: string) => ({ node, tag: null, name: node, type: "other", area: null });
 
@@ -23,6 +31,12 @@ describe("siteScene api", () => {
     expect(absUrl(info, "/api/v1/x/glb")).toBe("http://127.0.0.1:8000/api/v1/x/glb?token=a%20b");
     expect(absUrl(info, "/api/v1/t/{z}/{x}/{y}?v=1")).toBe(
       "http://127.0.0.1:8000/api/v1/t/{z}/{x}/{y}?v=1&token=a%20b",
+    );
+  });
+
+  it("siteModelUrl is the token-bearing GLB of one model version", () => {
+    expect(siteModelUrl({ baseUrl: "http://127.0.0.1:8000/", token: "a b" }, "p1", "m1", 4)).toBe(
+      "http://127.0.0.1:8000/api/v1/projects/p1/asset-models/m1/versions/4/glb?token=a+b",
     );
   });
 
@@ -56,6 +70,39 @@ describe("siteScene api", () => {
     act(() => result.current.reload());
     await waitFor(() => expect(result.current.error).toBe("it broke"));
     expect(result.current.scene).toEqual(EMPTY_SCENE);
+  });
+
+  it("useSiteScene drops an older reload's answer that lands after a newer one", async () => {
+    const bodies = [EMPTY_SCENE, MODEL_SCENE, FRAME_ONLY_SCENE];
+    let n = 0;
+    const { fetch: inner } = fakeFetch([{ method: "GET", path: /\/site-scene/, body: () => bodies[n++] }]);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    const gated = (async (input: Request | string | URL, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 2) {
+        const res = await inner(input, init); // takes MODEL_SCENE now, answers late
+        await gate;
+        return res;
+      }
+      return inner(input, init);
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: gated });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={api}>{children}</TestApiProvider>
+    );
+    const { result } = renderHook(() => useSiteScene("p1"), { wrapper });
+    await waitFor(() => expect(result.current.scene).toEqual(EMPTY_SCENE));
+    act(() => result.current.reload()); // older: MODEL_SCENE, held
+    act(() => result.current.reload()); // newer: FRAME_ONLY_SCENE
+    await waitFor(() => expect(result.current.scene).toEqual(FRAME_ONLY_SCENE));
+    await act(async () => {
+      release();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(calls).toBe(3);
+    expect(result.current.scene).toEqual(FRAME_ONLY_SCENE);
   });
 
   it("useAssetItems pages with the cursor", async () => {

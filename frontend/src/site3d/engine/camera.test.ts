@@ -33,9 +33,17 @@ describe("camera helpers", () => {
     expect(flyDelta(new Set(), north, 1, 1).length()).toBe(0);
   });
 
-  it("fly speed is a quarter of the distance, clamped, ×4 with Shift", () => {
+  it("fly speed is a quarter of the camera's height above the datum, ×4 with Shift", () => {
     expect(flySpeed(40, 1000, false)).toBe(10);
-    expect(flySpeed(0.1, 1000, false)).toBe(0.25);
+    expect(flySpeed(400, 1000, false)).toBeGreaterThan(flySpeed(40, 1000, false)); // higher → faster
+    expect(flySpeed(40, 1000, true)).toBe(40);
+  });
+
+  it("fly speed has a 10 m floor (at or below the datum too) and is clamped by the site diagonal", () => {
+    expect(flySpeed(2, 1000, false)).toBe(2.5);
+    expect(flySpeed(-30, 1000, false)).toBe(2.5);
+    expect(flySpeed(5000, 1000, false)).toBe(250);
     expect(flySpeed(5000, 1000, true)).toBe(1000);
+    expect(flySpeed(5000, 4, false)).toBe(2.5); // a tiny site keeps the floor
   });
 });

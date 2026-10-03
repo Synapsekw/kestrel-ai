@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ApiClient, paths, Schemas } from "@contract/client";
+import { assetModelGlbUrl, type ApiClient, type paths, type Schemas } from "@contract/client";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import type { SiteFrameT } from "@/site3d/engine/siteTransform";
 import { useApi } from "./client";
@@ -26,6 +26,16 @@ export function absUrl(info: { baseUrl: string; token: string }, rel: string): s
   const base = info.baseUrl.replace(/\/$/, "");
   const sep = rel.includes("?") ? "&" : "?";
   return `${base}${rel}${sep}token=${encodeURIComponent(info.token)}`;
+}
+
+/** The one GLB URL the Site 3D view loads (ruling R-S3-19): token-bearing, for a model version. */
+export function siteModelUrl(
+  info: { baseUrl: string; token: string },
+  projectId: string,
+  modelId: string,
+  version: number,
+): string {
+  return assetModelGlbUrl(info.baseUrl, info.token, projectId, modelId, version);
 }
 
 export function toFrameT(f: SiteScene["frame"]): SiteFrameT | null {
@@ -80,16 +90,24 @@ export function useSiteScene(projectId: string, modelId?: string | null) {
     error: string | null;
     code?: string | null;
   } | null>(null);
+  const seq = useRef(0);
   const reload = useCallback(() => {
+    // GLB jobs finishing back to back reload twice; an older answer that lands last is dropped.
+    const mine = ++seq.current;
+    const fresh = () => mine === seq.current;
     void getSiteScene(api, projectId, modelId).then(
-      (scene) => setLoaded({ key, scene, error: null }),
-      (e: unknown) =>
+      (scene) => {
+        if (fresh()) setLoaded({ key, scene, error: null });
+      },
+      (e: unknown) => {
+        if (!fresh()) return;
         setLoaded((prev) => ({
           key,
           scene: prev?.key === key ? prev.scene : null,
           error: message(e),
           code: codeOf(e),
-        })),
+        }));
+      },
     );
   }, [api, projectId, modelId, key]);
   useEffect(reload, [reload]);

@@ -1,13 +1,24 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useBackend } from "@/api/client";
-import { absUrl, toFrameT, useSiteScene } from "@/api/siteScene";
+import { siteModelUrl, toFrameT, useSiteScene, type SiteScene } from "@/api/siteScene";
 import { Alert, Button, EmptyState, GlassPanel, Pill, Skeleton, buttonClass } from "@/ui";
 import { sceneLayerRows, type ModelState } from "./layerRows";
+import { drawingLayerId } from "./layers/drawing.layer";
+import { orthoLayerId } from "./layers/ortho.layer";
 import type { PickHit } from "./layers/types";
 import { LayersPlaceholder } from "./panels/LayersPlaceholder";
 import { SelectionPlaceholder } from "./panels/SelectionPlaceholder";
-import { SiteView, type LayerGroup, type ModelStatus, type SiteViewHandle } from "./SiteView";
+import { SiteView, type ModelStatus, type SiteViewHandle } from "./SiteView";
+
+const GROUPS = ["model", "ortho", "drawing"] as const;
+
+/** The layer ids behind one of the placeholder's group rows (visibility is kept per layer id). */
+function groupIds(scene: SiteScene, row: string): string[] {
+  if (row === "ortho") return scene.orthos.map((o) => orthoLayerId(o.id));
+  if (row === "drawing") return scene.drawings.map((d) => drawingLayerId(d.id));
+  return [row];
+}
 
 function BuildLink({ projectId }: { projectId: string }) {
   return (
@@ -23,24 +34,37 @@ export function SiteScreen() {
   const backend = useBackend();
   const { scene, error, errorCode, loading, reload } = useSiteScene(projectId, modelId ?? null);
   const view = useRef<SiteViewHandle>(null);
-  const [hidden, setHidden] = useState<ReadonlySet<LayerGroup>>(() => new Set());
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   const [selected, setSelected] = useState<PickHit | null>(null);
   const [model, setModel] = useState<ModelStatus | null>(null);
   const [viewFailed, setViewFailed] = useState(false);
   const frame = useMemo(() => (scene ? toFrameT(scene.frame) : null), [scene]);
-  const modelUrl = scene?.model ? absUrl(backend, scene.model.glb_url) : null;
+  const modelUrl = scene?.model
+    ? siteModelUrl(backend, projectId, scene.model.id, scene.model.version)
+    : null;
   const reported: ModelState = model?.url === modelUrl && model ? model.state : "loading";
   // Ruling R-S1-15: without a running view the model never loads, so it is "Not shown", not "Loading".
   const modelState: ModelState = !modelUrl ? "none" : viewFailed && reported === "loading" ? "off" : reported;
   const items = model?.url === modelUrl ? (model?.info?.items ?? 0) : 0;
 
-  const toggle = (id: string, visible: boolean) =>
+  const toggle = (row: string, visible: boolean) =>
     setHidden((prev) => {
       const next = new Set(prev);
-      if (visible) next.delete(id as LayerGroup);
-      else next.add(id as LayerGroup);
+      for (const id of scene ? groupIds(scene, row) : [row]) {
+        if (visible) next.delete(id);
+        else next.add(id);
+      }
       return next;
     });
+  // A group row reads as off when every layer in it is hidden.
+  const hiddenRows = new Set(
+    scene
+      ? GROUPS.filter((g) => {
+          const ids = groupIds(scene, g);
+          return ids.length > 0 && ids.every((id) => hidden.has(id));
+        })
+      : [],
+  );
 
   let body;
   if (loading) {
@@ -100,6 +124,7 @@ export function SiteScreen() {
           ref={view}
           scene={scene}
           frame={frame}
+          modelUrl={modelUrl}
           hidden={hidden}
           onSelect={setSelected}
           onModel={setModel}
@@ -108,7 +133,7 @@ export function SiteScreen() {
         <div className="absolute left-[64px] top-3 z-10">
           <LayersPlaceholder
             rows={sceneLayerRows(scene, modelState, items)}
-            hidden={hidden}
+            hidden={hiddenRows}
             onToggle={toggle}
           />
         </div>

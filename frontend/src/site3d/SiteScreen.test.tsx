@@ -51,14 +51,27 @@ vi.mock("@/site3d/engine/create", () => ({
 }));
 
 vi.mock("@/site3d/layers/model.layer", () => ({
-  createModelLayer: (opts: { url: string }) => {
+  createModelLayer: (opts: {
+    url: string;
+    onLoad?: (i: unknown, u: string) => void;
+    onError?: (e: unknown, u: string) => void;
+  }) => {
     const l = {
       id: "model",
       label: "Plant model",
-      opts,
+      url: opts.url,
+      // the tests report for the layer's first URL unless they name another
+      opts: {
+        url: opts.url,
+        onLoad: (i: unknown, u = opts.url) => opts.onLoad?.(i, u),
+        onError: (e: unknown, u = opts.url) => opts.onError?.(e, u),
+      },
       attach: vi.fn(),
       detach: vi.fn(),
       setVisible: vi.fn(),
+      load: vi.fn(async (u: string) => {
+        l.url = u;
+      }),
     };
     h.models.push(l);
     return l;
