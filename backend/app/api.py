@@ -153,14 +153,18 @@ for _module in (
     "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
     "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
     # Plant model (spec 2026-10-03-plant-model-generator §10, plan pm-f0): the live catalogue, then the
-    # 501 stubs until A1, R1 and S1 land. A unit deletes its tuples in app/asset_models/stubs_plant.py.
+    # 501 stubs until A1 and R1 land. A unit deletes its tuples in app/asset_models/stubs_plant.py.
     "app.asset_models.catalogue_router",
+    "app.asset_models.items",  # plant model A1: items list, item, register CSV
     "app.asset_models.stubs_plant",
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
     # A unit inserts its own router module above its stubs module and deletes its tuples there.
     "app.asset_review.review_router",
+    "app.asset_review.routes_poses",  # asset findings J2: photo poses (spec 2026-10-02-asset-findings §6.2)
+    "app.asset_review.routes_glb",  # asset findings J1: GLB import
+    "app.asset_review.group_router",  # asset findings J4: Regroup (spec 2026-10-02-asset-findings §6.4)
     "app.asset_review.stubs",
-    "app.brands.stubs",
+    "app.brands.router",  # report brands: app level, in catalogue.db (plan D2)
 ):
     try:
         api_router.include_router(importlib.import_module(_module).router)
@@ -177,6 +181,7 @@ for _module in (
     "app.drawings.router",
     "app.mapmeasure.router",
     "app.measurements.union",
+    "app.asset_models.site_scene",  # plant model S1: the Site 3D manifest (needs the workspace frame)
     "app.workspace.router",
     "app.workspace.stubs",
 ):

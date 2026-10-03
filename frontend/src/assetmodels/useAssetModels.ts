@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AssetModel, AssetModelVersion, AssetModelVersionDetail } from "@contract/client";
 import { useApi } from "@/api/client";
-import { getVersion, listAssetModels, listVersions } from "@/api/assetModels";
+import { getAssetModel, getVersion, listAssetModels, listVersions } from "@/api/assetModels";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -77,4 +77,24 @@ export function useVersionDetail(projectId: string, modelId: string | null, vers
   useOnJobsFinished("asset_model_run", reload);
   const current = modelId && version != null && loaded?.key === key ? loaded : null;
   return { detail: current?.detail ?? null, error: current?.error ?? null, reload };
+}
+
+/** One asset model; `undefined` while loading, `null` when the read failed. Reloads after a GLB build. */
+export function useAssetModel(projectId: string, modelId: string) {
+  const api = useApi();
+  const key = `${projectId}/${modelId}`;
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    model: AssetModel | null;
+    error: string | null;
+  } | null>(null);
+  const reload = useCallback(() => {
+    void getAssetModel(api, projectId, modelId)
+      .then((model) => setLoaded({ key, model, error: null }))
+      .catch((e: unknown) => setLoaded({ key, model: null, error: message(e) }));
+  }, [api, projectId, modelId, key]);
+  useEffect(reload, [reload]);
+  useOnJobsFinished("asset_model_glb", reload);
+  const current = loaded?.key === key ? loaded : null;
+  return { model: current ? current.model : undefined, error: current?.error ?? null };
 }

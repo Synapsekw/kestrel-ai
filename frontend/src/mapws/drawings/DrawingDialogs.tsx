@@ -17,7 +17,6 @@ export function DrawingDialogs({ projectId }: PanelProps) {
   const { workspace } = useWorkspaceStores();
   const select = useWorkspace((s) => s.select);
   const intent = useDrawingUi((s) => s.intent);
-  const drawing = useDrawingsStore((s) => (intent ? (s.byId[intent.id] ?? null) : null));
 
   useEffect(() => {
     if (!intent || intent.kind === "delete") return;
@@ -34,7 +33,7 @@ export function DrawingDialogs({ projectId }: PanelProps) {
   const id = intent.id;
   return (
     <ConfirmDeleteDialog
-      title={`Delete ${drawing?.name ?? "this drawing"}?`}
+      title="Are you sure?"
       body={DELETE_CONFIRM}
       onConfirm={async () => {
         await removeDrawing(api, projectId, id);

@@ -20,7 +20,7 @@ test("a DJI flight imports, maps its 3 capture points and footprint, and shows t
   await importer.getByRole("button", { name: "Start import" }).click();
   await expect.poll(() => world.imported).toBe(true);
 
-  await page.getByRole("tab", { name: /Images/ }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /^Images/ }).click();
   const w = ws(page);
   await expect(w.gridTiles).toHaveCount(3);
   await w.gridTiles.first().click();

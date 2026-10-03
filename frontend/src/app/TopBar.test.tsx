@@ -8,11 +8,11 @@ import { useAddData } from "./addDataStore";
 import { useProvidedRouteActions } from "./routeActions";
 import { TopBar } from "./TopBar";
 
-function renderBar(path: string, projectId?: string, projectName: string | null = "Ahmadia") {
+function renderBar(path: string, projectId?: string) {
   const onOpenPalette = vi.fn();
   render(
     <MemoryRouter initialEntries={[path]}>
-      <TopBar projectId={projectId} projectName={projectName} onOpenPalette={onOpenPalette} />
+      <TopBar projectId={projectId} onOpenPalette={onOpenPalette} />
     </MemoryRouter>,
   );
   return { onOpenPalette, banner: screen.getByRole("banner") };
@@ -26,27 +26,16 @@ describe("TopBar", () => {
     useProvidedRouteActions.setState({ entries: [] });
   });
 
-  it("shows Projects / the project / the tab, with an idle dot", () => {
+  it("titles a project page by the page alone, with no breadcrumb", () => {
     const { banner } = renderBar(`/p/${PROJECT_ID}/images`, PROJECT_ID);
-    const crumbs = within(banner).getByRole("navigation", { name: "Breadcrumb" });
-    expect(within(crumbs).getByRole("link", { name: "Projects" })).toHaveAttribute("href", "/projects");
-    expect(within(crumbs).getByRole("link", { name: "Ahmadia" })).toHaveAttribute(
-      "href",
-      `/p/${PROJECT_ID}/overview`,
-    );
-    expect(within(crumbs).getByText("Images")).toHaveAttribute("aria-current", "page");
-    expect(within(crumbs).getByLabelText("Idle")).toBeInTheDocument();
-  });
-
-  it("calls a project whose name has not loaded 'Project'", () => {
-    const { banner } = renderBar(`/p/${PROJECT_ID}/overview`, PROJECT_ID, null);
-    expect(within(banner).getByRole("link", { name: "Project" })).toBeInTheDocument();
+    expect(within(banner).getByText("Images")).toBeInTheDocument();
+    expect(within(banner).queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
+    expect(within(banner).queryByRole("link", { name: "Projects" })).toBeNull();
   });
 
   it("goes live and links the running job to the project's jobs", () => {
     useJobsStore.getState().upsert({ ...runningJob, project_id: PROJECT_ID });
     const { banner } = renderBar(`/p/${PROJECT_ID}/images`, PROJECT_ID);
-    expect(within(banner).getByLabelText("Jobs running")).toBeInTheDocument();
     const pill = within(banner).getByRole("link", { name: /^Importing/ });
     expect(pill).toHaveAttribute("href", `/jobs?project=${PROJECT_ID}`);
   });
@@ -77,9 +66,7 @@ describe("TopBar", () => {
 
   it("names app sections and their pages, with no project actions", () => {
     const { banner } = renderBar("/models/datasets");
-    const crumbs = within(banner).getByRole("navigation", { name: "Breadcrumb" });
-    expect(crumbs).toHaveTextContent("Models");
-    expect(crumbs).toHaveTextContent("Datasets");
+    expect(within(banner).getByText("Models · Datasets")).toBeInTheDocument();
     expect(within(banner).queryByRole("button", { name: "Add data" })).toBeNull();
   });
 

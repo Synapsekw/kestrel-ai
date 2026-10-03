@@ -101,8 +101,8 @@ test("layout: every panel sits at its mockup position and the canvas fills the v
   const hint = await box(page.getByTestId("cloud-hintbar"));
   near(hint.y - vp.y, 14, "hint bar top");
   near(hint.x + hint.width / 2, vp.x + vp.width / 2, "hint bar centre");
-  // Full-bleed: the project tabs are hidden on the workspace (F §5.2).
-  await expect(page.getByRole("tab", { name: /^Point clouds/ })).toHaveCount(0);
+  // Full-bleed: the sidebar opens collapsed here (spec 2026-10-03-sidebar §4).
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveAttribute("data-state", "collapsed");
 });
 
 test("at 1280 x 720 the readout, with a pick and Show on map, stays on one line clear of the gizmo and the minimap", async ({

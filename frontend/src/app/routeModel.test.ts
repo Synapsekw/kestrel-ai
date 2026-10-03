@@ -7,9 +7,23 @@ import {
   layoutOf,
   routeInfo,
   secondaryHref,
+  SIDEBAR_NARROW_WIDTH,
+  isForcedCollapse,
+  sidebarCollapsed,
+  topBarTitle,
+  secondaryOf,
 } from "./routeModel";
 
 describe("routeInfo", () => {
+  it("the Site 3D view is full-bleed and names itself in the breadcrumb", () => {
+    expect(layoutOf("site", false)).toBe("fullbleed");
+    expect(layoutOf("site", true)).toBe("fullbleed");
+    const info = routeInfo("/p/p1/site/m1");
+    expect(info.page).toBe("Site 3D");
+    expect(info.tab).toBeNull();
+    expect(info.layout).toBe("fullbleed");
+  });
+
   it.each([
     ["/", "projects", null, "Projects"],
     ["/projects", "projects", null, "Projects"],
@@ -101,5 +115,56 @@ describe("routeInfo", () => {
       "Jobs",
       "Settings",
     ]);
+  });
+});
+
+describe("sidebar rules", () => {
+  it("forces collapse on full-bleed and workspace layouts and on narrow windows only", () => {
+    expect(isForcedCollapse("fullbleed", 1600)).toBe(true);
+    expect(isForcedCollapse("page", 1099)).toBe(true);
+    expect(isForcedCollapse("page", SIDEBAR_NARROW_WIDTH)).toBe(false);
+    expect(isForcedCollapse("workspace", 1280)).toBe(true);
+    expect(routeInfo("/p/p1/images").layout).toBe("workspace");
+    expect(routeInfo("/p/p1/maps").layout).toBe("fullbleed");
+    expect(routeInfo("/p/p1/models").layout).toBe("fullbleed");
+    expect(routeInfo("/p/p1/clouds/c1").layout).toBe("fullbleed");
+    expect(routeInfo("/p/p1/clouds").layout).toBe("page");
+  });
+
+  it("uses the stored preference unless forced, and a per-visit override when forced", () => {
+    expect(sidebarCollapsed(false, false, null)).toBe(false);
+    expect(sidebarCollapsed(true, false, null)).toBe(true);
+    expect(sidebarCollapsed(false, false, true)).toBe(false); // the override only counts when forced
+    expect(sidebarCollapsed(false, true, null)).toBe(true);
+    expect(sidebarCollapsed(true, true, false)).toBe(false);
+    expect(sidebarCollapsed(false, true, true)).toBe(true);
+  });
+
+  it.each([
+    ["/projects", "Projects"],
+    ["/projects/new", "Projects · New project"],
+    ["/models", "Models · Library"],
+    ["/models/datasets", "Models · Datasets"],
+    ["/catalogue", "Catalogue · Types"],
+    ["/catalogue/severity", "Catalogue · Severity"],
+    ["/jobs", "Jobs"],
+    ["/settings", "Settings"],
+    ["/about", "Settings · About"],
+    ["/p/p1/overview", "Overview"],
+    ["/p/p1/maps/m1/evaluate", "Maps"],
+    ["/p/p1/runs", "Runs"],
+    ["/p/p1/site-areas", "Site areas"],
+    ["/p/p1/nowhere", "Project"],
+    ["/no/such/page", ""],
+  ])("titles %s as %j", (path, title) => {
+    expect(topBarTitle(routeInfo(path))).toBe(title);
+  });
+
+  it("names the secondary page of a project path", () => {
+    expect(secondaryOf("/p/p1/runs")).toBe("runs");
+    expect(secondaryOf("/p/p1/review")).toBe("review");
+    expect(secondaryOf("/p/p1/settings")).toBe("settings");
+    expect(secondaryOf("/p/p1/findings")).toBeNull();
+    expect(secondaryOf("/settings")).toBeNull();
   });
 });

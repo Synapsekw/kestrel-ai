@@ -86,6 +86,9 @@ const MODELS_PAGES: Record<string, string> = {
   training: "Training",
 };
 
+/** Project pages with neither a tab nor a More-menu entry, named for the breadcrumb. */
+const PROJECT_PAGES: Record<string, string> = { site: "Site 3D" };
+
 export interface RouteInfo {
   section: Section | null;
   projectId: string | null;
@@ -103,6 +106,7 @@ export interface RouteInfo {
  * lands: `maps` is full-bleed at its list (the map workspace, M-W1); C makes `clouds` full-bleed.
  */
 export function layoutOf(tab: string, detail: boolean, sub?: string): Layout {
+  if (tab === "site") return "fullbleed"; // plant model S1: the Site 3D view
   if (tab === "maps") return "fullbleed";
   if (tab === "models") return "fullbleed";
   if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
@@ -138,7 +142,7 @@ export function routeInfo(pathname: string): RouteInfo {
       section: "projects",
       projectId: second,
       tab: tab?.id ?? null,
-      page: tab?.label ?? secondary?.label ?? null,
+      page: tab?.label ?? secondary?.label ?? PROJECT_PAGES[seg] ?? null,
       layout: layoutOf(seg, parts.length > 3, parts[3]),
       transitionKey: `p/${second}/${seg}`,
     };
@@ -160,4 +164,39 @@ export function sheetScope(info: RouteInfo): WorkspaceScope | null {
   return info.tab && (WORKSPACE_TABS as readonly string[]).includes(info.tab)
     ? (info.tab as WorkspaceScope)
     : null;
+}
+
+/** Below this window width the sidebar collapses on its own (the inspector's breakpoint). */
+export const SIDEBAR_NARROW_WIDTH = 1100;
+
+/**
+ * Full-bleed and workspace surfaces (Images, the report builder) and narrow windows collapse the
+ * sidebar, so the canvas keeps its width (spec 2026-10-03-sidebar §4).
+ */
+export function isForcedCollapse(layout: Layout, windowWidth: number): boolean {
+  return layout === "fullbleed" || layout === "workspace" || windowWidth < SIDEBAR_NARROW_WIDTH;
+}
+
+/**
+ * Whether the sidebar is collapsed: on a forced route it is, unless the operator chose otherwise on
+ * this visit (`override`); elsewhere the stored preference decides and the override is ignored.
+ */
+export function sidebarCollapsed(stored: boolean, forced: boolean, override: boolean | null): boolean {
+  if (forced) return override ?? true;
+  return stored;
+}
+
+/** The top bar's title (spec §5): the page in a project, else the section and its sub-page. */
+export function topBarTitle(info: RouteInfo): string {
+  if (info.projectId) return info.page ?? "Project";
+  if (!info.section) return info.page ?? "";
+  const section = SECTION_LABEL[info.section];
+  return info.page && info.page !== section ? `${section} · ${info.page}` : section;
+}
+
+/** The secondary page a project path is on (Runs, Review, …), or null. */
+export function secondaryOf(pathname: string): string | null {
+  const [head, , seg] = pathname.split("/").filter(Boolean);
+  if (head !== "p" || !seg) return null;
+  return SECONDARY_PAGES.find((p) => p.id === seg)?.id ?? null;
 }

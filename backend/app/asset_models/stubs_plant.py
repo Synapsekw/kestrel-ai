@@ -17,16 +17,11 @@ Stub = tuple[str, str, str]  # (method, path under /projects/{projectId}, operat
 M = "/asset-models/{assetModelId}"
 
 # A1: the register (spec §7, §9).
-A1_STUBS: list[Stub] = [
-    ("GET", M + "/versions/{version}/items", "listAssetModelItems"),
-    ("GET", M + "/versions/{version}/items/{itemId}", "getAssetModelItem"),
-    ("GET", M + "/versions/{version}/csv", "getAssetModelCsv"),
-]
+A1_STUBS: list[Stub] = []
 
-# S1: the Site 3D manifest (spec §10, §11).
-S1_STUBS: list[Stub] = [
-    ("GET", "/site-scene", "getSiteScene"),
-]
+# S1: the Site 3D manifest (spec §10, §11). Built: `GET /site-scene` is routed by
+# `app.asset_models.site_scene`. The empty list stays so per-unit tests can still name it.
+S1_STUBS: list[Stub] = []
 
 STUBS: list[Stub] = [*A1_STUBS, *S1_STUBS]
 

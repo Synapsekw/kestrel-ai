@@ -15,10 +15,9 @@ import { Toaster, useJobToasts } from "@/ui";
 import { AddDataHost } from "./AddDataHost";
 import { PageTransition } from "./PageTransition";
 import { Palette } from "./Palette";
-import { ProjectTabs } from "./ProjectTabs";
-import { Rail } from "./Rail";
 import { routeInfo } from "./routeModel";
 import { ShortcutSheet } from "./ShortcutSheet";
+import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { usePaletteShortcut } from "./usePaletteShortcut";
 
@@ -42,8 +41,8 @@ function useShellProject(projectId: string | undefined): Project | null {
 }
 
 /**
- * The app shell (spec 2026-09-26-foundation section 5.1): the rail, then a column of the top bar,
- * the project tabs (not on full-bleed surfaces) and the page, entering through PageTransition.
+ * The app shell (spec 2026-09-26-foundation section 5.1): the sidebar, then a column of the top bar
+ * and the page, entering through PageTransition.
  * It paints no background of its own: the chrome and the page sit on the body's fixed backdrop.
  */
 export function Shell() {
@@ -69,15 +68,10 @@ export function Shell() {
 
   return (
     <CatalogueSeverityProvider>
-      <div className="grid h-full w-full grid-cols-[64px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] text-ink">
-        <Rail projectId={projectId} />
+      <div className="grid h-full w-full grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] text-ink">
+        <Sidebar projectId={projectId} projectName={project?.name ?? null} />
         <div className="relative flex min-h-0 min-w-0 flex-col">
-          <TopBar
-            projectId={projectId}
-            projectName={project?.name ?? null}
-            onOpenPalette={() => setPaletteOpen(true)}
-          />
-          {projectId && info.layout !== "fullbleed" && <ProjectTabs projectId={projectId} />}
+          <TopBar projectId={projectId} onOpenPalette={() => setPaletteOpen(true)} />
           <main
             className={
               bare

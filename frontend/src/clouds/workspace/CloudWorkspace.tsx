@@ -51,6 +51,7 @@ interface ReadyProps {
   maps: GeoMap[];
   onImport(): void;
   onDetails(): void;
+  onDeleted(id: string): void;
 }
 
 const toggle = (s: ReadonlySet<number>, code: number) => {
@@ -60,7 +61,7 @@ const toggle = (s: ReadonlySet<number>, code: number) => {
 };
 
 /** The viewer and every glass panel for one ready cloud (keyed by cloud id: a switch starts afresh). */
-function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }: ReadyProps) {
+function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails, onDeleted }: ReadyProps) {
   const viewer = useRef<CloudViewerHandle>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -171,6 +172,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
       clouds={clouds}
       onImport={onImport}
       onDetails={onDetails}
+      onDeleted={onDeleted}
     >
       <RenderControls
         cloud={cloud}
@@ -327,6 +329,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
           clouds={clouds}
           onImport={onImport}
           onDetails={onDetails}
+          onDeleted={onDeleted}
         />
       )}
       <Inspector detail={detail} />
@@ -358,6 +361,7 @@ export function CloudWorkspace() {
     const rest = (clouds ?? []).filter((c) => c.id !== id);
     remove(id);
     reload();
+    if (id !== cloudId) return;
     navigate(`/p/${projectId}/clouds${rest.length ? `/${defaultCloud(rest).id}` : ""}`, { replace: true });
   };
 
@@ -433,6 +437,7 @@ export function CloudWorkspace() {
             maps={maps}
             onImport={onImport}
             onDetails={onDetails}
+            onDeleted={deleted}
           />
         ) : (
           <>
@@ -442,6 +447,7 @@ export function CloudWorkspace() {
               clouds={clouds}
               onImport={onImport}
               onDetails={onDetails}
+              onDeleted={deleted}
             />
             {cloud.status === "importing" ? (
               <ImportingCloud projectId={projectId} cloud={cloud} />

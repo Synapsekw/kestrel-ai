@@ -124,7 +124,7 @@ test("real backend: a vertical asset project from one delivery folder", async ({
   if (process.env.E2E_CAPTURE_EVIDENCE === "1") {
     // Both jobs are done: reload so the Overview reads the landed data, then wait for it to show.
     await page.reload();
-    await expect(page.getByRole("tab", { name: "Images 2" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Images 2" })).toBeVisible();
   }
   await entrancesDone(page);
   await page.screenshot({ path: evidencePath("setup", "overview-after-create-real.png"), fullPage: true });

@@ -201,6 +201,12 @@ def patch_in_session(
             from app.imagery import annotations as boxes
 
             boxes.reclass_in_session(s, row.annotation_id, pt.type_id)
+        elif row.anchor_kind == "asset":
+            from app.findings import sightings
+            from app.imagery import annotations as boxes
+
+            for box_id in sightings.box_ids(s, row.id):  # every sighting box carries the finding's type
+                boxes.reclass_in_session(s, box_id, pt.type_id)
     if "note" in fields and fields["note"] is not None:
         row.note = fields["note"]
     for key, value in moved.items():
@@ -213,25 +219,34 @@ def patch_in_session(
 
 
 def delete_in_session(s: Session, *, project_id: str, finding_id: str, delete_annotation: bool = True) -> str:
-    """Delete one finding; its attachment and comment rows go by ON DELETE CASCADE. The caller moves
-    its files to the trash after commit (`trash.move`). With `delete_annotation` an image finding's
-    box goes too (an annotation on a defect type IS the finding's geometry, section 8.5); the box
+    """Delete one finding. Its attachment and comment rows go by ON DELETE CASCADE. The caller moves
+    its files to the trash after commit (`trash.move`).
+
+    With `delete_annotation`, an image finding's box goes too: an annotation on a defect type IS the
+    finding's geometry (section 8.5). The same holds for an asset finding's sighting boxes. The box
     hooks pass False, since they are deleting or changing that box themselves."""
     row = get_or_404(s, finding_id)
     if row.anchor_kind == "map":
         from app.detect import map_findings  # detect's review imports this module
 
         map_findings.on_finding_deleting(s, finding_id)  # its detection becomes rejected (M §9.3)
-    annotation_id = row.annotation_id
+    box_ids = [row.annotation_id] if row.annotation_id else []
+    if row.anchor_kind == "asset":
+        from app.findings import sightings
+
+        for sighting in sightings.of_finding(s, finding_id):
+            box_ids.append(sighting.annotation_id)
+            s.delete(sighting)
     counts.change(s, counts.key_of(row), None)
     s.delete(row)
-    s.flush()  # the finding goes before the box it references
-    if delete_annotation and annotation_id:
+    s.flush()  # the finding and its sightings go before the boxes they reference
+    if delete_annotation:
         from app.imagery import annotations as boxes  # boxes imports this package's hooks
 
-        box = s.get(Box, annotation_id)
-        if box is not None:
-            boxes.delete_box_in_session(s, box)
+        for box_id in box_ids:
+            box = s.get(Box, box_id)
+            if box is not None:
+                boxes.delete_box_in_session(s, box)
     events.mark_changed(s, project_id, [finding_id])
     return finding_id
 
@@ -271,13 +286,52 @@ def _image_annotation(s: Session, handle, anchor: AnchorIn, type_id: str) -> Anc
     return anchor
 
 
+def _create_asset(s: Session, handle, kw: dict) -> Finding:
+    """`POST /findings` on an asset model: the finding first, then one box and one `pending`
+    sighting per entry, drawn through the annotation service. Nothing is placed here; the
+    `asset_place` job places pending sightings. A sighting keeps its own grade and tag; without
+    one it takes the finding's severity. Without a `severity` the finding takes the highest
+    sighting grade given, else the type's default (contract `createFinding`)."""
+    from app.findings import sightings  # sightings imports this module
+
+    anchor: AnchorIn = kw["anchor"]
+    if not anchor.sightings:
+        raise AppError("validation_error", "an asset anchor needs at least one sighting", 422)
+    defect_type(s, handle.catalogue, kw["type_id"])  # refuse an object type before a box is drawn
+    grades = [e["severity"] for e in anchor.sightings if e.get("severity") is not None]
+    for grade in grades:
+        check_severity(handle.catalogue, grade)
+    if "severity" not in kw and grades:
+        kw["severity"] = max(grades)
+    row = create_in_session(s, project_id=handle.id, catalogue=handle.catalogue, **kw)
+    for entry in anchor.sightings:
+        sightings.add_sighting(
+            s,
+            handle,
+            asset_model_id=row.asset_model_id,
+            finding_id=row.id,
+            image_id=entry["image_id"],
+            type_id=row.type_id,
+            box=entry.get("box"),
+            points=entry.get("points"),
+            severity=entry["severity"] if entry.get("severity") is not None else row.severity,
+            group_tag=entry.get("group_tag"),
+        )
+    sightings.refresh(s, row)
+    return row
+
+
 def create_finding(handle, **kw) -> Finding:
-    """`create_in_session` in its own transaction (the HTTP route); an image anchor may draw or adopt
-    its box first (spec section 8.3)."""
+    """`create_in_session` in its own transaction (the HTTP route). An image anchor may draw or adopt
+    its box first (spec section 8.3). An asset anchor draws one box per sighting (asset findings
+    spec §8)."""
     with handle.session() as s:
         if kw["anchor"].kind == "image":
             kw["anchor"] = _image_annotation(s, handle, kw["anchor"], kw["type_id"])
-        row = create_in_session(s, project_id=handle.id, catalogue=handle.catalogue, **kw)
+        if kw["anchor"].kind == "asset":
+            row = _create_asset(s, handle, kw)
+        else:
+            row = create_in_session(s, project_id=handle.id, catalogue=handle.catalogue, **kw)
         s.flush()
         s.expunge(row)
     return row

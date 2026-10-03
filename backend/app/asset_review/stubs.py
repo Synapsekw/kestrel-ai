@@ -28,16 +28,10 @@ M = "/asset-models/{assetModelId}"
 D1_STUBS: list[Stub] = []
 
 # J1: GLB import (spec §6.1).
-J1_STUBS: list[Stub] = [
-    ("POST", M + "/versions/import-glb", "importAssetModelGlb"),
-]
+J1_STUBS: list[Stub] = []
 
 # J2: photo poses (spec §6.2).
-J2_STUBS: list[Stub] = [
-    ("GET", M + "/poses", "listImagePoses"),
-    ("POST", M + "/poses/estimate", "estimateImagePoses"),
-    ("PUT", M + "/poses/{imageId}", "putImagePose"),
-]
+J2_STUBS: list[Stub] = []
 
 # J3: placement and its files (spec §6.3, §5.7).
 J3_STUBS: list[Stub] = [
@@ -49,12 +43,7 @@ J3_STUBS: list[Stub] = [
 ]
 
 # J4: grouping, merge, split and sightings (spec §6.4).
-J4_STUBS: list[Stub] = [
-    ("POST", M + "/findings/regroup", "regroupAssetFindings"),
-    ("POST", "/findings/{findingId}/merge", "mergeFinding"),
-    ("POST", "/findings/{findingId}/split", "splitFinding"),
-    ("GET", "/findings/{findingId}/sightings", "listFindingSightings"),
-]
+J4_STUBS: list[Stub] = []
 
 # J5: the kit import (spec §6.5).
 J5_STUBS: list[Stub] = [

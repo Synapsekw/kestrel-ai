@@ -7,10 +7,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
 
+from app.asset_review import group
 from app.catalogue import service as catalogue_service
 from app.data_items import search
 from app.errors import AppError
-from app.findings import activity, attachments, comments, jobs, query, service, thumbnails
+from app.findings import activity, attachments, comments, jobs, query, service, sightings, thumbnails
 from app.findings.anchors import AnchorIn
 from app.findings.schemas import (
     ActivityOut,
@@ -25,9 +26,13 @@ from app.findings.schemas import (
     FindingCommentPage,
     FindingCreate,
     FindingDetail,
+    FindingMergeIn,
     FindingOut,
     FindingPage,
     FindingPatch,
+    FindingSightingList,
+    FindingSightingOut,
+    FindingSplitIn,
     FindingSummary,
 )
 from app.jobs.schemas import JobOut
@@ -37,17 +42,25 @@ from app.training.schemas import JobRef
 router = APIRouter(prefix="/projects/{projectId}", tags=["findings"])
 SEVERITY_VALUES = {str(n) for n in range(1, 10)} | {"none"}
 
+
 # BK's search (spec section 10.3) gets its findings group from here (plan BK hand-off).
-search.register_finding_search(
-    lambda s, q, limit: [
-        FindingOut.from_row(r).model_dump(mode="json") for r in query.search_findings(s, q, limit)
-    ]
-)
+def _search(s, q: str, limit: int) -> list[dict]:
+    rows = query.search_findings(s, q, limit)
+    reps = sightings.representatives(s, [r.id for r in rows if r.anchor_kind == "asset"])
+    return [FindingOut.from_row(r, representative=reps.get(r.id)).model_dump(mode="json") for r in rows]
+
+
+search.register_finding_search(_search)
 
 
 def _detail(handle: ProjectHandle, finding_id: str) -> FindingDetail:
     row, n_att, n_com = service.get_finding(handle, finding_id)
-    return FindingDetail(**FindingOut.from_row(row).model_dump(), attachment_count=n_att, comment_count=n_com)
+    rep = None
+    if row.anchor_kind == "asset":
+        with handle.session() as s:
+            rep = sightings.representatives(s, [finding_id]).get(finding_id)
+    out = FindingOut.from_row(row, representative=rep)
+    return FindingDetail(**out.model_dump(), attachment_count=n_att, comment_count=n_com)
 
 
 @router.get("/findings", response_model=FindingPage)
@@ -56,7 +69,7 @@ def list_findings(
     status: list[Literal["open", "reviewed", "closed"]] | None = Query(None),
     severity: list[str] | None = Query(None),
     type_id: list[str] | None = Query(None),
-    anchor_kind: list[Literal["image", "map", "cloud"]] | None = Query(None),
+    anchor_kind: list[Literal["image", "map", "cloud", "asset"]] | None = Query(None),
     data_id: str | None = None,
     image_id: str | None = None,
     created_by: Literal["human", "model"] | None = None,
@@ -64,7 +77,12 @@ def list_findings(
     updated_from: datetime | None = None,
     updated_to: datetime | None = None,
     has_location: bool | None = None,
-    sort: Literal["-severity", "number", "-updated_at", "type"] = "-severity",
+    asset_model_id: str | None = None,
+    zone: list[str] | None = Query(None, max_length=200),
+    side: list[str] | None = Query(None, max_length=64),
+    component: list[str] | None = Query(None, max_length=200),
+    placed: bool | None = None,
+    sort: Literal["-severity", "number", "-updated_at", "type", "-height", "zone"] = "-severity",
     cursor: str | None = None,
     limit: int | None = Query(None, ge=1),
 ) -> FindingPage:
@@ -82,10 +100,16 @@ def list_findings(
         updated_from=updated_from,
         updated_to=updated_to,
         has_location=has_location,
+        asset_model_id=asset_model_id,
+        zone=zone,
+        side=side,
+        component=component,
+        placed=placed,
     )
     with handle.session() as s:
         rows, nxt = query.list_findings(s, filters, sort=sort, cursor=cursor, limit=limit)
-        items = [FindingOut.from_row(r) for r in rows]
+        reps = sightings.representatives(s, [r.id for r in rows if r.anchor_kind == "asset"])
+        items = [FindingOut.from_row(r, representative=reps.get(r.id)) for r in rows]
     return FindingPage(items=items, next_cursor=nxt)
 
 
@@ -102,7 +126,7 @@ def create_finding(body: FindingCreate, handle: ProjectHandle = Depends(get_proj
     if "severity" in body.model_fields_set:
         kw["severity"] = body.severity
     row = service.create_finding(handle, **kw)
-    return FindingDetail(**FindingOut.from_row(row).model_dump(), attachment_count=0, comment_count=0)
+    return _detail(handle, row.id)
 
 
 @router.get("/findings/summary", response_model=FindingSummary)
@@ -157,6 +181,34 @@ def delete_finding(findingId: str, handle: ProjectHandle = Depends(get_project))
     return Response(status_code=204)
 
 
+@router.post("/findings/{findingId}/merge", response_model=FindingOut)
+def merge_finding(
+    findingId: str,  # noqa: N803
+    body: FindingMergeIn,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingOut:
+    """Merge this asset finding into `into`; the source is closed with a comment, never deleted."""
+    author = comments.author_name(request.app.state.settings.data_dir)
+    with handle.session() as s:
+        row = group.merge(s, handle, findingId, body.into, author=author)
+        rep = sightings.representatives(s, [row.id]).get(row.id)
+        return FindingOut.from_row(row, representative=rep)
+
+
+@router.post("/findings/{findingId}/split", response_model=FindingOut, status_code=201)
+def split_finding(
+    findingId: str,  # noqa: N803
+    body: FindingSplitIn,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingOut:
+    """A new finding from some of this asset finding's sightings."""
+    with handle.session() as s:
+        row = group.split(s, handle, findingId, body.sighting_ids)
+        rep = sightings.representatives(s, [row.id]).get(row.id)
+        return FindingOut.from_row(row, representative=rep)
+
+
 @router.get("/activity", response_model=ActivityPage)
 def list_activity(
     handle: ProjectHandle = Depends(get_project),
@@ -197,6 +249,19 @@ def _attachment_out(a) -> FindingAttachmentOut:
 @router.get("/findings/{findingId}/thumbnail", response_class=FileResponse)
 def get_finding_thumbnail(findingId: str, handle: ProjectHandle = Depends(get_project)) -> FileResponse:  # noqa: N803
     return FileResponse(thumbnails.finding_thumbnail(handle, findingId), media_type="image/jpeg")
+
+
+@router.get("/findings/{findingId}/sightings", response_model=FindingSightingList)
+def list_finding_sightings(
+    findingId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingSightingList:
+    """An asset finding's sightings, representative first. An image finding is its one implicit
+    sighting; a map or cloud finding has none (decision A2)."""
+    with handle.session() as s:
+        f = service.get_or_404(s, findingId)
+        items = [FindingSightingOut(**d) for d in sightings.listing(s, f)]
+    return FindingSightingList(items=items)
 
 
 @router.get("/findings/{findingId}/comments", response_model=FindingCommentPage)

@@ -15,6 +15,8 @@ export interface MenuItem {
   shortcut?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** Marks the page the operator is on: aria-current="page" and an accent fill. */
+  current?: boolean;
   onSelect: () => void;
 }
 
@@ -61,6 +63,7 @@ function MenuItems({ items, onClose }: { items: readonly MenuItem[]; onClose: ()
           type="button"
           role="menuitem"
           disabled={item.disabled}
+          aria-current={item.current ? "page" : undefined}
           onClick={() => {
             onClose();
             item.onSelect();
@@ -69,7 +72,9 @@ function MenuItems({ items, onClose }: { items: readonly MenuItem[]; onClose: ()
             "flex h-8 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm focus-visible:outline-none",
             item.danger
               ? "text-danger hover:bg-danger-soft focus-visible:bg-danger-soft"
-              : "text-ink hover:bg-surface-2 focus-visible:bg-surface-2",
+              : item.current
+                ? "bg-accent-soft font-medium text-accent-ink"
+                : "text-ink hover:bg-surface-2 focus-visible:bg-surface-2",
             disabledClass,
           )}
         >
