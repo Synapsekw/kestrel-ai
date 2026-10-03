@@ -132,7 +132,9 @@ describe("DrawingDialogs (the row menu's actions, PF8)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: `Delete ${pdfDrawing.name}` }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }),
+    );
     await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
   });
 });

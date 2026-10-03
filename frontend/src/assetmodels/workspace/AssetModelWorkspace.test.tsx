@@ -362,7 +362,14 @@ describe("AssetModelWorkspace", () => {
   });
 
   it("deleting another model from the picker keeps the open model", async () => {
-    const other = { ...MODEL, id: "m2", name: "Stack", tag: null, current_version: null, status: "empty" as const };
+    const other = {
+      ...MODEL,
+      id: "m2",
+      name: "Stack",
+      tag: null,
+      current_version: null,
+      status: "empty" as const,
+    };
     const { requests } = open([
       { method: "GET", path: /\/asset-models$/, body: { items: [MODEL, other] } },
       { method: "DELETE", path: /\/asset-models\/m2$/, status: 204 },
@@ -370,7 +377,9 @@ describe("AssetModelWorkspace", () => {
     await screen.findByTestId("model-workspace");
     fireEvent.click(screen.getByRole("button", { name: /asset model: feed tank/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete Stack" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Are you sure?" })).getByRole("button", { name: "Yes" }),
+    );
     await waitFor(() =>
       expect(requests.some((r) => r.method === "DELETE" && /\/asset-models\/m2$/.test(r.url))).toBe(true),
     );

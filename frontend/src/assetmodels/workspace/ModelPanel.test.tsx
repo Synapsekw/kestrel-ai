@@ -6,7 +6,14 @@ import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { ModelPanel } from "./ModelPanel";
 
-const other = { ...MODEL, id: "m2", name: "Stack", tag: null, current_version: null, status: "empty" as const };
+const other = {
+  ...MODEL,
+  id: "m2",
+  name: "Stack",
+  tag: null,
+  current_version: null,
+  status: "empty" as const,
+};
 
 function show(onDeleted = vi.fn(), routes: Parameters<typeof fakeClient>[0] = []) {
   const client = fakeClient(routes);
@@ -36,9 +43,7 @@ function show(onDeleted = vi.fn(), routes: Parameters<typeof fakeClient>[0] = []
 describe("ModelPanel delete", () => {
   it("asks before deleting a listed model, and the trash does not open it", async () => {
     const onDeleted = vi.fn();
-    const { requests } = show(onDeleted, [
-      { method: "DELETE", path: /\/asset-models\/m2$/, status: 204 },
-    ]);
+    const { requests } = show(onDeleted, [{ method: "DELETE", path: /\/asset-models\/m2$/, status: 204 }]);
     await userEvent.click(screen.getByRole("button", { name: /asset model: feed tank/i }));
     await userEvent.click(screen.getByRole("button", { name: "Delete Stack" }));
     expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models/m1`);
