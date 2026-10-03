@@ -64,6 +64,8 @@ x-websocket:
       created, changed or deleted.
     - `map_workspace.changed`: `payload` is `{fields: [...]}` (`frame`, `state`, `planned_surveys`)
       after the site frame or the persisted map workspace changes.
+    - `asset_models.changed`: `payload` is `{asset_model_ids: [...]}` after an asset model, version or run
+      is created, changed or deleted.
   message: "#/components/schemas/Event"
 
 tags:
@@ -93,6 +95,8 @@ tags:
   - name: workspace
   - name: reports
   - name: setup
+  - name: assetmodels
+  - name: basemap
 
 paths:
   /api/v1/agent/chat:
@@ -125,6 +129,39 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ----------------------------------------------------------------- basemap
+  /api/v1/basemap/{source}/{z}/{x}/{y}:
+    parameters:
+      - name: source
+        in: path
+        required: true
+        description: "satellite (Esri World Imagery) or streets (OpenStreetMap); both keyless"
+        schema: { type: string, enum: [satellite, streets] }
+      - { name: z, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 19 } }
+      - { name: x, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: y, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      tags: [basemap]
+      operationId: getBasemapTile
+      summary: |
+        One 256 px web-mercator basemap tile (spec 2026-10-02-site-basemap). Fetched from the public
+        server once, then served from the app-data cache. Offline, an uncached tile answers 503
+        `basemap_unavailable` (through `default`), at once for 60 s after a failed fetch.
+      responses:
+        "200":
+          description: tile image
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        "422":
+          description: "x or y lies outside zoom z's grid (`code` is `tile_outside_grid`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   # ----------------------------------------------------------------- projects
@@ -5398,6 +5435,300 @@ paths:
         "204": { description: the drawing has no thumbnail yet }
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
+  # ----- asset models (spec 2026-10-02-asset-model-builder §9)
+  /api/v1/projects/{projectId}/asset-models:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [assetmodels]
+      operationId: listAssetModels
+      summary: Every asset model, newest first (tens).
+      responses:
+        "200":
+          description: asset models
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [assetmodels]
+      operationId: createAssetModel
+      summary: Create an empty asset model (no version yet). Publishes `asset_models.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetModelCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModel" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModel
+      summary: One asset model.
+      responses:
+        "200":
+          description: the asset model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModel" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [assetmodels]
+      operationId: patchAssetModel
+      summary: Rename or retag. Publishes `asset_models.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetModelPatch" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModel" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [assetmodels]
+      operationId: deleteAssetModel
+      summary: Delete the model, its versions, runs and files. Refused while a run or GLB job is live.
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: a run or GLB job is live (`code` is `job_running`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    get:
+      tags: [assetmodels]
+      operationId: listAssetModelVersions
+      summary: Every version of the model, newest first.
+      responses:
+        "200":
+          description: versions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelVersionList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [assetmodels]
+      operationId: createAssetModelVersion
+      summary: Save a manual version from a spec and queue its GLB build. Publishes `asset_models.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetModelVersionCreate" }
+      responses:
+        "201":
+          description: created; the GLB builds in the job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelVersionWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the spec has errors (`code` is `invalid_spec`; `details.errors` lists them)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelVersion"
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelVersion
+      summary: One version with its spec and warnings.
+      responses:
+        "200":
+          description: the version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelVersionDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/restore:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelVersion"
+    post:
+      tags: [assetmodels]
+      operationId: restoreAssetModelVersion
+      summary: Copy an earlier version forward as a new version and queue its GLB build. Publishes `asset_models.changed`.
+      responses:
+        "201":
+          description: restored as a new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelVersionWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/glb:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelVersion"
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelGlb
+      summary: The version's GLB file.
+      responses:
+        "200":
+          description: the GLB
+          content:
+            model/gltf-binary:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the GLB is still building or failed (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+    get:
+      tags: [assetmodels]
+      operationId: listAssetModelRuns
+      summary: The model's agent runs, newest first.
+      responses:
+        "200":
+          description: runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelRunList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [assetmodels]
+      operationId: startAssetModelRun
+      summary: Start an agent run (build or refine) as a background job. Publishes `asset_models.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetModelRunStart" }
+      responses:
+        "202":
+          description: started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelRunWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a run is already live (`job_running`) or the provider has no key (`provider_key_missing`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a source is missing or not ready (`code` is `no_sources`), or refine was asked of a model with no version (`nothing_to_refine`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelRunId"
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelRun
+      summary: One run.
+      responses:
+        "200":
+          description: the run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/stop:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelRunId"
+    post:
+      tags: [assetmodels]
+      operationId: stopAssetModelRun
+      summary: Ask the run to stop; it writes a draft version if it has parts.
+      responses:
+        "202":
+          description: stop requested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetModelRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/steps/{step}/thumb:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelRunId"
+      - name: step
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1, maximum: 2147483647 }
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelRunThumb
+      summary: The render the agent saw at one step.
+      responses:
+        "200":
+          description: thumbnail
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the step has no render }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/overlay/{cloudId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/assetModelId"
+      - $ref: "#/components/parameters/assetModelRunId"
+      - name: cloudId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [assetmodels]
+      operationId: getAssetModelRunOverlay
+      summary: The cloud overlay the agent compared against.
+      responses:
+        "200":
+          description: little-endian float32 xyz triples in the asset frame, metres, ≤ 300 000 points
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "204": { description: no overlay for this cloud }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/measurements:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -6163,6 +6494,21 @@ components:
       in: path
       required: true
       schema: { type: string }
+    assetModelId:
+      name: assetModelId
+      in: path
+      required: true
+      schema: { type: string }
+    assetModelVersion:
+      name: version
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1, maximum: 2147483647 }
+    assetModelRunId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string }
     sourceId:
       name: sourceId
       in: path
@@ -6207,7 +6553,7 @@ components:
       name: provider
       in: path
       required: true
-      schema: { $ref: "#/components/schemas/ProviderName" }
+      schema: { $ref: "#/components/schemas/KeyedProviderName" }
     limit:
       name: limit
       in: query
@@ -6557,7 +6903,9 @@ components:
                 upgrade is queued or running, or waits for the library or the catalogue; details
                 `{job_id}`, null while waiting), project_upgrade_failed (409: the upgrade failed and
                 the project stays closed; details `{error, backup_path}`), catalogue_unavailable
-                (503: the catalogue could not be opened), unknown_type (422: a type id the
+                (503: the catalogue could not be opened), basemap_unavailable (503: the basemap
+                tile server could not be reached), tile_outside_grid (422: a basemap x or y past
+                its zoom's grid), unknown_type (422: a type id the
                 catalogue does not know; details `{type_ids}`), type_exists (409: a catalogue type
                 with that normalised name exists; details `{type_id}`), hotkey_conflict (409: the
                 hotkey is taken; details `{type_id}` of the type holding it), severity_in_use (409:
@@ -8218,12 +8566,12 @@ components:
       type: object
       required: [name, has_key, model_name, requests_per_minute, cost_per_request]
       properties:
-        name: { $ref: "#/components/schemas/ProviderName" }
+        name: { $ref: "#/components/schemas/KeyedProviderName" }
         has_key: { type: boolean, description: whether a key is stored in Credential Manager }
         model_name: { type: string }
         requests_per_minute: { type: integer }
         cost_per_request: { type: number, description: USD per request, user-editable estimate }
-      example: { name: anthropic, has_key: true, model_name: claude-opus-5, requests_per_minute: 30, cost_per_request: 0.02 }
+      example: { name: anthropic, has_key: true, model_name: claude-opus-5-5, requests_per_minute: 30, cost_per_request: 0.02 }
     ProviderList:
       type: object
       required: [items]
@@ -10427,7 +10775,7 @@ components:
         accepted_warnings: { type: array, items: { type: string } }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile, report_render, setup_inspect]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile, report_render, setup_inspect, asset_model_glb, asset_model_run]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -10448,7 +10796,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id})"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}); asset_model_glb {model_id, version}; asset_model_run {run_id, version}"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
@@ -10514,6 +10862,7 @@ components:
               drawings.changed,
               map_measurements.changed,
               map_workspace.changed,
+              asset_models.changed,
             ]
         project_id: { type: string, description: "the project id, or `library` for library jobs and `catalogue.changed`" }
         job_id: { type: [string, "null"] }
@@ -10711,7 +11060,7 @@ components:
     # ------------------------------------------------------------ foundation: findings (F-C0)
     DataItemType:
       type: string
-      enum: [image_set, map, elevation, drawing, point_cloud]
+      enum: [image_set, map, elevation, drawing, point_cloud, asset_model]
       description: "`drawing` is declared now; the map workspace adds its storage and provider"
     FindingStatus:
       type: string
@@ -12621,6 +12970,228 @@ components:
       required: [drawing, job]
       properties:
         drawing: { $ref: "#/components/schemas/Drawing" }
+        job: { $ref: "#/components/schemas/Job" }
+    KeyedProviderName:
+      type: string
+      enum: [openai, anthropic, gemini]
+      description: A provider with a key in Credential Manager. Detection still uses `ProviderName`.
+    AssetModelStatus:
+      type: string
+      enum: [empty, building, ready]
+    AssetModel:
+      type: object
+      required: [id, name, asset_type, tag, status, current_version, live_run_id, captured_on, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        asset_type: { type: [string, "null"] }
+        tag: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/AssetModelStatus" }
+        current_version: { type: [integer, "null"] }
+        live_run_id: { type: [string, "null"] }
+        captured_on: { type: [string, "null"], format: date }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AssetModelList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AssetModel" } }
+    AssetModelCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        asset_type: { type: [string, "null"], maxLength: 80 }
+        tag: { type: [string, "null"], maxLength: 80 }
+    AssetModelPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        asset_type: { type: [string, "null"], maxLength: 80 }
+        tag: { type: [string, "null"], maxLength: 80 }
+        captured_on: { type: [string, "null"], format: date }
+    AssetPartPlacement:
+      type: object
+      additionalProperties: false
+      properties:
+        origin_mm: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        axis: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        host: { type: [string, "null"] }
+        bearing_deg: { type: [number, "null"] }
+        elevation_mm: { type: [number, "null"] }
+        e_mm: { type: [number, "null"] }
+        n_mm: { type: [number, "null"] }
+    AssetPartSource:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [drawing, cloud, photo, assumed] }
+        id: { type: [string, "null"] }
+        region:
+          type: [array, "null"]
+          items: { type: number, minimum: 0, maximum: 1 }
+          minItems: 4
+          maxItems: 4
+        note: { type: [string, "null"], maxLength: 500 }
+    AssetPart:
+      type: object
+      additionalProperties: false
+      required: [id, name, group, shape, params, source]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9_.\\-]{1,64}$" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        group: { type: string, enum: [Shell, Head, Bottom, Nozzle, Manway, Support, Access, Internal, Lining, Other] }
+        shape:
+          type: string
+          enum: [cylinder, cone, head_torispherical, head_ellipsoidal, head_hemispherical, flat_plate, box, nozzle, pipe_run, lathe, extrusion, sweep]
+        params:
+          type: object
+          additionalProperties: true
+          description: Shape-specific, millimetres and degrees (spec §6.2). Validated server-side per shape.
+        placement: { $ref: "#/components/schemas/AssetPartPlacement" }
+        material: { type: string, enum: [paint, steel, rubber, concrete, grating, galvanised, glass, other] }
+        source: { $ref: "#/components/schemas/AssetPartSource" }
+        confidence: { type: string, enum: [high, medium, low] }
+        note: { type: [string, "null"], maxLength: 500 }
+    AssetInfo:
+      type: object
+      additionalProperties: false
+      properties:
+        tag: { type: [string, "null"], maxLength: 80 }
+        type: { type: [string, "null"], maxLength: 80 }
+        name: { type: [string, "null"], maxLength: 120 }
+        frame_note: { type: [string, "null"], maxLength: 500 }
+        plant_to_true_north_deg: { type: [number, "null"] }
+        attributes: { type: object, additionalProperties: { type: string } }
+    AssetSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        asset: { $ref: "#/components/schemas/AssetInfo" }
+        parts: { type: array, maxItems: 2000, items: { $ref: "#/components/schemas/AssetPart" } }
+    SpecIssue:
+      type: object
+      required: [code, part_id, message]
+      properties:
+        code: { type: string }
+        part_id: { type: [string, "null"] }
+        message: { type: string }
+    AssetSourceRef:
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type: { type: string, enum: [drawing, point_cloud, image] }
+        id: { type: string }
+    AssetModelVersion:
+      type: object
+      required: [id, model_id, version, kind, glb_status, source_ids, run_id, note, part_count, meta, created_at]
+      properties:
+        id: { type: string }
+        model_id: { type: string }
+        version: { type: integer }
+        kind: { type: string, enum: [agent, manual, draft] }
+        glb_status: { type: string, enum: [pending, ready, failed] }
+        source_ids: { type: array, items: { $ref: "#/components/schemas/AssetSourceRef" } }
+        run_id: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        part_count: { type: integer }
+        meta:
+          type: [object, "null"]
+          description: "`build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}]"
+        created_at: { type: string, format: date-time }
+    AssetModelVersionList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AssetModelVersion" } }
+    AssetModelVersionDetail:
+      allOf:
+        - $ref: "#/components/schemas/AssetModelVersion"
+        - type: object
+          required: [spec, warnings]
+          properties:
+            spec: { $ref: "#/components/schemas/AssetSpec" }
+            warnings: { type: array, items: { $ref: "#/components/schemas/SpecIssue" } }
+    AssetModelVersionCreate:
+      type: object
+      additionalProperties: false
+      required: [spec]
+      properties:
+        spec: { $ref: "#/components/schemas/AssetSpec" }
+        note: { type: [string, "null"], maxLength: 500 }
+    AssetModelVersionWithJob:
+      type: object
+      required: [version, job]
+      properties:
+        version: { $ref: "#/components/schemas/AssetModelVersion" }
+        job: { $ref: "#/components/schemas/Job" }
+    AssetModelRunStep:
+      type: object
+      required: [n, tool, ok, summary, has_thumb]
+      properties:
+        n: { type: integer }
+        tool: { type: string }
+        ok: { type: boolean }
+        summary: { type: string }
+        has_thumb: { type: boolean }
+    AssetModelRun:
+      type: object
+      required: [id, model_id, job_id, provider, model_name, mode, notes, state, stop_reason, phase, steps, summary,
+                 open_questions, usage, sources, version, comparison, started_at, ended_at]
+      properties:
+        id: { type: string }
+        model_id: { type: string }
+        job_id: { type: string }
+        provider: { $ref: "#/components/schemas/KeyedProviderName" }
+        model_name: { type: string }
+        mode: { type: string, enum: [build, refine] }
+        notes: { type: [string, "null"] }
+        state: { type: string, enum: [running, finished, stopped, failed] }
+        stop_reason: { type: [string, "null"], enum: [budget, timeout, user, provider_error, interrupted, null] }
+        phase: { type: string, enum: [sampling, reading, building, checking, done] }
+        steps: { type: array, items: { $ref: "#/components/schemas/AssetModelRunStep" } }
+        summary: { type: [string, "null"] }
+        open_questions: { type: array, items: { type: string } }
+        usage:
+          type: object
+          required: [input_tokens, output_tokens]
+          properties:
+            input_tokens: { type: integer }
+            output_tokens: { type: integer }
+        sources: { type: array, items: { $ref: "#/components/schemas/AssetSourceRef" } }
+        version: { type: [integer, "null"], description: the version this run wrote (agent or draft) }
+        comparison:
+          type: [object, "null"]
+          description: >-
+            The last compare_to_cloud result: {cloud_id, transform {origin, yaw_deg}, overall {n, median_mm,
+            p95_mm}, parts [{id, n, median_mm, p95_mm}], inlier_share, points_used}.
+        started_at: { type: string, format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+    AssetModelRunList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AssetModelRun" } }
+    AssetModelRunStart:
+      type: object
+      additionalProperties: false
+      required: [mode, sources, provider]
+      properties:
+        mode: { type: string, enum: [build, refine] }
+        sources: { type: array, minItems: 1, maxItems: 50, items: { $ref: "#/components/schemas/AssetSourceRef" } }
+        provider: { $ref: "#/components/schemas/KeyedProviderName" }
+        model_name: { type: [string, "null"], maxLength: 120 }
+        notes: { type: [string, "null"], maxLength: 4000 }
+    AssetModelRunWithJob:
+      type: object
+      required: [run, job]
+      properties:
+        run: { $ref: "#/components/schemas/AssetModelRun" }
         job: { $ref: "#/components/schemas/Job" }
     DrawingPatch:
       type: object

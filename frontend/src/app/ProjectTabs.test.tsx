@@ -37,11 +37,11 @@ function renderTabs(path: string, overviewStatus = 200) {
 }
 
 describe("ProjectTabs", () => {
-  it("lists the seven tabs as links, marks the current one and shows the counts", async () => {
+  it("lists the eight tabs as links, marks the current one and shows the counts", async () => {
     renderTabs(`/p/${PROJECT_ID}/findings`);
     const list = screen.getByRole("tablist");
     const tabs = within(list).getAllByRole("tab");
-    expect(tabs).toHaveLength(7);
+    expect(tabs).toHaveLength(8);
     expect(within(list).getByRole("tab", { name: /^Images/ })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/images`,
@@ -66,7 +66,7 @@ describe("ProjectTabs", () => {
     // overview has actually been handled, rather than a fixed sleep that would race a regression.
     await waitFor(() => expect(requests).toHaveLength(1));
     await waitFor(() => {
-      expect(screen.getAllByRole("tab")).toHaveLength(7);
+      expect(screen.getAllByRole("tab")).toHaveLength(8);
       expect(screen.getByRole("tab", { name: /^Images/ })).not.toHaveTextContent(/\d/);
     });
   });

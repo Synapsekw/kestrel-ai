@@ -137,9 +137,12 @@ describe("profile panel", () => {
       fill: vi.fn(),
       fillText: vi.fn(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      ctx as unknown as CanvasRenderingContext2D,
-    );
+    // typed loosely: getContext's overload set (2d, webgpu, ...) varies with the loaded type packages
+    (
+      vi.spyOn(HTMLCanvasElement.prototype, "getContext") as unknown as {
+        mockReturnValue(v: unknown): void;
+      }
+    ).mockReturnValue(ctx);
     Object.defineProperty(HTMLCanvasElement.prototype, "clientWidth", { configurable: true, value: 200 });
     Object.defineProperty(HTMLCanvasElement.prototype, "clientHeight", { configurable: true, value: 120 });
     HTMLCanvasElement.prototype.getBoundingClientRect = () =>

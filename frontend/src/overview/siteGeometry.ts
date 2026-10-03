@@ -6,6 +6,8 @@ export interface SiteFrame {
   height: number;
   metresPerUnit: number;
   project(lon: number, lat: number): { x: number; y: number };
+  /** The inverse of `project`: frame units back to degrees. */
+  unproject(x: number, y: number): { lon: number; lat: number };
 }
 
 const M_PER_DEG_LAT = 111_320;
@@ -27,6 +29,7 @@ export function siteFrame(site: OverviewSite): SiteFrame | null {
     height: 2 * halfLat,
     metresPerUnit: M_PER_DEG_LAT,
     project: (lon, lat) => ({ x: (lon - minlon) * k, y: maxlat - lat }),
+    unproject: (x, y) => ({ lon: minlon + x / k, lat: maxlat - y }),
   };
 }
 

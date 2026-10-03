@@ -215,7 +215,7 @@ def test_a_plain_answer_succeeds_with_a_user_and_an_assistant_item(
     (call,) = fake.calls
     assert call["provider"] == "anthropic"
     assert call["api_key"] == key
-    assert call["model"] == "claude-opus-5"
+    assert call["model"] == "claude-opus-5-5"
     assert project["name"] in call["system"] and "excavator" in call["system"]
     assert {t.name for t in call["tools"]} >= {"get_project", "label_images"}
     assert [(e.role, e.text) for e in call["history"]] == [("user", "hello")]

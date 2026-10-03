@@ -70,6 +70,11 @@ def publish_drawings_changed(request: Request, handle: ProjectHandle, drawing_id
     _publish_ids_changed(request, handle, "drawings.changed", "drawing_ids", drawing_ids)
 
 
+def publish_asset_models_changed(request: Request, handle: ProjectHandle, ids: list[str]) -> None:
+    """`asset_models.changed {asset_model_ids}` (spec 2026-10-02-asset-model-builder)."""
+    _publish_ids_changed(request, handle, "asset_models.changed", "asset_model_ids", ids)
+
+
 def publish_map_measurements_changed(
     request: Request, handle: ProjectHandle, measurement_ids: list[str]
 ) -> None:

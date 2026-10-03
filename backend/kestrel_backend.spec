@@ -25,6 +25,8 @@ hiddenimports = (
     + collect_submodules("laspy")
     # trimesh imports its exporters and creation helpers lazily by name (asset models, 2026-10-02).
     + collect_submodules("trimesh")
+    # google-genai (Gemini adapter, asset models 2026-10-02) imports its types/errors lazily inside llm.py.
+    + collect_submodules("google.genai")
     + [
         "torch",
         "torchvision",

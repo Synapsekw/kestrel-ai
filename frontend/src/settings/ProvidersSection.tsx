@@ -10,9 +10,9 @@ export function ProvidersSection() {
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold">Provider keys</h2>
         <p className="text-sm text-muted">
-          OpenAI and Anthropic API keys are shared by every project on this machine: they are stored in
-          Windows Credential Manager and are never written to a project folder or the logs. The model name,
-          the rate limit and the cost per request feed the estimate on the Detect screen.
+          OpenAI, Anthropic and Google Gemini API keys are shared by every project on this machine: they are
+          stored in Windows Credential Manager and are never written to a project folder or the logs. The
+          model name, the rate limit and the cost per request feed the estimate on the Detect screen.
         </p>
       </div>
       {loading && (

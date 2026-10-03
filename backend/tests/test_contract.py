@@ -105,6 +105,7 @@ EXPECTED_STUBS |= reports_stub_operation_ids()
 # inspect) and of app/catalogue/router.py (U2 ensure). An owner drops its STUBS; nothing here changes.
 EXPECTED_STUBS |= setup_stub_operation_ids()
 
+
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
 # app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
 # here and in app/pointclouds/router.py::STUBS; the block is empty.
@@ -137,14 +138,21 @@ RETIRING: dict[str, str] = {}
 # S1, S2 and S3 add entries here and never loosen the test another way; each status must be
 # declared for its operation in openapi.yaml (guarded below).
 REFUSES_VALID_DATA: dict[str, set[int]] = {
+    "startAssetModelRun": {409, 422},  # provider_key_missing / job_running; no_sources / nothing_to_refine
     # S2 (plan deviation 14): a schema-valid build whose ids resolve can still be refused - a full
     # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
     # CRS-less cloud (`unsupported_crs`), a missing source (`source_missing`), a Z clip upside down
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
     "putLibraryModelClassMap": {422},  # unknown_type (bad/archived type id) or validation_error (bad key)
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
+    "getBasemapTile": {422},  # tile_outside_grid: x or y >= 2**z (a schema cannot relate them)
     "startTrainingRun": {422},  # task_mismatch: a base model of another task
     "createSurface": {422},
+    # asset models U3: a schema-valid spec with duplicate ids is `invalid_spec`; a GLB not built yet is
+    # `not_ready`; a model with a live run or GLB build refuses deletion (`job_running`).
+    "createAssetModelVersion": {422},
+    "getAssetModelGlb": {409},
+    "deleteAssetModel": {409},
     # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
     # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
     # `grid_too_large`, `insufficient_disk`).

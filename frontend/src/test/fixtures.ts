@@ -330,7 +330,14 @@ export const exampleProviders: Provider[] = [
   {
     name: "anthropic",
     has_key: true,
-    model_name: "claude-opus-5",
+    model_name: "claude-opus-5-5",
+    requests_per_minute: 30,
+    cost_per_request: 0.02,
+  },
+  {
+    name: "gemini",
+    has_key: false,
+    model_name: "gemini-2.5-pro",
     requests_per_minute: 30,
     cost_per_request: 0.02,
   },

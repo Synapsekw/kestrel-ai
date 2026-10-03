@@ -79,6 +79,7 @@ def project_opened(handle, runner) -> None:
         ("interrupted volume calculation sweep", sweep("app.volumes.startup")),
         ("stale design inspection sweep", sweep("app.surfaces.design.startup")),
         ("interrupted drawing import sweep", sweep("app.drawings.startup")),
+        ("interrupted asset model sweep", sweep("app.asset_models.startup")),
         ("interrupted report render sweep", sweep("app.reports.startup")),
         (
             "project type snapshot refresh",
@@ -201,6 +202,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         app.state.agent = AgentRunner(app)
         app.state.agent_llm = agent_llm.complete
+        app.state.jobs.agent_llm = agent_llm.complete
         yield
         await app.state.agent.stop()
         try:

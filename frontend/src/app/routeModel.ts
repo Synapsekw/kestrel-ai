@@ -3,7 +3,7 @@ import type { WorkspaceScope } from "@/ui/keymap";
 
 /** The seven project tabs, in order (spec 2026-09-26-foundation section 5.2). */
 export type ProjectTabId =
-  "overview" | "images" | "maps" | "clouds" | "findings" | "measurements" | "reports";
+  "overview" | "images" | "maps" | "clouds" | "models" | "findings" | "measurements" | "reports";
 /** The rail's sections (section 5.1). */
 export type Section = "projects" | "models" | "catalogue" | "jobs" | "settings";
 /** A padded, scrolling page; a bare workspace under the tabs; or a full-bleed surface without tabs. */
@@ -24,6 +24,7 @@ export const PROJECT_TABS: readonly NavEntry<ProjectTabId>[] = [
   { id: "images", label: "Images", icon: "images" },
   { id: "maps", label: "Maps", icon: "map" },
   { id: "clouds", label: "Point clouds", icon: "cloud" },
+  { id: "models", label: "Asset models", icon: "cube" },
   { id: "findings", label: "Findings", icon: "findings" },
   { id: "measurements", label: "Measurements", icon: "measure" },
   { id: "reports", label: "Reports", icon: "report" },
@@ -102,6 +103,7 @@ export interface RouteInfo {
  */
 export function layoutOf(tab: string, detail: boolean, sub?: string): Layout {
   if (tab === "maps") return "fullbleed";
+  if (tab === "models") return "fullbleed";
   if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
   if (tab === "images") return "workspace";
   // R7: the report builder's three panes fill the page under the tabs; Data exports stays a page.
@@ -150,7 +152,7 @@ export function routeInfo(pathname: string): RouteInfo {
 
 // `findings` is reserved empty in DS's keymap (S1 fills it later); the sheet still shows the
 // scope on the Findings tab so the global and review rows render there too (controller ruling F6).
-const WORKSPACE_TABS: readonly WorkspaceScope[] = ["images", "maps", "clouds", "findings"];
+const WORKSPACE_TABS: readonly WorkspaceScope[] = ["images", "maps", "clouds", "models", "findings"];
 
 /** The `?` sheet's keymap scope for a route: the workspace tab's own, else none (global only). */
 export function sheetScope(info: RouteInfo): WorkspaceScope | null {

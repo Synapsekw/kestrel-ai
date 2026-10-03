@@ -326,7 +326,10 @@ class GetProject(Tool):
                 ],
             },
             # Only whether a key exists: the key itself never leaves the credential store.
-            "cloud_providers": [{"name": p["name"], "has_key": bool(p["has_key"])} for p in providers],
+            # Gemini serves asset model runs only, so it is not a cloud-labeling provider.
+            "cloud_providers": [
+                {"name": p["name"], "has_key": bool(p["has_key"])} for p in providers if p["name"] != "gemini"
+            ],
         }
         return _ok(body, f"Read project {project['name']}")
 
@@ -1558,7 +1561,7 @@ REGISTRY: dict[str, Tool] = {
 }
 
 
-def _clean_schema(schema: dict) -> dict:
+def clean_schema(schema: dict) -> dict:
     """A self-contained JSON schema: `$defs` refs inlined, titles and discriminator hints dropped,
     `oneOf` emitted as `anyOf`."""
     defs = schema.get("$defs", {})
@@ -1589,9 +1592,12 @@ def _clean_schema(schema: dict) -> dict:
     return walk(schema)
 
 
+_clean_schema = clean_schema  # the old private name, kept for existing callers
+
+
 def tool_specs() -> list[ToolSpec]:
     return [
-        ToolSpec(t.name, t.description, _clean_schema(t.Args.model_json_schema())) for t in REGISTRY.values()
+        ToolSpec(t.name, t.description, clean_schema(t.Args.model_json_schema())) for t in REGISTRY.values()
     ]
 
 

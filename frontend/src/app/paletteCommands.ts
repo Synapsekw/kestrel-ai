@@ -119,6 +119,7 @@ const DATA_LABEL: Record<string, string> = {
   elevation: "Elevation",
   point_cloud: "Point cloud",
   drawing: "Drawing",
+  asset_model: "Asset model",
 };
 
 const DATA_ICON: Record<string, IconName> = {
@@ -127,6 +128,7 @@ const DATA_ICON: Record<string, IconName> = {
   elevation: "elevation",
   point_cloud: "cloud",
   drawing: "drawing",
+  asset_model: "cube",
 };
 
 export function dataHref(projectId: string, item: { id: string; type: string }): string {
@@ -135,6 +137,7 @@ export function dataHref(projectId: string, item: { id: string; type: string }):
   if (item.type === "point_cloud") return `${base}/clouds/${item.id}`;
   if (item.type === "elevation") return `${base}/maps?sel=surface:${item.id}`;
   if (item.type === "drawing") return `${base}/maps?sel=drawing:${item.id}`;
+  if (item.type === "asset_model") return `${base}/models/${item.id}`;
   return `${base}/images`;
 }
 

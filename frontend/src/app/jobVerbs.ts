@@ -38,4 +38,6 @@ export const JOB_VERB: Record<Job["type"], string> = {
   drawing_import: "Importing a drawing",
   report_render: "Rendering a report",
   setup_inspect: "Sorting files",
+  asset_model_glb: "Building asset model",
+  asset_model_run: "Building asset model",
 };

@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { create } from "zustand";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { providerLabel, useProviders } from "@/api/providers";
+import { detectionProviders, providerLabel, useProviders } from "@/api/providers";
 import { DEFAULT_TILING } from "@/api/queryRuns";
 import { useProjectTypes } from "@/findings/useProjectTypes";
 import { useJobsStore } from "@/store/jobs";
@@ -50,7 +50,7 @@ export function BatchDetectDialog({
   const { all } = useProjectTypes(projectId);
   const { models, loading } = useDetectModels(projectId);
   const { providers } = useProviders();
-  const keyed = useMemo(() => providers.filter((p) => p.has_key), [providers]);
+  const keyed = useMemo(() => detectionProviders(providers).filter((p) => p.has_key), [providers]);
   const [modelId, setModelId] = useState<string | null>(() => readLastModel(projectId));
   // Re-seed on a project change (M7): the component can outlive one project.
   const [modelFor, setModelFor] = useState(projectId);

@@ -15,7 +15,7 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.data_items.schemas import DataItem
-from app.db.models import Drawing, GeoMap, Job, PointCloud, Source, Surface
+from app.db.models import AssetModel, Drawing, GeoMap, Job, PointCloud, Source, Surface
 from app.errors import AppError
 from app.pagination import decode_cursor, encode_cursor
 
@@ -271,3 +271,34 @@ class Drawings(_Provider):
 
 
 PROVIDERS["drawing"] = Drawings()
+
+
+class AssetModels(_Provider):
+    """Asset models (asset model builder spec §5): dated by their capture date, when set."""
+
+    type = "asset_model"
+
+    def columns(self):
+        return AssetModel.captured_on, AssetModel.created_at, AssetModel.id, AssetModel.name
+
+    def base(self):
+        return select(AssetModel)
+
+    def count_query(self):
+        return select(func.count()).select_from(AssetModel)
+
+    def item(self, row) -> DataItem:
+        (m,) = row
+        status = "importing" if m.status == "building" else "ready"
+        return DataItem(
+            id=m.id,
+            type="asset_model",
+            label=m.name,
+            captured_on=m.captured_on,
+            status=status,
+            created_at=m.created_at,
+            summary={"versions": m.current_version or 0, "tag": m.tag, "asset_type": m.asset_type},
+        )
+
+
+PROVIDERS["asset_model"] = AssetModels()

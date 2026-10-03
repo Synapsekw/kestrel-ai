@@ -18,7 +18,7 @@ import {
   fetchConversation,
   startTurn,
 } from "@/api/projectAgent";
-import { useProviders } from "@/api/providers";
+import { detectionProviders, useProviders } from "@/api/providers";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
 import { useProjectAgentEvents } from "./agentEvents";
@@ -207,7 +207,7 @@ export function useProjectAgent(projectId: string, open: boolean): ProjectAgentS
     }
   }, [api, projectId, items]);
 
-  const providers = providerList.providers;
+  const providers = detectionProviders(providerList.providers);
   const hasKey = useCallback(
     (p: ProviderName) => providers.some((x) => x.name === p && x.has_key),
     [providers],

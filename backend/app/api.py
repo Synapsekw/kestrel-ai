@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.agent.router import router as agent_router
 from app.auth import require_token
+from app.basemap.router import router as basemap_router
 from app.catalogue.project_router import router as project_types_router
 from app.catalogue.router import router as catalogue_router
 from app.data_items.router import router as data_router
@@ -43,6 +44,7 @@ for _module in ("app.imagery.router", "app.assist.router"):
 # so every router is included plainly.
 for r in (
     agent_router,
+    basemap_router,
     catalogue_router,
     health_router,
     # Before projects_router: `/projects/migrations/...` must not reach `/projects/{projectId}`.
@@ -148,6 +150,8 @@ for _module in (
     "app.surfaces.router",
     "app.surfaces.design.router",
     "app.volumes.router",
+    "app.asset_models.router",  # asset models (spec 2026-10-02); trimesh is native
+    "app.asset_models.runs",  # asset models (spec 2026-10-02); trimesh is native
 ):
     try:
         api_router.include_router(importlib.import_module(_module).router)

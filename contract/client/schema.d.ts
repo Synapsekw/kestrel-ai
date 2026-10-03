@@ -41,6 +41,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/basemap/{source}/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description satellite (Esri World Imagery) or streets (OpenStreetMap); both keyless */
+                source: "satellite" | "streets";
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One 256 px web-mercator basemap tile (spec 2026-10-02-site-basemap). Fetched from the public
+         *     server once, then served from the app-data cache. Offline, an uncached tile answers 503
+         *     `basemap_unavailable` (through `default`), at once for 60 s after a failed fetch.
+         */
+        get: operations["getBasemapTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -3904,6 +3931,239 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/asset-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every asset model, newest first (tens). */
+        get: operations["listAssetModels"];
+        put?: never;
+        /** Create an empty asset model (no version yet). Publishes `asset_models.changed`. */
+        post: operations["createAssetModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        /** One asset model. */
+        get: operations["getAssetModel"];
+        put?: never;
+        post?: never;
+        /** Delete the model, its versions, runs and files. Refused while a run or GLB job is live. */
+        delete: operations["deleteAssetModel"];
+        options?: never;
+        head?: never;
+        /** Rename or retag. Publishes `asset_models.changed`. */
+        patch: operations["patchAssetModel"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        /** Every version of the model, newest first. */
+        get: operations["listAssetModelVersions"];
+        put?: never;
+        /** Save a manual version from a spec and queue its GLB build. Publishes `asset_models.changed`. */
+        post: operations["createAssetModelVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        /** One version with its spec and warnings. */
+        get: operations["getAssetModelVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy an earlier version forward as a new version and queue its GLB build. Publishes `asset_models.changed`. */
+        post: operations["restoreAssetModelVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/versions/{version}/glb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        /** The version's GLB file. */
+        get: operations["getAssetModelGlb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        /** The model's agent runs, newest first. */
+        get: operations["listAssetModelRuns"];
+        put?: never;
+        /** Start an agent run (build or refine) as a background job. Publishes `asset_models.changed`. */
+        post: operations["startAssetModelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+            };
+            cookie?: never;
+        };
+        /** One run. */
+        get: operations["getAssetModelRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the run to stop; it writes a draft version if it has parts. */
+        post: operations["stopAssetModelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/steps/{step}/thumb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+                step: number;
+            };
+            cookie?: never;
+        };
+        /** The render the agent saw at one step. */
+        get: operations["getAssetModelRunThumb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/asset-models/{assetModelId}/runs/{runId}/overlay/{cloudId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+                cloudId: string;
+            };
+            cookie?: never;
+        };
+        /** The cloud overlay the agent compared against. */
+        get: operations["getAssetModelRunOverlay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/measurements": {
         parameters: {
             query?: never;
@@ -4393,7 +4653,9 @@ export interface components {
                  *     upgrade is queued or running, or waits for the library or the catalogue; details
                  *     `{job_id}`, null while waiting), project_upgrade_failed (409: the upgrade failed and
                  *     the project stays closed; details `{error, backup_path}`), catalogue_unavailable
-                 *     (503: the catalogue could not be opened), unknown_type (422: a type id the
+                 *     (503: the catalogue could not be opened), basemap_unavailable (503: the basemap
+                 *     tile server could not be reached), tile_outside_grid (422: a basemap x or y past
+                 *     its zoom's grid), unknown_type (422: a type id the
                  *     catalogue does not know; details `{type_ids}`), type_exists (409: a catalogue type
                  *     with that normalised name exists; details `{type_id}`), hotkey_conflict (409: the
                  *     hotkey is taken; details `{type_id}` of the type holding it), severity_in_use (409:
@@ -6542,13 +6804,13 @@ export interface components {
          * @example {
          *       "name": "anthropic",
          *       "has_key": true,
-         *       "model_name": "claude-opus-5",
+         *       "model_name": "claude-opus-5-5",
          *       "requests_per_minute": 30,
          *       "cost_per_request": 0.02
          *     }
          */
         Provider: {
-            name: components["schemas"]["ProviderName"];
+            name: components["schemas"]["KeyedProviderName"];
             /** @description whether a key is stored in Credential Manager */
             has_key: boolean;
             model_name: string;
@@ -9080,7 +9342,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render" | "setup_inspect";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile" | "report_render" | "setup_inspect" | "asset_model_glb" | "asset_model_run";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -9115,7 +9377,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}) */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}; report_render {version_id, number, folder, files} (params {report_id, version_id, formats, label}); setup_inspect InspectResult {buckets, not_recognised, suggested_template_id, truncated} (params {paths, template_id}); asset_model_glb {model_id, version}; asset_model_run {run_id, version} */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -9157,7 +9419,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed" | "drawings.changed" | "map_measurements.changed" | "map_workspace.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed" | "drawings.changed" | "map_measurements.changed" | "map_workspace.changed" | "asset_models.changed";
             /** @description the project id, or `library` for library jobs and `catalogue.changed` */
             project_id: string;
             job_id: string | null;
@@ -9471,7 +9733,7 @@ export interface components {
          * @description `drawing` is declared now; the map workspace adds its storage and provider
          * @enum {string}
          */
-        DataItemType: "image_set" | "map" | "elevation" | "drawing" | "point_cloud";
+        DataItemType: "image_set" | "map" | "elevation" | "drawing" | "point_cloud" | "asset_model";
         /** @enum {string} */
         FindingStatus: "open" | "reviewed" | "closed";
         /** @enum {string} */
@@ -11674,6 +11936,188 @@ export interface components {
             drawing: components["schemas"]["Drawing"];
             job: components["schemas"]["Job"];
         };
+        /**
+         * @description A provider with a key in Credential Manager. Detection still uses `ProviderName`.
+         * @enum {string}
+         */
+        KeyedProviderName: "openai" | "anthropic" | "gemini";
+        /** @enum {string} */
+        AssetModelStatus: "empty" | "building" | "ready";
+        AssetModel: {
+            id: string;
+            name: string;
+            asset_type: string | null;
+            tag: string | null;
+            status: components["schemas"]["AssetModelStatus"];
+            current_version: number | null;
+            live_run_id: string | null;
+            /** Format: date */
+            captured_on: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AssetModelList: {
+            items: components["schemas"]["AssetModel"][];
+        };
+        AssetModelCreate: {
+            name: string;
+            asset_type?: string | null;
+            tag?: string | null;
+        };
+        AssetModelPatch: {
+            name?: string;
+            asset_type?: string | null;
+            tag?: string | null;
+            /** Format: date */
+            captured_on?: string | null;
+        };
+        AssetPartPlacement: {
+            origin_mm?: number[];
+            axis?: number[];
+            host?: string | null;
+            bearing_deg?: number | null;
+            elevation_mm?: number | null;
+            e_mm?: number | null;
+            n_mm?: number | null;
+        };
+        AssetPartSource: {
+            /** @enum {string} */
+            kind: "drawing" | "cloud" | "photo" | "assumed";
+            id?: string | null;
+            region?: number[] | null;
+            note?: string | null;
+        };
+        AssetPart: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            group: "Shell" | "Head" | "Bottom" | "Nozzle" | "Manway" | "Support" | "Access" | "Internal" | "Lining" | "Other";
+            /** @enum {string} */
+            shape: "cylinder" | "cone" | "head_torispherical" | "head_ellipsoidal" | "head_hemispherical" | "flat_plate" | "box" | "nozzle" | "pipe_run" | "lathe" | "extrusion" | "sweep";
+            /** @description Shape-specific, millimetres and degrees (spec §6.2). Validated server-side per shape. */
+            params: {
+                [key: string]: unknown;
+            };
+            placement?: components["schemas"]["AssetPartPlacement"];
+            /** @enum {string} */
+            material?: "paint" | "steel" | "rubber" | "concrete" | "grating" | "galvanised" | "glass" | "other";
+            source: components["schemas"]["AssetPartSource"];
+            /** @enum {string} */
+            confidence?: "high" | "medium" | "low";
+            note?: string | null;
+        };
+        AssetInfo: {
+            tag?: string | null;
+            type?: string | null;
+            name?: string | null;
+            frame_note?: string | null;
+            plant_to_true_north_deg?: number | null;
+            attributes?: {
+                [key: string]: string;
+            };
+        };
+        AssetSpec: {
+            asset?: components["schemas"]["AssetInfo"];
+            parts?: components["schemas"]["AssetPart"][];
+        };
+        SpecIssue: {
+            code: string;
+            part_id: string | null;
+            message: string;
+        };
+        AssetSourceRef: {
+            /** @enum {string} */
+            type: "drawing" | "point_cloud" | "image";
+            id: string;
+        };
+        AssetModelVersion: {
+            id: string;
+            model_id: string;
+            version: number;
+            /** @enum {string} */
+            kind: "agent" | "manual" | "draft";
+            /** @enum {string} */
+            glb_status: "pending" | "ready" | "failed";
+            source_ids: components["schemas"]["AssetSourceRef"][];
+            run_id: string | null;
+            note: string | null;
+            part_count: number;
+            /** @description `build_glb` meta: bounds_m, top_m, triangles, parts[{id,name,group,triangles}] */
+            meta: Record<string, never> | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AssetModelVersionList: {
+            items: components["schemas"]["AssetModelVersion"][];
+        };
+        AssetModelVersionDetail: components["schemas"]["AssetModelVersion"] & {
+            spec: components["schemas"]["AssetSpec"];
+            warnings: components["schemas"]["SpecIssue"][];
+        };
+        AssetModelVersionCreate: {
+            spec: components["schemas"]["AssetSpec"];
+            note?: string | null;
+        };
+        AssetModelVersionWithJob: {
+            version: components["schemas"]["AssetModelVersion"];
+            job: components["schemas"]["Job"];
+        };
+        AssetModelRunStep: {
+            n: number;
+            tool: string;
+            ok: boolean;
+            summary: string;
+            has_thumb: boolean;
+        };
+        AssetModelRun: {
+            id: string;
+            model_id: string;
+            job_id: string;
+            provider: components["schemas"]["KeyedProviderName"];
+            model_name: string;
+            /** @enum {string} */
+            mode: "build" | "refine";
+            notes: string | null;
+            /** @enum {string} */
+            state: "running" | "finished" | "stopped" | "failed";
+            /** @enum {string|null} */
+            stop_reason: "budget" | "timeout" | "user" | "provider_error" | "interrupted" | null;
+            /** @enum {string} */
+            phase: "sampling" | "reading" | "building" | "checking" | "done";
+            steps: components["schemas"]["AssetModelRunStep"][];
+            summary: string | null;
+            open_questions: string[];
+            usage: {
+                input_tokens: number;
+                output_tokens: number;
+            };
+            sources: components["schemas"]["AssetSourceRef"][];
+            /** @description the version this run wrote (agent or draft) */
+            version: number | null;
+            /** @description The last compare_to_cloud result: {cloud_id, transform {origin, yaw_deg}, overall {n, median_mm, p95_mm}, parts [{id, n, median_mm, p95_mm}], inlier_share, points_used}. */
+            comparison: Record<string, never> | null;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            ended_at: string | null;
+        };
+        AssetModelRunList: {
+            items: components["schemas"]["AssetModelRun"][];
+        };
+        AssetModelRunStart: {
+            /** @enum {string} */
+            mode: "build" | "refine";
+            sources: components["schemas"]["AssetSourceRef"][];
+            provider: components["schemas"]["KeyedProviderName"];
+            model_name?: string | null;
+            notes?: string | null;
+        };
+        AssetModelRunWithJob: {
+            run: components["schemas"]["AssetModelRun"];
+            job: components["schemas"]["Job"];
+        };
         DrawingPatch: {
             name?: string;
             layer_state?: components["schemas"]["DrawingLayerState"];
@@ -13484,6 +13928,9 @@ export interface components {
     };
     parameters: {
         projectId: string;
+        assetModelId: string;
+        assetModelVersion: number;
+        assetModelRunId: string;
         sourceId: string;
         imageId: string;
         boxId: string;
@@ -13492,7 +13939,7 @@ export interface components {
         turnId: string;
         runId: string;
         jobId: string;
-        provider: components["schemas"]["ProviderName"];
+        provider: components["schemas"]["KeyedProviderName"];
         limit: number;
         /** @description opaque cursor from the previous page's `next_cursor` */
         cursor: string;
@@ -13616,6 +14063,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getBasemapTile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description satellite (Esri World Imagery) or streets (OpenStreetMap); both keyless */
+                source: "satellite" | "streets";
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description x or y lies outside zoom z's grid (`code` is `tile_outside_grid`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
@@ -21747,6 +22231,486 @@ export interface operations {
                 };
             };
             /** @description the drawing has no thumbnail yet */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssetModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description asset models */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createAssetModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetModelCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModel"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the asset model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModel"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAssetModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a run or GLB job is live (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchAssetModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetModelPatch"];
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModel"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssetModelVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelVersionList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createAssetModelVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetModelVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description created; the GLB builds in the job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelVersionWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the spec has errors (`code` is `invalid_spec`; `details.errors` lists them) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelVersionDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    restoreAssetModelVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description restored as a new version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelVersionWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelGlb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                version: components["parameters"]["assetModelVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the GLB */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "model/gltf-binary": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the GLB is still building or failed (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssetModelRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelRunList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startAssetModelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetModelRunStart"];
+            };
+        };
+        responses: {
+            /** @description started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelRunWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a run is already live (`job_running`) or the provider has no key (`provider_key_missing`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a source is missing or not ready (`code` is `no_sources`), or refine was asked of a model with no version (`nothing_to_refine`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    stopAssetModelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description stop requested */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetModelRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelRunThumb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+                step: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the step has no render */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAssetModelRunOverlay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                assetModelId: components["parameters"]["assetModelId"];
+                runId: components["parameters"]["assetModelRunId"];
+                cloudId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description little-endian float32 xyz triples in the asset frame, metres, ≤ 300 000 points */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description no overlay for this cloud */
             204: {
                 headers: {
                     [name: string]: unknown;

@@ -9,6 +9,7 @@ never passed on, logged or chained.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from typing import Any
 
@@ -37,17 +38,29 @@ async def complete(
     system: str,
     history: list[HistoryEntry],
     tools: list[ToolSpec],
+    effort: str | None = None,
+    cache: bool = False,
 ) -> ModelReply:
     """Ask `provider` for the next assistant step. Raises `LlmError` with a user-safe message."""
     if provider == "anthropic":
         call = _anthropic
     elif provider == "openai":
         call = _openai
+    elif provider == "gemini":
+        call = _gemini
     else:
         raise LlmError("Unknown provider.")
     try:
         return await asyncio.wait_for(
-            call(api_key=api_key, model=model, system=system, history=history, tools=tools),
+            call(
+                api_key=api_key,
+                model=model,
+                system=system,
+                history=history,
+                tools=tools,
+                effort=effort,
+                cache=cache,
+            ),
             _DEADLINE_S,
         )
     except LlmError:
@@ -59,6 +72,8 @@ async def complete(
 def _error_message(provider: str, exc: Exception) -> str:
     if isinstance(exc, asyncio.TimeoutError):
         return _TOO_SLOW
+    if provider == "gemini":
+        return _gemini_error_message(exc)
     try:
         if provider == "anthropic":
             import anthropic as sdk
@@ -75,19 +90,56 @@ def _error_message(provider: str, exc: Exception) -> str:
     return _FAILED
 
 
+def _gemini_error_message(exc: Exception) -> str:
+    try:
+        import httpx
+        from google.genai import errors as gerrors
+    except ImportError:  # pragma: no cover - shipped with the backend
+        return _FAILED
+    if isinstance(exc, gerrors.APIError):
+        if exc.code == 429:
+            return _RATE_LIMITED
+        if exc.code in (401, 403) or (
+            exc.code == 400 and "API key" in str(getattr(exc, "message", "") or "")
+        ):
+            return _KEY_REJECTED
+        return _FAILED
+    if isinstance(exc, httpx.TimeoutException):
+        return _TOO_SLOW
+    return _FAILED
+
+
 def _replayable(entry: HistoryEntry, provider: str, model: str) -> bool:
     """A raw payload goes back only to the provider *and* model that wrote it (thinking signatures and
     encrypted reasoning are model-bound); anything else replays neutrally from text and calls."""
-    return entry.provider == provider and entry.model == model and isinstance(entry.provider_payload, list)
+    payload_type = dict if provider == "gemini" else list
+    return (
+        entry.provider == provider
+        and entry.model == model
+        and isinstance(entry.provider_payload, payload_type)
+    )
 
 
 # --- Anthropic -----------------------------------------------------------------------------------
 
 
 async def _anthropic(
-    *, api_key: str, model: str, system: str, history: list[HistoryEntry], tools: list[ToolSpec]
+    *,
+    api_key: str,
+    model: str,
+    system: str,
+    history: list[HistoryEntry],
+    tools: list[ToolSpec],
+    effort: str | None = None,
+    cache: bool = False,
 ) -> ModelReply:
     from anthropic import AsyncAnthropic
+
+    extra: dict = {}
+    if effort:
+        extra["output_config"] = {"effort": effort}
+    if cache:
+        extra["cache_control"] = {"type": "ephemeral"}  # automatic caching of the growing prefix
 
     async with AsyncAnthropic(api_key=api_key, timeout=MODEL_TIMEOUT_S, max_retries=0) as client:
         response = await client.messages.create(
@@ -98,6 +150,7 @@ async def _anthropic(
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools
             ],
             max_tokens=MAX_OUTPUT_TOKENS,
+            **extra,
         )
     if response.stop_reason == "refusal":
         raise LlmError(_REFUSED)
@@ -117,7 +170,14 @@ async def _anthropic(
         for block in response.content
         if not (block.type == "text" and not block.text)
     ]
-    return ModelReply(text="\n\n".join(texts), tool_calls=calls, provider_payload=payload)
+    used = response.usage
+    usage = {
+        "input_tokens": int(getattr(used, "input_tokens", 0) or 0)
+        + int(getattr(used, "cache_read_input_tokens", 0) or 0)
+        + int(getattr(used, "cache_creation_input_tokens", 0) or 0),
+        "output_tokens": int(getattr(used, "output_tokens", 0) or 0),
+    }
+    return ModelReply(text="\n\n".join(texts), tool_calls=calls, provider_payload=payload, usage=usage)
 
 
 def _anthropic_messages(history: list[HistoryEntry], model: str) -> list[dict]:
@@ -180,7 +240,14 @@ def _as_blocks(content: str | list[dict]) -> list[dict]:
 
 
 async def _openai(
-    *, api_key: str, model: str, system: str, history: list[HistoryEntry], tools: list[ToolSpec]
+    *,
+    api_key: str,
+    model: str,
+    system: str,
+    history: list[HistoryEntry],
+    tools: list[ToolSpec],
+    effort: str | None = None,
+    cache: bool = False,  # OpenAI caches prefixes automatically; nothing to send
 ) -> ModelReply:
     from openai import AsyncOpenAI
 
@@ -202,6 +269,7 @@ async def _openai(
             store=False,
             include=["reasoning.encrypted_content"],
             max_output_tokens=MAX_OUTPUT_TOKENS,
+            **({"reasoning": {"effort": effort}} if effort else {}),
         )
     if result.status != "completed":
         raise LlmError(_INCOMPLETE)
@@ -213,7 +281,12 @@ async def _openai(
         elif item.type == "function_call":
             calls.append(ToolCall(id=item.call_id, name=item.name, input=_parse_arguments(item.arguments)))
     payload = [item.model_dump(mode="json", exclude_none=True) for item in result.output]
-    return ModelReply(text=result.output_text or "", tool_calls=calls, provider_payload=payload)
+    used = getattr(result, "usage", None)
+    usage = {
+        "input_tokens": int(getattr(used, "input_tokens", 0) or 0),
+        "output_tokens": int(getattr(used, "output_tokens", 0) or 0),
+    }
+    return ModelReply(text=result.output_text or "", tool_calls=calls, provider_payload=payload, usage=usage)
 
 
 def _openai_input(history: list[HistoryEntry], model: str) -> list[dict]:
@@ -247,6 +320,114 @@ def _openai_input(history: list[HistoryEntry], model: str) -> list[dict]:
             if images:
                 items.append({"role": "user", "content": images})
     return items
+
+
+# --- Gemini --------------------------------------------------------------------------------------
+
+
+async def _gemini(
+    *,
+    api_key: str,
+    model: str,
+    system: str,
+    history: list[HistoryEntry],
+    tools: list[ToolSpec],
+    effort: str | None = None,  # not mapped: Gemini thinking budgets differ per model
+    cache: bool = False,  # implicit caching is automatic
+) -> ModelReply:
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=MODEL_TIMEOUT_S * 1000))
+    config = types.GenerateContentConfig(
+        system_instruction=system,
+        tools=[
+            types.Tool(
+                function_declarations=[
+                    types.FunctionDeclaration(
+                        name=t.name, description=t.description, parameters_json_schema=t.input_schema
+                    )
+                    for t in tools
+                ]
+            )
+        ]
+        if tools
+        else None,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+    )
+    response = await client.aio.models.generate_content(
+        model=model, contents=_gemini_contents(history, model, types), config=config
+    )
+    cand = response.candidates[0] if response.candidates else None
+    if cand is None or cand.content is None:
+        raise LlmError(_REFUSED)
+    finish = str(getattr(cand.finish_reason, "value", cand.finish_reason) or "")
+    if finish in ("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"):
+        raise LlmError(_REFUSED)
+    if finish == "MAX_TOKENS":
+        raise LlmError(_TRUNCATED)
+    texts: list[str] = []
+    calls: list[ToolCall] = []
+    for i, part in enumerate(cand.content.parts or []):
+        if part.function_call is not None:
+            fc = part.function_call
+            calls.append(
+                ToolCall(id=fc.id or f"gcall_{i}", name=fc.name, input=_as_object(dict(fc.args or {})))
+            )
+        elif part.text and not getattr(part, "thought", False):
+            texts.append(part.text)
+    used = response.usage_metadata
+    usage = {
+        "input_tokens": int(getattr(used, "prompt_token_count", 0) or 0),
+        "output_tokens": int(getattr(used, "candidates_token_count", 0) or 0)
+        + int(getattr(used, "thoughts_token_count", 0) or 0),
+    }
+    payload = cand.content.model_dump(mode="json", exclude_none=True)  # keeps thought signatures for replay
+    return ModelReply(text="\n\n".join(texts), tool_calls=calls, provider_payload=payload, usage=usage)
+
+
+def _gemini_contents(history: list[HistoryEntry], model: str, types: Any) -> list:
+    contents = []
+    for entry in history:
+        if entry.role == "user":
+            contents.append(
+                types.Content(role="user", parts=[types.Part.from_text(text=entry.text or _NO_TEXT)])
+            )
+        elif entry.role == "assistant":
+            if _replayable(entry, "gemini", model):
+                contents.append(types.Content.model_validate(entry.provider_payload))
+                continue
+            parts = [types.Part.from_text(text=entry.text)] if entry.text else []
+            parts += [
+                types.Part(
+                    function_call=types.FunctionCall(
+                        id=None if c.id.startswith("gcall_") else c.id, name=c.name, args=c.input
+                    )
+                )
+                for c in entry.tool_calls
+            ]
+            contents.append(types.Content(role="model", parts=parts or [types.Part.from_text(text=_NO_TEXT)]))
+        elif entry.role == "tool_results":
+            parts, images = [], []
+            for r in entry.results:
+                body = {"error": r.content or _NO_TEXT} if r.is_error else {"result": r.content or _NO_TEXT}
+                parts.append(
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=None if r.call_id.startswith("gcall_") else r.call_id,
+                            name=r.name,
+                            response=body,
+                        )
+                    )
+                )
+                if r.image_jpeg_b64:
+                    images.append(
+                        types.Part.from_bytes(data=base64.b64decode(r.image_jpeg_b64), mime_type="image/jpeg")
+                    )
+            if parts:
+                contents.append(types.Content(role="user", parts=parts + images))
+    return contents
 
 
 def _parse_arguments(arguments: str) -> dict:

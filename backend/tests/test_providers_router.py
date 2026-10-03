@@ -122,3 +122,60 @@ def test_test_endpoint_turns_a_rejected_key_into_a_result_not_a_500(client, app,
     assert body["message"] == "ProviderError: anthropic returned 401: invalid x-api-key"
     assert body["model_name"] == DEFAULTS["anthropic"].model_name
     assert "sk-fake" not in r.text
+
+
+def test_gemini_is_listed_with_a_default_model(client):
+    names = [p["name"] for p in client.get("/api/v1/providers").json()["items"]]
+    assert names == ["openai", "anthropic", "gemini"]
+
+
+def test_anthropic_default_model_is_current_opus(client):
+    items = client.get("/api/v1/providers").json()["items"]
+    anth = next(p for p in items if p["name"] == "anthropic")
+    assert anth["model_name"] == "claude-opus-5-5"
+
+
+def test_gemini_model_name_is_editable(client):
+    r = client.patch("/api/v1/providers/gemini", json={"model_name": "gemini-custom"})
+    assert r.status_code == 200, r.text
+    assert r.json()["name"] == "gemini"
+    items = client.get("/api/v1/providers").json()["items"]
+    assert next(p for p in items if p["name"] == "gemini")["model_name"] == "gemini-custom"
+
+
+def test_gemini_key_round_trip_and_test(client, app, monkeypatch):
+    import app.providers.gemini_ping as gp
+
+    assert client.put("/api/v1/providers/gemini/key", json={"api_key": "g-secret"}).status_code == 204
+    assert app.state.keys.get("gemini") == "g-secret"
+    seen = {}
+
+    def fake_ping(key, model):
+        seen["args"] = (key, model)
+        return "ok"
+
+    monkeypatch.setattr(gp, "ping", fake_ping)
+    r = client.post("/api/v1/providers/gemini/test")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is True
+    assert body["model_name"] == DEFAULTS["gemini"].model_name
+    assert seen["args"] == ("g-secret", DEFAULTS["gemini"].model_name)
+    assert "g-secret" not in r.text
+
+
+def test_gemini_test_without_a_key_and_with_a_failure(client, app, monkeypatch):
+    import app.providers.gemini_ping as gp
+    from app.project_agent.history import LlmError
+
+    assert client.post("/api/v1/providers/gemini/test").json()["ok"] is False
+    app.state.keys.set("gemini", "g-secret")
+
+    def boom(key, model):
+        raise LlmError("The provider rejected the API key. Check it in App settings.")
+
+    monkeypatch.setattr(gp, "ping", boom)
+    body = client.post("/api/v1/providers/gemini/test").json()
+    assert body["ok"] is False
+    assert "rejected the API key" in body["message"]
+    assert "g-secret" not in str(body)

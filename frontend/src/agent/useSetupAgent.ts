@@ -13,7 +13,7 @@ import type {
 import { useApi } from "@/api/client";
 import { chatWithAgent, type AgentMessage, type AgentPlan } from "@/api/agent";
 import { messageOf, unwrap } from "@/api/errors";
-import { fetchProviders } from "@/api/providers";
+import { detectionProviders, fetchProviders } from "@/api/providers";
 import { acquireStarter, LIBRARY_JOBS } from "@/api/library";
 import { listStarterModels } from "@/api/starterModels";
 import { createSource } from "@/api/sources";
@@ -73,7 +73,7 @@ export function useSetupAgent(open: boolean) {
     void Promise.all([fetchProviders(api), listStarterModels(api)])
       .then(([p, c]) => {
         if (!ignore) {
-          setProviders(p);
+          setProviders(detectionProviders(p));
           setCatalog(c);
         }
       })

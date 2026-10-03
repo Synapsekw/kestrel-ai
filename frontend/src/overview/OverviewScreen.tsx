@@ -1,5 +1,7 @@
 import { useEffect, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
+import { basemapTileUrl, type BasemapSource } from "@contract/client";
+import { useBackend } from "@/api/client";
 import { useProject } from "@/api/project";
 import { runAutoProbe } from "@/app/effects";
 import { useDataLabels } from "@/findings/useDataLabels";
@@ -66,6 +68,8 @@ function NoFindingsYet({ projectId }: { projectId: string }) {
  */
 export function OverviewScreen() {
   const { projectId = "" } = useParams();
+  const { baseUrl, token } = useBackend();
+  const basemapUrl = (source: BasemapSource) => basemapTileUrl(baseUrl, token, source);
   const {
     overview,
     recent,
@@ -189,7 +193,12 @@ export function OverviewScreen() {
         if (!siteSettled) return <Skeleton className="h-full rounded-panel" />;
         return (
           site && (
-            <SiteLocation site={site} pins={recent.filter((f) => f.status !== "closed")} className="h-full" />
+            <SiteLocation
+              site={site}
+              pins={recent.filter((f) => f.status !== "closed")}
+              basemapUrl={basemapUrl}
+              className="h-full"
+            />
           )
         );
       case "findings":

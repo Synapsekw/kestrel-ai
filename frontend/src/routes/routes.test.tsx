@@ -137,6 +137,7 @@ describe("routes", () => {
     `/p/${P}/maps/m1`,
     `/p/${P}/maps/m1/evaluate`,
     `/p/${P}/clouds/c1`,
+    `/p/${P}/models/m1`,
     `/p/${P}/findings/f1`,
     `/p/${P}/measurements/v1`,
     `/p/${P}/measurements/volumes`,
