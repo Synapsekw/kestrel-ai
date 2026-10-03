@@ -12,12 +12,12 @@ import math
 
 import numpy as np
 import trimesh
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from shapely import make_valid
 from shapely.geometry import LineString, Polygon
 from shapely.geometry.polygon import orient
 
-from app.asset_models.builders.base import BuildCtx, Instanced, MeshNode, Params
+from app.asset_models.builders.base import BuildCtx, Instanced, MeshNode, Params, builder
 from app.asset_models.siteframe import footprint_polygon
 from app.asset_models.spec import Item
 
@@ -215,3 +215,113 @@ def record(nodes: list[MeshNode], p: BaseModel, height_defaulted: bool = False) 
     if nodes:
         nodes[0].extras["defaults"] = defaults_of(p, height_defaulted)
     return nodes
+
+
+# ------------------------------------------------------------------ flat surfaces
+class RoadParams(B3Params):
+    markings: bool = False
+    dash_m: float = Field(3.0, gt=0, le=50)
+    gap_m: float = Field(6.0, gt=0, le=50)
+
+
+class SurfaceParams(B3Params):
+    pass
+
+
+class ParkingParams(B3Params):
+    markings: bool = True
+    stall_w: float = Field(2.5, gt=0.5, le=10)
+    stall_d: float = Field(5.0, gt=1, le=20)
+
+
+@builder(
+    "road",
+    family="civil",
+    params=RoadParams,
+    default_height_m=SLAB_T,  # flat: height is ignored; F0 refuses a non-positive default
+    doc="Road: a line footprint (centreline + width) as an asphalt slab; optional centre dashes.",
+)
+def build_road(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = RoadParams.model_validate(item.params)
+    nodes = [MeshNode("surface", "Asphalt", flat_slab(outline(item, ctx), "Asphalt"))]
+    if p.markings and item.footprint.kind == "line":
+        rows = dashes(local_line(item, ctx), p.dash_m, p.gap_m, ctx.lod)
+        if len(rows):
+            dash = unit_box(p.dash_m, 0.02, 0.15)
+            nodes.append(MeshNode("markings", "Paving", instanced(dash, rows, LIFT["Asphalt"])))
+    return record(nodes, p)
+
+
+def _flat(material: str):
+    def fn(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+        p = SurfaceParams.model_validate(item.params)
+        return record([MeshNode("surface", material, flat_slab(outline(item, ctx), material))], p)
+
+    return fn
+
+
+builder(
+    "paved",
+    family="civil",
+    params=SurfaceParams,
+    default_height_m=SLAB_T,
+    doc="Paved area: the footprint as a concrete paving slab.",
+)(_flat("Paving"))
+builder(
+    "laydown",
+    family="civil",
+    params=SurfaceParams,
+    default_height_m=SLAB_T,
+    doc="Laydown or graded pad: the footprint as a gravel slab.",
+)(_flat("Laydown"))
+builder(
+    "revetment",
+    family="civil",
+    params=SurfaceParams,
+    default_height_m=SLAB_T,
+    doc="Revetment or rock armour band: the footprint as a rock-armour slab.",
+)(_flat("Rock_Armour"))
+
+
+def axes(poly: Polygon):
+    """Centre, long unit axis, short unit axis, long length, short length of the min rotated rect."""
+    rect = np.asarray(poly.minimum_rotated_rectangle.exterior.coords)[:4]
+    e0, e1 = rect[1] - rect[0], rect[2] - rect[1]
+    l0, l1 = float(np.hypot(*e0)), float(np.hypot(*e1))
+    if l0 >= l1:
+        u, lu, v, lv = e0 / l0, l0, e1 / l1, l1
+    else:
+        u, lu, v, lv = e1 / l1, l1, e0 / l0, l0
+    if u[0] < 0 or (abs(u[0]) < 1e-9 and u[1] < 0):  # canonical sign: deterministic across inputs
+        u = -u
+    v = np.array([-u[1], u[0]])
+    return rect.mean(axis=0), u, v, lu, lv
+
+
+@builder(
+    "parking",
+    family="civil",
+    params=ParkingParams,
+    default_height_m=SLAB_T,
+    doc="Parking: an asphalt slab with stall lines along its long side (two rows when deep).",
+)
+def build_parking(item: Item, ctx: BuildCtx) -> list[MeshNode]:
+    p = ParkingParams.model_validate(item.params)
+    poly = outline(item, ctx)
+    nodes = [MeshNode("surface", "Asphalt", flat_slab(poly, "Asphalt"))]
+    if p.markings:
+        c, u, v, lu, lv = axes(poly)
+        depth = min(p.stall_d, lv - 0.5)
+        if depth > 0.5:
+            sides = [-1, 1] if lv >= 2 * p.stall_d + 6.0 else [-1]
+            n = max(1, math.floor(lu * ctx.lod / p.stall_w))
+            rows = []
+            for side in sides:
+                mid_v = side * (lv / 2 - 0.25 - depth / 2)
+                for k in range(n + 1):
+                    s = -lu / 2 + k * lu / n
+                    q = c + u * s + v * mid_v
+                    rows.append((q[0], q[1], v[0], v[1]))
+            line = unit_box(depth, 0.02, 0.12)
+            nodes.append(MeshNode("stalls", "Paving", instanced(line, np.asarray(rows), LIFT["Asphalt"])))
+    return record(nodes, p)

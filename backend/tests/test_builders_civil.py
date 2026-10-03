@@ -7,10 +7,21 @@ import math
 
 import numpy as np
 import pytest
-from plant_b3_helpers import CTX, cowork, cowork_item, make_item
+from plant_b3_helpers import (
+    CTX,
+    assert_golden,
+    bounds,
+    build_ok,
+    by_name,
+    cowork,
+    cowork_item,
+    make_item,
+    tri_count,
+)
 from shapely.geometry import Polygon
 
 from app.asset_models.builders import civil
+from app.asset_models.builders.base import Instanced
 from app.asset_models.builders.palette import PALETTE
 from app.asset_models.siteframe import footprint_polygon, footprint_ref
 
@@ -186,3 +197,53 @@ def test_largest_polygon_repairs_a_bow_tie_with_a_spike():
     # make_valid gives GeometryCollection[MultiPolygon, LineString]: the polygons are one level down
     poly = civil.largest_polygon(Polygon([(0, 0), (10, 10), (10, 0), (0, 10), (0, 5), (-5, 5), (0, 5)]))
     assert poly.is_valid and poly.area == pytest.approx(25.0)
+
+
+# ------------------------------------------------------------------ flat surfaces
+def test_road_is_a_slab_along_its_centreline():
+    nodes = build_ok(make_item("road", ROAD))
+    assert [n.name for n in nodes] == ["surface"]
+    b = bounds(nodes)
+    assert b[:, 1].tolist() == pytest.approx([civil.LIFT["Asphalt"] - civil.SLAB_T, civil.LIFT["Asphalt"]])
+    # north: 50 + half width below the mitred corner; east: 100 + half width past the corner
+    assert b[1, 0] - b[0, 0] == pytest.approx(54.0, abs=0.01)
+    assert b[1, 2] - b[0, 2] == pytest.approx(104.0, abs=0.01)
+    assert 12 <= tri_count(nodes) <= 60
+    assert nodes[0].material == "Asphalt"
+
+
+def test_road_markings_are_instanced_dashes():
+    nodes = by_name(build_ok(make_item("road", ROAD, params={"markings": True})))
+    dashes = nodes["markings"].geometry
+    assert isinstance(dashes, Instanced)
+    assert len(dashes.transforms) == 11 + 6  # 3 m dash every 9 m on the 100 m and 50 m legs
+    assert nodes["markings"].material == "Paving"
+
+
+@pytest.mark.parametrize(
+    ("type_", "material"), [("paved", "Paving"), ("laydown", "Laydown"), ("revetment", "Rock_Armour")]
+)
+def test_flat_surfaces_cover_a_concave_footprint(type_, material):
+    nodes = build_ok(make_item(type_, L_POLY))
+    (node,) = nodes
+    assert node.material == material
+    top = civil.LIFT[material]
+    up = node.geometry.face_normals[:, 1] > 0.99
+    tops = node.geometry.triangles[up][:, :, 1]
+    assert np.allclose(tops, top)
+    assert node.geometry.area_faces[up].sum() == pytest.approx(450.0)  # notch not filled
+
+
+def test_parking_has_stall_lines_along_its_long_side():
+    nodes = by_name(build_ok(sample("parking")))
+    stalls = nodes["stalls"].geometry
+    assert isinstance(stalls, Instanced) and len(stalls.transforms) == 25  # 60 m / 2.5 m + 1
+    deep = make_item("parking", {"kind": "rect", "center": [E0, N0], "size": [60.0, 20.0], "rot_deg": 0})
+    assert len(by_name(build_ok(deep))["stalls"].geometry.transforms) == 50  # two rows
+    plain = by_name(build_ok(make_item("parking", RECT, params={"markings": False})))
+    assert set(plain) == {"surface"}
+
+
+@pytest.mark.parametrize("type_", ["road", "paved", "laydown", "parking", "revetment"])
+def test_flat_goldens(type_):
+    assert_golden(build_ok(sample(type_)), type_)
