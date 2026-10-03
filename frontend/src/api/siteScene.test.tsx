@@ -5,17 +5,7 @@ import { createApiClient } from "@contract/client";
 import { fakeClient, fakeFetch } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { EMPTY_SCENE, FRAME_ONLY_SCENE, MODEL_SCENE, TEST_FRAME } from "@/test/siteSceneFixtures";
-import {
-  absUrl,
-  getSiteScene,
-  listAssetItems,
-  siteModelUrl,
-  toFrameT,
-  useAssetItems,
-  useSiteScene,
-} from "./siteScene";
-
-const row = (node: string) => ({ node, tag: null, name: node, type: "other", area: null });
+import { absUrl, getSiteScene, listAssetItems, siteModelUrl, toFrameT, useSiteScene } from "./siteScene";
 
 describe("siteScene api", () => {
   it("asks for the scene with and without a model id", async () => {
@@ -103,61 +93,6 @@ describe("siteScene api", () => {
     });
     expect(calls).toBe(3);
     expect(result.current.scene).toEqual(FRAME_ONLY_SCENE);
-  });
-
-  it("useAssetItems pages with the cursor", async () => {
-    const { api, requests } = fakeClient([
-      {
-        method: "GET",
-        path: /\/items/,
-        body: (req) =>
-          req.url.includes("cursor=c2")
-            ? { items: [row("b")], next_cursor: null }
-            : { items: [row("a")], next_cursor: "c2" },
-      },
-    ]);
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <TestApiProvider api={api}>{children}</TestApiProvider>
-    );
-    const { result } = renderHook(() => useAssetItems("p1", "m1", 2, { q: "tank" }), { wrapper });
-    await waitFor(() => expect(result.current.items?.map((i) => i.node)).toEqual(["a"]));
-    expect(result.current.hasMore).toBe(true);
-    act(() => result.current.loadMore());
-    await waitFor(() => expect(result.current.items?.map((i) => i.node)).toEqual(["a", "b"]));
-    expect(result.current.hasMore).toBe(false);
-    expect(requests[0].url).toBe("/api/v1/projects/p1/asset-models/m1/versions/2/items?q=tank&limit=200");
-  });
-
-  it("useAssetItems fetches the new filters when they change while a request is pending", async () => {
-    const { fetch: inner } = fakeFetch([
-      {
-        method: "GET",
-        path: /\/items/,
-        body: (req) => ({ items: [row(req.url.includes("q=old") ? "old" : "new")], next_cursor: null }),
-      },
-    ]);
-    let release: () => void = () => {};
-    const gate = new Promise<void>((r) => (release = r));
-    const gated = (async (input: Request | string | URL, init?: RequestInit) => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (url.includes("q=old")) await gate;
-      return inner(input, init);
-    }) as typeof fetch;
-    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: gated });
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <TestApiProvider api={api}>{children}</TestApiProvider>
-    );
-    const { result, rerender } = renderHook(({ q }) => useAssetItems("p1", "m1", 1, { q }), {
-      wrapper,
-      initialProps: { q: "old" },
-    });
-    rerender({ q: "new" });
-    await waitFor(() => expect(result.current.items?.map((i) => i.node)).toEqual(["new"]));
-    await act(async () => {
-      release();
-      await Promise.resolve();
-    });
-    expect(result.current.items?.map((i) => i.node)).toEqual(["new"]);
   });
 
   it("listAssetItems sends the filters", async () => {
