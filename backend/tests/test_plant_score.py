@@ -2,6 +2,7 @@
 """The plant register scorer against Cowork's KIPIC register (spec 2026-10-03 §13, K1)."""
 
 import copy
+import math
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from app.asset_models import score as sc
 
 DATA = Path(__file__).parent / "data" / "plant"
 REGISTER = DATA / "kipic_register.csv"
+LANDMASK = DATA / "kipic_landmask.json"
 
 
 @pytest.fixture(scope="module")
@@ -142,3 +144,38 @@ def test_required_present_tracks_jetties_trestles_and_dolphins(ref):
 def test_required_present_skips_what_the_reference_lacks():
     ref = [{"node": "a", "tag": "P-1", "type": "pump", "plant_E": "0", "plant_N": "0"}]
     assert sc.required_present(ref, ref) == {}
+
+
+def test_cowork_land_against_itself_is_zero(ref):
+    land = sc.read_land(LANDMASK)
+    assert sc.score(ref, ref, gen_land=land, ref_land=land).landmask_hausdorff_m == 0.0
+
+
+def test_landmask_fixture_is_in_plant_coordinates(ref):
+    import shapely
+
+    land = shapely.unary_union([shapely.Polygon(p) for p in sc.read_land(LANDMASK)])
+    tanks = [r for r in ref if r["type"] == "tank_lng"]
+    assert len(tanks) == 8
+    assert all(land.contains(shapely.Point(float(r["plant_E"]), float(r["plant_N"]))) for r in tanks)
+    heads = [r for r in ref if r["node"].endswith("-loading-platform")]
+    assert len(heads) == 2
+    assert not any(land.contains(shapely.Point(float(r["plant_E"]), float(r["plant_N"]))) for r in heads)
+
+
+def test_landmask_hausdorff_measures_a_shift(ref):
+    land = sc.read_land(LANDMASK)
+    moved = [[[e + 8.0, n] for e, n in ring] for ring in land]
+    box = sc.extent(ref)
+    assert 7.0 <= sc.landmask_hausdorff(moved, land, box) <= 8.6
+    assert sc.landmask_hausdorff([], land, box) == math.inf
+    assert sc.landmask_hausdorff([], [], box) == 0.0
+    assert sc.score(ref, ref).landmask_hausdorff_m is None
+
+
+def test_land_from_a_spec_environment():
+    env = [
+        {"id": "l1", "kind": "land", "pts": [[0, 0], [10, 0], [10, 10]], "el": 104.5},
+        {"id": "s1", "kind": "sea", "pts": [[0, 0], [5, 0], [5, 5]], "el": 100.0},
+    ]
+    assert sc.land_from_environment(env) == [[[0, 0], [10, 0], [10, 10]]]

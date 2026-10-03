@@ -12,6 +12,7 @@ CLI: python -m app.asset_models.score <gen.csv> <ref.csv> [--gen-land x.json --r
 from __future__ import annotations
 
 import csv
+import json
 import math
 import re
 from collections.abc import Iterable
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import shapely
 
 TYPE_FAMILY: dict[str, str] = {
     **dict.fromkeys(
@@ -48,6 +50,8 @@ FALLBACK_TYPES = frozenset({"other", "composite"})
 POS_TOL_LARGE_M = 2.0
 POS_TOL_SMALL_M = 5.0
 LARGE_FOOTPRINT_M = 5.0
+EXTENT_MARGIN_M = 100.0
+LAND_SEGMENT_M = 2.0
 _DASHES = "-" + "".join(chr(c) for c in range(0x2010, 0x2016)) + chr(0x2212)  # hyphens, en/em dashes, minus
 _SEP = re.compile(r"[\s" + re.escape(_DASHES) + "]+")
 
@@ -191,7 +195,9 @@ def score(
         missing=sorted(missing),
         extra=sorted(g["tag"] for t, g in gen_by_tag.items() if t not in ref_tags),
         required_present=required_present(gen, ref),
-        landmask_hausdorff_m=None,  # the land outline arrives in the next task
+        landmask_hausdorff_m=landmask_hausdorff(gen_land, ref_land, extent(ref))
+        if gen_land is not None and ref_land is not None
+        else None,
     )
 
 
@@ -225,3 +231,50 @@ def required_present(
         if pts:
             out[req.key] = all(near(req.type or "", p, req.radius_m) for p in pts)
     return out
+
+
+def extent(ref: list[dict], margin_m: float = EXTENT_MARGIN_M) -> tuple[float, float, float, float] | None:
+    """The plant extent: the reference register's positions, grown by `margin_m`."""
+    pts = np.array([p for p in (_en(r) for r in ref) if p is not None])
+    if not len(pts):
+        return None
+    lo, hi = pts.min(axis=0) - margin_m, pts.max(axis=0) + margin_m
+    return float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1])
+
+
+def _land(polys: list) -> shapely.Geometry:
+    shapes = [shapely.make_valid(shapely.Polygon(p)) for p in polys if len(p) >= 3]
+    return shapely.unary_union(shapes) if shapes else shapely.Polygon()
+
+
+def landmask_hausdorff(
+    gen_land: list, ref_land: list, box: tuple[float, float, float, float] | None
+) -> float:
+    """Hausdorff distance (m) between the two land outlines inside the plant extent. Both empty: 0;
+    one empty: infinity."""
+    a, b = _land(gen_land), _land(ref_land)
+    if box is not None:
+        clip = shapely.box(*box)
+        a, b = a.intersection(clip), b.intersection(clip)
+    if a.is_empty and b.is_empty:
+        return 0.0
+    if a.is_empty or b.is_empty:
+        return math.inf
+    la = shapely.segmentize(a.boundary, LAND_SEGMENT_M)
+    lb = shapely.segmentize(b.boundary, LAND_SEGMENT_M)
+    return float(shapely.hausdorff_distance(la, lb))
+
+
+def read_land(path: Path) -> list[list[list[float]]]:
+    """Land rings in plant [E, N] from a landmask file ({"land": [...], "main": [...]}), a spec JSON
+    (its `environment` features of kind `land`), or a bare list of rings."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return data
+    if "environment" in data:
+        return land_from_environment(data["environment"])
+    return [*data.get("land", []), *data.get("main", [])]
+
+
+def land_from_environment(environment: list[dict]) -> list[list[list[float]]]:
+    return [f["pts"] for f in environment if f.get("kind") == "land" and len(f.get("pts", [])) >= 3]
