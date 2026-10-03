@@ -8,6 +8,7 @@ shaded flat from its triangle normal. Outlines mark part-id and depth jumps. No 
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -45,6 +46,19 @@ class View:
     direction: tuple[float, float, float] | None = None
 
 
+@dataclass(frozen=True)
+class Marker:
+    """A finding drawn over a render (spec 2026-10-02-asset-findings A9): a pin at one point, or a
+    closed outline through several, in the asset frame."""
+
+    kind: Literal["pin", "outline"]
+    points: tuple[tuple[float, float, float], ...]
+    rgb: tuple[int, int, int]
+
+
+Window = tuple[tuple[float, float, float], float]  # (centre, half-width in metres)
+
+
 def _basis(view: View) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """forward (into the screen), right, up — all unit vectors in the asset frame."""
     up_world = np.array([0.0, 1.0, 0.0])
@@ -77,8 +91,40 @@ def _basis(view: View) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return f, right / np.linalg.norm(right), up
 
 
+def basis(view: View) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """forward, right, up for `view` (the report's 3D locator projects patch outlines with it)."""
+    return _basis(view)
+
+
+def _draw_markers(img: Image.Image, markers: Sequence[Marker] | None, project, size: int) -> Image.Image:
+    if not markers:
+        return img
+    draw = ImageDraw.Draw(img)
+    for mk in markers:
+        pts = [project(np.asarray(p, dtype=float)) for p in mk.points]
+        if mk.kind == "pin" and pts:
+            x, y = pts[0]
+            r = max(5, round(size * 0.018))
+            draw.ellipse([x - r - 2, y - r - 2, x + r + 2, y + r + 2], fill=(255, 255, 255))
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=mk.rgb)
+        elif mk.kind == "outline" and len(pts) >= 2:
+            w = max(2, round(size * 0.004))
+            ring = [*pts, pts[0]]
+            draw.line(ring, fill=(255, 255, 255), width=w + 4, joint="curve")
+            draw.line(ring, fill=mk.rgb, width=w, joint="curve")
+    return img
+
+
 def render(
-    meshes, view: View, *, size: int = 1024, labels: bool = False, groups=None, highlight=None
+    meshes,
+    view: View,
+    *,
+    size: int = 1024,
+    labels: bool = False,
+    groups=None,
+    highlight=None,
+    window: Window | None = None,
+    markers: Sequence[Marker] | None = None,
 ) -> Image.Image:
     size = int(min(max(size, 64), MAX_SIZE))
     groups = groups or {}
@@ -96,11 +142,35 @@ def render(
         if len(tris) == 0:
             return Image.new("RGB", (size, size), BG)
     sx, sy, sd = tris @ right, tris @ up, tris @ f  # (T,3) each
-    lo = np.array([sx.min(), sy.min()])
-    hi = np.array([sx.max(), sy.max()])
+    if window is not None:
+        c = np.asarray(window[0], dtype=float)
+        half = float(window[1])
+        cx, cy = float(c @ right), float(c @ up)
+        lo = np.array([cx - half, cy - half])
+        hi = np.array([cx + half, cy + half])
+        keep = (
+            (sx.max(axis=1) >= lo[0])
+            & (sx.min(axis=1) <= hi[0])
+            & (sy.max(axis=1) >= lo[1])
+            & (sy.min(axis=1) <= hi[1])
+        )
+        tris, owner, normals = tris[keep], owner[keep], normals[keep]
+        sx, sy, sd = sx[keep], sy[keep], sd[keep]
+    else:
+        lo = np.array([sx.min(), sy.min()])
+        hi = np.array([sx.max(), sy.max()])
     span = float(max(hi - lo)) or 1.0
     scale = size * (1 - 2 * MARGIN) / span
     off = (size - (hi - lo) * scale) / 2
+
+    def project(p: np.ndarray) -> tuple[float, float]:
+        return (
+            float((p @ right - lo[0]) * scale + off[0]),
+            float(size - ((p @ up - lo[1]) * scale + off[1])),
+        )
+
+    if len(tris) == 0:
+        return _draw_markers(Image.new("RGB", (size, size), BG), markers, project, size)
     px = (sx - lo[0]) * scale + off[0]
     py = size - ((sy - lo[1]) * scale + off[1])  # image y grows downward
     area = 0.5 * np.abs(
@@ -119,9 +189,14 @@ def render(
     def interp(q):
         return w * q[tri_of, 0] + u * q[tri_of, 1] + v * q[tri_of, 2]
 
-    ix = np.clip(interp(px).astype(np.int64), 0, size - 1)
-    iy = np.clip(interp(py).astype(np.int64), 0, size - 1)
-    depth = interp(sd)
+    fx, fy, depth = interp(px), interp(py), interp(sd)
+    if window is not None:  # a sample outside the frame is dropped, never clamped onto its border
+        inside = (fx >= 0) & (fx < size) & (fy >= 0) & (fy < size)
+        tri_of, fx, fy, depth = tri_of[inside], fx[inside], fy[inside], depth[inside]
+        if len(tri_of) == 0:
+            return _draw_markers(Image.new("RGB", (size, size), BG), markers, project, size)
+    ix = np.clip(fx.astype(np.int64), 0, size - 1)
+    iy = np.clip(fy.astype(np.int64), 0, size - 1)
     pix = iy * size + ix
     d0, d1 = float(depth.min()), float(depth.max())
     dq = ((depth - d0) / ((d1 - d0) or 1.0) * ((1 << 20) - 1)).astype(np.int64)
@@ -174,7 +249,7 @@ def render(
                     stroke_fill=(0, 0, 0),
                     anchor="mm",
                 )
-    return out
+    return _draw_markers(out, markers, project, size)
 
 
 def grid(images: list[Image.Image], titles: list[str]) -> Image.Image:
