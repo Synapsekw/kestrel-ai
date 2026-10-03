@@ -111,6 +111,8 @@ def review_message(rc) -> str:
         + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "none")
         + ".",
     ]
+    if rc.state.check_summary:
+        lines.append("Cloud check: " + rc.state.check_summary)
     if rc.state.candidates:
         lines.append(
             "Unregistered candidates (clusters in the cloud with no item), largest first. Name each real one "

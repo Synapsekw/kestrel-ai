@@ -752,6 +752,54 @@ class RenderSite:
 
 
 # ------------------------------------------------------------------ registry and dispatch
+class CloudCheckArgs(_A):
+    item_ids: (
+        Annotated[list[Annotated[str, Field(max_length=64)]], Field(min_length=1, max_length=300)] | None
+    ) = None
+
+
+class CloudCheck:
+    name, Args = "cloud_check", CloudCheckArgs
+    description = (
+        "Re-run the cloud check after edits and report chosen items (or all): per item, ground and top EL "
+        "from the cloud, scan coverage, the plan offset, and flags; plus the unregistered candidates. "
+        "Positions never move; heights fill in only where the height is indicative or from the cloud."
+    )
+
+    def run(self, rc, scope, a):
+        from app.asset_models import cloudcheck as cc
+        from app.asset_models.agent.plant.cloud import check_all
+
+        if rc.cloud is None:
+            return ToolOut(
+                "No cloud check ran in this run. " + " ".join(rc.state.notes),
+                "No cloud check",
+                ok=False,
+                phase="checking",
+            )
+        wanted = set(a.item_ids) if a.item_ids else None
+        if wanted is not None and not wanted & set(rc.store):
+            return ToolOut(
+                "None of those items are in the register.", "Nothing to check", ok=False, phase="checking"
+            )
+        result = check_all(rc, cc, rc.cloud, rc.grid())  # every item: a subset turns the rest into candidates
+        shown = result
+        if wanted is not None:  # only the digest is filtered (C1 hand-off 3)
+            shown = cc.CheckResult(
+                result.datum,
+                {k: v for k, v in result.items.items() if k in wanted},
+                result.candidates,
+                result.note,
+            )
+        digest = cc.summarise(shown, limit=QUERY_ROWS)
+        head = f"Checked {len(result.items)} items. {rc.state.check_summary}"
+        return ToolOut(
+            head + "\n" + json.dumps(digest, separators=(",", ":")),
+            f"Checked {len(result.items)} items against the cloud",
+            phase="checking",
+        )
+
+
 _TOOLS = [
     UpsertItems(),
     RemoveItems(),
@@ -766,6 +814,7 @@ _TOOLS = [
     SetSite(),
     OrthoView(),
     RenderSite(),
+    CloudCheck(),
 ]
 PLANT_TOOLS = {t.name: t for t in _TOOLS}
 ORCH_NAMES = (
@@ -782,6 +831,7 @@ ORCH_NAMES = (
     "upsert_environment",
     "ortho_view",
     "render_site",
+    "cloud_check",
     "next_stage",
     "finish",
 )

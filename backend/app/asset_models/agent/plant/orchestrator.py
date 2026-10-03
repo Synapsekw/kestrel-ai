@@ -16,7 +16,7 @@ from app.asset_models import service
 from app.asset_models import store as mstore
 from app.asset_models.agent.plant import packages as pk
 from app.asset_models.agent.plant import prompt_plant as P
-from app.asset_models.agent.plant.cloud import cloud_stage
+from app.asset_models.agent.plant.cloud import _note, cloud_stage
 from app.asset_models.agent.plant.context import PlantRunContext, Scope, build_context
 from app.asset_models.agent.plant.merge import merge_items, with_flag
 from app.asset_models.agent.plant.model import call_model
@@ -59,13 +59,6 @@ def _advance(rc: PlantRunContext, stage: str) -> None:
     rc.state.stage = stage
     rc.save()
     rc.recorder.enter(stage)
-
-
-def _note(rc: PlantRunContext, text: str) -> None:
-    with rc.lock:
-        if text not in rc.state.notes:
-            rc.state.notes.append(text)
-    rc.save()
 
 
 # ------------------------------------------------------------------ the orchestrator conversation

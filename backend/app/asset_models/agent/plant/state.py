@@ -33,6 +33,7 @@ class PlantState:
     notes: list[str] = field(default_factory=list)  # app-written run notes (cloud check skipped, ...)
     fix_rounds: int = 0
     candidates: list[dict] = field(default_factory=list)
+    check_summary: str | None = None  # the cloud check's digest (C1 summarise), shown in the review stage
 
 
 def plant_dir(run_dir: Path) -> Path:
