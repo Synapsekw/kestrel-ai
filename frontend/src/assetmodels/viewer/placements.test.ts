@@ -20,10 +20,12 @@ const patch = (id: string, center: [number, number, number]): PlacementItem => (
   size: 1,
   severity: 2,
   colour: "#e2bf2e",
+  hasPatch: true,
 });
 const pin = (id: string, center: [number, number, number]): PlacementItem => ({
   ...patch(id, center),
   kind: "point",
+  hasPatch: false,
 });
 
 const buffers: PatchBuffers = { mesh: new ArrayBuffer(4), texture: new Blob([]), labels: new ArrayBuffer(4) };
@@ -64,7 +66,7 @@ describe("placementItems", () => {
         normal: [0, 0, 1],
         size: 2.5,
         severity: 2,
-        patch_url: "x",
+        has_patch: true,
       },
       {
         sighting_id: "s2",
@@ -74,7 +76,7 @@ describe("placementItems", () => {
         normal: null,
         size: null,
         severity: null,
-        patch_url: null,
+        has_patch: false,
       },
       {
         sighting_id: "s3",
@@ -84,14 +86,21 @@ describe("placementItems", () => {
         normal: null,
         size: null,
         severity: 1,
-        patch_url: null,
+        has_patch: false,
       },
     ];
     const items = placementItems(rows as never, DEFAULT_SEVERITY_SCALE, "#999999");
-    expect(items.map((i) => [i.sightingId, i.kind, i.colour, i.size])).toEqual([
-      ["s1", "patch", "#e2bf2e", 2.5],
-      ["s2", "point", "#999999", 0],
+    expect(items.map((i) => [i.sightingId, i.kind, i.colour, i.size, i.hasPatch])).toEqual([
+      ["s1", "patch", "#e2bf2e", 2.5, true],
+      ["s2", "point", "#999999", 0, false],
     ]);
+  });
+
+  it("reads a missing has_patch as no patch files", () => {
+    const rows = [
+      { sighting_id: "s1", finding_id: null, kind: "patch", center: [0, 0, 0], normal: [0, 0, 1], size: 1 },
+    ];
+    expect(placementItems(rows as never, DEFAULT_SEVERITY_SCALE, "#999999")[0].hasPatch).toBe(false);
   });
 });
 
@@ -113,6 +122,14 @@ describe("PatchLoader", () => {
     expect(fetchPatch.mock.calls.map((c) => c[0])).toEqual(["front", "behind"]);
     loader.update(items, visibleFrom(camera([0, 0, 10], [0, 0, 0])));
     expect(fetchPatch).toHaveBeenCalledTimes(2);
+  });
+
+  it("never fetches a patch row that has no patch files", () => {
+    const { fetchPatch } = deferredFetch();
+    const loader = new PatchLoader(fetchPatch, () => {});
+    const bare = { ...patch("bare", [0, 0, 0]), hasPatch: false };
+    loader.update([bare, patch("real", [0, 0, 0])], visibleFrom(camera([0, 0, 10], [0, 0, 0])));
+    expect(fetchPatch.mock.calls.map((c) => c[0])).toEqual(["real"]);
   });
 
   it("keeps at most six fetches in flight, nearest first, and continues as they land", async () => {

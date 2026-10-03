@@ -48,7 +48,9 @@ interface PageOf<T> {
 /**
  * Reads every page of a keyset list, one request at a time, publishing after each page so a long
  * list shows as it arrives. Stops on a null or repeated cursor (the Prism mock repeats "string"),
- * on an error (kept items stay), or after MAX_PAGES.
+ * on an error (kept items stay), or after MAX_PAGES. A reload of the same list (a finished job)
+ * keeps the previous answer on screen and swaps the new one in whole once it has arrived, so the
+ * viewer never sees the list flash empty or shrink to page 1; a different key starts empty.
  */
 function usePaged<T, Pg extends PageOf<T>>(
   key: string | null,
@@ -56,20 +58,24 @@ function usePaged<T, Pg extends PageOf<T>>(
 ): Paged<T> & { first: Pg | null } {
   const [gen, setGen] = useState(0);
   const [state, setState] = useState<{
-    tag: string;
+    key: string;
     items: T[];
     done: boolean;
     error: string | null;
     first: Pg | null;
   } | null>(null);
   const fetchRef = useRef(fetchPage);
+  const stateRef = useRef(state);
   useEffect(() => {
     fetchRef.current = fetchPage;
+    stateRef.current = state;
   });
-  const tag = key === null ? null : `${key}#${gen}`;
   useEffect(() => {
-    if (tag === null) return;
+    if (key === null) return;
     let alive = true;
+    const prev = stateRef.current;
+    // the same list reloading: hold the previous answer until the new one is complete
+    const reloading = prev !== null && prev.key === key;
     void (async () => {
       const seen = new Set<string>();
       let after: string | null = null;
@@ -80,8 +86,10 @@ function usePaged<T, Pg extends PageOf<T>>(
         try {
           got = await fetchRef.current(after);
         } catch (e) {
-          if (alive)
-            setState({ tag, items, done: true, error: messageOf(e, "The list could not be loaded."), first });
+          if (!alive) return;
+          const error = messageOf(e, "The list could not be loaded.");
+          if (reloading) setState((s) => (s && s.key === key ? { ...s, error } : s));
+          else setState({ key, items, done: true, error, first });
           return;
         }
         if (!alive) return;
@@ -89,7 +97,7 @@ function usePaged<T, Pg extends PageOf<T>>(
         items = items.concat(got.items);
         const next = got.next;
         const end = !next || seen.has(next) || page === MAX_PAGES - 1;
-        setState({ tag, items, done: end, error: null, first });
+        if (end || !reloading) setState({ key, items, done: end, error: null, first });
         if (end) return;
         seen.add(next);
         after = next;
@@ -98,9 +106,9 @@ function usePaged<T, Pg extends PageOf<T>>(
     return () => {
       alive = false;
     };
-  }, [tag]);
+  }, [key, gen]);
   const reload = useCallback(() => setGen((g) => g + 1), []);
-  const mine = state && state.tag === tag ? state : null;
+  const mine = state && state.key === key ? state : null;
   return {
     items: mine?.items ?? [],
     done: mine?.done ?? false,

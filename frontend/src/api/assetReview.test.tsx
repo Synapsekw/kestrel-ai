@@ -1,5 +1,5 @@
 // src/api/assetReview.test.tsx
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { TestApiProvider } from "@/test/render";
@@ -103,6 +103,69 @@ describe("asset review hooks", () => {
     const { result } = renderHook(() => usePoses(PROJECT_ID, "m1"), { wrapper: wrap(api) });
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(result.current.items).toEqual([]);
+  });
+});
+
+describe("asset review hooks across reloads", () => {
+  it("keeps the loaded list while the same list reloads, then shows the new answer", async () => {
+    let answer = ["i1", "i2"];
+    const { api } = fakeClient([
+      { method: "GET", path: /\/poses$/, body: () => ({ items: answer.map(pose), next: null }) },
+    ]);
+    const seen: string[][] = [];
+    const { result } = renderHook(
+      () => {
+        const r = usePoses(PROJECT_ID, "m1");
+        seen.push(r.items.map((p) => p.image_id));
+        return r;
+      },
+      { wrapper: wrap(api) },
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    const loadedAt = seen.length;
+    answer = ["i3"];
+    act(() => result.current.reload());
+    expect(result.current.items.map((p) => p.image_id)).toEqual(["i1", "i2"]);
+    expect(result.current.done).toBe(true);
+    await waitFor(() => expect(result.current.items.map((p) => p.image_id)).toEqual(["i3"]));
+    // never flashed empty in between (U2 would push setPlacements([]) and drop the loaded patches)
+    expect(seen.slice(loadedAt).every((ids) => ids.length > 0)).toBe(true);
+  });
+
+  it("a different list starts empty", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/poses$/,
+        body: (r) => ({ items: [pose(r.url.includes("/m2/") ? "b1" : "a1")], next: null }),
+      },
+    ]);
+    const { result, rerender } = renderHook(({ m }) => usePoses(PROJECT_ID, m), {
+      wrapper: wrap(api),
+      initialProps: { m: "m1" },
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    rerender({ m: "m2" });
+    expect(result.current.items).toEqual([]);
+    await waitFor(() => expect(result.current.items.map((p) => p.image_id)).toEqual(["b1"]));
+  });
+
+  it("a failed second page keeps the first page's items with an error", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/poses$/,
+        status: (r) => (r.url.includes("after=c1") ? 500 : 200),
+        body: (r) =>
+          r.url.includes("after=c1")
+            ? { error: { code: "internal", message: "boom", details: {} } }
+            : { items: [pose("i1")], next: "c1" },
+      },
+    ]);
+    const { result } = renderHook(() => usePoses(PROJECT_ID, "m1"), { wrapper: wrap(api) });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.items.map((p) => p.image_id)).toEqual(["i1"]);
+    expect(result.current.done).toBe(true);
   });
 });
 

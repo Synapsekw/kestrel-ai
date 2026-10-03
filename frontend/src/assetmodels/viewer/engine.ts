@@ -148,6 +148,47 @@ export function renderLoop(o: {
   };
 }
 
+/** The M1 perspective camera's vertical field of view, which every preset view frames with. */
+export const MODEL_FOV = 38;
+
+/** The perspective view before the first `viewFromPose`, restored by `viewFromPose(null)`. */
+export interface SavedView {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  up: THREE.Vector3;
+  fov: number;
+  near: number;
+  far: number;
+}
+
+export function saveView(camera: THREE.PerspectiveCamera, target: THREE.Vector3): SavedView {
+  return {
+    position: camera.position.clone(),
+    target: target.clone(),
+    up: camera.up.clone(),
+    fov: camera.fov,
+    near: camera.near,
+    far: camera.far,
+  };
+}
+
+/** Puts the camera (and the orbit target) back where `saveView` found it. */
+export function restoreView(camera: THREE.PerspectiveCamera, target: THREE.Vector3, v: SavedView): void {
+  camera.position.copy(v.position);
+  camera.up.copy(v.up);
+  camera.fov = v.fov;
+  camera.near = v.near;
+  camera.far = v.far;
+  target.copy(v.target);
+  camera.updateProjectionMatrix();
+}
+
+/** A preset view drops a photo pose's roll and lens: Y up and the M1 field of view. */
+export function presetCamera(camera: THREE.PerspectiveCamera): void {
+  camera.up.set(0, 1, 0);
+  camera.fov = MODEL_FOV;
+}
+
 interface GhostBase {
   transparent: boolean;
   opacity: number;
@@ -197,7 +238,7 @@ export function createModelEngine(o: {
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
   sun.position.set(-8, 16, 10);
   scene.add(sun);
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 1000);
+  const camera = new THREE.PerspectiveCamera(MODEL_FOV, 1, 0.05, 1000);
   camera.up.set(0, 1, 0);
   const controls = new OrbitControls(camera, o.canvas);
   controls.enableDamping = true;
@@ -233,8 +274,9 @@ export function createModelEngine(o: {
   let selectedCam: { id: string | null; cone: boolean } = { id: null, cone: false };
   let ghostOn = false;
   let pickCb: ((hit: PickHit) => void) | null = null;
-  let savedView: { position: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; fov: number } | null =
-    null;
+  let savedView: SavedView | null = null;
+  /** How far the ground tiles reach, so a preset view does not clip them (0 without ground). */
+  let groundFar = 0;
   /** The model's height above the datum, the H of the kit's fractions. */
   const assetHeight = () => Math.max(bounds.max.y - Math.min(bounds.min.y, 0), 1);
   /** Releases textures too: `disposeChildren` frees geometry and materials only. */
@@ -330,6 +372,7 @@ export function createModelEngine(o: {
     active = camera;
     controls.object = camera;
     savedView = null;
+    presetCamera(camera);
     const size = bounds.getSize(new THREE.Vector3());
     const centre = bounds.getCenter(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 0.5);
@@ -339,7 +382,7 @@ export function createModelEngine(o: {
     const dist = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2));
     camera.position.copy(centre).addScaledVector(dir, -dist);
     camera.near = dist / 100;
-    camera.far = dist * 10;
+    camera.far = Math.max(dist * 10, groundFar);
     camera.updateProjectionMatrix();
     controls.target.copy(centre);
     controls.update();
@@ -768,11 +811,13 @@ export function createModelEngine(o: {
         m.userData.kind = "ground";
         ground.add(m);
       }
+      groundFar = 0;
       if (tiles?.length) {
         const reach = Math.max(
           ...tiles.flatMap((t) => [Math.hypot(...t.tl), Math.hypot(...t.tr), Math.hypot(...t.bl)]),
         );
-        camera.far = Math.max(camera.far, reach * 4);
+        groundFar = reach * 4;
+        camera.far = Math.max(camera.far, groundFar);
         camera.updateProjectionMatrix();
       }
       requestRender();
@@ -782,25 +827,14 @@ export function createModelEngine(o: {
       controls.object = camera;
       if (!pose) {
         if (savedView) {
-          camera.position.copy(savedView.position);
-          camera.up.copy(savedView.up);
-          camera.fov = savedView.fov;
-          controls.target.copy(savedView.target);
+          restoreView(camera, controls.target, savedView);
           savedView = null;
         }
-        camera.updateProjectionMatrix();
         controls.update();
         requestRender();
         return;
       }
-      if (!savedView) {
-        savedView = {
-          position: camera.position.clone(),
-          target: controls.target.clone(),
-          up: camera.up.clone(),
-          fov: camera.fov,
-        };
-      }
+      if (!savedView) savedView = saveView(camera, controls.target);
       const tgt = new THREE.Vector3(...pose.target);
       camera.position.set(...pose.position);
       camera.up.set(...pose.up);

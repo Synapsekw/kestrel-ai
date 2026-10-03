@@ -21,6 +21,8 @@ export interface PlacementItem {
   severity: number | null;
   /** #rrggbb from the severity scale (a data colour). */
   colour: string;
+  /** The patch's mesh, texture and label files exist; a patch row without them is never fetched. */
+  hasPatch: boolean;
 }
 
 export interface PatchBuffers {
@@ -58,6 +60,7 @@ export function placementItems(
       size: Array.isArray(size) ? Math.max(...(size as number[])) : typeof size === "number" ? size : 0,
       severity: r.severity ?? null,
       colour: severityOf(scale, r.severity ?? null)?.colour ?? fallback,
+      hasPatch: r.has_patch === true,
     });
   }
   return out;
@@ -107,6 +110,7 @@ export class PatchLoader {
       .filter(
         (p) =>
           p.kind === "patch" &&
+          p.hasPatch &&
           !this.loaded.has(p.sightingId) &&
           !this.pending.has(p.sightingId) &&
           !this.failed.has(p.sightingId) &&

@@ -4,12 +4,16 @@ import {
   AUTO_ROTATE_SPEED,
   GHOST_OPACITY,
   GROUND_RENDER_ORDER,
+  MODEL_FOV,
   PATCH_ALPHA_TEST,
   PATCH_POLYGON_OFFSET,
   PATCH_RENDER_ORDER,
   ghostMaterial,
   partsFromScene,
+  presetCamera,
   renderLoop,
+  restoreView,
+  saveView,
   viewDirection,
 } from "./engine";
 
@@ -123,5 +127,34 @@ describe("ghost materials", () => {
     ghostMaterial(blend, false);
     expect(blend.transparent).toBe(true);
     expect(blend.opacity).toBe(0.5);
+  });
+});
+
+describe("pose view and preset views", () => {
+  it("viewFromPose(null) restores position, target, up, fov, near and far", () => {
+    const cam = new THREE.PerspectiveCamera(MODEL_FOV, 1, 0.4, 400);
+    cam.position.set(10, 8, 10);
+    const target = new THREE.Vector3(0, 3, 0);
+    const saved = saveView(cam, target);
+    // what a photo pose does to the camera
+    cam.position.set(1, 2, 3);
+    cam.up.set(0.2, 0.98, 0);
+    cam.fov = 52;
+    cam.near = 0.05;
+    cam.far = 5000;
+    target.set(0, 0, 0);
+    restoreView(cam, target, saved);
+    expect(cam.position.toArray()).toEqual([10, 8, 10]);
+    expect(target.toArray()).toEqual([0, 3, 0]);
+    expect(cam.up.toArray()).toEqual([0, 1, 0]);
+    expect([cam.fov, cam.near, cam.far]).toEqual([MODEL_FOV, 0.4, 400]);
+  });
+
+  it("a preset view drops the pose's roll and lens", () => {
+    const cam = new THREE.PerspectiveCamera(52, 1, 0.05, 1000);
+    cam.up.set(0.2, 0.98, 0);
+    presetCamera(cam);
+    expect(cam.up.toArray()).toEqual([0, 1, 0]);
+    expect(cam.fov).toBe(38);
   });
 });
