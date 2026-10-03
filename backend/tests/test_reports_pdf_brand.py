@@ -76,3 +76,15 @@ def test_a_customer_logo_with_alpha_is_flattened(tmp_path):
     doc = document([cover_section(logo_path="reports/assets/logo-cust.png")])
     [part] = _render(tmp_path, doc, replace(brand(tmp_path), cover_logo=None))
     assert b"/SMask" not in part.path.read_bytes()
+
+
+def test_a_very_wide_header_logo_is_capped_and_the_title_still_prints(tmp_path):
+    wide = tmp_path / "wide.png"
+    Image.new("RGB", (4000, 100), (230, 20, 20)).save(wide)
+    [part] = _render(tmp_path, standard_doc(), replace(brand(tmp_path), header_logo=wide))
+    assert "Quarterly inspection" in pdf_pages_text(part.path)[1]
+    # 40 mm wide keeps the aspect: 1 mm high, its bottom on the logo's baseline 10.8 mm from the top
+    r, g, _ = pixel(part.path, 1, (18 + 2) / 210, 10.3 / 297)
+    assert r > 150 and g < 120  # the logo is drawn
+    r, g, b = pixel(part.path, 1, (18 + 41) / 210, 10.3 / 297)
+    assert min(r, g, b) > 230  # past its 40 mm cap: paper

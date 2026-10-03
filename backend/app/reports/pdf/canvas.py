@@ -35,6 +35,7 @@ def pdf_date(dt: datetime) -> str:
 
 HEADER_GAP_MM = 4  # between the header title and the version label
 HEADER_LOGO_MM = 5
+HEADER_LOGO_MAX_W_MM = 40  # a very wide logo shrinks to this width, keeping its aspect
 FOOTER_LINES = 3
 COVER_LOGO_MM = (60, 10)  # max width, height: U6's preview draws the same box
 
@@ -91,6 +92,9 @@ def _furniture(canv: rl_canvas.Canvas, meta: PageMeta, styles: Styles, local: in
         iw, ih = fur.header_logo.getSize()
         lh = HEADER_LOGO_MM * mm
         lw = lh * iw / ih
+        if lw > HEADER_LOGO_MAX_W_MM * mm:
+            lw = HEADER_LOGO_MAX_W_MM * mm
+            lh = lw * ih / iw
         canv.drawImage(fur.header_logo, m, h - off - 0.8 * mm, lw, lh)
         x0 = m + lw + HEADER_GAP_MM * mm
     room = w - m - x0 - stringWidth(meta.version_label, styles.fonts.sans, size) - HEADER_GAP_MM * mm
