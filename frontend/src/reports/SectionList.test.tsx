@@ -166,9 +166,11 @@ describe("SectionList", () => {
     expect(screen.getByRole("checkbox", { name: "Note" })).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: "Number" })).toBeEnabled();
     fireEvent.click(within(row("Measurements")).getByRole("button", { name: "Options" }));
+    // The findings table now also has a Height column: act on the measurement kinds' own group.
+    const kinds = within(screen.getByRole("group", { name: "Kinds" }));
     for (const name of ["Length", "Area", "Height", "Lean", "Profile"])
-      fireEvent.click(screen.getByRole("checkbox", { name }));
-    expect(screen.getByRole("checkbox", { name: "Volume" })).toBeDisabled();
+      fireEvent.click(kinds.getByRole("checkbox", { name }));
+    expect(kinds.getByRole("checkbox", { name: "Volume" })).toBeDisabled();
     // Snapshots may be emptied (no minItems in the contract).
     fireEvent.click(within(row("Finding pages")).getByRole("button", { name: "Options" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Image" }));

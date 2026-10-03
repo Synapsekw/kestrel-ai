@@ -36,7 +36,7 @@ const ASSET_FINDING: BlockOf<"finding"> = {
     ["Zone", "Upper floors"],
   ],
   asset: {
-    kicker: "Finding F-0042 · Upper floors · West elevation · seen in 3 photos",
+    kicker: "Finding F-0042 ï¿½ Upper floors ï¿½ West elevation ï¿½ seen in 3 photos",
     height_locator: { ...MAP_BLOCK.drawing, width: 64, height: 200, font_size: 6, bands: [], x_ticks: [] },
   },
 };
@@ -58,7 +58,14 @@ describe("FindingBlock with an asset panel", () => {
 describe("brand head fill", () => {
   const brand = coverBrandOf(
     {
-      colors: { accent: "#BC0000", accent_dark: "#9E0000", navy: "#141D2D", ink: "#1A1A1A", pale: "#FFE5E5", line: "#E7E4DE" },
+      colors: {
+        accent: "#BC0000",
+        accent_dark: "#9E0000",
+        navy: "#141D2D",
+        ink: "#1A1A1A",
+        pale: "#FFE5E5",
+        line: "#E7E4DE",
+      },
       font_text: null,
       font_numerals: null,
     } as Parameters<typeof coverBrandOf>[0],
@@ -73,13 +80,21 @@ describe("brand head fill", () => {
     const table = FIXTURE_BLOCKS.findings_table.find((b) => b.kind === "table") as BlockOf<"table">;
     const { container } = render(
       <PreviewEnvContext.Provider
-        value={{ resolveSnapshot: () => null, resolveAsset: () => null, scrollRoot: null, paper: "A4", brand }}
+        value={{
+          resolveSnapshot: () => null,
+          resolveAsset: () => null,
+          scrollRoot: null,
+          paper: "A4",
+          brand,
+        }}
       >
         <TableBlock block={table} />
         <FindingBlock block={ASSET_FINDING} />
       </PreviewEnvContext.Provider>,
     );
     expect((container.querySelector("thead tr") as HTMLElement).style.background).toBe("rgb(255, 229, 229)");
-    expect((container.querySelector("article header") as HTMLElement).style.background).toBe("rgb(255, 229, 229)");
+    expect((container.querySelector("article header") as HTMLElement).style.background).toBe(
+      "rgb(255, 229, 229)",
+    );
   });
 });

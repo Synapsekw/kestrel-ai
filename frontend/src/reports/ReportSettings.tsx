@@ -8,6 +8,7 @@ import { Button, Field, Icon, Input, Segmented, Select } from "@/ui";
 import { ReportFilters } from "./ReportFilters";
 
 type Cover = ReportConfig["cover"];
+type CsvLayout = ReportConfig["csv_layout"];
 type PaperSize = ReportConfig["paper"]["size"];
 
 export interface ReportSettingsProps {
@@ -149,6 +150,23 @@ export function ReportSettings({
           className="self-start"
         />
         <p className="text-2xs text-muted">Portrait; landscape pages come later.</p>
+      </Region>
+
+      <Region title="Tables">
+        <Segmented<CsvLayout>
+          label="CSV layout"
+          size="sm"
+          options={[
+            { value: "findings", label: "Findings" },
+            { value: "asset_sightings", label: "Asset sightings" },
+          ]}
+          value={config.csv_layout}
+          onChange={(csv_layout) => onEdit((c) => ({ ...c, csv_layout }))}
+          className="self-start"
+        />
+        <p className="text-2xs text-muted">
+          Asset sightings writes one row per photo sighting in the inspection kit&apos;s columns.
+        </p>
       </Region>
 
       <Region title="Filters">

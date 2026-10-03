@@ -58,7 +58,10 @@ export function FindingBlock({ block }: { block: BlockOf<"finding"> }) {
       {main ? <FigureBlock block={main} /> : null}
       {secondary.length > 0 ? <FigureRowBlock block={{ kind: "figure_row", figures: secondary }} /> : null}
       {asset?.height_locator ? (
-        <div className="grid items-start" style={{ gridTemplateColumns: `${mm(22)} 1fr`, gap: mm(0), marginTop: mm(3) }}>
+        <div
+          className="grid items-start"
+          style={{ gridTemplateColumns: `${mm(22)} 1fr`, gap: mm(0), marginTop: mm(3) }}
+        >
           <AssetDrawingSvg drawing={asset.height_locator} label="Height on the asset" widthMm={18} />
           {block.kv.length > 0 ? <KvBlock block={{ kind: "kv", rows: block.kv }} /> : <span />}
         </div>

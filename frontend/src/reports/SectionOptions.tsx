@@ -19,7 +19,12 @@ const TABLE_COLUMNS = [
   ["data_item", "Data item"],
   ["observed", "Observed"],
   ["note", "Note"],
+  ["zone", "Zone"],
+  ["side", "Side"],
+  ["height", "Height"],
+  ["sightings", "Sightings"],
 ] as const;
+const SEVERITY_FLOORS = [1, 2, 3, 4] as const;
 const TABLE_SORTS = [
   ["severity_desc", "Severity, worst first"],
   ["number", "Finding number"],
@@ -138,7 +143,7 @@ export function SectionOptions({
             value={list(
               o,
               "columns",
-              TABLE_COLUMNS.map(([v]) => v),
+              TABLE_COLUMNS.slice(0, 7).map(([v]) => v),
             )}
             onChange={(columns) => onChange({ columns })}
           />
@@ -168,6 +173,24 @@ export function SectionOptions({
               }}
             />
           </Field>
+          <Field
+            label="Pages for"
+            htmlFor={`${id}-min-severity`}
+            hint="The findings table still lists every finding."
+          >
+            <Select
+              id={`${id}-min-severity`}
+              value={typeof o.min_severity === "number" ? String(o.min_severity) : ""}
+              onChange={(e) => onChange({ min_severity: e.target.value ? Number(e.target.value) : null })}
+            >
+              <option value="">Every finding</option>
+              {SEVERITY_FLOORS.map((n) => (
+                <option key={n} value={n}>
+                  {`Severity ${n} and above`}
+                </option>
+              ))}
+            </Select>
+          </Field>
           <Segmented<Comments>
             label="Comments"
             size="sm"
@@ -183,6 +206,21 @@ export function SectionOptions({
             checked={bool(o, "context_inset", true)}
             onChange={(v) => onChange({ context_inset: v })}
             label="Context inset"
+          />
+        </div>
+      );
+    case "asset_summary":
+      return (
+        <div className="flex flex-col gap-3">
+          <Switch
+            checked={bool(o, "show_map", true)}
+            onChange={(v) => onChange({ show_map: v })}
+            label="Findings map"
+          />
+          <Switch
+            checked={bool(o, "show_tables", true)}
+            onChange={(v) => onChange({ show_tables: v })}
+            label="Zone and side tables"
           />
         </div>
       );
