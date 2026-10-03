@@ -27,6 +27,28 @@ describe("useSidebarShortcut", () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores auto-repeat so holding Ctrl+B does not flicker", () => {
+    const onToggle = vi.fn();
+    render(<Probe onToggle={onToggle} />);
+    fireEvent.keyDown(document.body, { key: "b", ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: "b", ctrlKey: true, repeat: true });
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not act behind an open modal dialog", () => {
+    const onToggle = vi.fn();
+    render(
+      <>
+        <Probe onToggle={onToggle} />
+        <div role="dialog" aria-modal="true">
+          <button>Inside</button>
+        </div>
+      </>,
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "Inside" }), { key: "b", ctrlKey: true });
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
   it("is listed in the keymap for the ? sheet", () => {
     const entry = GLOBAL_KEYS.find((e) => e.action === "toggle-sidebar");
     expect(entry?.keys).toEqual(["Ctrl+B"]);

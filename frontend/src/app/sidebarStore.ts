@@ -26,19 +26,20 @@ export function writeSidebarPref(collapsed: boolean): void {
 export interface SidebarState {
   /** The operator's remembered preference (spec 2026-10-03-sidebar §4). */
   stored: boolean;
-  /** This visit's choice on a forced (full-bleed or narrow) route; null when none. */
-  override: boolean | null;
-  toggle(forced: boolean): void;
+  /** This visit's choice on a forced route, tied to the route's transitionKey it was made on; null when none. */
+  override: { key: string; collapsed: boolean } | null;
+  toggle(forced: boolean, key: string): void;
   clearOverride(): void;
 }
 
 export const useSidebar = create<SidebarState>((set, get) => ({
   stored: readSidebarPref(),
   override: null,
-  toggle: (forced) => {
+  toggle: (forced, key) => {
     const s = get();
     if (forced) {
-      set({ override: !sidebarCollapsed(s.stored, true, s.override) });
+      const here = s.override?.key === key ? s.override.collapsed : null;
+      set({ override: { key, collapsed: !sidebarCollapsed(s.stored, true, here) } });
       return;
     }
     const next = !s.stored;

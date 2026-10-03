@@ -53,13 +53,18 @@ export function Sidebar({
   const forced = isForcedCollapse(info.layout, useWindowWidth());
   const stored = useSidebar((s) => s.stored);
   const override = useSidebar((s) => s.override);
-  const collapsed = sidebarCollapsed(stored, forced, override);
+  // Derived at render so the choice ends on the very frame the page changes (spec §4).
+  const here = override?.key === info.transitionKey ? override.collapsed : null;
+  const collapsed = sidebarCollapsed(stored, forced, here);
   const activeJobs = useJobsStore(selectActiveCount);
 
-  // A per-visit choice ends when the page changes (spec §4).
+  // Housekeeping only: drops a stale choice so returning to the page starts fresh.
   useEffect(() => useSidebar.getState().clearOverride(), [info.transitionKey]);
 
-  const toggle = useCallback(() => useSidebar.getState().toggle(forced), [forced]);
+  const toggle = useCallback(
+    () => useSidebar.getState().toggle(forced, info.transitionKey),
+    [forced, info.transitionKey],
+  );
   useSidebarShortcut(toggle);
 
   return (

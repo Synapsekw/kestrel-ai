@@ -23,21 +23,27 @@ describe("sidebar store", () => {
   });
 
   it("toggles and persists the preference on an ordinary route", () => {
-    useSidebar.getState().toggle(false);
+    useSidebar.getState().toggle(false, "k");
     expect(useSidebar.getState().stored).toBe(true);
     expect(readSidebarPref()).toBe(true);
     expect(useSidebar.getState().override).toBeNull();
   });
 
   it("on a forced route sets a per-visit override and leaves the preference alone", () => {
-    useSidebar.getState().toggle(true); // forced and collapsed, so it expands for this visit
-    expect(useSidebar.getState().override).toBe(false);
+    useSidebar.getState().toggle(true, "p/p1/maps"); // forced and collapsed, so it expands for this visit
+    expect(useSidebar.getState().override).toEqual({ key: "p/p1/maps", collapsed: false });
     expect(useSidebar.getState().stored).toBe(false);
     expect(localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBeNull();
-    useSidebar.getState().toggle(true);
-    expect(useSidebar.getState().override).toBe(true);
+    useSidebar.getState().toggle(true, "p/p1/maps");
+    expect(useSidebar.getState().override).toEqual({ key: "p/p1/maps", collapsed: true });
     useSidebar.getState().clearOverride();
     expect(useSidebar.getState().override).toBeNull();
+  });
+
+  it("ignores an override set on another page when toggling", () => {
+    useSidebar.setState({ override: { key: "p/p1/maps", collapsed: false } });
+    useSidebar.getState().toggle(true, "p/p1/models"); // no override here: forced collapsed, so it expands
+    expect(useSidebar.getState().override).toEqual({ key: "p/p1/models", collapsed: false });
   });
 
   it("survives a storage that throws", () => {
@@ -48,7 +54,7 @@ describe("sidebar store", () => {
       throw new Error("blocked");
     });
     expect(readSidebarPref()).toBe(false);
-    expect(() => useSidebar.getState().toggle(false)).not.toThrow();
+    expect(() => useSidebar.getState().toggle(false, "k")).not.toThrow();
     expect(useSidebar.getState().stored).toBe(true);
   });
 });

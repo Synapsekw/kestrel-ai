@@ -138,6 +138,21 @@ describe("Shell", () => {
     expect(useSidebar.getState().stored).toBe(true);
   });
 
+  it("applies a per-visit override only on the page it was set on, with no frame of lag", async () => {
+    renderShell(`/p/${PROJECT_ID}/maps`);
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    await screen.findByText("map workspace");
+    expect(nav).toHaveAttribute("data-state", "collapsed");
+    fireEvent.keyDown(document.body, { key: "b", ctrlKey: true });
+    expect(useSidebar.getState().override?.key).toBe(`p/${PROJECT_ID}/maps`);
+    expect(nav).toHaveAttribute("data-state", "expanded");
+    fireEvent.click(within(nav).getByRole("link", { name: /^Images/ }));
+    // Images is a forced route too; the Maps choice must not carry over.
+    await screen.findByLabelText("Filter");
+    expect(nav).toHaveAttribute("data-state", "collapsed");
+    expect(useSidebar.getState().override).toBeNull();
+  });
+
   it("still renders a project that cannot be loaded, as 'Project'", async () => {
     const { requests } = renderShell(`/p/${PROJECT_ID}/images`, 409);
     await waitFor(() =>

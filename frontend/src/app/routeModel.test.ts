@@ -110,7 +110,7 @@ describe("routeInfo", () => {
 });
 
 describe("sidebar rules", () => {
-  it("forces collapse on full-bleed layouts and narrow windows only", () => {
+  it("forces collapse on full-bleed and workspace layouts and on narrow windows only", () => {
     expect(isForcedCollapse("fullbleed", 1600)).toBe(true);
     expect(isForcedCollapse("page", 1099)).toBe(true);
     expect(isForcedCollapse("page", SIDEBAR_NARROW_WIDTH)).toBe(false);
