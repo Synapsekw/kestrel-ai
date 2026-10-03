@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import functools
+import importlib
 import inspect
 import json
+import logging
 import math
 import os
+import sys
+import types
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,7 +21,7 @@ from PIL import Image
 from pydantic import BaseModel
 from shapely.geometry import Polygon
 
-from app.asset_models.builders import geom
+from app.asset_models.builders import base, geom
 from app.asset_models.builders.base import (
     REGISTRY,
     BuildCtx,
@@ -25,6 +29,7 @@ from app.asset_models.builders.base import (
     MeshNode,
     build_item,
     builder,
+    catalogue,
     load_all,
 )
 from app.asset_models.builders.palette import PALETTE
@@ -1106,3 +1111,76 @@ def test_nav_aid_light_too_short_for_its_solar_panel_is_refused():
     with pytest.raises(ValueError, match="too small"):
         REGISTRY["nav_aid"].fn(make_item("nav_aid", circle(0.6), h=1.0), CTX)
     assert bounds(REGISTRY["nav_aid"].fn(make_item("nav_aid", circle(0.6), h=1.2), CTX))[0][1] >= -0.01
+
+
+# ------------------------------------------------------------------ whole family
+EQUIPMENT = {
+    "tank_lng", "vessel_v", "vessel_h", "storage_tank_small", "pump", "pump_group", "compressor", "heater",
+    "vaporizer_orv", "vaporizer_scv", "stack", "flare", "loading_arm", "crane", "monitor", "generator",
+    "transformer", "package", "nav_aid",
+}  # fmt: skip
+
+
+def test_all_19_equipment_types_are_registered_and_have_cases():
+    assert {t for t, d in REGISTRY.items() if d.family == "equipment"} == EQUIPMENT
+    assert set(FIRST) == EQUIPMENT == set(COWORK)
+
+
+def test_catalogue_publishes_the_equipment_family():
+    rows = [r for r in catalogue() if r["family"] == "equipment"]
+    assert {r["type"] for r in rows} == EQUIPMENT
+    for r in rows:
+        assert r["doc"] and r["default_height_m"] > 0 and r["params_schema"]["properties"]
+
+
+@pytest.mark.parametrize(
+    ("type_", "footprint", "h", "params"),
+    [
+        ("vessel_v", circle(6.0), 0.0, {}),  # top_el == base_el
+        ("vessel_v", circle(6.0), 2.0, {}),  # too short for the heads
+        ("pump", rect(2.0, 1.0), 1.5, {"plinth": float("nan")}),  # schema failure
+        ("tank_lng", circle(93.5), 51.5, {"wall_t_m": 60.0}),  # wall thicker than the radius
+        ("transformer", rect(10.0, 4.0), 4.0, {"bays": 0}),  # out of range
+    ],
+)
+def test_unusable_input_falls_back(type_, footprint, h, params):  # Review Focus 3
+    nodes, flags = build_item(make_item(type_, footprint, h=h, params=params), CTX)
+    assert [f for f in flags if f.code == "builder_fallback"]
+    assert nodes
+
+
+def test_load_all_registers_the_equipment_package():
+    load_all()
+    assert {t for t, d in REGISTRY.items() if d.family == "equipment"} == EQUIPMENT
+    pkg = sys.modules["app.asset_models.builders.equipment"]
+    assert hasattr(pkg, "__path__")
+
+
+def _load_all_with_import_error(monkeypatch, caplog, exc: ModuleNotFoundError) -> list[logging.LogRecord]:
+    real = importlib.import_module
+    family = "app.asset_models.builders.equipment"
+
+    def fake(name, *args, **kwargs):
+        if name == family:
+            raise exc
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(base, "_loaded", False)
+    monkeypatch.setattr(base, "importlib", types.SimpleNamespace(import_module=fake))
+    before = dict(REGISTRY)
+    with caplog.at_level(logging.ERROR):
+        load_all()
+    assert dict(REGISTRY) == before
+    return [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_missing_inner_import_in_equipment_is_logged(monkeypatch, caplog):
+    exc = ModuleNotFoundError("no vessels", name="app.asset_models.builders.equipment.vessels")
+    records = _load_all_with_import_error(monkeypatch, caplog, exc)
+    assert any("equipment" in r.getMessage() for r in records)
+
+
+def test_missing_family_module_itself_is_silent(monkeypatch, caplog):
+    exc = ModuleNotFoundError("no equipment", name="app.asset_models.builders.equipment")
+    records = _load_all_with_import_error(monkeypatch, caplog, exc)
+    assert not [r for r in records if "equipment" in r.getMessage()]
