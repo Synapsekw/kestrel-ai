@@ -193,3 +193,47 @@ def test_cloud_in_frame_reads_the_cloud_row(tmp_path, handle, make_cloud):
     assert cc.cloud_in_frame(handle, make_cloud(las, epsg=32639), frame)
     assert not cc.cloud_in_frame(handle, make_cloud(las, epsg=32640), frame)
     assert not cc.cloud_in_frame(handle, make_cloud(las, epsg=None), frame)
+
+
+# ---------------------------------------------------------------- datum
+
+
+def test_fit_datum_from_drawing_elevations(scene):
+    pts, items = scene
+    g = pc.grid()
+    datum = cc.fit_datum(pc.to_sample(g, pts), g, items)
+    assert datum.cloud_id == "c1" and datum.tilt is None
+    assert datum.offset_m == pytest.approx(pc.EL_OFFSET, abs=0.05)
+
+
+def test_fit_datum_fits_a_tilt_over_a_wide_site():
+    g = pc.grid()
+    items = [
+        pc.item(f"d{k}", "package", pc.rect(e, n, 10, 10), base=pc.GROUND_EL, source="drawing")
+        for k, (e, n) in enumerate(
+            [(1000, 300), (1150, 300), (1300, 300), (1000, 550), (1150, 550), (1300, 550)]
+        )
+    ]
+    pts = pc.ground(950, 250, 1350, 600, step=2.0)
+    x, _ = g.plant_to_site(pts[:, 0], pts[:, 1])
+    pts[:, 2] = -20.0 - 0.002 * (x - g.frame.origin_crs[0])  # the cloud sinks 2 mm per metre east
+    d = cc.fit_datum(pc.to_sample(g, pts), g, items)
+    assert d.tilt is not None
+    assert d.tilt[0] == pytest.approx(0.002, abs=2e-4) and abs(d.tilt[1]) < 2e-4
+    xs = np.array([x.min(), x.max()])
+    el = -20.0 - 0.002 * (xs - g.frame.origin_crs[0]) + [cc._el_offset(d, g.frame, v, 0.0) for v in xs]
+    assert np.allclose(el, pc.GROUND_EL, atol=0.05)
+
+
+def test_fit_datum_falls_back_to_base_elevations(scene):
+    pts, items = scene
+    g = pc.grid()
+    two_drawn = [
+        it.model_copy(update={"height_source": "indicative"}) if it.id == "tank-c" else it for it in items
+    ]
+    with_bases = [
+        it.model_copy(update={"base_el": pc.GROUND_EL}) if it.base_el is None else it for it in two_drawn
+    ]
+    sample = pc.to_sample(g, pts)
+    assert cc.fit_datum(sample, g, with_bases).offset_m == pytest.approx(pc.EL_OFFSET, abs=0.05)
+    assert cc.fit_datum(sample, g, items[:2]) is None  # one drawn base, one without: under 3 usable

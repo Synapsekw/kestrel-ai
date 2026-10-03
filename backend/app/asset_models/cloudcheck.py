@@ -11,14 +11,15 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+import shapely
 from pyproj import CRS
 from pyproj.exceptions import CRSError
 
-from app.asset_models.siteframe import PlantGrid, footprint_polygon
+from app.asset_models.siteframe import PlantGrid, footprint_polygon, footprint_ref
 from app.asset_models.spec import CloudDatum, Item, ItemFlag, SiteCrs, SiteFrame
 from app.jobs.cancellation import JobCancelled
 
@@ -82,6 +83,7 @@ class PlantSample:
     crs_wkt: str | None = None
     origin: tuple[float, float] = (0.0, 0.0)
     total: int = 0
+    _index: _Index | None = field(default=None, repr=False, compare=False)
 
     def site_xy(self, idx=slice(None)) -> np.ndarray:
         return self.xyz[idx, :2].astype(np.float64) + np.asarray(self.origin, dtype=np.float64)
@@ -114,6 +116,11 @@ class PlantSample:
                 origin=tuple(float(v) for v in d["origin"]),
                 total=int(d["total"][0]),
             )
+
+    def index(self) -> _Index:
+        if self._index is None:
+            self._index = _Index(self.xyz[:, :2])
+        return self._index
 
 
 @dataclass
@@ -256,3 +263,151 @@ def sample_plant_cloud(
         origin=(x0, y0),
         total=total,
     )
+
+
+# ---------------------------------------------------------------- spatial index and item windows
+
+
+class _Index:
+    """Sample points bucketed on a 10 m site grid, so a box query never scans the whole sample."""
+
+    CELL = 10.0
+
+    def __init__(self, xy: np.ndarray):
+        self.n = len(xy)
+        if self.n == 0:
+            self.nx = self.ny = 0
+            return
+        self.lo = xy.min(axis=0).astype(np.float64)
+        ix = ((xy[:, 0] - np.float32(self.lo[0])) / np.float32(self.CELL)).astype(np.int64)
+        iy = ((xy[:, 1] - np.float32(self.lo[1])) / np.float32(self.CELL)).astype(np.int64)
+        self.nx, self.ny = int(ix.max()) + 1, int(iy.max()) + 1
+        key = iy * self.nx + ix
+        del ix, iy
+        self.order = np.argsort(key, kind="stable").astype(np.int32 if self.n < 2**31 else np.int64)
+        self.starts = np.concatenate([[0], np.cumsum(np.bincount(key, minlength=self.nx * self.ny))])
+
+    def query(self, x0: float, y0: float, x1: float, y1: float) -> np.ndarray:
+        """Indices of points in the cells overlapping the box (coordinates relative to the sample)."""
+        if self.n == 0:
+            return np.zeros(0, np.int64)
+        i0 = math.floor((x0 - self.lo[0]) / self.CELL)
+        i1 = math.floor((x1 - self.lo[0]) / self.CELL)
+        j0 = math.floor((y0 - self.lo[1]) / self.CELL)
+        j1 = math.floor((y1 - self.lo[1]) / self.CELL)
+        if i1 < 0 or j1 < 0 or i0 >= self.nx or j0 >= self.ny:
+            return np.zeros(0, np.int64)
+        i0, i1 = max(i0, 0), min(i1, self.nx - 1)
+        j0, j1 = max(j0, 0), min(j1, self.ny - 1)
+        parts = [
+            self.order[self.starts[j * self.nx + i0] : self.starts[j * self.nx + i1 + 1]]
+            for j in range(j0, j1 + 1)
+        ]
+        return np.concatenate(parts).astype(np.int64) if parts else np.zeros(0, np.int64)
+
+
+def _poly(item: Item):
+    ring = np.asarray(footprint_polygon(item.footprint), dtype=np.float64)
+    if len(ring) < 3 or not np.isfinite(ring).all():
+        return None
+    poly = shapely.make_valid(shapely.Polygon(ring))
+    if poly.is_empty or poly.area < 0.01:
+        return None
+    return poly
+
+
+@dataclass
+class _Local:
+    poly: object
+    window: tuple[float, float, float, float]  # plant [E, N] box: footprint bounds grown by the margin
+    e: np.ndarray
+    n: np.ndarray
+    z: np.ndarray
+    inside: np.ndarray
+    ref_site: tuple[float, float]
+
+
+def _local(sample: PlantSample, grid: PlantGrid, item: Item, margin: float) -> _Local | None:
+    poly = _poly(item)
+    if poly is None:
+        return None
+    a0, b0, a1, b1 = poly.bounds
+    win = (a0 - margin, b0 - margin, a1 + margin, b1 + margin)
+    cx, cy = grid.plant_to_site(
+        np.array([win[0], win[2], win[2], win[0]]), np.array([win[1], win[1], win[3], win[3]])
+    )
+    ox, oy = sample.origin
+    idx = sample.index().query(cx.min() - ox, cy.min() - oy, cx.max() - ox, cy.max() - oy)
+    if len(idx) > ITEM_CAP:
+        idx = idx[:: math.ceil(len(idx) / ITEM_CAP)]
+    xy = sample.site_xy(idx)
+    e, n = grid.site_to_plant(xy[:, 0], xy[:, 1])
+    e, n = np.asarray(e, dtype=np.float64), np.asarray(n, dtype=np.float64)
+    z = sample.xyz[idx, 2].astype(np.float64)
+    keep = (e >= win[0]) & (e <= win[2]) & (n >= win[1]) & (n <= win[3])
+    e, n, z = e[keep], n[keep], z[keep]
+    inside = shapely.contains_xy(poly, e, n) if len(e) else np.zeros(0, bool)
+    re_, rn = footprint_ref(item.footprint)
+    rx, ry = grid.plant_to_site(np.array([re_]), np.array([rn]))
+    return _Local(poly, win, e, n, z, inside, (float(rx[0]), float(ry[0])))
+
+
+def _el_offset(datum: CloudDatum, frame: SiteFrame, x: float, y: float) -> float:
+    """plant EL = cloud z + this, at site (x, y)."""
+    off = float(datum.offset_m)
+    if datum.tilt is not None:
+        off += datum.tilt[0] * (x - frame.origin_crs[0]) + datum.tilt[1] * (y - frame.origin_crs[1])
+    return off
+
+
+# ---------------------------------------------------------------- datum
+
+
+def fit_datum(sample: PlantSample, grid: PlantGrid, items: list[Item]) -> CloudDatum | None:
+    """plant EL = cloud z + offset_m (+ tilt . [x - origin_x, y - origin_y]).
+
+    From the ground ring around items with drawing base elevations (median; a tilt when 6+ of them
+    span 200 m+ and a plane explains the spread clearly better). With fewer than 3 such items, the
+    median base_el of every item that has one, against the sample's 5th z percentile. Else None.
+    """
+    frame = grid.frame
+    if _skip_note(sample, frame) is not None or len(sample.xyz) == 0:
+        return None
+    pairs: list[tuple[float, float, float]] = []
+    for it in items:
+        if it.height_source != "drawing" or it.base_el is None:
+            continue
+        try:
+            loc = _local(sample, grid, it, RING_M)
+        except (ValueError, ArithmeticError, shapely.errors.ShapelyError):
+            continue
+        if loc is None:
+            continue
+        outside = loc.z[~loc.inside]
+        if len(outside) < 20:
+            continue
+        pairs.append((loc.ref_site[0], loc.ref_site[1], it.base_el - float(np.percentile(outside, 10))))
+    if len(pairs) >= 3:
+        return _fit_offsets(np.asarray(pairs), frame, sample.cloud_id)
+    bases = [it.base_el for it in items if it.base_el is not None]
+    if len(bases) >= 3:
+        ground_z = float(np.percentile(sample.xyz[:, 2], 5))
+        return CloudDatum(cloud_id=sample.cloud_id, offset_m=round(float(np.median(bases)) - ground_z, 3))
+    return None
+
+
+def _fit_offsets(a: np.ndarray, frame: SiteFrame, cloud_id: str) -> CloudDatum:
+    off = a[:, 2]
+    med = float(np.median(off))
+    if len(a) >= 6 and math.hypot(np.ptp(a[:, 0]), np.ptp(a[:, 1])) >= 200.0:
+        A = np.column_stack([np.ones(len(a)), a[:, 0] - frame.origin_crs[0], a[:, 1] - frame.origin_crs[1]])
+        sol = np.linalg.lstsq(A, off, rcond=None)[0]
+        r_plane = float(np.sqrt(np.mean((off - A @ sol) ** 2)))
+        r_const = float(np.sqrt(np.mean((off - med) ** 2)))
+        if r_const > 0.05 and r_plane < 0.7 * r_const:
+            return CloudDatum(
+                cloud_id=cloud_id,
+                offset_m=round(float(sol[0]), 3),
+                tilt=(round(float(sol[1]), 7), round(float(sol[2]), 7)),
+            )
+    return CloudDatum(cloud_id=cloud_id, offset_m=round(med, 3))
