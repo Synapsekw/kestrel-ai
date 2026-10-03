@@ -99,6 +99,20 @@ def test_degenerate_features_yield_nothing_instead_of_raising():
     assert environment.build_env(feat("land", [[0, 0], [5, 0], [10, 0]]), GRID_CTX) == []  # collinear
 
 
+def test_a_failing_feature_is_logged_by_id_and_error_type_only(monkeypatch, caplog):
+    def boom(*_a, **_k):
+        raise RuntimeError("secret detail 123.456")
+
+    monkeypatch.setattr(environment, "surface", boom)
+    with caplog.at_level("WARNING", logger=environment.__name__):
+        assert environment.build_env(feat("sea", SQUARE, id_="sea-9"), GRID_CTX) == []
+    (rec,) = [r for r in caplog.records if r.name == environment.__name__]
+    assert rec.levelname == "WARNING"
+    msg = rec.getMessage()
+    assert "sea-9" in msg and "sea" in msg and "RuntimeError" in msg
+    assert "secret" not in msg and "123.456" not in msg
+
+
 def test_a_closed_ring_and_a_bow_tie_still_build():
     ring = [*SQUARE, SQUARE[0]]
     (node,) = environment.build_env(feat("paved", ring), GRID_CTX)

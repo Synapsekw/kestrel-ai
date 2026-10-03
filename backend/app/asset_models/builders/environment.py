@@ -9,6 +9,8 @@ kinds are thin slabs. Never raises: a degenerate feature yields [].
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import trimesh
 from shapely.geometry import Polygon
@@ -24,6 +26,8 @@ from app.asset_models.builders.civil import (
     surface,
 )
 from app.asset_models.spec import EnvFeature
+
+log = logging.getLogger(__name__)
 
 LAND_DEPTH_M = 8.0  # skirt drop when there is no sea feature (Cowork's platform slab depth)
 SEA_TOE_M = 2.5  # the skirt toe sits this far below the sea surface (Cowork: -9 vs -6.44)
@@ -97,7 +101,9 @@ def build_env(feature: EnvFeature, ctx: BuildCtx, *, sea_el: float | None = None
         mat = MATERIAL[feature.kind]
         top = y + LIFT[mat]
         return [MeshNode(feature.id, mat, prism(poly, top - SLAB_T, top), extras)]
-    except Exception:  # a broken feature never fails the GLB
+    except Exception as exc:  # a broken feature never fails the GLB
+        # names and types only: never the exception text or the points (project logging rule)
+        log.warning("environment feature %s (%s) skipped: %s", feature.id, feature.kind, type(exc).__name__)
         return []
 
 
