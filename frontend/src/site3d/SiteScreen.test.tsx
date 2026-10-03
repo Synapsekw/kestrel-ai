@@ -1,4 +1,4 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoWebGlError } from "@/clouds/viewer/engine";
@@ -81,6 +81,16 @@ function open(scene: SiteScene | { status: number }, route = "/p/p1/site") {
   return renderWithProviders(<SiteScreen />, { api, route, path: "/p/:projectId/site/:modelId?" });
 }
 
+/**
+ * The canvas is in the DOM one commit before the engine exists: the engine is made in SiteView's
+ * passive effect, which React flushes in a later task than the commit. `findBy*` resolves on the
+ * commit, so wait for the engine too before reading `h.engines` or `h.models`.
+ */
+async function viewStarted() {
+  await screen.findByTestId("site-canvas");
+  await waitFor(() => expect(h.engines.length).toBeGreaterThan(0));
+}
+
 const TANK: PickHit = {
   layerId: "model",
   itemId: "20-t-0001",
@@ -116,7 +126,7 @@ describe("SiteScreen", () => {
     expect(await screen.findByText("No plant model yet")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Build a plant model" })).toBeInTheDocument();
     expect(screen.getByTestId("site-canvas")).toBeInTheDocument();
-    expect(h.engines).toHaveLength(1);
+    await waitFor(() => expect(h.engines).toHaveLength(1));
     const layers = screen.getByTestId("site-layers");
     const modelRow = within(layers).getByText("Plant model").closest("li")!;
     expect(modelRow).toHaveAttribute("aria-disabled", "true");
@@ -128,7 +138,7 @@ describe("SiteScreen", () => {
 
   it("a model loads with the token-bearing URL, counts its items, and a pick shows the item", async () => {
     open(MODEL_SCENE, "/p/p1/site/m1");
-    await screen.findByTestId("site-canvas");
+    await viewStarted();
     expect(h.models[0].opts.url).toBe(
       "http://fake/api/v1/projects/p1/asset-models/m1/versions/1/glb?token=t",
     );
@@ -147,7 +157,7 @@ describe("SiteScreen", () => {
 
   it("a model that fails to load says so and offers a reload (Review Focus 3)", async () => {
     open(MODEL_SCENE);
-    await screen.findByTestId("site-canvas");
+    await viewStarted();
     act(() => h.models[0].opts.onError?.(new Error("409")));
     expect(await screen.findByText("The plant model could not load.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Reload view" }));
@@ -163,7 +173,7 @@ describe("SiteScreen", () => {
 
   it("a reloaded view drops the stale selection", async () => {
     open(MODEL_SCENE);
-    await screen.findByTestId("site-canvas");
+    await viewStarted();
     act(() => h.models[0].opts.onError?.(new Error("409")));
     act(() => h.engines[0].select(TANK));
     expect(await screen.findByTestId("site-selection")).toBeInTheDocument();
@@ -173,7 +183,7 @@ describe("SiteScreen", () => {
 
   it("Escape clears the selection unless something else handled it; clearing returns focus to the view", async () => {
     open(MODEL_SCENE);
-    await screen.findByTestId("site-canvas");
+    await viewStarted();
     act(() => h.engines[0].select(TANK));
     await screen.findByTestId("site-selection");
     const handled = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
@@ -227,7 +237,7 @@ describe("SiteScreen", () => {
 
   it("maps and drawings become drape layers; switching Maps off hides them", async () => {
     open(TILE_SCENE);
-    await screen.findByTestId("site-canvas");
+    await viewStarted();
     const e = h.engines[0];
     expect([...e.layers.keys()].sort()).toEqual(["drawing:d1", "model", "ortho:o1"]);
     await userEvent.click(screen.getByRole("switch", { name: "Maps" }));
@@ -237,7 +247,7 @@ describe("SiteScreen", () => {
 
   it("view tools drive the engine", async () => {
     open(MODEL_SCENE);
-    await screen.findByTestId("site-canvas");
+    await viewStarted();
     await userEvent.click(screen.getByRole("button", { name: "Plan view" }));
     expect(h.engines[0].setPreset).toHaveBeenCalledWith("plan");
     await userEvent.click(screen.getByRole("button", { name: "Pan" }));
