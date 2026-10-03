@@ -29,6 +29,7 @@ from app.asset_models.builders.civil import (
     prism,
     record,
     stations,
+    thin,
     unit_box,
     yaw,
 )
@@ -185,14 +186,6 @@ builder(
 )(_house_builder(AnalyzerHouseParams, 3.5))
 
 
-def _thin(rows: list, cap: int = MAX_INSTANCES) -> np.ndarray:
-    """At most `cap` rows, picked evenly (first and last kept), as an (n, 4) array."""
-    arr = np.asarray(rows, dtype=float).reshape(-1, 4)
-    if len(arr) > cap:
-        arr = arr[np.unique(np.linspace(0, len(arr) - 1, cap).round().astype(int))]
-    return arr
-
-
 # ------------------------------------------------------------------ shelter
 class ShelterParams(B3Params):
     bay: float = Field(6.0, gt=1, le=30)
@@ -231,6 +224,9 @@ def build_shelter(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     keep_in = poly.buffer(1e-6)
     grid = [[c + u * a + v * b for a in us] for b in vs]
     cols = [q for row in grid for q in row if keep_in.contains(Point(float(q[0]), float(q[1])))]
+    if not cols:  # a small round or other convex non-rect outline clips every grid corner away
+        rp = poly.representative_point()
+        cols = [np.array([rp.x, rp.y])]
     under = h - p.roof_t
     col_h = under - p.slab_t
     nodes = []
@@ -314,7 +310,7 @@ def build_gate(item: Item, ctx: BuildCtx) -> list[MeshNode]:
             MeshNode(
                 "pickets",
                 "Steel_Dark",
-                instanced(unit_box(0.03, h - 0.36, 0.03), _thin(picket_rows), 0.18),
+                instanced(unit_box(0.03, h - 0.36, 0.03), thin(picket_rows), 0.18),
             )
         )
     return record(nodes, p, defaulted)

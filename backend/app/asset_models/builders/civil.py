@@ -157,9 +157,19 @@ def xform(x: float, y: float, z: float, dx: float = 1.0, dz: float = 0.0) -> np.
     return t
 
 
+def thin(rows, cap: int = MAX_INSTANCES) -> np.ndarray:
+    """At most `cap` rows of (n, 4), picked evenly with the first and last kept; deterministic."""
+    arr = np.asarray(rows, dtype=float).reshape(-1, 4)
+    if len(arr) > cap:
+        arr = arr[np.unique(np.linspace(0, len(arr) - 1, cap).round().astype(int))]
+    return arr
+
+
 def stations(pts: np.ndarray, spacing: float, lod: float) -> np.ndarray:
     """Evenly spaced points along a polyline, every vertex included, the closing vertex of a
-    closed ring not repeated. Returns (n, 4): x, z, and the unit direction of the segment."""
+    closed ring not repeated. Returns (n, 4): x, z, and the unit direction of the segment.
+    Never more than MAX_INSTANCES rows: past the cap the rows are thinned evenly (both ends kept,
+    so a many-vertex line can lose vertex stations)."""
     pts = clean_line(pts)
     closed = is_closed(pts)
     seglen = np.hypot(*np.diff(pts, axis=0).T)
@@ -174,11 +184,12 @@ def stations(pts: np.ndarray, spacing: float, lod: float) -> np.ndarray:
     if not closed:
         d = (pts[-1] - pts[-2]) / seglen[-1]
         out.append((pts[-1][0], pts[-1][1], d[0], d[1]))
-    return np.asarray(out, dtype=float)
+    return thin(out)
 
 
 def dashes(pts: np.ndarray, dash: float, gap: float, lod: float) -> np.ndarray:
-    """Centres and directions (n, 4) of dashes laid along a polyline, restarting per segment."""
+    """Centres and directions (n, 4) of dashes laid along a polyline, restarting per segment;
+    at most MAX_INSTANCES rows (thinned evenly past the cap)."""
     out = []
     pitch = (dash + gap) / max(lod, 1e-3)
     pts = clean_line(pts)
@@ -194,7 +205,7 @@ def dashes(pts: np.ndarray, dash: float, gap: float, lod: float) -> np.ndarray:
             p = a + d * s
             out.append((p[0], p[1], d[0], d[1]))
             s += pitch
-    return np.asarray(out, dtype=float).reshape(-1, 4)
+    return thin(out)
 
 
 def instanced(mesh: trimesh.Trimesh, rows: np.ndarray, y: float = 0.0) -> Instanced:
@@ -365,9 +376,7 @@ def build_wall(item: Item, ctx: BuildCtx) -> list[MeshNode]:
 
 
 def fence_like(pts: np.ndarray, h: float, p: FenceParams, lod: float) -> list[MeshNode]:
-    rows = stations(pts, p.post_spacing, lod)
-    if len(rows) > MAX_INSTANCES:  # every vertex gets a post: thin a many-vertex line evenly
-        rows = rows[np.unique(np.linspace(0, len(rows) - 1, MAX_INSTANCES).round().astype(int))]
+    rows = stations(pts, p.post_spacing, lod)  # capped at MAX_INSTANCES
     post = unit_box(p.post, h, p.post)
     panels, rails = [], []
     for a, b in zip(pts[:-1], pts[1:], strict=True):
@@ -434,9 +443,26 @@ def open_box(poly: Polygon, h: float, wall_t: float, floor_t: float, wall_mat: s
     ]
     nodes = [
         MeshNode("walls", wall_mat, merge(walls)),
-        MeshNode("floor", wall_mat, prism(inner, 0.0, min(floor_t, h / 2))),
+        MeshNode("floor", wall_mat, prism(inner, 0.0, floor_top(h, floor_t))),
     ]
     return nodes, inner
+
+
+def floor_top(h: float, floor_t: float) -> float:
+    """The top of open_box's floor slab for walls of height h."""
+    return min(floor_t, h / 2)
+
+
+WATER_CLEAR = 0.02  # a water surface keeps this far off the floor top and below the wall tops
+
+
+def water(inner: Polygon, y: float, h: float, floor_t: float) -> list[MeshNode]:
+    """The water surface at y, clamped into (floor top, wall top h) with WATER_CLEAR either side
+    so it never z-fights the floor or rises over the walls; none when that band is empty."""
+    lo, hi = floor_top(h, floor_t) + WATER_CLEAR, h - WATER_CLEAR
+    if lo > hi:
+        return []
+    return [MeshNode("water", "Water_Pit", surface(inner, min(max(y, lo), hi)))]
 
 
 def _depth(item: Item, ctx: BuildCtx, default: float) -> tuple[float, bool]:
@@ -474,7 +500,7 @@ def build_channel(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     h, defaulted = _depth(item, ctx, 2.0)
     nodes, inner = open_box(outline(item, ctx), h, p.wall_t, p.floor_t, "Concrete")
     if inner is not None and p.water > 0:
-        nodes.append(MeshNode("water", "Water_Pit", surface(inner, max(p.floor_t, h * p.water))))
+        nodes += water(inner, h * p.water, h, p.floor_t)
     return record(nodes, p, defaulted)
 
 
@@ -490,5 +516,5 @@ def build_basin(item: Item, ctx: BuildCtx) -> list[MeshNode]:
     h, defaulted = _depth(item, ctx, 3.0)
     nodes, inner = open_box(outline(item, ctx), h + p.kerb_h, p.wall_t, p.floor_t, "Concrete")
     if inner is not None:
-        nodes.append(MeshNode("water", "Water_Pit", surface(inner, max(p.floor_t, h - p.freeboard))))
+        nodes += water(inner, h - p.freeboard, h + p.kerb_h, p.floor_t)
     return record(nodes, p, defaulted)

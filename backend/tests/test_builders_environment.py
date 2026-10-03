@@ -129,8 +129,14 @@ def test_build_environment_uses_the_lowest_sea_for_every_land_skirt():
         feat("road", U_SHAPE, id_="r"),
     ]
     nodes = environment.build_environment(feats, GRID_CTX)
-    assert [n.name for n in nodes] == ["a", "a-edge", "s1", "s2", "r"]
+    assert [n.name for n in nodes] == ["a", "a:edge", "s1", "s2", "r"]
     assert nodes[1].geometry.bounds[0, 1] == pytest.approx(93.0 - environment.SEA_TOE_M - 100.0)
+
+
+def test_a_land_skirt_name_never_collides_with_a_feature_id():
+    feats = [feat("land", SQUARE, id_="L"), feat("road", U_SHAPE, id_="L-edge")]
+    names = [n.name for n in environment.build_environment(feats, GRID_CTX)]
+    assert len(names) == len(set(names)) == 3
 
 
 def test_al_zour_landmask_builds_land_over_its_full_outline():
@@ -147,7 +153,7 @@ def test_al_zour_landmask_builds_land_over_its_full_outline():
     assert by["sea"].extras["env"] == "sea"
     assert np.isfinite(bounds(nodes)).all()
     assert same_geometry(nodes, environment.build_environment(feats, GRID_CTX))
-    assert_golden([by["land"], by["land-edge"], by["mainland"], by["mainland-edge"]], "env_land", "top")
+    assert_golden([by["land"], by["land:edge"], by["mainland"], by["mainland:edge"]], "env_land", "top")
 
 
 def test_environment_kinds_are_not_registered_builders():

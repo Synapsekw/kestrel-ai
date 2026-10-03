@@ -2,9 +2,10 @@
 
 `build_env(feature, ctx)` turns one EnvFeature into scene-frame meshes (metres, x = plant N,
 y = EL - datum, z = plant E; identity placement under the GLB's `environment/` group). Land is a
-ground cap at `el` with a rock-armour skirt sloping down and out to below sea level; sea is a flat,
-up-facing surface the Site 3D view swaps for its water shader (extras {"env": "sea"}); the other
-kinds are thin slabs. Never raises: a degenerate feature yields [].
+ground cap at `el` (node named after the feature id) with a rock-armour skirt sloping down and out
+to below sea level (node "<id>:edge"; ':' is outside the ItemId alphabet, so it never collides with
+another feature's id); sea is a flat, up-facing surface the Site 3D view swaps for its water shader
+(extras {"env": "sea"}); the other kinds are thin slabs. Never raises: a degenerate feature yields [].
 """
 
 from __future__ import annotations
@@ -96,7 +97,7 @@ def build_env(feature: EnvFeature, ctx: BuildCtx, *, sea_el: float | None = None
             drop = max(drop, 0.5)
             return [
                 MeshNode(feature.id, "Ground", surface(poly, y), extras),
-                MeshNode(f"{feature.id}-edge", "Rock_Armour", _skirt(poly, y, y - drop), dict(extras)),
+                MeshNode(f"{feature.id}:edge", "Rock_Armour", _skirt(poly, y, y - drop), dict(extras)),
             ]
         mat = MATERIAL[feature.kind]
         top = y + LIFT[mat]

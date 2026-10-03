@@ -154,6 +154,32 @@ def test_stations_open_closed_lod_and_cap():
     assert len(civil.stations(long, 3.0, 1.0)) <= civil.MAX_INSTANCES + 1
 
 
+def test_stations_and_dashes_never_exceed_max_instances():
+    straight = np.array([[0.0, 0.0], [100_000.0, 0.0]])
+    zigzag = np.array([[10.0 * i, 3.0 * (i % 2)] for i in range(500)])  # 499 legs of ~10.4 m
+    for pts in (straight, zigzag):
+        rows = civil.stations(pts, 0.01, 1.0)
+        assert 0 < len(rows) <= civil.MAX_INSTANCES
+        assert rows[0, :2].tolist() == pytest.approx(pts[0].tolist())  # both ends kept
+        assert rows[-1, :2].tolist() == pytest.approx(pts[-1].tolist())
+        assert same_rows(rows, civil.stations(pts, 0.01, 1.0))  # deterministic
+        dash = civil.dashes(pts, 0.01, 0.01, 1.0)
+        assert 0 < len(dash) <= civil.MAX_INSTANCES
+        assert same_rows(dash, civil.dashes(pts, 0.01, 0.01, 1.0))
+
+
+def same_rows(a: np.ndarray, b: np.ndarray) -> bool:
+    return a.shape == b.shape and bool(np.array_equal(a, b))
+
+
+def test_thin_keeps_both_ends_and_caps_evenly():
+    rows = np.column_stack([np.arange(12.0), np.zeros(12), np.ones(12), np.zeros(12)])
+    out = civil.thin(rows, 4)
+    assert out[:, 0].tolist() == [0.0, 4.0, 7.0, 11.0]
+    assert civil.thin(rows[:3], 4).shape == (3, 4)
+    assert civil.thin([], 4).shape == (0, 4)
+
+
 def test_yaw_turns_x_onto_the_plan_direction():
     d = np.array([3.0, 4.0]) / 5.0
     v = civil.yaw(d[0], d[1]) @ np.array([1.0, 0.0, 0.0, 1.0])
@@ -361,6 +387,34 @@ def test_channel_holds_water_at_half_depth():
     assert nodes["water"].material == "Water_Pit"
     assert water.bounds[:, 1].tolist() == pytest.approx([1.0, 1.0])
     assert materials(list(nodes.values())) == {"Concrete", "Water_Pit"}
+
+
+def _water_band(nodes):
+    """(floor top, water y, wall top) of an open box."""
+    floor_top = nodes["floor"].geometry.bounds[1, 1]
+    wall_top = nodes["walls"].geometry.bounds[1, 1]
+    return floor_top, nodes["water"].geometry.bounds[0, 1], wall_top
+
+
+def test_shallow_channel_keeps_its_water_below_the_wall_tops():
+    fp = {"kind": "line", "pts": [[E0, N0], [E0 + 10, N0]], "width": 1.9}
+    nodes = by_name(build_ok(make_item("channel", fp, top_el=100.2)))
+    floor_top, y, wall_top = _water_band(nodes)
+    assert wall_top == pytest.approx(0.2)
+    assert floor_top + 0.02 - 1e-9 <= y <= wall_top - 0.02 + 1e-9
+
+
+def test_a_channel_too_shallow_for_water_has_none():
+    fp = {"kind": "line", "pts": [[E0, N0], [E0 + 10, N0]], "width": 1.9}
+    nodes = by_name(build_ok(make_item("channel", fp, top_el=100.05)))
+    assert "water" not in nodes and {"walls", "floor"} <= set(nodes)
+
+
+def test_shallow_basin_water_stands_off_the_floor():
+    nodes = by_name(build_ok(make_item("basin", RECT, top_el=100.8)))
+    floor_top, y, wall_top = _water_band(nodes)
+    assert floor_top == pytest.approx(0.3)
+    assert floor_top + 0.02 - 1e-9 <= y <= wall_top - 0.02 + 1e-9
 
 
 def test_narrow_channel_becomes_a_solid_body():

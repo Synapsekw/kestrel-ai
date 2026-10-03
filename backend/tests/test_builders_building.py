@@ -156,6 +156,16 @@ def test_shelter_on_a_concave_footprint_keeps_columns_inside():
     assert all(poly.contains(Point(t[0, 3], t[2, 3])) for t in xf)
 
 
+@pytest.mark.parametrize("d", [3.0, 2.0])
+def test_a_small_round_shelter_still_has_a_column(d):
+    fp = {"kind": "circle", "center": [E0, N0], "d": d}
+    nodes = by_name(build_ok(make_item("shelter", fp, top_el=105.0)))
+    xf = nodes["columns"].geometry.transforms
+    poly = outline(make_item("shelter", fp), CTX).buffer(1e-6)
+    assert len(xf) > 0
+    assert all(poly.contains(Point(t[0, 3], t[2, 3])) for t in xf)
+
+
 def test_too_low_shelter_falls_back():
     _, flags = build_item(make_item("shelter", RECT, top_el=100.8), BuildCtx(grid=None))
     assert [f.code for f in flags] == ["builder_fallback"]
