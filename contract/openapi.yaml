@@ -11822,7 +11822,7 @@ components:
         side: { type: [string, "null"], description: "a side label of the model's review profile" }
         zone: { type: [string, "null"], description: "a zone id of the model's review profile" }
         component: { type: [string, "null"], description: "the GLB part hit, through the profile's component map" }
-        placement: { type: [string, "null"], enum: [point, patch, none, null], description: "the representative sighting's placement; null for other anchor kinds" }
+        placement: { type: [string, "null"], enum: [point, patch, none, null], description: "the representative sighting's placement; null for other anchor kinds, and while an asset finding's representative sighting is still `pending` (not yet placed)" }
         sighting_count: { type: integer, minimum: 0, description: "an asset finding's `finding_sighting` rows; every other kind has one implicit sighting and answers 1" }
         representative:
           description: "the sighting the finding is shown by (an image finding: its own annotation); null for map and cloud findings, or an asset finding with no sighting left"
@@ -14153,7 +14153,7 @@ components:
       required: [sighting_id, finding_id, kind, center, normal, size, severity, type_id, has_patch]
       properties:
         sighting_id: { type: string }
-        finding_id: { type: string }
+        finding_id: { type: [string, "null"], description: "the sighting's finding; null while the sighting is ungrouped, between `asset_place` and `asset_group`" }
         kind: { type: string, enum: [point, patch] }
         center: { $ref: "#/components/schemas/AssetVec3" }
         normal: { $ref: "#/components/schemas/AssetVec3" }

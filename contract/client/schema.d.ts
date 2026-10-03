@@ -10418,7 +10418,7 @@ export interface components {
             /** @description the GLB part hit, through the profile's component map */
             component: string | null;
             /**
-             * @description the representative sighting's placement; null for other anchor kinds
+             * @description the representative sighting's placement; null for other anchor kinds, and while an asset finding's representative sighting is still `pending` (not yet placed)
              * @enum {string|null}
              */
             placement: "point" | "patch" | "none" | null;
@@ -12858,7 +12858,8 @@ export interface components {
         };
         Placement: {
             sighting_id: string;
-            finding_id: string;
+            /** @description the sighting's finding; null while the sighting is ungrouped, between `asset_place` and `asset_group` */
+            finding_id: string | null;
             /** @enum {string} */
             kind: "point" | "patch";
             center: components["schemas"]["AssetVec3"];
