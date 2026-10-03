@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import {
   AUTO_ROTATE_SPEED,
@@ -6,7 +7,9 @@ import {
   PATCH_ALPHA_TEST,
   PATCH_POLYGON_OFFSET,
   PATCH_RENDER_ORDER,
+  ghostMaterial,
   partsFromScene,
+  renderLoop,
   viewDirection,
 } from "./engine";
 
@@ -49,5 +52,76 @@ describe("engine constants follow the kit", () => {
     expect(GHOST_OPACITY).toBe(0.25);
     expect(GROUND_RENDER_ORDER).toBe(-10);
     expect(AUTO_ROTATE_SPEED).toBe(0.6);
+  });
+});
+
+describe("render loop", () => {
+  it("keeps one frame pending while a frame's own update asks for another (auto-rotate)", () => {
+    const queue: FrameRequestCallback[] = [];
+    let loop: ReturnType<typeof renderLoop> | null = null;
+    let draws = 0;
+    loop = renderLoop({
+      // controls.update() under auto-rotate fires "change", which requests a render from inside the frame
+      draw: () => {
+        draws += 1;
+        loop!.request();
+      },
+      keepAlive: () => true,
+      raf: (cb) => queue.push(cb),
+      caf: () => {},
+      now: () => 0,
+    });
+    loop.request();
+    expect(queue).toHaveLength(1);
+    for (let i = 0; i < 5; i++) {
+      const cb = queue.shift()!;
+      cb(0);
+      expect(queue).toHaveLength(1);
+    }
+    expect(draws).toBe(5);
+    loop.stop();
+  });
+
+  it("idles a second after the last request when nothing keeps it alive", () => {
+    const queue: FrameRequestCallback[] = [];
+    let t = 0;
+    const loop = renderLoop({
+      draw: () => {},
+      keepAlive: () => false,
+      raf: (cb) => queue.push(cb),
+      now: () => t,
+    });
+    loop.request();
+    queue.shift()!(0);
+    expect(queue).toHaveLength(1);
+    t = 1001;
+    queue.shift()!(0);
+    expect(queue).toHaveLength(0);
+  });
+});
+
+describe("ghost materials", () => {
+  it("ghosts a material and restores its authored alpha", () => {
+    const glass = new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.4, depthWrite: false });
+    ghostMaterial(glass, true);
+    expect(glass.transparent).toBe(true);
+    expect(glass.opacity).toBe(GHOST_OPACITY);
+    expect(glass.depthWrite).toBe(false);
+    ghostMaterial(glass, false);
+    expect(glass.transparent).toBe(true);
+    expect(glass.opacity).toBe(0.4);
+    expect(glass.depthWrite).toBe(false);
+  });
+
+  it("leaves an untouched material as authored when ghost is off", () => {
+    const solid = new THREE.MeshStandardMaterial();
+    ghostMaterial(solid, false);
+    expect(solid.transparent).toBe(false);
+    expect(solid.opacity).toBe(1);
+    expect(solid.depthWrite).toBe(true);
+    const blend = new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.5 });
+    ghostMaterial(blend, false);
+    expect(blend.transparent).toBe(true);
+    expect(blend.opacity).toBe(0.5);
   });
 });

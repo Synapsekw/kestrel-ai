@@ -110,6 +110,69 @@ export function partsFromScene(
 /** Top view looks straight down; a hair of tilt keeps the camera's +Y up well defined (north up the screen). */
 const TOP_TILT = 0.002;
 
+/**
+ * The on-demand render loop: a request renders for the next second; `keepAlive` (auto-rotate) keeps
+ * it going. At most one frame is ever pending, even when `draw` itself requests a render
+ * (OrbitControls' auto-rotate fires "change" from `update()`), so callbacks never multiply.
+ */
+export function renderLoop(o: {
+  draw(): void;
+  keepAlive(): boolean;
+  raf?: (cb: FrameRequestCallback) => number;
+  caf?: (id: number) => void;
+  now?: () => number;
+}): { request(): void; stop(): void } {
+  const raf = o.raf ?? ((cb: FrameRequestCallback) => requestAnimationFrame(cb));
+  const caf = o.caf ?? ((id: number) => cancelAnimationFrame(id));
+  const now = o.now ?? (() => performance.now());
+  let pending = 0;
+  let idleUntil = 0;
+  let stopped = false;
+  const frame = () => {
+    pending = 0;
+    if (stopped) return;
+    o.draw();
+    if (!pending && !stopped && (now() < idleUntil || o.keepAlive())) pending = raf(frame);
+  };
+  return {
+    request() {
+      if (stopped) return;
+      idleUntil = now() + 1000;
+      if (!pending) pending = raf(frame);
+    },
+    stop() {
+      stopped = true;
+      if (pending) caf(pending);
+      pending = 0;
+    },
+  };
+}
+
+interface GhostBase {
+  transparent: boolean;
+  opacity: number;
+  depthWrite: boolean;
+}
+
+/**
+ * Ghost on: see-through at `GHOST_OPACITY` with depth writes off. Ghost off: the material's authored
+ * transparent, opacity and depthWrite (recorded the first time it is ghosted), so GLB glass and
+ * BLEND/MASK materials keep their alpha. A material never ghosted is left as it is.
+ */
+export function ghostMaterial(m: THREE.Material, on: boolean): void {
+  const ud = m.userData as { ghostBase?: GhostBase };
+  if (!on && !ud.ghostBase) return;
+  const base = (ud.ghostBase ??= {
+    transparent: m.transparent,
+    opacity: m.opacity,
+    depthWrite: m.depthWrite,
+  });
+  m.transparent = on ? true : base.transparent;
+  m.opacity = on ? GHOST_OPACITY : base.opacity;
+  m.depthWrite = on ? false : base.depthWrite;
+  m.needsUpdate = true;
+}
+
 export function createModelEngine(o: {
   canvas: HTMLCanvasElement;
   host: HTMLElement;
@@ -151,8 +214,6 @@ export function createModelEngine(o: {
   let levelsOn = false;
   let selected: string | null = null;
   let bounds = new THREE.Box3(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
-  let raf = 0;
-  let idleUntil = 0;
   let disposed = false;
   let loadSeq = 0;
 
@@ -180,6 +241,12 @@ export function createModelEngine(o: {
   const disposeTextured = (g: THREE.Object3D) => {
     g.traverse((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined)?.map?.dispose());
     disposeChildren(g);
+  };
+  /** `disposeChildren` frees geometry and material; the InstancedMesh's own dispose frees its instance buffers. */
+  const disposeCameras = () => {
+    for (const c of cams.children)
+      if ((c as THREE.InstancedMesh).isInstancedMesh) (c as THREE.InstancedMesh).dispose();
+    disposeChildren(cams);
   };
   const sizeOrtho = (aspect: number) => {
     ortho.top = orthoHeight / 2;
@@ -209,20 +276,19 @@ export function createModelEngine(o: {
       (c) => active.position.distanceTo(new THREE.Vector3(...c)),
     );
   };
-  const frame = () => {
-    raf = 0;
-    if (disposed) return;
-    controls.update();
-    updatePins();
-    requestVisiblePatches();
-    renderer.render(scene, active);
-    // auto-rotate keeps the loop alive; otherwise it idles a second after the last change
-    if (performance.now() < idleUntil || controls.autoRotate) raf = requestAnimationFrame(frame);
-  };
+  // auto-rotate keeps the loop alive; otherwise it idles a second after the last change
+  const loop = renderLoop({
+    draw: () => {
+      controls.update();
+      updatePins();
+      requestVisiblePatches();
+      renderer.render(scene, active);
+    },
+    keepAlive: () => controls.autoRotate,
+  });
   const requestRender = () => {
     if (disposed) return;
-    idleUntil = performance.now() + 1000;
-    if (!raf) raf = requestAnimationFrame(frame);
+    loop.request();
   };
   controls.addEventListener("change", requestRender);
   const resize = () => {
@@ -323,13 +389,7 @@ export function createModelEngine(o: {
     requestRender();
   };
 
-  const applyGhost = () =>
-    applyMaterials((m) => {
-      m.transparent = ghostOn;
-      m.opacity = ghostOn ? GHOST_OPACITY : 1;
-      m.depthWrite = !ghostOn;
-      m.needsUpdate = true;
-    });
+  const applyGhost = () => applyMaterials((m) => ghostMaterial(m, ghostOn));
 
   const addPatch = async (id: string, b: PatchBuffers) => {
     const item = items.find((p) => p.sightingId === id);
@@ -528,7 +588,8 @@ export function createModelEngine(o: {
       });
       bounds = new THREE.Box3().setFromObject(gltf.scene);
       applyCut();
-      applyGhost();
+      // fresh clones carry the GLB's own alpha: only a ghost that is on touches them
+      if (ghostOn) applyGhost();
       applyVisibility();
       drawLevels();
       if (opts?.keepCamera) requestRender();
@@ -601,7 +662,7 @@ export function createModelEngine(o: {
       requestRender();
     },
     setCameras(next, colourOf) {
-      disposeChildren(cams);
+      disposeCameras();
       poses = next;
       if (next.length > 0) {
         const size = Math.max(0.3, assetHeight() * 0.015);
@@ -759,8 +820,7 @@ export function createModelEngine(o: {
       if (disposed) return;
       disposed = true;
       loadSeq++;
-      cancelAnimationFrame(raf);
-      raf = 0;
+      loop.stop();
       ro.disconnect();
       o.canvas.removeEventListener("pointerdown", onDown);
       o.canvas.removeEventListener("pointerup", onUp);
@@ -773,7 +833,7 @@ export function createModelEngine(o: {
       disposeTextured(surface);
       disposeTextured(ground);
       disposeChildren(pins);
-      disposeChildren(cams);
+      disposeCameras();
       renderer.dispose();
     },
   };
