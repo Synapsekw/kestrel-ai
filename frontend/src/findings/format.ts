@@ -1,3 +1,6 @@
+import type { Finding } from "@/api/findings";
+import { zoneKey } from "./assetLookups";
+
 /** F §8.1: `F-` plus at least four digits. */
 export function formatFindingNumber(n: number): string {
   return `F-${String(n).padStart(4, "0")}`;
@@ -31,4 +34,23 @@ export function parseCreatedBy(v: string): CreatedBy {
 
 export function formatPercent(v: number | null): string | null {
   return v === null ? null : `${Math.round(v * 100)}%`;
+}
+
+/** A height above the asset's ground datum, one decimal: "42.5 m". */
+export function formatHeight(m: number): string {
+  return `${m.toFixed(1)} m`;
+}
+
+/**
+ * Zone, side and height of an asset finding ("Shaft · E · 42.5 m"), or "Unplaced" when no ray hit
+ * (no height, zone or side: Global Constraints). Null for a finding that is not on an asset.
+ */
+export function assetFacts(
+  f: Pick<Finding, "asset_model_id" | "zone" | "side" | "height_m">,
+  zoneLabels: ReadonlyMap<string, string>,
+): string | null {
+  if (!f.asset_model_id) return null;
+  if (f.height_m === null) return "Unplaced";
+  const zone = f.zone ? (zoneLabels.get(zoneKey(f.asset_model_id, f.zone)) ?? f.zone) : null;
+  return [zone, f.side, formatHeight(f.height_m)].filter(Boolean).join(" · ");
 }

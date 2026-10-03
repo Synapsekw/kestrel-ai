@@ -32,9 +32,16 @@ const SORT_LABEL: Record<FindingSort, string> = {
   number: "Number",
   "-updated_at": "Recently updated",
   type: "Type",
+  "-height": "Height",
+  zone: "Zone",
 };
 const SOURCES: SourceKind[] = ["image", "map", "cloud"];
-const SOURCE_BUTTON: Record<SourceKind, string> = { image: "Images", map: "Maps", cloud: "Clouds" };
+const SOURCE_BUTTON: Record<SourceKind, string> = {
+  image: "Images",
+  map: "Maps",
+  cloud: "Clouds",
+  asset: "Asset",
+};
 
 function ToggleChip({
   pressed,
