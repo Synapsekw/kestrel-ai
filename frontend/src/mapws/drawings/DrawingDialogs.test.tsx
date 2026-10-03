@@ -69,9 +69,9 @@ describe("DrawingDialogs (the row menu's actions, PF8)", () => {
     ]);
     act(() => stores.workspace.getState().select({ kind: "drawing", id: pdfDrawing.id }));
     ask("delete");
-    const dialog = screen.getByRole("dialog", { name: `Delete ${pdfDrawing.name}?` });
+    const dialog = screen.getByRole("dialog", { name: "Are you sure?" });
     expect(dialog).toHaveTextContent("The drawing leaves the project; the original file is not touched.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(requests.some((r) => r.method === "DELETE")).toBe(true);
     expect(useDrawingsStore.getState().byId[pdfDrawing.id]).toBeUndefined();

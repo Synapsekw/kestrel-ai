@@ -10,7 +10,7 @@ const fail = () => Promise.reject(new Error(""));
 describe("raster dialog fallbacks", () => {
   it("delete says it could not delete, in sentence case", async () => {
     render(<ConfirmDeleteDialog title="Delete it?" body="Gone." onConfirm={fail} onClose={() => {}} />);
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     expect(await screen.findByText("Could not delete it.")).toBeInTheDocument();
   });
 

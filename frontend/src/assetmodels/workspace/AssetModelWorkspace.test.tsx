@@ -350,8 +350,9 @@ describe("AssetModelWorkspace", () => {
     const dialog = await openDetails();
     fireEvent.click(within(dialog).getByRole("button", { name: /delete asset model…/i }));
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
-    expect(within(dialog).getByText(/every version and its 3d model go with it/i)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: /delete permanently/i }));
+    const confirm = screen.getByRole("dialog", { name: "Are you sure?" });
+    expect(confirm).toHaveTextContent(/every version and its 3d model go with it/i);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Yes" }));
     await waitFor(() =>
       expect(requests.some((r) => r.method === "DELETE" && /\/asset-models\/m1$/.test(r.url))).toBe(true),
     );

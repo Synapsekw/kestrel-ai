@@ -34,7 +34,7 @@ export function DrawingDialogs({ projectId }: PanelProps) {
   const id = intent.id;
   return (
     <ConfirmDeleteDialog
-      title={`Delete ${drawing?.name ?? "this drawing"}?`}
+      title="Are you sure?"
       body={DELETE_CONFIRM}
       onConfirm={async () => {
         await removeDrawing(api, projectId, id);

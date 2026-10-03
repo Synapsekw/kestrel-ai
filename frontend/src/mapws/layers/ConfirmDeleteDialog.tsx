@@ -38,7 +38,7 @@ export function ConfirmDeleteDialog({
             Cancel
           </Button>
           <Button variant="danger" loading={busy} onClick={() => void confirm()}>
-            Delete
+            Yes
           </Button>
         </>
       }

@@ -153,7 +153,7 @@ export function DrawingsScreen() {
       )}
       {pending && (
         <ConfirmDeleteDialog
-          title={`Delete ${pending.name}?`}
+          title="Are you sure?"
           body={DELETE_CONFIRM}
           onConfirm={() => removeDrawing(api, projectId, pending.id)}
           onClose={() => setPending(null)}

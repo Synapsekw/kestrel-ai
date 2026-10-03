@@ -119,8 +119,8 @@ async function deleteFromDetails(name: string) {
   await userEvent.click(
     within(await screen.findByTestId("cloud-details")).getByRole("button", { name: "Delete" }),
   );
-  const confirm = await screen.findByRole("dialog", { name: `Delete ${name}?` });
-  await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+  const confirm = await screen.findByRole("dialog", { name: "Are you sure?" });
+  await userEvent.click(within(confirm).getByRole("button", { name: "Yes" }));
 }
 
 /** A tool button on the rail or in the open topic panel. */

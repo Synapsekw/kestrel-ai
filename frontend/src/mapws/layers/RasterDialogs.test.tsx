@@ -113,7 +113,7 @@ describe("row-menu dialogs (M §5.2)", () => {
     useToastStore.getState().clear();
     setup();
     choose(ortho, "delete");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(useGoneLayers.getState().gone.has(ortho.key)).toBe(true));
     useGoneLayers.getState().markGone(ortho.key, ortho.name); // a tile that 404s after the delete
     expect(useToastStore.getState().toasts).toHaveLength(0);
@@ -122,10 +122,10 @@ describe("row-menu dialogs (M §5.2)", () => {
   it("deletes after confirming, and shows the server's 409", async () => {
     const requests = setup();
     choose(ortho, "delete");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
     choose(dsm, "delete");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     expect(await screen.findByText(/Stockpile A uses this surface/)).toBeInTheDocument();
   });
 });
