@@ -109,3 +109,18 @@ def test_review_message_and_frame_line_with_a_site_flags_and_candidates(handle, 
     assert "1 items" in msg
     frame = P._frame_line(rc)
     assert "The site frame is set" in frame and "datum HPFS = 100 m" in frame and "17.9991" in frame
+
+
+def test_the_frame_a_drawing_states_is_authoritative():
+    """Al-Zour live run 1 fitted the frame through a roughly placed page instead of General Note 2."""
+    from app.asset_models.agent.plant import prompt_plant as P
+
+    assert "authoritative" in P.ORCH_SYSTEM and "note wins" in P.ORCH_SYSTEM
+
+
+def test_shorelines_come_from_the_largest_scale_plan_and_the_ortho():
+    """Live run 1 traced the shore from the 1:3000 overall plan and missed Cowork's by up to 181 m."""
+    from app.asset_models.agent.plant import prompt_plant as P
+
+    assert "largest-scale" in P.ORCH_SYSTEM and "every 20 m" in P.ORCH_SYSTEM
+    assert "use that type, not package" in P.ORCH_SYSTEM

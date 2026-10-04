@@ -1,0 +1,126 @@
+{
+  "tagged_ref": 404,
+  "tagged_found": 386,
+  "type_match": 374,
+  "recall": 0.9554455445544554,
+  "type_accuracy": 0.9257425742574258,
+  "pos_err_p50_m": 0.5500000000000114,
+  "pos_err_p95_m": 10.550118482747017,
+  "within_tol": 0.8556430446194225,
+  "by_area": {
+    "10": {
+      "ref": 79,
+      "found": 76,
+      "type_match": 76,
+      "positioned": 75,
+      "within": 74,
+      "recall": 0.9620253164556962,
+      "type_accuracy": 0.9620253164556962
+    },
+    "20": {
+      "ref": 84,
+      "found": 84,
+      "type_match": 84,
+      "positioned": 84,
+      "within": 74,
+      "recall": 1.0,
+      "type_accuracy": 1.0
+    },
+    "30": {
+      "ref": 39,
+      "found": 39,
+      "type_match": 39,
+      "positioned": 39,
+      "within": 39,
+      "recall": 1.0,
+      "type_accuracy": 1.0
+    },
+    "40": {
+      "ref": 24,
+      "found": 24,
+      "type_match": 22,
+      "positioned": 24,
+      "within": 7,
+      "recall": 1.0,
+      "type_accuracy": 0.9166666666666666
+    },
+    "50": {
+      "ref": 82,
+      "found": 77,
+      "type_match": 74,
+      "positioned": 77,
+      "within": 70,
+      "recall": 0.9390243902439024,
+      "type_accuracy": 0.9024390243902439
+    },
+    "60": {
+      "ref": 3,
+      "found": 3,
+      "type_match": 3,
+      "positioned": 3,
+      "within": 3,
+      "recall": 1.0,
+      "type_accuracy": 1.0
+    },
+    "70": {
+      "ref": 77,
+      "found": 67,
+      "type_match": 60,
+      "positioned": 63,
+      "within": 50,
+      "recall": 0.8701298701298701,
+      "type_accuracy": 0.7792207792207793
+    },
+    "80": {
+      "ref": 16,
+      "found": 16,
+      "type_match": 16,
+      "positioned": 16,
+      "within": 9,
+      "recall": 1.0,
+      "type_accuracy": 1.0
+    }
+  },
+  "missing": [
+    "10-M-0001",
+    "10-M-0002",
+    "10-MH-12B01",
+    "50-A-0001",
+    "50-A-0004-M-01",
+    "50-A-0004-P-01A~C",
+    "50-A-0004-V-01",
+    "50-AC-003",
+    "70-A-0012-G-01",
+    "70-A-0012-G-02",
+    "70-A-0012-G-03",
+    "70-A-0012-V-01",
+    "70-A-0012-V-02",
+    "70-A-0012-V-03",
+    "70-P-0001A",
+    "70-P-0001B",
+    "70-P-0005A",
+    "70-S-0001A/B"
+  ],
+  "extra": [
+    "50-A-0003-P-01A~C",
+    "50-A-0003-P-02A~C",
+    "70-P-0001A/B",
+    "70-S-0001A",
+    "70-S-0001B"
+  ],
+  "required_present": {
+    "20-T-0001": true,
+    "20-T-0002": true,
+    "20-T-0003": true,
+    "20-T-0004": true,
+    "20-T-0005": true,
+    "20-T-0006": true,
+    "20-T-0007": true,
+    "20-T-0008": true,
+    "jetty_head_1": true,
+    "jetty_head_2": true,
+    "trestles": false,
+    "dolphins": false
+  },
+  "landmask_hausdorff_m": 181.47479171222847
+}

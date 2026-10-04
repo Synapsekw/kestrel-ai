@@ -577,20 +577,35 @@ class SetSite:
             if xy is not None:
                 pairs.append(((gp.plant_E, gp.plant_N), (float(xy[0]), float(xy[1]))))
                 placed_from = placed_from or gp.drawing_id
-        lines, rms = [], None
-        if len(pairs) >= 2:
+        lines, rms, mismatch = [], None, None
+        stated = a.origin_crs is not None and a.plant_north_deg is not None
+        if len(pairs) >= 2 and not stated:
             try:
                 origin, theta, rms = fit_plant_grid(pairs)
             except GridError as e:
                 raise LookError(str(e)) from None
             source = Source(kind="drawing", id=placed_from, note=a.note)
-            if a.origin_crs is not None and a.plant_north_deg is not None:
-                d = math.dist(origin, a.origin_crs)
-                lines.append(
-                    f"The frame you stated differs from the grid fit by {d:.2f} m and "
-                    f"{abs(theta - a.plant_north_deg):.4f} deg; the fit is used."
-                )
-        elif a.origin_crs is not None and a.plant_north_deg is not None:
+        elif stated:
+            # A frame the drawing states (a coordinate note) is authoritative: a grid fit goes through
+            # the page's map placement, which the operator may have made only roughly (Al-Zour: 26 m).
+            if len(pairs) >= 2:
+                try:
+                    f_origin, f_theta, rms = fit_plant_grid(pairs)
+                except GridError:
+                    f_origin = None
+                if f_origin is not None:
+                    d = math.dist(f_origin, a.origin_crs)
+                    dt = abs(f_theta - a.plant_north_deg)
+                    lines.append(
+                        f"The grid fit through the placed page differs from the stated frame by {d:.2f} m "
+                        f"and {dt:.4f} deg; the stated frame is used."
+                    )
+                    if d > 1.0 or dt > 0.01:
+                        mismatch = (
+                            f"The frame the drawing states differs from a grid fit through the page's map "
+                            f"placement by {d:.1f} m and {dt:.3f} deg; the stated frame is used. Check the "
+                            "page's placement on the map."
+                        )
             origin, theta = (a.origin_crs[0], a.origin_crs[1]), a.plant_north_deg
             source = (
                 Source(kind="drawing", id=a.source_drawing_id, note=a.note)
@@ -610,7 +625,10 @@ class SetSite:
             rc.state.site = frame.model_dump(mode="json")
             # a new frame replaces the old one: its fit question goes, and comes back only if this
             # fit's residual is over 1 m too
-            rc.state.questions = [x for x in rc.state.questions if "plant grid fit" not in x]
+            stale = ("plant grid fit", "frame the drawing states")
+            rc.state.questions = [x for x in rc.state.questions if not any(k in x for k in stale)]
+            if mismatch:
+                rc.state.questions.append(mismatch)
             if rms is not None and rms > 1.0:
                 q = (
                     f"The plant grid fit has a residual of {rms:.2f} m over {len(pairs)} grid points: "

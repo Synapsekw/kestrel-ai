@@ -68,13 +68,14 @@ class Required:
     node: str | None = None
     type: str | None = None
     radius_m: float = 0.0
+    geom_radius_m: float | None = None  # with a generated footprint: distance to it, not to its centre
 
 
 KIPIC_REQUIRED: tuple[Required, ...] = (
     *(Required(f"20-T-000{k}", tag=f"20-T-000{k}") for k in range(1, 9)),
     Required("jetty_head_1", node="jetty1-loading-platform", type="jetty_platform", radius_m=25.0),
     Required("jetty_head_2", node="jetty2-loading-platform", type="jetty_platform", radius_m=25.0),
-    Required("trestles", type="trestle", radius_m=60.0),
+    Required("trestles", type="trestle", radius_m=60.0, geom_radius_m=15.0),
     Required("dolphins", type="dolphin", radius_m=10.0),
 )
 
@@ -211,13 +212,20 @@ def required_present(
     gen_tags = {normalise_tag(r.get("tag")) for r in gen} - {""}
     ref_tags = {normalise_tag(r.get("tag")) for r in ref} - {""}
     by_type: dict[str, list[tuple[float, float]]] = {}
+    shapes: dict[str, list] = {}
     for r in gen:
         p = _en(r)
         if p is not None:
             by_type.setdefault(str(r.get("type") or ""), []).append(p)
+        if r.get("footprint_geom") is not None:
+            shapes.setdefault(str(r.get("type") or ""), []).append(r["footprint_geom"])
 
-    def near(type_: str, p: tuple[float, float], radius: float) -> bool:
-        return any(math.hypot(q[0] - p[0], q[1] - p[1]) <= radius for q in by_type.get(type_, []))
+    def near(req: Required, p: tuple[float, float]) -> bool:
+        type_ = req.type or ""
+        if req.geom_radius_m is not None and shapes.get(type_):
+            pt = shapely.Point(p)
+            return any(g.distance(pt) <= req.geom_radius_m for g in shapes[type_])
+        return any(math.hypot(q[0] - p[0], q[1] - p[1]) <= req.radius_m for q in by_type.get(type_, []))
 
     out: dict[str, bool] = {}
     for req in required:
@@ -231,7 +239,7 @@ def required_present(
         ]
         pts = [p for p in (_en(r) for r in rows) if p is not None]
         if pts:
-            out[req.key] = all(near(req.type or "", p, req.radius_m) for p in pts)
+            out[req.key] = all(near(req, p) for p in pts)
     return out
 
 
@@ -325,7 +333,11 @@ def with_footprint_sizes(rows: list[dict], spec: dict) -> list[dict]:
     by tag), so `tolerance_m` can use the 2 m rule."""
     by_id: dict[str, float] = {}
     by_tag: dict[str, float] = {}
+    geom: dict[str, object] = {}
     for it in spec.get("items", []):
+        g = _footprint_geom(it.get("footprint") or {})
+        if g is not None:
+            geom[str(it.get("id"))] = g
         size = footprint_size_m(it.get("footprint") or {})
         if size is None:
             continue
@@ -335,8 +347,26 @@ def with_footprint_sizes(rows: list[dict], spec: dict) -> list[dict]:
     out = []
     for r in rows:
         size = by_id.get(str(r.get("node")), by_tag.get(normalise_tag(r.get("tag"))))
-        out.append({**r, "footprint_m": size} if size is not None else dict(r))
+        row = {**r, "footprint_m": size} if size is not None else dict(r)
+        if str(r.get("node")) in geom:
+            row["footprint_geom"] = geom[str(r.get("node"))]
+        out.append(row)
     return out
+
+
+def _footprint_geom(fp: dict):
+    """The footprint as a shapely polygon in plant metres, or None when it cannot be read."""
+    from pydantic import TypeAdapter, ValidationError
+
+    from app.asset_models.siteframe import footprint_polygon
+    from app.asset_models.spec import Footprint
+
+    try:
+        ring = footprint_polygon(TypeAdapter(Footprint).validate_python(fp))
+        poly = shapely.make_valid(shapely.Polygon(ring))
+    except (ValidationError, ValueError, TypeError):
+        return None
+    return None if poly.is_empty else poly
 
 
 def _finite(v):

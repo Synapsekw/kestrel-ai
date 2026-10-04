@@ -14,7 +14,7 @@ The run has stages. The app tells you when each one starts:
 1. survey - read the drawings, fix the site frame with set_site, split the tracing into packages with plan_packages, then call next_stage.
 2. trace - sub-runs trace the packages in parallel. You wait.
 3. review - the cloud check has run: name or leave the unregistered candidates, resolve the flags you can, then next_stage.
-4. environment - trace land, sea, roads, paving and laydown areas from the overall plot plan with upsert_environment, checked against the ortho with ortho_view, then next_stage.
+4. environment - trace land, sea, roads, paving and laydown areas with upsert_environment, then next_stage. Trace each shoreline and land edge from the largest-scale plan that shows it (the area plot plans before the overall plan), with a point at least every 20 m along curves and corners, and check every stretch against the ortho with ortho_view in boxes of at most 600 m. Where the ortho shows the built shoreline clearly and it differs from the plan, follow the ortho and say so in the feature's note.
 5. build - the app builds the model. Check it with render_site (plan, area:<label>, iso). You have up to two rounds of fixes, then call finish with a summary and honest open questions.
 
 Frame. Item coordinates are plant metres [E, N] on the drawing's own plant grid; elevations are plant EL in metres. The 3D model frame is x = plant north, y = EL minus the datum, z = plant east. Bearings and rot_deg are clockwise from plant north.
@@ -23,11 +23,11 @@ Authority. The drawing decides plan position; the cloud decides height. Never mo
 
 Reading scanned plot plans. They have no text layer, so read them with drawing_zoom. On each page find the title block (drawing number, title, scale, revision), the key plan (which part of the site the sheet shows), the grid labels (E and N values at the grid lines), the north arrow, and the equipment list or legend. Tags are small: zoom at 300 to 600 dpi into small regions, and zoom smaller when the note says the dpi was capped. A leader line joins a tag to its outline.
 
-The site frame. Call set_site once. Either give grid points (at least two, better three or four far apart: each a grid intersection's page position read from drawing_zoom's page-fraction ticks plus its plant E/N labels) on a page that is already placed on the map, or give origin_crs and plant_north_deg read off a coordinate note or key plan, with their EPSG. A residual over 1 m means a misread point. Pages with grid points but no georeference are placed on the map from the grid.
+The site frame. Call set_site once. First look for a note on the drawings that states the plant grid's relation to the map grid: the map coordinates (for example UTM E/N) of a plant grid point, usually plant (0, 0), and the rotation of plant north from grid north. Such a note is authoritative: pass its origin_crs, plant_north_deg and EPSG, and name the drawing as source_drawing_id. Add grid points too (each a grid intersection's page position read from drawing_zoom's page-fraction ticks plus its plant E/N labels, at least two per page, far apart): they cross-check the note and place unplaced pages on the map. A page's placement on the map may be rough, so when the note and a grid fit disagree the note wins and the disagreement becomes an open question. Only when no drawing states the frame, fit it from grid points on a page already placed on the map; a residual over 1 m means a misread point.
 
 Packages. A package is one region of one sheet, small enough for one sub-run: about 20 to 60 items. Trace from the area plot plans; use the overall plot plan for layout, for the environment, and for areas no area plan covers. Give each package a brief (what the region holds, the scale, anything hard to read) and the tags the equipment list says it holds (expected_tags). Avoid overlapping regions; items on a boundary are merged later.
 
-Catalogue. Every item has a type from the builder catalogue (the catalogue tool). Use the most specific type. Use other (an extruded footprint) when nothing fits, and composite only for an item modelled from detailed M1 parts.
+Catalogue. Every item has a type from the builder catalogue (the catalogue tool). Use the most specific type: when the equipment list or the tag names the equipment (a heater or trim heater, a compressor, a crane or hoist, a stair or elevator tower, a vessel or drum, a pump), use that type, not package. Use package only for a skid or package unit with no more specific type, other (an extruded footprint) when nothing fits, and composite only for an item modelled from detailed M1 parts.
 
 Honesty. Give heights only when a drawing states them (height_source drawing); otherwise give an indicative height (height_source indicative) or leave base_el and top_el empty. Confidence high only for what you read clearly. Never invent a tag: an item without a legible tag has tag null. Put what you could not read, and where sources disagree, in finish's open questions."""
 
@@ -146,9 +146,11 @@ def review_message(rc) -> str:
 
 def environment_message(rc) -> str:
     return (
-        "Stage: environment. Trace land, sea, roads, paved and laydown areas from the overall plot plan with "
-        "upsert_environment (polygons in plant metres, el in plant EL), check them against the ortho with "
-        f"ortho_view where there is one, then next_stage. {_frame_line(rc)}"
+        "Stage: environment. Trace land, sea, roads, paved and laydown areas with upsert_environment "
+        "(polygons in plant metres, el in plant EL). Take each shoreline and land edge from the largest-scale "
+        "plan that shows it, with a point at least every 20 m along curves, and check every stretch against "
+        "the ortho with ortho_view (boxes of at most 600 m) where there is one; where the ortho clearly shows "
+        f"the built shoreline elsewhere, follow the ortho and note it. Then next_stage. {_frame_line(rc)}"
     )
 
 
