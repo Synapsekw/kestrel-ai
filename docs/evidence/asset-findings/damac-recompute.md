@@ -49,9 +49,16 @@ sighting, the centres agree closely (median 3 mm).
 
 So the miss is in the patch-or-point decision, not in the ray cast. For 27 sightings, the kit's placement made a
 patch and Kestrel's `asset_place` (profile `building_facade`, mixed placement) chooses a point. I did not
-investigate further and did not tune anything.
+tuned nothing.
+
+Cause, checked read-only on the first replay project (4,495 photos):
+- In the replay, 27 of the kit's patches belong to sightings whose box is a plain rectangle (no merged.json
+  polygon); the other 679 patches are polygons.
+- `place.wants_patch` applies the spec's mixed rule (§6.3): a polygon gives a patch, a box gives a pin.
+- So on a recompute these 27 rectangles become points. That is exactly the 27 patch -> point transitions.
+- The kit itself made patches for some rectangle findings (its surface.json holds them), so the two rules differ.
 
 Options for the ruling:
-1. Look into why `asset_place` picks a point for these 27 (for example the patch coverage or grid rule
-   against the kit's), and fix it if it is a defect.
+1. Change the mixed rule so a rectangle can also get a patch, the way the kit does (this needs the kit's
+   rule for when a rectangle gets one). It is a spec change to §6.3.
 2. Accept the result and amend the recompute targets for kind counts and same-kind share.
