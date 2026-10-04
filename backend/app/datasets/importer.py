@@ -120,7 +120,8 @@ def _run_import(ctx: JobContext) -> dict:
     planned = [(p, unique_dest(dest_dir, p.stem, taken)) for p in sources]
     todo = []
     for src, dest in planned:
-        if dest.name not in own_duplicates and _relative(handle, dest) not in all_paths:
+        recorded_here = dest.name in own_duplicates and not settings.keep_duplicates
+        if not recorded_here and _relative(handle, dest) not in all_paths:
             todo.append((src, dest))
     skipped = len(planned) - len(todo)
     ctx.check_cancelled()
@@ -137,7 +138,9 @@ def _run_import(ctx: JobContext) -> dict:
     items = [(Path(p).name, h) for p, h in known_hashes]
     items += [(Path(r.dest).name, r.phash) for r in prepared]
     new_names = {Path(r.dest).name for r in prepared}
-    found = find_duplicates(items, settings.dedupe_threshold)
+    # Keep every photo: an inspection kit set holds distinct photos whose hashes can be equal,
+    # so the duplicate check is skipped entirely rather than run at threshold 0.
+    found = {} if settings.keep_duplicates else find_duplicates(items, settings.dedupe_threshold)
     duplicates = {name: kept for name, kept in found.items() if name in new_names}
 
     for name in duplicates:
@@ -155,6 +158,14 @@ def _run_import(ctx: JobContext) -> dict:
 
     keep = [r for r in prepared if Path(r.dest).name not in duplicates]
     imported = _write_rows(ctx, source_id, site, keep, settings.group_regex, folder=folder, ids=ids)
+    if settings.keep_duplicates:
+        # Keep every photo on a re-post: the duplicates this source recorded earlier were imported
+        # above, so they no longer belong in the list.
+        revived = {Path(r.dest).name for r in keep} & own_duplicates
+        if revived:
+            for name in revived:
+                recorded.pop(name, None)
+            (dest_dir / DUPLICATES_FILE).write_text(json.dumps(recorded, indent=2), "utf-8")
 
     with handle.session() as s:
         source = s.get(Source, source_id)

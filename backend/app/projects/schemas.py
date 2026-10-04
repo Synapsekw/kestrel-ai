@@ -15,6 +15,9 @@ class ImportSettings(BaseModel):
     quality: int = Field(95, ge=50, le=100)
     dedupe_threshold: int = Field(4, ge=0, le=32)
     group_regex: str = r"^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)"
+    # Per import only: never a project default (ImportSettingsPatch has no such field and
+    # create_source drops it from the defaults), so every import starts with the check on.
+    keep_duplicates: bool = False
 
 
 class ImportSettingsPatch(BaseModel):

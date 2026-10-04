@@ -165,7 +165,7 @@ export function ReportSettings({
           className="self-start"
         />
         <p className="text-2xs text-muted">
-          Asset sightings writes one row per photo sighting in the inspection kit&apos;s columns.
+          Asset sightings writes one row per sighting in the inspection kit&apos;s columns.
         </p>
       </Region>
 

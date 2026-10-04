@@ -15,7 +15,7 @@ import numpy as np
 from sqlalchemy import delete
 
 from app.asset_review.kit_format import UNCLASSIFIED, Kit
-from app.asset_review.kit_masks import MIN_REGION_PX, load_mask, vectorise
+from app.asset_review.kit_masks import MIN_REGION_PX, largest_fragment, load_mask, vectorise
 from app.asset_review.kit_match import Match
 from app.db.models import Box, FindingSighting, ImagePose
 from app.errors import AppError
@@ -162,6 +162,10 @@ def plan_photo(
         sx, sy = m.width / pw, m.height / ph
         min_area = max(MIN_REGION_PX, REGION_MIN_SHARE * pw * ph)
         rings = vectorise(mask, graded, min_area=min_area, max_regions=MAX_REGIONS)
+        if not rings:
+            # operator ruling: a graded mask with only sub-floor fragments keeps its largest one
+            fragment = largest_fragment(mask, graded)
+            rings = [fragment] if fragment else []
         if not rings:
             skipped.append({"kit_key": kit_id, "reason": "empty_mask"})
             continue

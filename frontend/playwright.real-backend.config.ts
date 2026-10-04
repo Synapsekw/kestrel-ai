@@ -2,9 +2,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
 
-// The one real-backend flow of spec 2026-09-26-map-workspace §15: the real FastAPI backend (the
-// shared venv's interpreter, a scratch data folder, never %APPDATA%) and Vite in APP_BACKEND_URL
-// mode. Opt-in, never part of `pnpm e2e`:
+// The real-backend flows (spec 2026-09-26-map-workspace §15, and the asset findings close-out X):
+// the real FastAPI backend (the shared venv's interpreter, a scratch data folder, never %APPDATA%)
+// and Vite in APP_BACKEND_URL mode. Opt-in, never part of `pnpm e2e`:
 //   pnpm -C frontend exec playwright test -c playwright.real-backend.config.ts
 const webPort = Number(process.env.E2E_WEB_PORT ?? 1520);
 const apiPort = Number(process.env.E2E_API_PORT ?? webPort + 1);
@@ -20,7 +20,7 @@ process.env.KESTREL_PYTHON = python;
 
 export default defineConfig({
   testDir: "e2e",
-  testMatch: /maps-real-backend\.spec\.ts$/,
+  testMatch: /(maps|asset-findings)-real-backend\.spec\.ts$/,
   timeout: 240_000,
   workers: 1,
   // Beside the scratch data, not frontend/test-results: a gate run in the same checkout empties

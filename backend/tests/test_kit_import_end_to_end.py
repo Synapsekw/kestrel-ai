@@ -111,6 +111,33 @@ def test_photo_kit_finding_keeps_its_source_mask(tmp_path, client, project, hand
     assert np.array_equal(load_mask(handle.folder / att.path), draw_mask())
 
 
+def test_a_sub_floor_finding_photo_keeps_its_largest_fragment(tmp_path, client, project, handle, wait_job):
+    types = kit_types(client, project)
+    kit = make_photo_kit(tmp_path / "kit")
+    tiny = np.zeros((750, 1000), np.uint8)
+    tiny[100:103, 100:103] = 2  # 9 px, below the floor
+    tiny[300:302, 300:302] = 2
+    tiny[500, 500] = 2
+    Image.fromarray(tiny).save(kit / "masks" / "p001.png")
+    source_id, _ = seed_images(handle, PHOTO_PHOTOS, PHOTO_SIZE)
+    mid = seed_ready_model(handle, "Flare")
+    res = start(
+        client,
+        project,
+        wait_job,
+        folder=str(kit),
+        image_source_id=source_id,
+        asset_model_id=mid,
+        class_map={"moderate": types["corrosion"]["id"]},
+    )
+    assert res["sightings"] == 1
+    assert res["findings"]["total"] == 1
+    assert all(k["reason"] != "empty_mask" for k in res["skipped"])
+    assert res["placement"]["orphans"] == 0
+    (finding,) = findings_of(handle, mid)
+    assert finding.placement == "patch" and finding.sighting_count == 1
+
+
 def test_photo_unit_sightings_are_never_clustered(tmp_path, client, project, handle, wait_job):
     """Two photos of one spot stay two findings; each photo's regions are one finding."""
     types = kit_types(client, project)

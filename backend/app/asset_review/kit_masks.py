@@ -56,6 +56,45 @@ def vectorise(
     return [ring for _, ring in rings[:max_regions]]
 
 
+def largest_fragment(
+    mask: np.ndarray, class_ids: set[int], *, epsilon: float = EPSILON_PX
+) -> list[list[float]] | None:
+    """The outer ring of the largest graded fragment (contour area, then pixel count), however
+    small; None when the mask holds no graded pixel. Used when no region reaches the size floor:
+    a finding photo keeps one sighting. A fragment too small to simplify to a polygon (or with no
+    area) falls back to its pixel bounding box as a 4-point ring."""
+    m = np.isin(mask, list(class_ids)).astype(np.uint8)
+    if not m.any():
+        return None
+    contours, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return None
+
+    def rank(c: np.ndarray) -> tuple[float, int]:
+        x, y, w, h = cv2.boundingRect(c)
+        fill = np.zeros((h, w), np.uint8)
+        cv2.drawContours(fill, [c - [x, y]], -1, 1, cv2.FILLED)
+        return float(cv2.contourArea(c)), int((fill & m[y : y + h, x : x + w]).sum())
+
+    best = max(contours, key=rank)
+    pts = cv2.approxPolyDP(best, epsilon, True).reshape(-1, 2)
+    if len(pts) >= 3:
+        ring = [[float(x) + 0.5, float(y) + 0.5] for x, y in pts]
+        n = len(ring)
+        twice_area = abs(
+            sum(ring[i][0] * ring[(i + 1) % n][1] - ring[(i + 1) % n][0] * ring[i][1] for i in range(n))
+        )
+        if twice_area > 0:
+            return ring
+    x, y, w, h = cv2.boundingRect(best)
+    return [
+        [float(x), float(y)],
+        [float(x + w), float(y)],
+        [float(x + w), float(y + h)],
+        [float(x), float(y + h)],
+    ]
+
+
 def mask_coverage(mask: np.ndarray, class_ids: set[int]) -> float:
     return float(np.isin(mask, list(class_ids)).sum()) / float(mask.size)
 

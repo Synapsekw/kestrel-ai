@@ -293,6 +293,12 @@ export function ReviewImportDialog({
                 </ul>
               </details>
             )}
+            {preview.unmatched_count > 0 && (
+              <p className="text-xs text-muted">
+                Missing photos? Import the photo folder again with &quot;Keep every photo&quot; on, then check
+                again.
+              </p>
+            )}
             <table aria-label="Class mapping" className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted">

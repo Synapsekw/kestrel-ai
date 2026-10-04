@@ -91,11 +91,37 @@ def _placed(row: FindingRow) -> bool:
     return row.placement in PLACED and row.height_m is not None
 
 
-def _photos(n: int) -> str:
-    return f"seen in {n} photo" + ("" if n == 1 else "s")
+def _plural(n: int, noun: str) -> str:
+    return f"{n} {noun}" + ("" if n == 1 else "s")
 
 
-def kicker(row: FindingRow, info: AssetInfo | None) -> str:
+def sightings_phrase(unit: str | None, regions: int, photos: int) -> str:
+    """Photo-unit findings are one photo with a region per mask ("3 regions on 1 photo"); region-unit
+    findings keep "seen in N photos" (each sighting is a photo)."""
+    regions = max(regions, 1)
+    if unit == "photo":
+        return f"{_plural(regions, 'region')} on {_plural(max(photos, 1), 'photo')}"
+    return f"seen in {_plural(regions, 'photo')}"
+
+
+def photo_count(ctx: ComposeContext, row: FindingRow) -> int:
+    """Distinct photos among a finding's sightings (one indexed read)."""
+    with ctx.session() as s:
+        return int(
+            s.execute(
+                select(func.count(func.distinct(FindingSighting.image_id))).where(
+                    FindingSighting.finding_id == row.id
+                )
+            ).scalar_one()
+        )
+
+
+def _phrase(ctx: ComposeContext, row: FindingRow, info: AssetInfo | None) -> str:
+    unit = info.review.finding_unit if info is not None and info.review is not None else None
+    return sightings_phrase(unit, row.sighting_count, photo_count(ctx, row) if unit == "photo" else 0)
+
+
+def kicker(row: FindingRow, info: AssetInfo | None, phrase: str) -> str:
     parts = [f"Finding {row.label}"]
     if row.zone:
         parts.append((info.zone_label(row.zone) if info is not None else row.zone) or row.zone)
@@ -103,7 +129,7 @@ def kicker(row: FindingRow, info: AssetInfo | None) -> str:
         parts.append(row.side)
     if not _placed(row):
         parts.append("not placed on the model")
-    parts.append(_photos(max(row.sighting_count, 1)))
+    parts.append(phrase)
     return " · ".join(parts)
 
 
@@ -131,7 +157,9 @@ def _captured(t: datetime) -> str:
     return f"{blocks.fmt_date(t)}, {t:%H:%M}"
 
 
-def asset_facts(row: FindingRow, info: AssetInfo | None, rep: Rep | None) -> list[tuple[str, str]]:
+def asset_facts(
+    row: FindingRow, info: AssetInfo | None, rep: Rep | None, phrase: str
+) -> list[tuple[str, str]]:
     basis = info.review.sides.basis if info is not None and info.review is not None else None
     frame = info.frame if info is not None else None
     datum = frame.datum_label if frame is not None and frame.datum_label else "ground"
@@ -149,7 +177,7 @@ def asset_facts(row: FindingRow, info: AssetInfo | None, rep: Rep | None) -> lis
         elif key == "class":
             out.append(("Type", row.type_name))
         elif key == "defect":
-            out.append(("Finding", f"{row.label} · {_photos(max(row.sighting_count, 1))}"))
+            out.append(("Finding", f"{row.label} · {phrase}"))
         elif key == "height":
             out.append(("Height", f"{row.height_m:.1f} m above {datum}" if _placed(row) else NOT_PLACED_TEXT))
         elif key == "zone" and row.zone:
@@ -239,6 +267,7 @@ def asset_finding_block(ctx: ComposeContext, row: FindingRow) -> Block:
     kinds = {str(k) for k in opts.snapshots}
     info = ctx.asset_models.get(row.asset_model_id) if row.asset_model_id else None
     rep = read_rep(ctx, row)
+    phrase = _phrase(ctx, row, info)
     wide = close = None
     if "image" in kinds and rep is not None:
         wide = _crop(ctx, row, rep, WIDE_CONTEXT, WIDE_OUT, WIDE_MM, f"Source photograph {rep.image_name}")
@@ -255,10 +284,10 @@ def asset_finding_block(ctx: ComposeContext, row: FindingRow) -> Block:
     return blocks.finding(
         row,
         figures=figures,
-        kv_rows=asset_facts(row, info, rep),
+        kv_rows=asset_facts(row, info, rep, phrase),
         photos=photos,
         comments=comments,
-        asset={"kicker": kicker(row, info), "height_locator": loc},
+        asset={"kicker": kicker(row, info, phrase), "height_locator": loc},
     )
 
 

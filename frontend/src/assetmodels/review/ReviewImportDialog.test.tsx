@@ -113,6 +113,19 @@ function setup(extra: unknown[] = [], mode: "mock" | "tauri" = "mock") {
 afterEach(() => useJobsStore.setState({ jobs: {} }));
 
 describe("ReviewImportDialog", () => {
+  it("hints at re-importing the photos with Keep every photo when some are not matched", async () => {
+    setup();
+    fireEvent.change(screen.getByLabelText(/review job folder/i), {
+      target: { value: "D:/kits/tower/job" },
+    });
+    await screen.findByRole("option", { name: /flight 14 sep/i });
+    fireEvent.click(screen.getByRole("button", { name: /check the folder/i }));
+    const preview = await screen.findByRole("region", { name: /what this import will do/i });
+    expect(preview).toHaveTextContent(
+      'Missing photos? Import the photo folder again with "Keep every photo" on, then check again.',
+    );
+  });
+
   it("checks the folder, shows the preview, maps the classes and starts the import", async () => {
     const { requests, onStarted } = setup();
     fireEvent.change(screen.getByLabelText(/review job folder/i), {

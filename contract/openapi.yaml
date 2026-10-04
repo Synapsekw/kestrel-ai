@@ -7881,6 +7881,15 @@ components:
           type: string
           default: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)"
           description: the named group `flight` is the group key (flights span cameras); fall back to a 250 m tile, then the source site
+        keep_duplicates:
+          type: boolean
+          description: >-
+            Absent means false (no `default` here so the generated client keeps it optional and a
+            project-defaults patch need not carry it). Keep every photo: true turns the duplicate check off entirely, so no photo is dropped,
+            not even one whose perceptual hash equals an earlier one (which `dedupe_threshold: 0`
+            still drops). Use it for inspection kit photo sets. Per import only: it is stored with
+            the source's settings, but it is never a project default (it is ignored in a project's
+            `import_defaults` and reads back false there).
       example: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)" }
 
     Project:

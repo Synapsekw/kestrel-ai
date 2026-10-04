@@ -5,7 +5,7 @@ import { messageOf } from "@/api/errors";
 import { createSource, type SourceWithJob } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, Dialog, Disclosure, Field, Input } from "@/ui";
+import { Alert, Button, Checkbox, Dialog, Disclosure, Field, Input } from "@/ui";
 
 interface Props {
   project: Project;
@@ -20,6 +20,7 @@ interface Form {
   quality: string;
   dedupe_threshold: string;
   group_regex: string;
+  keep_duplicates: boolean;
 }
 
 function whole(text: string, min: number, max: number): number | null {
@@ -41,6 +42,7 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
     quality: String(d.quality),
     dedupe_threshold: String(d.dedupe_threshold),
     group_regex: d.group_regex,
+    keep_duplicates: false, // per import, never a project default
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
       quality,
       dedupe_threshold,
       group_regex: form.group_regex.trim(),
+      keep_duplicates: form.keep_duplicates,
     };
     setBusy(true);
     setError(null);
@@ -131,6 +134,17 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
         <Field label="Site name" htmlFor={`${id}-site`} hint="Optional. Defaults to the folder name.">
           <Input id={`${id}-site`} value={form.site} onChange={(e) => patch({ site: e.target.value })} />
         </Field>
+        <div className="flex flex-col gap-1">
+          <Checkbox
+            label="Keep every photo"
+            checked={form.keep_duplicates}
+            onChange={(e) => patch({ keep_duplicates: e.target.checked })}
+            aria-describedby={`${id}-keep-hint`}
+          />
+          <p id={`${id}-keep-hint`} className="text-xs leading-relaxed text-muted">
+            Turns off the duplicate check. Use it for inspection kit photo sets.
+          </p>
+        </div>
         <Disclosure label="Advanced settings (the defaults suit most imports)">
           <div className="grid grid-cols-1 gap-4 rounded-panel border border-line bg-bg p-4 md:grid-cols-2">
             <Field
