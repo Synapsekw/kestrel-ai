@@ -77,6 +77,25 @@ def sdk(monkeypatch):
                     raise state["error"]
                 return state[kind]
 
+            def stream(self, **kwargs):
+                """messages.stream(...): an async context manager with an awaited get_final_message()."""
+                state["requests"].append(kwargs)
+                state["streamed"] = True
+
+                class _Stream:
+                    async def __aenter__(self_inner):
+                        if state["error"] is not None:
+                            raise state["error"]
+                        return self_inner
+
+                    async def __aexit__(self_inner, *args):
+                        pass
+
+                    async def get_final_message(self_inner):
+                        return state[kind]
+
+                return _Stream()
+
         return FakeClient
 
     import anthropic
@@ -104,7 +123,9 @@ def test_anthropic_request_shape(sdk):
     reply = run("anthropic", [HistoryEntry(role="user", text="Hi")])
     assert reply.text == "Done."
     assert reply.tool_calls == []
-    assert sdk["clients"] == [{"api_key": KEY, "timeout": llm.MODEL_TIMEOUT_S, "max_retries": 0}]
+    assert sdk["clients"] == [
+        {"api_key": KEY, "timeout": llm.MODEL_TIMEOUT_S, "max_retries": llm.SDK_RETRIES}
+    ]
     request = sdk["requests"][0]
     assert request == {
         "model": "the-model",
@@ -113,7 +134,7 @@ def test_anthropic_request_shape(sdk):
         "tools": [
             {"name": "list_images", "description": "List images.", "input_schema": TOOLS[0].input_schema}
         ],
-        "max_tokens": llm.MAX_OUTPUT_TOKENS,
+        "max_tokens": llm.ANTHROPIC_MAX_OUTPUT_TOKENS,
     }
     assert "thinking" not in request and "temperature" not in request
     assert KEY not in json.dumps(request)
@@ -467,8 +488,8 @@ ERROR_MESSAGES = {
     "auth": "The provider rejected the API key. Check it in App settings.",
     "denied": "The provider rejected the API key. Check it in App settings.",
     "timeout": "The provider took too long to answer.",
-    "server": "The provider could not complete this step. Try again.",
-    "connection": "The provider could not complete this step. Try again.",
+    "server": "The provider is busy or had a server error. Try again in a moment.",
+    "connection": "The provider is busy or had a server error. Try again in a moment.",
     "asyncio_timeout": "The provider took too long to answer.",
     "runtime": "The provider could not complete this step. Try again.",
 }
@@ -604,3 +625,13 @@ def test_effort_reaches_openai_only_when_asked(sdk):
         )
     )
     assert sdk["requests"][-1]["reasoning"] == {"effort": "low"}
+
+
+def test_anthropic_streams_with_room_for_long_tool_calls_and_sdk_retries(sdk):
+    """Live Al-Zour run 3 died in the survey: a long plan_packages call plus thinking hit the
+    16 000-token cap of a non-streaming request. Anthropic calls stream with 64 000 output tokens, and
+    the SDK retries dropped connections and 5xx itself."""
+    run("anthropic", [HistoryEntry(role="user", text="Hi")])
+    assert sdk.get("streamed") is True
+    assert sdk["requests"][0]["max_tokens"] == 64000
+    assert sdk["clients"][0]["max_retries"] >= 2

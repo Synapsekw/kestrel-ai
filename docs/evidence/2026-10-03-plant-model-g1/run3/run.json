@@ -1,0 +1,37 @@
+{
+  "state": "failed",
+  "stop_reason": "provider_error",
+  "summary": "The provider's answer was cut off. Try a smaller request.",
+  "open_questions": [
+    "The frame the drawing states differs from a grid fit through the page's map placement by 17.3 m and 0.220 deg; the stated frame is used. Check the page's placement on the map.",
+    "The plant grid fit has a residual of 8.77 m over 3 grid points: check the grid points read off the drawings."
+  ],
+  "usage": {
+    "input_tokens": 2614211,
+    "output_tokens": 32271
+  },
+  "usage_by_stage": {
+    "current": "done",
+    "stages": {
+      "survey": {
+        "input_tokens": 2614211,
+        "output_tokens": 32271,
+        "images": 48,
+        "calls": 52
+      }
+    },
+    "cost_estimate_usd": 11.1,
+    "cost_label": "Estimate from list prices, not a bill. Cached input is priced as fresh input."
+  },
+  "packages": {
+    "total": 0,
+    "done": 0,
+    "failed": 0,
+    "running": 0
+  },
+  "version": null,
+  "started_at": "2026-10-04T08:04:17.269749Z",
+  "ended_at": "2026-10-04T08:19:39.621095Z",
+  "seconds": 926,
+  "tokens": 2646482
+}

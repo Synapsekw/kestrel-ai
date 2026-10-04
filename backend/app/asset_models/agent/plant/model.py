@@ -2,7 +2,8 @@
 """One model call for any plant conversation (ruling R12):
 - the key comes from the KeyStore at call time and is dropped right after;
 - the call stops when the job is cancelled;
-- a rate limit is retried after 20, 40 and 80 s, and the wait is cancel-aware.
+- a rate limit or a busy provider (5xx, overloaded, dropped connection) is retried after 20, 40 and
+  80 s, and the wait is cancel-aware.
 
 Every other LlmError is raised to the caller."""
 
@@ -12,7 +13,9 @@ import time
 
 from app.asset_models.agent.runner import EFFORT, KEY_MISSING, _call_model
 from app.project_agent.history import LlmError
-from app.project_agent.llm import _RATE_LIMITED
+from app.project_agent.llm import _RATE_LIMITED, _SERVER_BUSY
+
+RETRYABLE = (_RATE_LIMITED, _SERVER_BUSY)
 
 RATE_RETRIES_S: tuple[float, ...] = (20.0, 40.0, 80.0)
 
@@ -40,7 +43,7 @@ def call_model(rc, *, system: str, history: list, tools: list):
                 cache=True,
             )
         except LlmError as e:
-            if e.message != _RATE_LIMITED or attempt >= len(RATE_RETRIES_S):
+            if e.message not in RETRYABLE or attempt >= len(RATE_RETRIES_S):
                 raise
             wait = RATE_RETRIES_S[attempt]
             attempt += 1

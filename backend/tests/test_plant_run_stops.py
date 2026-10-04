@@ -363,3 +363,35 @@ def test_a_main_thread_failure_in_trace_aborts_the_other_sub_runs(handle, app, m
     _, _, run, model = run_job(handle, app, ids, fake)
     assert run.state == "failed" and run.summary == INTERNAL and model.live_run_id is None
     assert len(fake.of("P2")) == 1  # no model call after the abort
+
+
+def test_a_package_that_fails_with_nothing_saved_is_traced_once_more(handle, app):
+    """Live run 2: two packages died on one provider failure each and the plant lost their items.
+    A package that fails with no items is re-queued once; a second failure stands."""
+    from app.project_agent.llm import _FAILED
+
+    ids = seed_plant(handle, app, limits=PlantLimits(parallel=1))
+    d0 = ids["drawings"][0]
+    fake = FakePlantLlm(
+        [
+            *survey(ids),
+            reply(("next_stage", {"summary": "No environment."})),
+            reply(("finish", {"summary": "ok"})),
+        ],
+        {
+            "P1": [
+                LlmError(_FAILED),
+                reply(("upsert_items", {"items": [item("t1", tag="T1", did=d0)]})),
+                finish_pkg(),
+            ],
+            "P2": [LlmError(_FAILED), LlmError(_FAILED)],
+        },
+    )
+    _, result, run, _ = run_job(handle, app, ids, fake)
+    assert run.state == "finished", run.summary
+    with handle.session() as s:
+        rows = pk.rows(s, ids["run"])
+        assert [r.state for r in rows] == ["done", "failed"]
+        assert [r.attempts for r in rows] == [2, 2]
+        v = store.get_version(s, ids["model"], result["version"])
+        assert [i["id"] for i in v.spec["items"]] == ["t1"]

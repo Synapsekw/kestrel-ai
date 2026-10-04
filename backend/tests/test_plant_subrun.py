@@ -180,3 +180,12 @@ def test_stop_propagates_and_keeps_the_items_reachable(handle, app):
 def _steps(handle, rc):
     with handle.session() as s:
         return s.get(AssetModelRun, rc.run_id).steps or []
+
+
+def test_a_busy_provider_is_retried_like_a_rate_limit(handle, app, monkeypatch):
+    """Live run 2 lost two whole packages to one transient provider failure each."""
+    from app.project_agent.llm import _SERVER_BUSY
+
+    monkeypatch.setattr(M, "RATE_RETRIES_S", (0.0, 0.0))
+    rc, w, fake = setup(handle, app, [LlmError(_SERVER_BUSY), reply(("finish_package", {"summary": "ok"}))])
+    assert run_package(rc, w).state == "done" and len(fake.of("P1")) == 2

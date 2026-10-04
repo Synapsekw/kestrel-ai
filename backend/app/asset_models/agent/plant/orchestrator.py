@@ -165,7 +165,7 @@ def _trace(rc: PlantRunContext) -> None:
         works = [pk.work_of(r, rc.state.packages_meta.get(r.id, {})) for r in rows if r.state == "queued"]
         total, done = len(rows), sum(1 for r in rows if r.state in pk.TERMINAL)
     rc.recorder.enter("trace", done, total)
-    pending, running = deque(works), {}
+    pending, running, retried = deque(works), {}, set()
     pool = ThreadPoolExecutor(max_workers=rc.limits.parallel, thread_name_prefix="plant-package")
     try:
         while pending or running:
@@ -180,7 +180,16 @@ def _trace(rc: PlantRunContext) -> None:
             finished, _ = wait(list(running), timeout=0.5, return_when=FIRST_COMPLETED)
             for f in finished:
                 w = running.pop(f)
-                _persist(rc, w, f.result())  # JobCancelled from a sub-run propagates
+                res = f.result()  # JobCancelled from a sub-run propagates
+                _persist(rc, w, res)
+                if res.state == "failed" and not res.items and w.id not in retried and not rc.abort.is_set():
+                    # one transient failure must not cost a whole area: trace it once more, last
+                    retried.add(w.id)
+                    with rc.lock, rc.handle.session() as s:
+                        pk.set_state(s, w.id, "queued")
+                    pending.append(w)
+                    log.info("plant package P%d failed with nothing saved; queued once more", w.n)
+                    continue
                 done += 1
                 rc.recorder.enter("trace", done, total)
             rc.check_cancelled()

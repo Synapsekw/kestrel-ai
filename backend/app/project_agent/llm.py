@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 from typing import Any
 
 from app.project_agent.history import HistoryEntry, LlmError, ModelReply, ToolCall, ToolSpec
@@ -19,6 +20,14 @@ MODEL_TIMEOUT_S = 300
 # The wall-clock bound around one call: the SDK timeout plus a little slack for connect/teardown.
 _DEADLINE_S = MODEL_TIMEOUT_S + 5
 MAX_OUTPUT_TOKENS = 16000
+# Anthropic calls stream, so a long tool call plus adaptive thinking has room (live Al-Zour run 3 hit
+# the 16 000 cap in a survey turn); a streamed answer may run longer than one non-streaming request.
+ANTHROPIC_MAX_OUTPUT_TOKENS = 64000
+_STREAM_DEADLINE_FACTOR = 6
+# The SDK retries dropped connections, 408/409/429 and 5xx with backoff before we see an error.
+SDK_RETRIES = 2
+
+_log = logging.getLogger(__name__)
 
 _NO_TEXT = "(no text)"
 _REFUSED = "The provider declined this request."
@@ -28,6 +37,7 @@ _RATE_LIMITED = "The provider is rate limiting requests. Wait a minute and try a
 _KEY_REJECTED = "The provider rejected the API key. Check it in App settings."
 _TOO_SLOW = "The provider took too long to answer."
 _FAILED = "The provider could not complete this step. Try again."
+_SERVER_BUSY = "The provider is busy or had a server error. Try again in a moment."
 
 
 async def complete(
@@ -61,7 +71,7 @@ async def complete(
                 effort=effort,
                 cache=cache,
             ),
-            _DEADLINE_S,
+            _DEADLINE_S * _STREAM_DEADLINE_FACTOR if provider == "anthropic" else _DEADLINE_S,
         )
     except LlmError:
         raise
@@ -87,6 +97,12 @@ def _error_message(provider: str, exc: Exception) -> str:
         return _KEY_REJECTED
     if isinstance(exc, sdk.APITimeoutError):
         return _TOO_SLOW
+    status = getattr(exc, "status_code", None)
+    # class name and HTTP status only: the SDK message can echo request data
+    shown = status if status is not None else "-"
+    _log.info("provider %s call failed: %s %s", provider, type(exc).__name__, shown)
+    if isinstance(exc, sdk.APIConnectionError) or (isinstance(status, int) and status >= 500):
+        return _SERVER_BUSY
     return _FAILED
 
 
@@ -141,17 +157,18 @@ async def _anthropic(
     if cache:
         extra["cache_control"] = {"type": "ephemeral"}  # automatic caching of the growing prefix
 
-    async with AsyncAnthropic(api_key=api_key, timeout=MODEL_TIMEOUT_S, max_retries=0) as client:
-        response = await client.messages.create(
+    async with AsyncAnthropic(api_key=api_key, timeout=MODEL_TIMEOUT_S, max_retries=SDK_RETRIES) as client:
+        async with client.messages.stream(
             model=model,
             system=system,
             messages=_anthropic_messages(history, model),
             tools=[
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools
             ],
-            max_tokens=MAX_OUTPUT_TOKENS,
+            max_tokens=ANTHROPIC_MAX_OUTPUT_TOKENS,
             **extra,
-        )
+        ) as stream:
+            response = await stream.get_final_message()
     if response.stop_reason == "refusal":
         raise LlmError(_REFUSED)
     if response.stop_reason == "max_tokens":

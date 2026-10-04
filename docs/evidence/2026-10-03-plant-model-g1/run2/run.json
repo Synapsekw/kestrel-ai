@@ -1,0 +1,89 @@
+{
+  "state": "finished",
+  "stop_reason": null,
+  "summary": "The register has 596 items, traced from the area plot plans (scanned) for Building Area T0008, Process & Utility T0007, LNG Tanks Area T0006 and Jetty Area T0005, plus 12 environment features.\n\n**Site frame.** It comes from general note 2 and the north arrow: plant (0,0) = UTM-39 E 244338.089 N 3179515.690 (EPSG 32639), with plant north 17.9991\u00b0 clockwise of grid north. I placed the area sheets from battery-limit grid points, with an RMSE of 0.15 m or less. The model's base level is EL 92.5 (ACD 0); grade is HPFS EL 100, and the building area's graded plots are FG EL 97.5.\n\n**Tracing.** Twelve of the 13 packages traced their sheets:\n- the 8 LNG tanks with their pumps, jib cranes, elevators, dry chemical packages, roof platforms, overbridges and basins;\n- the process and utility units;\n- the buildings;\n- both jetty heads with their loading arms, dolphins, hooks and monitors;\n- the approach trestle;\n- the flare.\n\n**Fixes in review and build.**\n- The Process & Utility north-east package saved nothing. I traced that region myself: ORVs G~L, trim heaters, BOG compressors and their shelter and crane, the metering shelter and skids, pig launchers, 40-series vessels and heaters, 30-TC-04 and the north N-S rack.\n- I removed one wrong item (pipe_rack-pu-conv-01). It was the revetment slope hatching at the top of the P&U sheet, traced as a conveyor rack.\n\n**Heights.** Drawing heights are used where a section states them: Section A-A for the compressor shelter, B-B for the HP pump / vent drum structure, C-C for the process rack, and the 30-V-0001 platform levels. Everything else is indicative or filled from the cloud.\n\n**Environment.**\n- The land polygon follows the ortho revetment water edge east of E 440, and the building plan west of it.\n- The sea is set at MSL EL 93.56.\n- I also added two graded laydown plots and the main roads.",
+  "open_questions": [
+    "Systematic plan offset: 229 items are flagged plan_offset, most of them about 4-8 m north (and in places a few m east) of where the cloud and ortho put them. Is the frame from the drawing note (17.9991\u00b0, UTM origin) exactly what the point cloud and ortho were registered to? The ITB originally gave 20.9491\u00b0 minus 2.95\u00b0; the comment sheets mention this.",
+    "The cloud check gives plant EL = cloud z + 117.74 m. Please confirm the cloud's vertical datum against HPFS EL 100.000 (= +7.5 m ACD).",
+    "22 height_mismatch flags are left as drawn. The 30-V-0002A~N drums show cloud tops of about EL 117 against a drawn 107.6, probably because their supporting structure (TOS 114) is above them. The 30-PR-001/002 and process main racks show cloud tops 2-4 m above the drawn TOS 116.2 / 114.0.",
+    "Several tag assignments in the P&U north-east block are inferred, not read from clear leaders: the 40-DCP-001~004 cell order; 40-V-0001 / 40-V-0002 / 40-V-0003 (which drum is which); 40-H-0001; and 50-B-13, which is a 2.4 x 1.9 m box next to the analyzer house 50-AH-0001.",
+    "The fuel gas heaters 40-E-0001A~H are modelled as two rows of four with tag null; the letter for each unit was not resolved.",
+    "50-A-0001 (metering station package) is in the equipment list but not labelled on the plan. The south skid row in 50-MS-01 is modelled with tag null.",
+    "The offsite package (the Unit 98 solids-jetty conveyor trestle and the sea water intake heads, from the overall plan) produced no items. Unit 98 itself is not modelled.",
+    "Shoreline west of E 440 comes from the building plan revetment. It lies 12-17 m south of where the ortho's line extrapolates. At the Unit 98 harbour quay the ortho edge is about 20 m beyond the plan revetment.",
+    "11 items are flagged missing_in_cloud (e.g. 10-RCM-002, 10-RCM-003, 10-MH-11B02, some tank-east packages and a gate). Are they removed, mislocated, or just poorly scanned?",
+    "The cloud shows unregistered features I left unnamed: piping manifolds east of the 40-DCP block (E ~1185, N ~500), small sheds and containers in the building area, and a rotated blue-roof building near E 550 N 450 that the building plan appears not to show.",
+    "P4: 70-P-0004A/B: the label leaders end at about E916.5/918.5, N209, just inside the E908 battery-limit corner, and no pump is drawn there. The pumps are placed at the leader ends with low confidence; the drawing that shows them is needed.",
+    "P4: 70-A-0014 vs 70-A-0015: neither label has a leader. Pairing them with 70-UB-07 and 70-UB-05 is a guess, and the packages' extents (including the equipment on the slab south of UB-05) are unclear.",
+    "P4: Generator and day-tank numbers (G-01..03, V-01..03) are not written on the plan; they are numbered north to south. The horizontal units read as day tanks are an interpretation.",
+    "P4: 70-P-0011A/B: which one is A and which is B is taken from the label order.",
+    "P4: The large two-hall building east of 70-SS-01 and the north annex have no legible tags. Are they part of the substation, or separate buildings?",
+    "P4: Outfall: the narrow double line on the embankment/causeway is read as the sea water outfall channel. Its width, its invert and whether it is open or a culvert are not given.",
+    "P3: The ortho photo does not line up with the drawing. 30-V-0001 matches, but the vaporizers, SCVs and 50-TC-10 look about 10-12 m further north in the ortho. Please check the ortho registration; I kept the drawing positions.",
+    "P3: Letter order inside each pump row (30-P-0001A~G and H~N, and the matching 30-V-0002 drums) is assumed west to east; the plan gives only range labels.",
+    "P3: Process Main PR(E-W): plan column rows are about 7 m apart (N 454.2 and 461.2), but Section C-C gives a 9 m bay. C-C seems to cut the N-S rack at E 1072-1081 instead, so its tiers may not apply to the E-W rack.",
+    "P3: Vertical rack text '30-PR-00?' at E ~1098-1104 between 30-PR-001 and 30-PR-002 has its last digit hidden, so I did not model it.",
+    "P3: Not modelled: boxes with hatched crosses next to the pump rows (E 1145-1154, N 404-412 and N 424-432) and at E 1101-1110, N 412-424. They may be pump removal or laydown areas.",
+    "P3: No drawing elevation for the top of 30-V-0001 or the SCV stacks; pump tops are also indicative.",
+    "P6: Which roof pump well each label points to is a guess: A/B/C are the three south-western wells, read on the assumption that the leaders don't cross. A fourth well, marked FUTURE (about E1631.6 N535.7 and E1777.6 N535.7), was not modelled.",
+    "P6: The labels for 20-A-0041 and 20-A-0043 are cut off at the east edge of the package. Their positions copy tank 3's layout, 146 m east.",
+    "P6: The roof platforms use the tank_lng builder defaults because the drawing gives no deck heights. Should the drawn bearings be used instead? Roughly: safety 355\u00b0 (85\u00b0 span), instrument 89\u00b0, pump 125\u00b0 (about 25 \u00d7 30 m), flare 228\u00b0, unloading 187\u00b0.",
+    "P6: On the ortho photo the tanks sit about 9 m north of the drawing grid positions. Is the ortho or the frame off?",
+    "P6: The fence-like line with posts and two gate symbols along the north road (N about 685) was not modelled. Is it a fence?",
+    "P6: The basin depth for 20-TC-06 and all roof elevations are indicative. I assumed the wall top at about EL 141 and the dome crown at EL 151.5.",
+    "P5: Central corridor / tank area flare rack (N~440-470): only a row of ~3.5 m squares at N~467 and thin bars at N452-465 are drawn. I could not read them as a rack, so no pipe_rack was added. A larger-scale corridor drawing is needed.",
+    "P5: In-tank pump A/B/C assignment comes from the order of the crossing leaders (A = southwest-most column). A 4th FUTURE column at E1339.8 N535.9 (T-0001) and E1485.6 N535.9 (T-0002) was not modelled."
+  ],
+  "usage": {
+    "input_tokens": 25335086,
+    "output_tokens": 555169
+  },
+  "usage_by_stage": {
+    "current": "done",
+    "stages": {
+      "survey": {
+        "input_tokens": 2129143,
+        "output_tokens": 34984,
+        "images": 45,
+        "calls": 51
+      },
+      "trace": {
+        "input_tokens": 11773035,
+        "output_tokens": 469165,
+        "images": 189,
+        "calls": 316
+      },
+      "review": {
+        "input_tokens": 6078918,
+        "output_tokens": 31611,
+        "images": 15,
+        "calls": 38
+      },
+      "environment": {
+        "input_tokens": 2932669,
+        "output_tokens": 16018,
+        "images": 8,
+        "calls": 13
+      },
+      "build": {
+        "input_tokens": 2421321,
+        "output_tokens": 3391,
+        "images": 4,
+        "calls": 9
+      }
+    },
+    "cost_estimate_usd": 112.44,
+    "cost_label": "Estimate from list prices, not a bill. Cached input is priced as fresh input."
+  },
+  "packages": {
+    "total": 13,
+    "done": 11,
+    "failed": 2,
+    "running": 0
+  },
+  "version": 1,
+  "started_at": "2026-10-04T04:19:07.791294Z",
+  "ended_at": "2026-10-04T05:32:00.092787Z",
+  "seconds": 4375,
+  "tokens": 25890255
+}

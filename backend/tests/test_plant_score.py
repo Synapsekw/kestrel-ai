@@ -261,3 +261,45 @@ def test_cli_gen_spec_applies_footprint_sizes_from_a_wrapped_spec(tmp_path):
 def test_gen_spec_without_items_is_an_error(tmp_path):
     with pytest.raises(ValueError):
         sc.spec_of({"foo": 1})
+
+
+def test_a_trestle_split_into_other_segments_is_matched_by_its_geometry():
+    """Live run 1: Kestrel's trestle lines covered Cowork's, but split differently, so segment centres
+    were 30-370 m apart and the centre test said MISSING. With footprints, a reference trestle counts
+    when a generated trestle's footprint passes within the radius."""
+    ref = [
+        {"node": "t-a", "type": "trestle", "plant_E": "100", "plant_N": "50"},
+        {"node": "t-b", "type": "trestle", "plant_E": "100", "plant_N": "250"},
+    ]
+    one_long = {"node": "t1", "type": "trestle", "plant_E": "100", "plant_N": "150"}
+    line = {"kind": "line", "pts": [[100, 0], [100, 300]], "width": 13}
+    spec = {"items": [{"id": "t1", "footprint": line}]}
+    req = sc.required_present([one_long], ref)
+    assert req["trestles"] is False  # centres alone: 100 m apart
+    gen = sc.with_footprint_sizes([one_long], spec)
+    assert sc.required_present(gen, ref)["trestles"] is True
+    far = {"items": [{"id": "t1", "footprint": {"kind": "line", "pts": [[400, 0], [400, 300]], "width": 13}}]}
+    assert sc.required_present(sc.with_footprint_sizes([one_long], far), ref)["trestles"] is False
+
+
+def test_tag_ranges_and_alternatives_expand_to_their_members():
+    assert sc.expand_tag("50-P-0001A~C") == {"50P0001A", "50P0001B", "50P0001C"}
+    assert sc.expand_tag("70-S-0001A/B") == {"70S0001A", "70S0001B"}
+    assert sc.expand_tag("10-SE-11B01/02") == {"10SE11B01", "10SE11B02"}
+    assert sc.expand_tag("20-T-0001") == {"20T0001"}
+    assert sc.expand_tag("") == set()
+
+
+def test_a_reference_tag_is_found_through_either_notation():
+    """Live run 4: Cowork lists 50-P-0001A..N singly but 10-SE-11B01/02 as one row; Kestrel did the
+    opposite. The same equipment written in another notation is found, not missing."""
+    ref = [
+        {"tag": "50-P-0001B", "type": "pump", "plant_E": "0", "plant_N": "0"},
+        {"tag": "10-SE-11B01/02", "type": "crane", "plant_E": "10", "plant_N": "0"},
+    ]
+    gen = [
+        {"tag": "50-P-0001A~N", "type": "pump", "plant_E": "1", "plant_N": "0"},
+        {"tag": "10-SE-11B01", "type": "crane", "plant_E": "10", "plant_N": "0"},
+    ]
+    rep = sc.score(gen, ref)
+    assert rep.tagged_found == 2 and rep.missing == []

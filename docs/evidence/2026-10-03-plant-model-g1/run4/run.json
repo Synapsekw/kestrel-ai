@@ -1,0 +1,89 @@
+{
+  "state": "finished",
+  "stop_reason": null,
+  "summary": "The register holds 812 typed items, traced from the five plot-plan sheets: Overall T0003, Process & Utility T0007, LNG Tanks T0006, Jetty T0005 and Building T0008. The other pages in those files are PMC comment sheets with no drawings on them. The work was split into 18 packages.\n\n**Site frame:** taken from general note 2 on the overall plan and its north arrow:\n- Plant (0,0) is UTM-39 (EPSG 32639) E 244,338.089, N 3,179,515.690.\n- Plant north is 17.9991\u00b0 clockwise of UTM north. The comment sheets give the same angle.\n- Plant EL = ACD + 92.5, so MSL 0 = EL 93.56, which I used as the datum.\n- The four area sheets were placed from their battery-limit corners with a fit error of 0.03 m or less.\n- One cross-check passed: the flare 60-A-0001 sits within 0.3 m of the UTM coordinate printed on the overall plan.\n\n**Model contents:**\n- Eight full-containment LNG tanks with their LP pumps, jib cranes, elevators, dry chemical packages and impound basins.\n- Twelve open rack vaporizers, three submerged combustion vaporizers, five trim heaters, four BOG compressors in their shelter, and fourteen HP pumps with their vent drums.\n- Utilities, the main substation 70-SS-01, emergency generators and the seawater intake/filtration area.\n- Pipe racks and overbridges, the building cluster, the jetty trestles, two jetty heads with loading arms, dolphins and quick release hooks, and the flare.\n- The subsea seawater intake and outfall lines from the overall plan.\n- Roads, fences, revetments, laydown areas and paving as civil items.\n\n**Review and environment stages:**\n- I added 7 untagged carports/tents in the building yard; they are in the cloud and visible on the ortho.\n- The environment is the sea at MSL plus one land polygon. Between E 416 and E 1943 it follows the rock-armour toe seen on the ortho; outside that it comes from the drawings.\n\n**Build checks:**\n- The plan, area and 3D views look right overall.\n- I corrected the intake pipeline trunk: the cloud check had made it a 9 m tall slab over the sea using water returns, and it is now a thin indicative band at sea level.\n- Two minor skids (package-pu-skid-3, package-pu3-01) are only about 0.4 m tall and were left modelled as plain extruded shapes.",
+  "open_questions": [
+    "The three UTM grid points read off the 1:3000 overall plan fitted the stated frame with a 10 m residual, so the plan's own note was used. Confirm the frame with a surveyed control point.",
+    "The cloud check reports plant EL = cloud z + 118.76 m. The cloud's vertical datum is unknown, so check that it is not an ellipsoidal or arbitrary datum before relying on absolute heights. Cloud ground also varies from about 96 in the north to about 102 in the south of the Process & Utility area. Is that a real grading difference or a tilt in the cloud registration?",
+    "247 items carry plan_offset flags, mostly 1-6 m. The jetty trestles and Jetty II sit 5-10 m west/south of the cloud and ortho, which suggests a slight rotation in the scanned jetty sheet or an as-built change. Positions were kept as drawn.",
+    "Many height_mismatch flags are expected: equipment under roofs or inside structures (BOG compressors under 40-BC-01, HP pump vent drums inside 30-PR-001/002), and jetty decks whose base was taken as ACD or seabed. Some drawing-sourced tops (compressors 107.6, vent drums 107.7) are estimates from the section sketches, not stated equipment heights.",
+    "The Section A-A detail of 40-K-0001A~D and the vessel platform details give platform elevations only. Most equipment heights are indicative or come from the cloud.",
+    "The land edge west of E 27, north of the NRP corridor, is assumed; the overall plan shows no coastline there. The Unit 98 strip, bay, breakwater and mainland coast come from the 1:3000 overall plan (about \u00b110 m), because the ortho does not cover them.",
+    "The built rock-armour toe on the ortho lies 3-15 m inside the drawn battery limits along the north and south shores (for example N ~686 against BL N 703). The environment follows the ortho there.",
+    "Several items have no legible tag: the U-shaped blue-roof building near 80-B-19 (Note 1 construction office), a blue-roof building south-west of it at about E 556 N 413 (not registered), and miscellaneous skids. 80-B-10 (M&O building) could not be identified with certainty on the building sheet.",
+    "The intake trunk was re-entered by hand at about MSL: footprint from the earlier trace, height indicative because the seabed level is not stated. The seabed level and the burial or rock cover of the intake and outfall lines are not stated.",
+    "The long NRP sulphur/coke conveyor bridge running NE from the corridor, and the third-party subsea pipeline bundle, belong to neighbouring facilities and were not modelled as LNGI assets.",
+    "The frame the drawing states differs from a grid fit through the page's map placement by 21.0 m and 0.224 deg; the stated frame is used. Check the page's placement on the map.",
+    "The plant grid fit has a residual of 10.07 m over 3 grid points: check the grid points read off the drawings.",
+    "P2: 70-T-0002, 70-P-0007A/B and 70-P-0007B-V-01 are expected for this package, but their labels lead north to items centred at about N 503\u2013515, outside the region (N \u2264 495). I did not trace them; they are left for the northern package.",
+    "P2: I assigned the six pumps at E 938 to tags from where the labels sit, not from clear leaders: 0008 north pair, 0001 middle pair, 0002 south pair. Only the 70-P-0002A/B leader is reasonably clear. The A/B order within each pair (A to the north) is also assumed.",
+    "P2: The A/B and A\u2013H letter order is assumed for 50-T-0002A~H (labels only split them into the east column A/C/E/G and the west column B/D/F/H), 70-V-1002A/B, 70-A-1002A/B and 70-A-0002-E-02A/B.",
+    "P2: Two large rectangular units (13 x 5 m at E 932, N 477 and N 466) have three circular nozzles and a ladder at the west end. I could not find a tag or leader for them, so they are untagged 'other' items.",
+    "P2: 70-V-1001 was tagged by elimination: it is the small vessel, because the 70-V-1002A/B leader runs through the two large octagons. The 4.9 m circles drawn for 70-V-1002A/B may be the foundations rather than the vessel shells.",
+    "P2: The drawing writes the filter tags as 70-A-1001A-S01 and 70-A-1001B-S01. I registered them in the equipment-list form, 70-A-1001A-S-01 and 70-A-1001B-S-01.",
+    "P1: Three small vertical labels over the screen area (x~0.225, 0.236, 0.24) are hidden under linework and read only as '70-P-000?A' etc. The motor pump at E 899.6 is probably 70-P-0005A, and the two vertical pumps at E 903.1 and 905.8 may be 70-P-0003A/B. I left all three untagged; please confirm.",
+    "P1: 70-P-0005B/C/D, their -V-01 drums and 70-P-0006A/B are tagged in an assumed west-to-east order; the drawing does not label each unit separately. Which 70-P-0006 unit is diesel-driven is also assumed.",
+    "P1: 70-V-0003 is assigned to the capsule-shaped vessel east of 70-UB-04 because the label ends next to it. Please confirm it does not mean another item.",
+    "P1: North strip, N 655-691: the drawing shows slope bands, a heavy line and two fences, but the ortho shows sea, rock armour and an asphalt road 5-10 m further north. Which one shows the current layout?",
+    "P1: Pit depth of 50-TC-09 and all equipment and shelter heights are indicative; no section was available.",
+    "P1: Diesel-tank labels 70-P-0007B-V-01 and 70-P-0007A/B sit just south of the package (around E 869-873, N 500-508). I left these items to the southern package.",
+    "P3: 70-P-0004A/B (fire water jockey pumps): the label next to BL E908 points into an empty corner (about E917, N209) that is sea on the ortho. Which drawing shows these pumps?",
+    "P3: 70-A-0012-G-01..03 and V-01..03 can't be read on T0007. I assumed numbering runs north to south (generator-pu3-01..03, tank-pu3-01..03). Please confirm.",
+    "P3: 50-B-14: the label underline points to a small hut (E974.9-978.3, N333.8-341.5). Is the operator house that hut, or the large two-room enclosure east of 70-SS-01 (E941.7-971.0, N322.9-377.8)?",
+    "P3: 50-A-0004 sub-items (M-01, P-01A~C, V-01) are not tagged on this sheet. The tank and skid under 70-UB-06 are saved untagged / as the whole package.",
+    "P3: The split between 70-A-0014 and 70-A-0015 (and what belongs under 70-UB-07) comes from label positions only. The dashed area at E929-949, N266-280 has no tag.",
+    "P3: The ortho sits about 9-10 m north of the drawing grid in the north of this package. Is the ortho georeferencing or the T0007 grid in error?"
+  ],
+  "usage": {
+    "input_tokens": 36122039,
+    "output_tokens": 933574
+  },
+  "usage_by_stage": {
+    "current": "done",
+    "stages": {
+      "survey": {
+        "input_tokens": 2098528,
+        "output_tokens": 39964,
+        "images": 37,
+        "calls": 49
+      },
+      "trace": {
+        "input_tokens": 25294400,
+        "output_tokens": 849667,
+        "images": 295,
+        "calls": 597
+      },
+      "review": {
+        "input_tokens": 3536844,
+        "output_tokens": 11672,
+        "images": 8,
+        "calls": 24
+      },
+      "environment": {
+        "input_tokens": 2993867,
+        "output_tokens": 27109,
+        "images": 7,
+        "calls": 14
+      },
+      "build": {
+        "input_tokens": 2198400,
+        "output_tokens": 5162,
+        "images": 4,
+        "calls": 11
+      }
+    },
+    "cost_estimate_usd": 163.16,
+    "cost_label": "Estimate from list prices, not a bill. Cached input is priced as fresh input."
+  },
+  "packages": {
+    "total": 18,
+    "done": 18,
+    "failed": 0,
+    "running": 0
+  },
+  "version": 1,
+  "started_at": "2026-10-04T09:22:59.612265Z",
+  "ended_at": "2026-10-04T10:48:07.763249Z",
+  "seconds": 5109,
+  "tokens": 37055613
+}

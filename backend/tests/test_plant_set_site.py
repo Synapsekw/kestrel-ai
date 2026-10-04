@@ -184,3 +184,25 @@ def test_a_good_refit_removes_the_stale_grid_fit_question(rc, handle):
     out = T.run_plant_tool(rc, orch(rc), "set_site", {"grid_points": gps})
     assert out.ok and "over 1 m" not in out.text
     assert not any("plant grid fit" in q for q in rc.state.questions)
+
+
+def test_a_stated_frame_wins_over_a_grid_fit_from_a_misplaced_page(rc, handle):
+    """Al-Zour live run 1: the overall plan was placed on the map ~26 m off, and the grid fit through it
+    overrode the frame General Note 2 states. The drawing's statement is authoritative; the fit is a
+    cross-check whose disagreement becomes an open question."""
+    d0 = rc.test_ids["drawings"][0]
+    _georef(handle, d0)  # places the page so the grid fits TRUE: 244500 / 3179300 / 18.0 deg
+    gps = [
+        {"drawing_id": d0, "page_xy": _page_xy(e, n), "plant_E": e, "plant_N": n}
+        for e, n in ((0, 0), (400, 0), (0, 300), (400, 300))
+    ]
+    stated = {"epsg": 32639, "origin_crs": [244520.0, 3179290.0], "plant_north_deg": 18.2}
+    out = T.run_plant_tool(
+        rc, orch(rc), "set_site", {**stated, "grid_points": gps, "source_drawing_id": d0, "note": "note 2"}
+    )
+    assert out.ok, out.text
+    site = rc.site()
+    assert site.origin_crs == (244520.0, 3179290.0) and site.plant_north_deg == 18.2
+    assert site.source.kind == "drawing" and site.source.id == d0
+    assert "stated frame is used" in out.text
+    assert any("stated" in q and "grid" in q for q in rc.state.questions)
