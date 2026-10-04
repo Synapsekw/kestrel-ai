@@ -3,7 +3,7 @@
 
 import sqlite3
 
-from plant_live_helpers import copy_project_state, pick_sources
+from plant_live_helpers import copy_project_state, pick_sources, sheet_file
 
 
 def test_copy_takes_the_database_and_kestrel_folders_only(tmp_path):
@@ -47,3 +47,22 @@ def test_pick_sources_needs_every_sheet():
     many = [{"id": f"d{k}", "name": f"T0003 — p{k:02d}", "status": "ready"} for k in range(60)]
     sources, missing = pick_sources(many, clouds, sheets=("T0003",), limit=50)
     assert len(sources) == 50 and missing == []
+
+
+def test_pick_sources_matches_the_operators_file_names():
+    drawings = [
+        {"id": "a", "name": "Overall Plotplan · p1", "status": "ready"},
+        {"id": "b", "name": "Plot Plan for Jetty Area · p3", "status": "ready"},
+        {"id": "c", "name": "Plot Plan for Tank Area · p1", "status": "ready"},
+        {"id": "d", "name": "Plot Plan for Process & Utility · p1", "status": "ready"},
+        {"id": "e", "name": "Plot Plan for Building Area · p2", "status": "ready"},
+    ]
+    sources, missing = pick_sources(drawings, [])
+    assert missing == [] and {s["id"] for s in sources} == {"a", "b", "c", "d", "e"}
+
+
+def test_sheet_file_finds_the_pdf(tmp_path):
+    (tmp_path / "Drawings").mkdir()
+    (tmp_path / "Drawings" / "Plot Plan for Tank Area.PDF").write_bytes(b"%PDF")
+    assert sheet_file(tmp_path, "T0006").name == "Plot Plan for Tank Area.PDF"
+    assert sheet_file(tmp_path, "T0005") is None

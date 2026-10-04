@@ -13,6 +13,22 @@ from pathlib import Path
 KESTREL_DIRS = ("drawings", "maps", "pointclouds")
 SKIP_DIRS = frozenset({"octree", ".work"})  # display copies and scratch the run never reads
 SHEETS = ("T0003", "T0005", "T0006", "T0007", "T0008")  # the overall and the four area plot plans
+# The operator's file names for those sheets (E:\Asset Inspections\LNG Terminal\Drawings).
+SHEET_FILES = {
+    "T0003": "Overall Plotplan",
+    "T0005": "Plot Plan for Jetty Area",
+    "T0006": "Plot Plan for Tank Area",
+    "T0007": "Plot Plan for Process & Utility",
+    "T0008": "Plot Plan for Building Area",
+}
+
+
+def _is_sheet(name: str, sheet: str) -> bool:
+    """A drawing page belongs to a sheet when its name carries the sheet number or the file name."""
+    stem = SHEET_FILES.get(sheet)
+    return sheet in name or (stem is not None and name.startswith(stem))
+
+
 MAX_SOURCES = 200  # the contract's AssetModelRunStart.sources maxItems
 
 
@@ -44,10 +60,19 @@ def pick_sources(
     """(run sources, sheets with no ready drawing page). Ready clouds first, then every ready page whose
     name carries one of the sheet numbers, by name, up to the contract's 200 sources."""
     pages = sorted(
-        (d for d in drawings if d.get("status") == "ready" and any(s in d["name"] for s in sheets)),
+        (d for d in drawings if d.get("status") == "ready" and any(_is_sheet(d["name"], s) for s in sheets)),
         key=lambda d: d["name"],
     )
-    missing = [s for s in sheets if not any(s in d["name"] for d in pages)]
+    missing = [s for s in sheets if not any(_is_sheet(d["name"], s) for d in pages)]
     out = [{"type": "point_cloud", "id": c["id"]} for c in clouds if c.get("status") == "ready"][:limit]
     out += [{"type": "drawing", "id": d["id"]} for d in pages][: limit - len(out)]
     return out, missing
+
+
+def sheet_file(folder: Path, sheet: str) -> Path | None:
+    """The operator's PDF for a sheet in the project's Drawings folder, or None."""
+    stem = SHEET_FILES.get(sheet)
+    for f in sorted((folder / "Drawings").glob("*")) if stem else []:
+        if f.suffix.lower() == ".pdf" and f.stem == stem:
+            return f
+    return None

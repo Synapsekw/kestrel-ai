@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import pytest
-from plant_live_helpers import copy_project_state, pick_sources
+from plant_live_helpers import copy_project_state, pick_sources, sheet_file
 
 from app.asset_models import score as sc
 
@@ -49,10 +49,56 @@ def _wait_csv(client, url: str) -> bytes:
     raise AssertionError(f"no register CSV within {CSV_TIMEOUT_S} s")
 
 
-def test_al_zour_plant_acceptance(client, app, wait_job, tmp_path):
+def _anthropic_key() -> str | None:
+    """The environment's key, else the one the app stores in Credential Manager. Never printed."""
     key = os.environ.get("ANTHROPIC_API_KEY")
+    if key:
+        return key
+    try:
+        from app.providers.keys import KeyringKeyStore
+
+        return KeyringKeyStore().get("anthropic")
+    except Exception:  # noqa: BLE001 - no keyring means no live test
+        return None
+
+
+def _wait_slow(client, pid: str, job_id: str, timeout: float) -> dict:
+    """Poll a long job every 5 s (conftest's wait_job polls every 0.1 s, too often for hours)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        j = client.get(f"/api/v1/projects/{pid}/jobs/{job_id}").json()
+        if j["state"] in ("succeeded", "failed", "cancelled"):
+            return j
+        time.sleep(5)
+    raise AssertionError(f"job {job_id} did not finish within {timeout}s")
+
+
+def _import_sheets(client, pid: str, sheets: list[str]) -> None:
+    """Import the operator's PDFs for the missing sheets into the COPY, every page, unplaced."""
+    for sheet in sheets:
+        pdf = sheet_file(PROJECT, sheet)
+        if pdf is None:
+            continue
+        r = client.post(f"/api/v1/projects/{pid}/drawing-inspections", json={"path": str(pdf)})
+        assert r.status_code == 202, r.text
+        ins = r.json()
+        _wait_slow(client, pid, ins["job"]["id"], 900)
+        body = {
+            "inspection_id": ins["inspection"]["id"],
+            "name": pdf.stem,
+            "pages": "all",
+            "dpi": 200,
+            "placement": {"method": "none"},
+        }
+        r = client.post(f"/api/v1/projects/{pid}/drawings/pages", json=body)
+        assert r.status_code == 202, r.text
+        _wait_slow(client, pid, r.json()["job"]["id"], 3600)
+
+
+def test_al_zour_plant_acceptance(client, app, wait_job, tmp_path):
+    key = _anthropic_key()
     if not key or not (PROJECT / "project.db").exists():
-        pytest.skip("needs ANTHROPIC_API_KEY and the LNG Terminal project folder (KESTREL_LNG_PROJECT)")
+        pytest.skip("needs an Anthropic key and the LNG Terminal project folder (KESTREL_LNG_PROJECT)")
     copy = copy_project_state(PROJECT, tmp_path / "LNG Terminal copy")
     opened = client.post("/api/v1/projects/open", json={"folder": str(copy)})
     assert opened.status_code == 200, opened.text
@@ -61,6 +107,10 @@ def test_al_zour_plant_acceptance(client, app, wait_job, tmp_path):
     drawings = client.get(f"/api/v1/projects/{pid}/drawings").json()["items"]
     clouds = client.get(f"/api/v1/projects/{pid}/pointclouds").json()["items"]
     sources, missing = pick_sources(drawings, clouds)
+    if missing:
+        _import_sheets(client, pid, missing)
+        drawings = client.get(f"/api/v1/projects/{pid}/drawings").json()["items"]
+        sources, missing = pick_sources(drawings, clouds)
     if missing:
         pytest.skip(f"import these plot plans (all pages) into the project first: {', '.join(missing)}")
     base = f"/api/v1/projects/{pid}/asset-models"
@@ -71,7 +121,7 @@ def test_al_zour_plant_acceptance(client, app, wait_job, tmp_path):
     r = client.post(f"{base}/{mid}/runs", json={"mode": "plant", "provider": "anthropic", "sources": sources})
     assert r.status_code == 202, r.text
     body = r.json()
-    wait_job(pid, body["job"]["id"], timeout=RUN_TIMEOUT_S)
+    _wait_slow(client, pid, body["job"]["id"], RUN_TIMEOUT_S)
     seconds = time.monotonic() - started
     run = client.get(f"{base}/{mid}/runs/{body['run']['id']}").json()
     tokens = run["usage"]["input_tokens"] + run["usage"]["output_tokens"]
