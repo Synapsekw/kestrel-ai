@@ -103,6 +103,48 @@ def test_near_duplicates_are_recorded_not_imported(client, project, tmp_path, pr
     assert (folder / "A_0001_0002.jpg").exists()  # the original is never removed
 
 
+def _equal_phash_pair(folder):
+    """Two different photos whose perceptual hashes are equal (Hamming distance 0)."""
+    a = _gradient(folder / "K_0001_0001.jpg")
+    b = PILImage.open(a).convert("RGB")
+    b.putpixel((5, 5), (255, 0, 0))
+    b.save(folder / "K_0001_0002.jpg", "JPEG", quality=95)
+
+
+def test_equal_phash_photo_is_dropped_by_default_even_at_threshold_zero(client, project, tmp_path):
+    folder = tmp_path / "kit"
+    _equal_phash_pair(folder)
+    pid = project["id"]
+    body = client.post(
+        f"/api/v1/projects/{pid}/sources", json={"folder": str(folder), "settings": {"dedupe_threshold": 0}}
+    ).json()
+    res = _wait(client, pid, body["job"]["id"])["result"]
+    assert res["imported"] == 1 and res["duplicates"] == 1
+    assert body["source"]["settings"]["keep_duplicates"] is False
+
+
+def test_keep_duplicates_imports_every_photo(client, project, tmp_path, project_dir):
+    folder = tmp_path / "kit"
+    _equal_phash_pair(folder)
+    pid = project["id"]
+    body = client.post(
+        f"/api/v1/projects/{pid}/sources",
+        json={"folder": str(folder), "settings": {"dedupe_threshold": 0, "keep_duplicates": True}},
+    ).json()
+    res = _wait(client, pid, body["job"]["id"])["result"]
+    assert res["imported"] == 2 and res["duplicates"] == 0
+    site = body["source"]["site"]
+    assert (project_dir / "images" / site / "K_0001_0002.jpg").exists()
+    source = client.get(f"/api/v1/projects/{pid}/sources/{body['source']['id']}").json()
+    assert source["settings"]["keep_duplicates"] is True and source["duplicate_count"] == 0
+
+
+def test_keep_duplicates_is_not_a_project_default(client, project):
+    pid = project["id"]
+    client.patch(f"/api/v1/projects/{pid}", json={"import_defaults": {"keep_duplicates": True}})
+    assert client.get(f"/api/v1/projects/{pid}").json()["import_defaults"]["keep_duplicates"] is False
+
+
 def test_group_falls_back_to_tile_and_site(client, project, tmp_path, make_jpeg):
     folder = tmp_path / "g"
     make_jpeg(folder / "DJI_0001.jpg", 100, 80, seed=3, exif={"lat": 29.5, "lon": 47.7})

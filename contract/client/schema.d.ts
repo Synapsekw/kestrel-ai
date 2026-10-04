@@ -5391,6 +5391,8 @@ export interface components {
              * @default ^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)
              */
             group_regex: string;
+            /** @description Absent means false (no `default` here so the generated client keeps it optional and a project-defaults patch need not carry it). Keep every photo: true turns the duplicate check off entirely, so no photo is dropped, not even one whose perceptual hash equals an earlier one (which `dedupe_threshold: 0` still drops). Use it for inspection kit photo sets. Per import only: it is stored with the source's settings, but it is never a project default (it is ignored in a project's `import_defaults` and reads back false there). */
+            keep_duplicates?: boolean;
         };
         /**
          * @description A project has no kind (foundation F5): every project may hold every data type and run every action. A project whose `migration.state` is not `ok` is still listed, but does not open (its project routes answer 409 `project_upgrading` or `project_upgrade_failed`); it is then built from its recent-list entry: `classes: []`, `schema_version: 0`, `summary: null`, and `created_at` equal to `last_opened_at`. A recent project whose folder or `project.db` is gone is listed too, with `availability: missing` (built the same way from its recent entry); it can only be removed from the list (`forgetProject`) or located again (`openProject` on its new folder, which replaces the stale recent entry of the same project id).

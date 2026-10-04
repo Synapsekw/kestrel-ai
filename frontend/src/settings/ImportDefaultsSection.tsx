@@ -29,8 +29,8 @@ function fromProject(p: Project): Form {
   };
 }
 
-/** `null` when a field is empty or not a number. */
-function toSettings(form: Form): Required<ImportSettings> | null {
+/** `null` when a field is empty or not a number. `keep_duplicates` is per import, never a default. */
+function toSettings(form: Form): Required<Omit<ImportSettings, "keep_duplicates">> | null {
   const numbers = [form.max_side, form.quality, form.dedupe_threshold].map((v) =>
     v.trim() === "" ? NaN : Number(v),
   );

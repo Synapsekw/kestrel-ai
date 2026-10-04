@@ -137,7 +137,9 @@ def _run_import(ctx: JobContext) -> dict:
     items = [(Path(p).name, h) for p, h in known_hashes]
     items += [(Path(r.dest).name, r.phash) for r in prepared]
     new_names = {Path(r.dest).name for r in prepared}
-    found = find_duplicates(items, settings.dedupe_threshold)
+    # Keep every photo: an inspection kit set holds distinct photos whose hashes can be equal,
+    # so the duplicate check is skipped entirely rather than run at threshold 0.
+    found = {} if settings.keep_duplicates else find_duplicates(items, settings.dedupe_threshold)
     duplicates = {name: kept for name, kept in found.items() if name in new_names}
 
     for name in duplicates:

@@ -108,6 +108,7 @@ def create_source(
     site = slugify(body.site or folder.name) or "source"
     with handle.session() as s:
         defaults = dict(handle.row(s).import_defaults or {})
+        defaults.pop("keep_duplicates", None)  # a per-import choice, never a project default
         if body.settings is not None:
             defaults.update(body.settings.model_dump(exclude_unset=True))
         settings = ImportSettings(**defaults).model_dump()

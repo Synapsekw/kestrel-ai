@@ -39,9 +39,33 @@ describe("ImportImagesDialog", () => {
         quality: 95,
         dedupe_threshold: 4,
         group_regex: exampleProject.import_defaults.group_regex,
+        keep_duplicates: false,
       },
     });
     expect(useJobsStore.getState().jobs[runningJob.id]).toBeDefined();
+  });
+
+  it("offers Keep every photo, off by default, and sends keep_duplicates true when ticked", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/sources$/, status: 202, body: { source: exampleSource, job: runningJob } },
+    ]);
+    const onStarted = vi.fn();
+    renderWithProviders(
+      <ImportImagesDialog project={exampleProject} onClose={() => {}} onStarted={onStarted} />,
+      { api },
+    );
+    const keep = screen.getByRole("checkbox", { name: "Keep every photo" });
+    expect(keep).not.toBeChecked();
+    expect(screen.getByText(/Turns off the duplicate check/)).toBeInTheDocument();
+    fireEvent.click(keep);
+    expect(keep).toBeChecked();
+    fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "E:/kit/photos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalled());
+    expect(requests[0].body).toMatchObject({
+      folder: "E:/kit/photos",
+      settings: { keep_duplicates: true },
+    });
   });
 
   it("sends the site name when given and shows the envelope message on failure", async () => {
