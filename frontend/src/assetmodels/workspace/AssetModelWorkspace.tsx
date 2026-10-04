@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   assetModelGlbUrl,
   assetModelOverlayUrl,
@@ -31,6 +31,7 @@ import type { CameraPose } from "@/assetmodels/viewer/cameras";
 import type { ModelPart, ModelView, PickHit } from "@/assetmodels/viewer/engine";
 import { ModelViewer, type ModelViewerHandle, type ModelViewState } from "@/assetmodels/viewer/ModelViewer";
 import { NOTICE_INSET } from "@/clouds/workspace/layout";
+import { siteHref } from "@/site3d/entry/links";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
@@ -49,6 +50,7 @@ import {
   useToolShortcuts,
 } from "@/ui";
 import { downloadGlb, downloadSpec } from "./download";
+import { ListReloadNotice } from "./ListReloadNotice";
 import { ModelDetailsDialog } from "./ModelDetailsDialog";
 import { ModelInspector, type ModelInspectorTab } from "./ModelInspector";
 import { ModelPanel } from "./ModelPanel";
@@ -161,6 +163,7 @@ function ModelWorkspace({
 }: ModelWorkspaceProps) {
   const api = useApi();
   const backend = useBackend();
+  const navigate = useNavigate();
   const viewer = useRef<ModelViewerHandle | null>(null);
   const { versions, error: versionsError, reload: reloadVersions } = useVersions(projectId, model.id);
   const [picked, setPicked] = useState<number | null>(null);
@@ -741,8 +744,11 @@ function ModelWorkspace({
         variant="float"
         radius="control"
         style={stagger(2)}
-        className="stagger absolute right-[358px] top-3.5 z-10 p-[3px] animate-reveal reduce-motion:animate-none"
+        className="stagger absolute right-[358px] top-3.5 z-10 flex items-center gap-0.5 p-[3px] animate-reveal reduce-motion:animate-none"
       >
+        <Button variant="ghost" size="sm" icon="cube" onClick={() => navigate(siteHref(projectId, model.id))}>
+          Open in site
+        </Button>
         <MenuButton
           label="Download"
           icon="download"
@@ -869,6 +875,7 @@ function MissingModel({ projectId, first }: { projectId: string; first: AssetMod
 export function AssetModelWorkspace() {
   const { projectId = "", modelId } = useParams();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
   const { models, error, reload } = useAssetModelList(projectId);
   const [created, setCreated] = useState<AssetModel | null>(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -930,8 +937,15 @@ export function AssetModelWorkspace() {
         {dialog}
       </>
     );
-  if (!modelId) return <Navigate replace to={`/p/${projectId}/models/${all[0].id}`} />;
+  // The default pick prefers an asset model, so asset models stay reachable in a mixed project.
+  if (!modelId)
+    return (
+      <Navigate replace to={`/p/${projectId}/models/${(all.find((m) => m.kind !== "plant") ?? all[0]).id}`} />
+    );
   const model = all.find((m) => m.id === modelId) ?? null;
+  // Ruling 13: a plant model opened by its URL goes to the site view unless asked for here (?view=model).
+  if (model?.kind === "plant" && search.get("view") !== "model")
+    return <Navigate replace to={siteHref(projectId, model.id)} />;
   const details = detailsOpen && model && (
     <ModelDetailsDialog
       projectId={projectId}
@@ -967,6 +981,7 @@ export function AssetModelWorkspace() {
       </div>
       {dialog}
       {details}
+      {error && <ListReloadNotice error={error} onRetry={reload} />}
     </div>
   );
 }

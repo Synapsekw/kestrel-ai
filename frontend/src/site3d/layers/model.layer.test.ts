@@ -11,6 +11,7 @@ import {
   glbLoader,
   isFlagged,
   itemIdOf,
+  itemNodeOf,
   type ModelLayer,
 } from "./model.layer";
 import type { PickHit, Pickable } from "./types";
@@ -58,6 +59,7 @@ function engine() {
       };
     }),
     emit: (h: PickHit | null) => listener?.(h),
+    select: vi.fn((h: PickHit | null) => listener?.(h)),
     pickable: () => pickable!,
   };
   return e as unknown as SiteEngine & typeof e;
@@ -90,6 +92,43 @@ describe("model layer helpers", () => {
     expect(itemIdOf(n)).toBeNull();
   });
 
+  it("A1's GLB: the item id is the node name from `node` (no `id`), children resolve to the item (R8)", () => {
+    // assemble.py: item node named by its id with the CSV-cased register row as extras; children
+    // `<id>/<name>` carry builder extras only; area groups and env nodes carry no `type`.
+    const root = new THREE.Group();
+    const area = new THREE.Group();
+    area.name = "area:30";
+    const item = new THREE.Group();
+    item.name = "30-P-0001";
+    item.userData = {
+      node: "30-P-0001",
+      tag: "30-P-0001",
+      type: "other",
+      area: "30",
+      plant_E: 260,
+      plant_N: 180,
+      base_EL: 100,
+      top_EL: 103,
+      height_source: "drawing",
+      flags: [],
+      confidence: "high",
+    };
+    const child = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+    child.name = "30-P-0001/body";
+    child.userData = { shape: "box", params: { w: 6 } };
+    item.add(child);
+    const sea = new THREE.Group();
+    sea.name = "Sea";
+    sea.userData = { env: "sea", node: "sea" };
+    area.add(item);
+    root.add(area, sea);
+    const items = collectItems(root);
+    expect(items.map((i) => i.id)).toEqual(["30-P-0001"]);
+    expect(items[0].node).toBe(item);
+    expect(itemIdOf(child)).toBeNull();
+    expect(itemNodeOf(child, root)).toBe(item);
+  });
+
   it("colour keys per mode", () => {
     const x = { type: "pump", area: "20", height_source: "cloud", flags: "plan_offset" };
     expect(colourKey("material", x)).toBeNull();
@@ -117,11 +156,10 @@ describe("model layer helpers", () => {
 describe("ModelLayer", () => {
   it("loads: counts items, frames the content and makes one preset per area", async () => {
     const { e, onLoad } = await loaded();
-    expect(onLoad).toHaveBeenCalledWith({
-      items: 3,
-      areas: ["20", "30"],
-      types: ["building", "pipe_rack", "tank_lng"],
-    });
+    expect(onLoad).toHaveBeenCalledWith(
+      { items: 3, areas: ["20", "30"], types: ["building", "pipe_rack", "tank_lng"] },
+      "x.glb",
+    );
     expect(e.setContentBox).toHaveBeenCalledWith("model", expect.any(THREE.Box3));
     expect(e.setPresetBox).toHaveBeenCalledWith("model", "area:20", expect.any(THREE.Box3));
     expect(e.setPresetBox).toHaveBeenCalledWith("model", "area:30", expect.any(THREE.Box3));
@@ -324,5 +362,116 @@ describe("ModelLayer lifecycle (fix round 1)", () => {
     });
     await expect(layer.attach(engine())).rejects.toThrow("consumer");
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("ModelLayer swap and select (S3 Task 1b)", () => {
+  const ids = (l: ModelLayer) => l.itemIds();
+  function single(id: string): THREE.Group {
+    const root = new THREE.Group();
+    root.add(item(id, "pump", {}, 5));
+    return root;
+  }
+
+  it("load swaps the content, keeps the camera and reports the new url", async () => {
+    const e = engine();
+    const onLoad = vi.fn();
+    const scenes: Record<string, THREE.Object3D> = { "v1.glb": plant(), "v2.glb": single("p-9") };
+    const layer = createModelLayer({ url: "v1.glb", onLoad, loader: async (u) => scenes[u] });
+    await layer.attach(e);
+    expect(layer.url).toBe("v1.glb");
+    await layer.load("v2.glb");
+    expect(ids(layer)).toEqual(["p-9"]);
+    expect(layer.root.children).toHaveLength(1);
+    expect(layer.url).toBe("v2.glb");
+    expect(onLoad).toHaveBeenLastCalledWith({ items: 1, areas: ["20"], types: ["pump"] }, "v2.glb");
+    expect(e.addPickable).toHaveBeenCalledTimes(1); // the same layer, not a new attach
+  });
+
+  it("a failed load keeps the old model, reports the error and rejects", async () => {
+    const e = engine();
+    const onError = vi.fn();
+    const layer = createModelLayer({
+      url: "v1.glb",
+      onError,
+      loader: async (u) => (u === "v1.glb" ? plant() : Promise.reject(new Error("bad glb"))),
+    });
+    await layer.attach(e);
+    await expect(layer.load("v2.glb")).rejects.toThrow("bad glb");
+    expect(ids(layer)).toEqual(["20-t-0001", "rack.1", "b-1"]);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), "v2.glb");
+  });
+
+  it("a load superseded by a newer one is dropped", async () => {
+    const e = engine();
+    const finish: Record<string, (o: THREE.Object3D) => void> = {};
+    const layer = createModelLayer({
+      url: "v1.glb",
+      loader: (u) => (u === "v1.glb" ? Promise.resolve(plant()) : new Promise((r) => (finish[u] = r))),
+    });
+    await layer.attach(e);
+    const a = layer.load("v2.glb");
+    const b = layer.load("v3.glb");
+    finish["v3.glb"](single("p-3"));
+    await b;
+    finish["v2.glb"](single("p-2"));
+    await a;
+    expect(ids(layer)).toEqual(["p-3"]);
+  });
+
+  it("the outline follows the selected item into the new version", async () => {
+    const e = engine();
+    const layer = createModelLayer({ url: "v1.glb", loader: async () => plant() });
+    await layer.attach(e);
+    e.emit({ layerId: "model", itemId: "rack.1", point: [0, 0, 0], extras: {} });
+    await layer.load("v2.glb");
+    expect(layer.helpers.children.length).toBeGreaterThan(0);
+  });
+
+  it("a swap that drops the selected item tells every listener the selection is gone (S3-9 minor 1)", async () => {
+    const e = engine();
+    const scenes: Record<string, () => THREE.Object3D> = { "v1.glb": plant, "v2.glb": () => single("p-9") };
+    const layer = createModelLayer({ url: "v1.glb", loader: async (u) => scenes[u]() });
+    await layer.attach(e);
+    layer.select("rack.1");
+    e.select.mockClear();
+    await layer.load("v2.glb");
+    expect(e.select).toHaveBeenCalledWith(null);
+    expect(layer.helpers.children).toHaveLength(0);
+  });
+
+  it("a swap that keeps the selected item does not clear the selection", async () => {
+    const e = engine();
+    const layer = createModelLayer({ url: "v1.glb", loader: async () => plant() });
+    await layer.attach(e);
+    layer.select("rack.1");
+    e.select.mockClear();
+    await layer.load("v2.glb");
+    expect(e.select).not.toHaveBeenCalled();
+    expect(layer.helpers.children.length).toBeGreaterThan(0);
+  });
+
+  it("select(id) broadcasts a model hit at the item's centre with its extras; null clears", async () => {
+    const { e, layer } = await loaded();
+    layer.select("rack.1");
+    expect(e.select).toHaveBeenCalledWith({
+      layerId: "model",
+      itemId: "rack.1",
+      point: [expect.closeTo(10, 6), expect.closeTo(1, 6), expect.closeTo(0, 6)],
+      extras: expect.objectContaining({ type: "pipe_rack" }),
+    });
+    expect(layer.helpers.children.length).toBeGreaterThan(0);
+    layer.select(null);
+    expect(e.select).toHaveBeenLastCalledWith(null);
+    expect(layer.helpers.children).toHaveLength(0);
+  });
+
+  it("select of an id the model lacks clears the outline without a broadcast", async () => {
+    const { e, layer } = await loaded();
+    layer.select("rack.1");
+    e.select.mockClear();
+    layer.select("no-geometry");
+    expect(e.select).not.toHaveBeenCalled();
+    expect(layer.helpers.children).toHaveLength(0);
   });
 });

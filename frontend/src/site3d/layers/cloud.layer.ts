@@ -7,6 +7,7 @@ import type { SiteEngine } from "@/site3d/engine/SiteEngine";
 import type { SiteFrameT } from "@/site3d/engine/siteTransform";
 import type { CloudHost } from "./cloudHost";
 import { partsOf, type EngineParts } from "./s1Bridge";
+import { loadFailureText } from "@/site3d/loadError";
 import { siteToSceneMatrix } from "./sceneMatrix";
 import type { SiteCloud } from "./sceneTypes";
 import { StatusCell, type StatusLayer } from "./status";
@@ -130,8 +131,8 @@ export function createCloudLayer(o: {
         },
         (err: unknown) => {
           if (seq !== loadSeq) return;
-          const why = err instanceof Error ? err.message : String(err);
-          status.set({ kind: "error", message: `The cloud could not load: ${why}` });
+          // Never the loader's text: potree's errors name the octree URL, which carries the token.
+          status.set({ kind: "error", message: loadFailureText("The cloud could not load", err) });
         },
       );
     },

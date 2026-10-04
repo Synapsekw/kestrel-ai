@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
@@ -1010,5 +1011,49 @@ describe("AssetModelWorkspace", () => {
       const panel = await screen.findByRole("tabpanel", { name: /run/i });
       expect(await within(panel).findByText(RUN.summary!)).toBeInTheDocument();
     });
+  });
+
+  /** Renders the models route plus a catch-all, the probe outside `<Routes>` (it would unmount on a redirect). */
+  const openRouted = (route: string, items: unknown[]) => {
+    const client = fakeClient(routes([{ method: "GET", path: /\/asset-models$/, body: { items } }]) as never);
+    renderWithProviders(
+      <>
+        <Routes>
+          <Route path="/p/:projectId/models/:modelId?" element={<AssetModelWorkspace />} />
+          <Route path="*" element={<p>elsewhere</p>} />
+        </Routes>
+        <LocationProbe />
+      </>,
+      { api: client.api, route },
+    );
+    return client;
+  };
+
+  it("a plant model opens in the site view (Ruling 13)", async () => {
+    openRouted(`/p/${PROJECT_ID}/models/m1`, [{ ...MODEL, kind: "plant" }]);
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/site/m1`));
+  });
+
+  it("?view=model keeps a plant in this workspace", async () => {
+    openRouted(`/p/${PROJECT_ID}/models/m1?view=model`, [{ ...MODEL, kind: "plant" }]);
+    expect(await screen.findByTestId("model-workspace")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models/m1?view=model`);
+  });
+
+  it("the default pick on /models prefers an asset model, so a mixed project stays reachable", async () => {
+    openRouted(`/p/${PROJECT_ID}/models`, [
+      { ...MODEL, id: "plant1", kind: "plant" },
+      { ...MODEL, id: "m1", kind: "asset" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/models/m1`),
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("/site");
+  });
+
+  it("Open in site opens this model in the site view", async () => {
+    openRouted(`/p/${PROJECT_ID}/models/m1`, [MODEL]);
+    fireEvent.click(await screen.findByRole("button", { name: "Open in site" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/site/m1`);
   });
 });

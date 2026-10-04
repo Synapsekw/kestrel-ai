@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { NoWebGlError } from "@/clouds/viewer/engine";
-import { Alert, Button, Skeleton } from "@/ui";
+import { Alert, Button, Pill, Skeleton } from "@/ui";
 import type { CameraPose } from "./cameras";
 import { createModelEngine, type ModelEngine, type ModelPart, type ModelView, type PickHit } from "./engine";
 import type { FocusSettings } from "./focus";
@@ -63,8 +63,13 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
   });
   const [generation, setGeneration] = useState(0);
   const sceneKey = `${glbUrl ?? ""}#${generation}`;
-  const [status, setStatus] = useState<{ key: string; state: ModelViewState }>({ key: "", state: "loading" });
+  const [status, setStatus] = useState<{ key: string; state: ModelViewState; stale?: boolean }>({
+    key: "",
+    state: "loading",
+  });
   const state: ModelViewState = status.key === sceneKey ? status.state : "loading";
+  /** A load failed after an earlier GLB loaded into this engine: that earlier model is still drawn. */
+  const stale = status.key === sceneKey && status.stale === true;
 
   useEffect(() => {
     cbs.current = props;
@@ -142,7 +147,7 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         cbs.current.onParts(parts);
       },
       () => {
-        if (!cancelled) setStatus({ key: sceneKey, state: "load-error" });
+        if (!cancelled) setStatus({ key: sceneKey, state: "load-error", stale: framed.current });
       },
     );
     return () => {
@@ -226,6 +231,26 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
           This computer can&apos;t start WebGL, so the 3D view is off. The parts list still works.
         </Alert>
       );
+    if (state === "load-error" && stale)
+      return (
+        <Alert
+          tone="warn"
+          role="alert"
+          title="The new version's 3D model could not load."
+          actions={
+            <Button size="sm" icon="refresh" onClick={() => setGeneration((g) => g + 1)}>
+              Reload view
+            </Button>
+          }
+        >
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <Pill size="sm" tone="warn">
+              Stale
+            </Pill>
+            The model shown is the previous version.
+          </p>
+        </Alert>
+      );
     if (state === "load-error")
       return (
         <Alert
@@ -240,7 +265,7 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
         </Alert>
       );
     return null;
-  }, [state]);
+  }, [state, stale]);
 
   return (
     <div ref={box} className="relative min-h-0 min-w-0 flex-1" data-testid="model-viewer">

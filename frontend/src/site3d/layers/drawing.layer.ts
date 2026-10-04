@@ -7,6 +7,9 @@ export const DRAWING_Y = 0.05;
 export const DRAWING_MAX_Z = 19;
 export const DRAWING_OPACITY = 0.85;
 
+/** The drape's layer id: SiteScreen keys per-layer visibility by it. */
+export const drawingLayerId = (drawingId: string) => `drawing:${drawingId}`;
+
 export function createDrawingLayer(
   d: SceneDrawing,
   url: (rel: string) => string,
@@ -15,7 +18,7 @@ export function createDrawingLayer(
   const bounds = extent(d.bounds_site);
   return new TileDrapeLayer(
     {
-      id: `drawing:${d.id}`,
+      id: drawingLayerId(d.id),
       label: d.name,
       template: url(d.tile_url_template),
       bounds,

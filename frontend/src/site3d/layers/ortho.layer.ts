@@ -4,6 +4,9 @@ import { TileDrapeLayer, extent } from "./tileDrape";
 /** The site ortho at the datum (scene y = 0): ruling R9. */
 export const ORTHO_Y = 0;
 
+/** The drape's layer id: SiteScreen keys per-layer visibility by it. */
+export const orthoLayerId = (orthoId: string) => `ortho:${orthoId}`;
+
 export function createOrthoLayer(
   o: SceneOrtho,
   url: (rel: string) => string,
@@ -11,7 +14,7 @@ export function createOrthoLayer(
 ): TileDrapeLayer {
   return new TileDrapeLayer(
     {
-      id: `ortho:${o.id}`,
+      id: orthoLayerId(o.id),
       label: o.name,
       template: url(o.tile_url_template),
       bounds: extent(o.bounds_site),

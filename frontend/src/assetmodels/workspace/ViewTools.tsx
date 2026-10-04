@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- the palette, its cut slider and the key lookup they share */
 import { useRef, useState } from "react";
 import type { ModelView } from "@/assetmodels/viewer/engine";
-import { GLOBAL_KEYS, Menu, Slider, ToolButton, ToolSeparator, WORKSPACE_KEYS } from "@/ui";
+import { GLOBAL_KEYS, Icon, Menu, Slider, ToolButton, ToolSeparator, Tooltip, WORKSPACE_KEYS } from "@/ui";
 
 /** The chord the keymap gives an action in the models workspace (F, fit, is a global key). */
 export function modelKey(action: string): string {
@@ -16,6 +16,9 @@ export const VIEWS: readonly { view: Exclude<ModelView, "fit">; label: string; a
   { view: "side", label: "Side view", action: "view-side" },
   { view: "iso", label: "Iso view", action: "view-iso" },
 ];
+
+/** M1's engine has one navigation mode; the palette shows it with its gestures instead of a dead button. */
+const ORBIT_HELP = "Orbit: drag to turn, right-drag to pan, scroll to zoom";
 
 export interface ViewToolState {
   cut: boolean;
@@ -43,7 +46,15 @@ export function ViewToolButtons({
   const viewsAnchor = useRef<HTMLSpanElement>(null);
   return (
     <>
-      <ToolButton icon="orbit" label="Orbit" active disabled={disabled} onClick={() => {}} />
+      <Tooltip label={ORBIT_HELP} side="right" delay={250}>
+        <span
+          role="img"
+          aria-label={ORBIT_HELP}
+          className="grid h-9 w-[38px] place-items-center rounded-control bg-grad-primary text-accent-fg shadow-glow reduce-effects:shadow-none"
+        >
+          <Icon name="orbit" size={18} />
+        </span>
+      </Tooltip>
       <ToolSeparator />
       <ToolButton
         icon="section"

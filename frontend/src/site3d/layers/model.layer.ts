@@ -25,8 +25,9 @@ export interface ModelLoadInfo {
 export interface ModelLayerOptions {
   url: string;
   label?: string;
-  onLoad?(info: ModelLoadInfo): void;
-  onError?(err: unknown): void;
+  /** `url` is the GLB that loaded: the first one, or a later `load(url)`. */
+  onLoad?(info: ModelLoadInfo, url: string): void;
+  onError?(err: unknown, url: string): void;
   /** Tests pass a scene; the app loads the GLB. */
   loader?(url: string): Promise<THREE.Object3D>;
 }
@@ -171,10 +172,13 @@ export class ModelLayer implements SiteLayer {
   private cutY: number | null = null;
   private seq = 0;
   private offSelect: (() => void) | null = null;
+  private wanted: string;
+  private selectedId: string | null = null;
   private adopted: THREE.Object3D | null = null;
 
   constructor(private readonly opts: ModelLayerOptions) {
     this.label = opts.label ?? "Plant model";
+    this.wanted = opts.url;
     this.root.name = "model";
     this.helpers.name = "model-selection";
   }
@@ -192,10 +196,30 @@ export class ModelLayer implements SiteLayer {
     this.offSelect = e.onSelect((hit: PickHit | null) =>
       this.highlight(hit && hit.layerId === this.id ? hit.itemId : null),
     );
+    await this.fetchModel(this.wanted, e, false);
+  }
+
+  /** The GLB last asked for (the options' url, then each `load(url)`), whether or not it loaded. */
+  get url(): string {
+    return this.wanted;
+  }
+
+  /**
+   * Swaps the GLB in place (ruling R-S3-10, the one swap path): the new file is parsed first and the
+   * old model stays when it fails (onError, then the promise rejects). The camera is not reframed: the
+   * engine fits only its first content box. A load superseded by a later one is dropped.
+   */
+  async load(url: string): Promise<void> {
+    this.wanted = url;
+    const e = this.engine;
+    if (e) await this.fetchModel(url, e, true);
+  }
+
+  private async fetchModel(url: string, e: SiteEngine, rethrow: boolean): Promise<void> {
     const seq = ++this.seq;
     let info: ModelLoadInfo;
     try {
-      const scene = await (this.opts.loader ?? loadGlb)(this.opts.url);
+      const scene = await (this.opts.loader ?? loadGlb)(url);
       if (seq !== this.seq || this.engine !== e) {
         disposeTree(scene);
         return;
@@ -204,10 +228,33 @@ export class ModelLayer implements SiteLayer {
       // the model would never be adopted.
       info = this.adopt(scene);
     } catch (err) {
-      if (seq === this.seq) this.opts.onError?.(err);
+      if (seq !== this.seq) return;
+      this.opts.onError?.(err, url);
+      if (rethrow) throw err;
       return;
     }
-    this.opts.onLoad?.(info); // outside the try: a consumer's exception is not a load error
+    this.opts.onLoad?.(info, url); // outside the try: a consumer's exception is not a load error
+  }
+
+  /**
+   * Selects an item by id through the engine, as a click would: every listener (this outline, the
+   * screen's panels) hears a model hit at the item's box centre. Null clears. An id this model lacks
+   * (an item without geometry) only clears the outline.
+   */
+  select(itemId: string | null): void {
+    const e = this.engine;
+    const it = itemId === null ? undefined : this.byId.get(itemId);
+    if (!e || (itemId !== null && !it)) {
+      this.highlight(null);
+      return;
+    }
+    if (!it) {
+      e.select(null);
+      return;
+    }
+    this.root.updateMatrixWorld(true);
+    const c = new THREE.Box3().setFromObject(it.node).getCenter(new THREE.Vector3());
+    e.select({ layerId: this.id, itemId: it.id, point: [c.x, c.y, c.z], extras: { ...it.extras } });
   }
 
   /** The adopted GLB scene (a new object on every load, under `root`); null before a load and after detach. */
@@ -230,6 +277,13 @@ export class ModelLayer implements SiteLayer {
       for (const mat of materialsOf(m)) mat.side = THREE.DoubleSide;
     });
     this.applyColour();
+    if (this.selectedId) {
+      // An item the new version lacks: every listener (the panels too) hears the selection is gone,
+      // not only this outline (S3-9 minor 1).
+      if (this.byId.has(this.selectedId)) this.highlight(this.selectedId);
+      else if (this.engine) this.engine.select(null);
+      else this.highlight(null);
+    }
     const areas = new Map<string, THREE.Box3>();
     for (const it of this.items) {
       const a = str(it.extras.area);
@@ -364,6 +418,7 @@ export class ModelLayer implements SiteLayer {
   }
 
   private highlight(id: string | null): void {
+    this.selectedId = id;
     disposeChildren(this.helpers);
     const it = id ? this.byId.get(id) : undefined;
     if (it) {

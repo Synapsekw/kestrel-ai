@@ -1,0 +1,155 @@
+{
+  "asset": {
+    "tag": null,
+    "type": null,
+    "name": null,
+    "frame_note": null,
+    "plant_to_true_north_deg": null,
+    "attributes": {}
+  },
+  "parts": [],
+  "site": {
+    "crs": {
+      "epsg": 32639,
+      "wkt": null
+    },
+    "origin_crs": [
+      244338.089,
+      3179515.69
+    ],
+    "plant_north_deg": 17.9991,
+    "datum": {
+      "label": "HPFS",
+      "el_m": 100.0
+    },
+    "cloud_z_to_el": null,
+    "source": {
+      "kind": "assumed",
+      "id": null,
+      "page": null,
+      "region": null,
+      "note": null
+    }
+  },
+  "items": [
+    {
+      "id": "20-T-0001",
+      "tag": "20-T-0001",
+      "name": "LNG tank 1",
+      "type": "other",
+      "area": "20",
+      "footprint": {
+        "kind": "circle",
+        "center": [
+          100.0,
+          200.0
+        ],
+        "d": 80.0
+      },
+      "base_el": 100.0,
+      "top_el": 135.0,
+      "levels": [],
+      "params": {},
+      "height_source": "drawing",
+      "source": {
+        "kind": "drawing",
+        "id": "dr-1",
+        "page": null,
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ],
+        "note": null
+      },
+      "confidence": "high",
+      "flags": [],
+      "parts": [],
+      "notes": null
+    },
+    {
+      "id": "30-P-0001",
+      "tag": "30-P-0001",
+      "name": "Send-out pump 1",
+      "type": "other",
+      "area": "30",
+      "footprint": {
+        "kind": "rect",
+        "center": [
+          260.0,
+          180.0
+        ],
+        "size": [
+          6.0,
+          3.0
+        ],
+        "rot_deg": 0.0
+      },
+      "base_el": 100.0,
+      "top_el": 103.0,
+      "levels": [],
+      "params": {},
+      "height_source": "drawing",
+      "source": {
+        "kind": "drawing",
+        "id": "dr-1",
+        "page": null,
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ],
+        "note": null
+      },
+      "confidence": "high",
+      "flags": [],
+      "parts": [],
+      "notes": null
+    },
+    {
+      "id": "untagged-1",
+      "tag": null,
+      "name": "Pipe rack segment",
+      "type": "other",
+      "area": "30",
+      "footprint": {
+        "kind": "line",
+        "pts": [
+          [
+            150.0,
+            150.0
+          ],
+          [
+            250.0,
+            150.0
+          ]
+        ],
+        "width": 8.0
+      },
+      "base_el": 100.0,
+      "top_el": 108.0,
+      "levels": [],
+      "params": {},
+      "height_source": "drawing",
+      "source": {
+        "kind": "drawing",
+        "id": "dr-1",
+        "page": null,
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ],
+        "note": null
+      },
+      "confidence": "high",
+      "flags": [],
+      "parts": [],
+      "notes": null
+    }
+  ],
+  "environment": []
+}

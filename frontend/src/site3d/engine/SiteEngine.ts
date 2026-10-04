@@ -110,6 +110,8 @@ export class SiteEngine {
         const d = this.downAt;
         this.downAt = null;
         if (!d || Math.hypot(p.clientX - d[0], p.clientY - d[1]) > CLICK_SLOP_PX) return;
+        // A pin or glyph already took this click (S2's layers, ruling R-S3-31).
+        if (p.defaultPrevented) return;
         this.select(this.pick(p.clientX, p.clientY));
       });
       this.listen(window, "keydown", (e) => this.onKey(e as KeyboardEvent, true));
@@ -320,7 +322,9 @@ export class SiteEngine {
         if (dt > 0) {
           const forward = this.controls.target.clone().sub(this.camera.position);
           const diag = this.contentBox()?.getSize(new THREE.Vector3()).length() ?? 1000;
-          const step = flyDelta(this.held, forward, flySpeed(forward.length(), diag, this.shift), dt);
+          // scene y is the height above the datum (index frame rule)
+          const speed = flySpeed(this.camera.position.y, diag, this.shift);
+          const step = flyDelta(this.held, forward, speed, dt);
           this.camera.position.add(step);
           this.controls.target.add(step);
         }

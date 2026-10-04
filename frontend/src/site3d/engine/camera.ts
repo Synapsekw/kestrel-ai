@@ -30,9 +30,15 @@ export const FLY_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE"]
 export const FLY_SHIFT_FACTOR = 4;
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** `clamp(distanceToTarget, 1, siteDiagonal) / 4` m/s, × 4 with Shift (as the cloud viewer). */
-export function flySpeed(distanceToTarget: number, siteDiagonal: number, shift: boolean): number {
-  const d = Math.min(Math.max(distanceToTarget, 1), Math.max(siteDiagonal, 1));
+export const FLY_MIN_HEIGHT_M = 10;
+
+/**
+ * `clamp(heightAboveDatum, 10, siteDiagonal) / 4` m/s, × 4 with Shift: slow near the ground, fast
+ * high above the site (the fly target sits a fixed 10 m ahead, so it cannot scale the speed).
+ */
+export function flySpeed(heightAboveDatum: number, siteDiagonal: number, shift: boolean): number {
+  const top = Math.max(siteDiagonal, FLY_MIN_HEIGHT_M);
+  const d = Math.min(Math.max(heightAboveDatum, FLY_MIN_HEIGHT_M), top);
   return (d / 4) * (shift ? FLY_SHIFT_FACTOR : 1);
 }
 

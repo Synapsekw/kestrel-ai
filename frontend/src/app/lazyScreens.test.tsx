@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, RouterProvider, createMemoryRouter } from "react-router-dom";
 import { fakeClient } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { EMPTY_SCENE } from "@/test/siteSceneFixtures";
@@ -27,11 +27,12 @@ describe("lazy screens (foundation F0)", () => {
         key="s"
         api={fakeClient([{ method: "GET", path: /\/site-scene/, body: EMPTY_SCENE }]).api}
       >
-        <MemoryRouter initialEntries={["/p/p1/site"]}>
-          <Routes>
-            <Route path="/p/:projectId/site" element={<SiteScreen />} />
-          </Routes>
-        </MemoryRouter>
+        {/* a data router: the site's panels guard unsaved edits with useBlocker (ruling R-S3-5) */}
+        <RouterProvider
+          router={createMemoryRouter([{ path: "/p/:projectId/site", element: <SiteScreen /> }], {
+            initialEntries: ["/p/p1/site"],
+          })}
+        />
       </TestApiProvider>,
     ],
     ["About Kestrel AI", <AboutScreen key="a" />],

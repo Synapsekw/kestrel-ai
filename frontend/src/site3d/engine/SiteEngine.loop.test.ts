@@ -150,4 +150,31 @@ describe("SiteEngine render loop", () => {
     expect(e.camera.position.distanceTo(before)).toBeGreaterThan(0.01);
     e.dispose();
   });
+
+  it("a click another listener already handled (a pin or glyph, R-S3-31) is not a model pick", () => {
+    const canvas = document.createElement("canvas");
+    // jsdom has no pointer capture; OrbitControls calls it on pointerdown (an uncaught error otherwise)
+    Object.assign(canvas, {
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      hasPointerCapture: () => false,
+    });
+    const e = new SiteEngine(canvas, null);
+    const picked = vi.fn();
+    e.onSelect(picked);
+    const handled = (ev: Event) => ev.preventDefault();
+    const click = () => {
+      canvas.dispatchEvent(new PointerEvent("pointerdown", { clientX: 5, clientY: 5, button: 0 }));
+      canvas.dispatchEvent(
+        new PointerEvent("pointerup", { clientX: 5, clientY: 5, button: 0, cancelable: true }),
+      );
+    };
+    canvas.addEventListener("pointerup", handled, true);
+    click();
+    expect(picked).not.toHaveBeenCalled();
+    canvas.removeEventListener("pointerup", handled, true);
+    click();
+    expect(picked).toHaveBeenCalledTimes(1);
+    e.dispose();
+  });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ApiClient, paths, Schemas } from "@contract/client";
+import { assetModelGlbUrl, type ApiClient, type paths, type Schemas } from "@contract/client";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import type { SiteFrameT } from "@/site3d/engine/siteTransform";
 import { useApi } from "./client";
@@ -28,6 +28,16 @@ export function absUrl(info: { baseUrl: string; token: string }, rel: string): s
   return `${base}${rel}${sep}token=${encodeURIComponent(info.token)}`;
 }
 
+/** The one GLB URL the Site 3D view loads (ruling R-S3-19): token-bearing, for a model version. */
+export function siteModelUrl(
+  info: { baseUrl: string; token: string },
+  projectId: string,
+  modelId: string,
+  version: number,
+): string {
+  return assetModelGlbUrl(info.baseUrl, info.token, projectId, modelId, version);
+}
+
 export function toFrameT(f: SiteScene["frame"]): SiteFrameT | null {
   if (!f) return null;
   return {
@@ -48,6 +58,10 @@ export async function getSiteScene(
   );
 }
 
+/** Register page size: well under the contract's 500-row cap, a few screens of 44 px rows. */
+export const ITEMS_PAGE = 200;
+
+/** One cursor page of a version's register; blank filters are left out, `limit` defaults to ITEMS_PAGE. */
 export async function listAssetItems(
   api: ApiClient,
   projectId: string,
@@ -55,9 +69,19 @@ export async function listAssetItems(
   version: number,
   filters: ItemFilters = {},
   cursor?: string | null,
+  signal?: AbortSignal,
 ): Promise<AssetItemPage> {
-  const query: ItemsQuery = { ...filters, ...(cursor ? { cursor } : {}) };
-  return unwrap(api.GET(ITEMS, { params: { path: { projectId, assetModelId, version }, query } }));
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(filters)) {
+    const t = typeof v === "string" ? v.trim() : v;
+    if (t !== undefined && t !== null && t !== "") clean[k] = t;
+  }
+  const query = {
+    ...clean,
+    limit: filters.limit ?? ITEMS_PAGE,
+    ...(cursor ? { cursor } : {}),
+  } as ItemsQuery;
+  return unwrap(api.GET(ITEMS, { params: { path: { projectId, assetModelId, version }, query }, signal }));
 }
 
 export async function getAssetItem(
@@ -80,16 +104,24 @@ export function useSiteScene(projectId: string, modelId?: string | null) {
     error: string | null;
     code?: string | null;
   } | null>(null);
+  const seq = useRef(0);
   const reload = useCallback(() => {
+    // GLB jobs finishing back to back reload twice; an older answer that lands last is dropped.
+    const mine = ++seq.current;
+    const fresh = () => mine === seq.current;
     void getSiteScene(api, projectId, modelId).then(
-      (scene) => setLoaded({ key, scene, error: null }),
-      (e: unknown) =>
+      (scene) => {
+        if (fresh()) setLoaded({ key, scene, error: null });
+      },
+      (e: unknown) => {
+        if (!fresh()) return;
         setLoaded((prev) => ({
           key,
           scene: prev?.key === key ? prev.scene : null,
           error: message(e),
           code: codeOf(e),
-        })),
+        }));
+      },
     );
   }, [api, projectId, modelId, key]);
   useEffect(reload, [reload]);
@@ -101,72 +133,6 @@ export function useSiteScene(projectId: string, modelId?: string | null) {
     /** The API error code (`not_found` for an unknown model id), null without an error. */
     errorCode: current?.code ?? null,
     loading: current === null,
-    reload,
-  };
-}
-
-/** The register rows of one version, ≤ 500 per page (index Global Constraints), appended by cursor. */
-export function useAssetItems(
-  projectId: string,
-  modelId: string | null,
-  version: number | null,
-  filters: ItemFilters = {},
-) {
-  const api = useApi();
-  const key = JSON.stringify([projectId, modelId, version, filters]);
-  const inFlight = useRef<string | null>(null);
-  const latest = useRef(key);
-  const [state, setState] = useState<{
-    key: string;
-    items: AssetItemRow[];
-    next: string | null;
-    error: string | null;
-  } | null>(null);
-  const fetchPage = useCallback(
-    (cursor: string | null) => {
-      const [pid, mid, ver, f] = JSON.parse(key) as [string, string | null, number | null, ItemFilters];
-      if (!mid || ver == null || inFlight.current === key) return;
-      inFlight.current = key;
-      latest.current = key;
-      void listAssetItems(api, pid, mid, ver, f, cursor)
-        .then(
-          (page) => {
-            if (latest.current !== key) return;
-            setState((prev) => ({
-              key,
-              items: cursor && prev?.key === key ? [...prev.items, ...page.items] : page.items,
-              next: page.next_cursor ?? null,
-              error: null,
-            }));
-          },
-          (e: unknown) => {
-            if (latest.current !== key) return;
-            setState((prev) => ({
-              key,
-              items: prev?.key === key ? prev.items : [],
-              next: prev?.key === key ? prev.next : null,
-              error: message(e),
-            }));
-          },
-        )
-        .finally(() => {
-          if (inFlight.current === key) inFlight.current = null;
-        });
-    },
-    [api, key],
-  );
-  useEffect(() => fetchPage(null), [fetchPage]);
-  const current = state?.key === key ? state : null;
-  const next = current?.next ?? null;
-  const loadMore = useCallback(() => {
-    if (next) fetchPage(next);
-  }, [fetchPage, next]);
-  const reload = useCallback(() => fetchPage(null), [fetchPage]);
-  return {
-    items: current ? current.items : null,
-    error: current?.error ?? null,
-    hasMore: Boolean(current?.next),
-    loadMore,
     reload,
   };
 }

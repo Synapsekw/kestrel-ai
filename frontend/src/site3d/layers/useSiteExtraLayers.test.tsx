@@ -179,4 +179,38 @@ describe("useExtraLayerClicks", () => {
     canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 60, clientY: 10, button: 0 }));
     expect(on.finding).toHaveBeenCalledTimes(1);
   });
+
+  it("a pin or glyph wins the click: the model pick skips it, other pointerup listeners still run (R-S3-31)", () => {
+    const { hook, engine, canvas, wrapper } = setup();
+    // Registered first, as S1's engine and three's OrbitControls are: the model pick skips a handled
+    // click (SiteEngine checks defaultPrevented); OrbitControls must still hear every pointerup, or it
+    // keeps the pointer and the camera follows the mouse.
+    const modelPick = vi.fn((e: Event) => {
+      if (!e.defaultPrevented) modelPick.picked += 1;
+    }) as ReturnType<typeof vi.fn> & { picked: number };
+    modelPick.picked = 0;
+    const orbitUp = vi.fn();
+    canvas.addEventListener("pointerup", modelPick);
+    canvas.addEventListener("pointerup", orbitUp);
+    const hit = vi.spyOn(hook.result.current.findings!, "hit").mockReturnValue({ findingId: "f1" });
+    const on = { photo: vi.fn(), finding: vi.fn() };
+    renderHook(() => useExtraLayerClicks(engine, hook.result.current, on), { wrapper });
+    const click = () => {
+      canvas.dispatchEvent(new PointerEvent("pointerdown", { clientX: 10, clientY: 10, button: 0 }));
+      canvas.dispatchEvent(
+        new PointerEvent("pointerup", { clientX: 10, clientY: 10, button: 0, cancelable: true }),
+      );
+    };
+    click();
+    expect(on.finding).toHaveBeenCalledWith("f1");
+    expect(modelPick.picked).toBe(0);
+    expect(orbitUp).toHaveBeenCalledTimes(1);
+    // Nothing of S2's under the pointer: the model pick runs as before.
+    hit.mockReturnValue(null);
+    click();
+    expect(modelPick.picked).toBe(1);
+    expect(orbitUp).toHaveBeenCalledTimes(2);
+    canvas.removeEventListener("pointerup", modelPick);
+    canvas.removeEventListener("pointerup", orbitUp);
+  });
 });

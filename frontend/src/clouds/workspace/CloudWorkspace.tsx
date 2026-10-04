@@ -14,6 +14,7 @@ import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOp
 import type { ColourAvailability } from "@/clouds/viewer/types";
 import { ReportViewCard as ReportViewCardView } from "@/clouds/views/ReportViewCard";
 import { useViewCapture } from "@/clouds/views/useViewCapture";
+import { useOpenSiteAction } from "@/site3d/entry/useOpenSiteAction";
 import { Alert, Button, WorkspaceRail, type RailState } from "@/ui";
 import { canClip } from "./clipEngine";
 import { defaultCloud } from "./cloudActions";
@@ -63,6 +64,10 @@ const toggle = (s: ReadonlySet<number>, code: number) => {
 /** The viewer and every glass panel for one ready cloud (keyed by cloud id: a switch starts afresh). */
 function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails, onDeleted }: ReadyProps) {
   const viewer = useRef<CloudViewerHandle>(null);
+  useOpenSiteAction(projectId, () => {
+    const t = viewer.current?.currentPose()?.target;
+    return t ? { x: t[0], y: t[1], epsg: cloud.epsg } : null;
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const { baseUrl, token } = useBackend();

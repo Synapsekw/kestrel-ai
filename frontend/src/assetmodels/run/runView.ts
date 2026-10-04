@@ -3,16 +3,31 @@ import type { ToastTone } from "@/ui/toastStore";
 import type { BuildInitial } from "./BuildDialog";
 import { stopReasonText } from "./runText";
 
-/** The agent's step budget: a run ends at the latest after this many steps (spec §6). */
-export const MAX_STEPS = 80;
+/** M1's tool-call budget (backend runner.py MAX_CALLS) for build and refine runs. */
+export const DEFAULT_MAX_STEPS = 80;
 
-/** "step 12 of 80" */
-export const stepText = (run: Pick<AssetModelRun, "steps">) =>
-  `step ${Math.min(run.steps.length, MAX_STEPS)} of ${MAX_STEPS}`;
+type Budgeted = Pick<AssetModelRun, "mode">;
 
-/** The run's share of its step budget, 0 to 1. */
-export const stepShare = (run: Pick<AssetModelRun, "steps">) =>
-  Math.min(run.steps.length, MAX_STEPS) / MAX_STEPS;
+/**
+ * The run's step budget (spec §11): M1's 80 for build and refine; null for plant runs, which are
+ * counted in packages (Ruling 12).
+ */
+export function maxSteps(run: Budgeted): number | null {
+  return run.mode === "build" || run.mode === "refine" ? DEFAULT_MAX_STEPS : null;
+}
+
+/** "step 12 of 80", or "step 12" without a budget. */
+export function stepText(run: Budgeted & Pick<AssetModelRun, "steps">): string {
+  const max = maxSteps(run);
+  const n = run.steps.length;
+  return max === null ? `step ${n}` : `step ${Math.min(n, max)} of ${max}`;
+}
+
+/** The run's share of its step budget, 0 to 1; undefined (an indeterminate bar) without a budget. */
+export function stepShare(run: Budgeted & Pick<AssetModelRun, "steps">): number | undefined {
+  const max = maxSteps(run);
+  return max === null ? undefined : Math.min(run.steps.length, max) / max;
+}
 
 /** The latest step that rendered a thumbnail, or null. */
 export function lastThumbStep(run: Pick<AssetModelRun, "steps">) {
