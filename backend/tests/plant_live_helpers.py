@@ -10,7 +10,7 @@ from pathlib import Path
 
 # Kestrel-managed folders the plant run reads. Raw data (Drawings/, Point_Cloud/, Ortho/, ...) is not
 # copied: the rows hold absolute paths and the run only ever reads those files.
-KESTREL_DIRS = ("drawings", "maps", "pointclouds")
+KESTREL_DIRS = ("drawings", "maps", "pointclouds", "asset_models")
 SKIP_DIRS = frozenset({"octree", ".work"})  # display copies and scratch the run never reads
 SHEETS = ("T0003", "T0005", "T0006", "T0007", "T0008")  # the overall and the four area plot plans
 # The operator's file names for those sheets (E:\Asset Inspections\LNG Terminal\Drawings).
