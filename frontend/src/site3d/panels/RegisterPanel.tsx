@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AssetItemRow } from "@/api/plantItems";
 import {
   Alert,
@@ -33,6 +33,8 @@ export interface RegisterPanelProps {
   selectedId: string | null;
   /** The row comes along so the caller can fly to it when the 3D model has no box for it. */
   onPick(node: string, row: AssetItemRow): void;
+  /** Kept mounted but not shown (an item or the editor is open): nothing is lost or read again. */
+  hidden?: boolean;
 }
 
 /** Spec section 11 Register (right): search by tag or name, filter by area, type and flag, fly to a row. */
@@ -66,20 +68,37 @@ export function RegisterPanel(p: RegisterPanelProps) {
   const win = computeWindow(scrollTop, height, ROW_H, reg.rows.length);
   const ids = { type: useId(), area: useId(), flag: useId() };
   const filtered = !!(q || type || area || flag);
+  /** The list's scroll offset while it was last shown. */
+  const lastTop = useRef(0);
   // A new query starts at the top of its list.
   useEffect(() => {
+    lastTop.current = 0;
     if (containerRef.current) containerRef.current.scrollTop = 0;
     syncScroll();
   }, [q, type, area, flag, containerRef, syncScroll]);
 
+  // A hidden list has no layout box and may lose its scroll offset: put it back when it shows again.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (p.hidden || !el) return;
+    if (el.scrollTop !== lastTop.current) el.scrollTop = lastTop.current;
+    syncScroll();
+  }, [p.hidden, containerRef, syncScroll]);
+
   const onScroll = () => {
     syncScroll();
     const el = containerRef.current;
+    if (el && !p.hidden) lastTop.current = el.scrollTop;
     if (el && el.scrollTop + el.clientHeight >= (reg.rows.length - AHEAD) * ROW_H) reg.loadMore();
   };
 
   return (
-    <section aria-label="Register" className="flex min-h-0 flex-1 flex-col gap-2">
+    <section
+      aria-label="Register"
+      hidden={p.hidden}
+      // no display utility while hidden: `flex` would beat the hidden attribute's display: none
+      className={cx(!p.hidden && "flex", "min-h-0 flex-1 flex-col gap-2")}
+    >
       <Input
         type="search"
         aria-label="Search the register"

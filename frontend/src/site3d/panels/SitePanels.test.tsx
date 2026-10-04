@@ -12,6 +12,7 @@ import { FRAME, sceneWith } from "@/test/siteSceneFixtures";
 import { useJobsStore } from "@/store/jobs";
 import type { ExtraLayerRow, ExtraLayers } from "@/site3d/layers/useSiteExtraLayers";
 import type { SiteLayer } from "@/site3d/layers/types";
+import type { SiteControls } from "./engineBridge";
 import { SitePanels, rowBox, type SiteModelView } from "./SitePanels";
 
 const JOB = {
@@ -101,7 +102,12 @@ function Harness(p: {
   initialView?: SiteModelView;
   /** Lets a test play the view's own reports (a first load finishing). */
   onViewSetter?: (set: (v: SiteModelView) => void) => void;
+  /** Lets a test play a new view (Reload view: new controls) or rebuilt S1 layers. */
+  onEngineSetter?: (set: (e: { controls: SiteControls; s1Layers: SiteLayer[] }) => void) => void;
 }) {
+  const [engine, setEngine] = useState({ controls: p.controls as SiteControls, s1Layers: p.s1Layers });
+  const { onEngineSetter } = p;
+  useEffect(() => onEngineSetter?.(setEngine), [onEngineSetter]);
   const [view, setView] = useState<SiteModelView>(
     p.initialView ?? { version: 3, shown: 3, state: "ready", items: 2 },
   );
@@ -120,8 +126,8 @@ function Harness(p: {
       projectId="p"
       scene={scene}
       frame={FRAME}
-      controls={p.controls}
-      s1Layers={p.s1Layers}
+      controls={engine.controls}
+      s1Layers={engine.s1Layers}
       extra={p.extra}
       view={view}
       onShowVersion={show}
@@ -157,6 +163,7 @@ function mount(
   const load = o.load ?? vi.fn(async () => {});
   const modelLayer = layerOf("model", "Plant model", true);
   let setView: ((v: SiteModelView) => void) | null = null;
+  let setEngine: ((e: { controls: SiteControls; s1Layers: SiteLayer[] }) => void) | null = null;
   const r = renderWithDataRouter(
     <Harness
       controls={c.controls}
@@ -166,10 +173,20 @@ function mount(
       gone={o.gone ?? new Set()}
       initialView={o.initialView}
       onViewSetter={(set) => (setView = set)}
+      onEngineSetter={(set) => (setEngine = set)}
     />,
     { api: client.api as ApiClient, route: o.url ?? "/p/p/site/m1", path: "/p/:projectId/site/:modelId" },
   );
-  return { ...client, ...r, c, x, load, modelLayer, setView: (v: SiteModelView) => setView!(v) };
+  return {
+    ...client,
+    ...r,
+    c,
+    x,
+    load,
+    modelLayer,
+    setView: (v: SiteModelView) => setView!(v),
+    setEngine: (e: { controls: SiteControls; s1Layers: SiteLayer[] }) => setEngine!(e),
+  };
 }
 const openTank = async () => fireEvent.click(await screen.findByRole("button", { name: /20-T-0001/ }));
 const editTop = async () => {
@@ -262,27 +279,100 @@ describe("SitePanels", () => {
     expect(c.raw.select).toHaveBeenCalledWith("20-T-0001");
   });
 
-  it("edit item B while A's version builds; when A's swap lands, B's draft survives and saves from its own base", async () => {
-    const { c, requests } = mount();
+  it("a new edit waits while a saved version builds or loads, then edits from that version (final fix 3)", async () => {
+    let finish: () => void = () => {};
+    const load = vi.fn(() => new Promise<void>((r) => (finish = r)));
+    const { c, requests } = mount({
+      load,
+      routes: [
+        { method: "GET", path: /\/versions\/4\/items\/30-P-0001$/, body: PUMP },
+        {
+          method: "GET",
+          path: /\/versions\/4\/items$/,
+          body: { items: [itemRow({ node: PUMP.id, tag: PUMP.tag, name: PUMP.name })], next_cursor: null },
+        },
+        {
+          method: "GET",
+          path: /\/asset-models\/m1\/versions\/4$/,
+          body: { ...VERSION_2, version: 4, spec: plantSpec(), warnings: [] },
+        },
+      ],
+    });
     await openTank();
     await editTop();
     fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
     await screen.findByText(/building version 4/i);
+    // Item B while A's version 4 builds: Edit waits (from version 3 it would drop version 4's change).
     act(() => c.emitSelect("30-P-0001"));
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    fireEvent.change(await screen.findByLabelText(/^top el/i), { target: { value: "110" } });
+    await screen.findByRole("heading", { name: "Send-out pump 1" });
+    const edit = screen.getByRole("button", { name: "Edit" });
+    expect(edit).toBeDisabled();
+    expect(screen.getByText("Version 4 is still building. Edit when it shows.")).toBeInTheDocument();
+    fireEvent.click(edit);
+    expect(screen.queryByLabelText(/^top el/i)).toBeNull();
+    // Built, now loading: still waiting.
     act(() => useJobsStore.getState().upsert({ ...JOB, state: "succeeded", progress: 1 } as never));
+    expect(await screen.findByText("Version 4 is still loading. Edit when it shows.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeDisabled();
+    // Version 4 lands: Edit works and starts from version 4.
+    await act(async () => finish());
     expect(await screen.findByText("Version 4")).toBeInTheDocument();
-    // the editor was not remounted: the draft is there, and it still edits from version 3
-    expect(screen.getByLabelText(/^top el/i)).toHaveValue(110);
-    expect(screen.getByText(/editing from version/i)).toHaveTextContent("Editing from version 3.");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(await screen.findByText(/editing from version/i)).toHaveTextContent("Editing from version 4.");
+    fireEvent.change(await screen.findByLabelText(/^top el/i), { target: { value: "110" } });
     const before = requests.length;
     fireEvent.click(screen.getByRole("button", { name: "Save as new version" }));
     await waitFor(() => expect(requests.slice(before).some((q) => q.method === "POST")).toBe(true));
     const saved = requests.slice(before);
-    expect(saved.some((q) => q.method === "GET" && /\/versions\/3$/.test(q.url))).toBe(true);
-    const post = saved.find((q) => q.method === "POST")!;
-    expect((post.body as { note: string }).note).toMatch(/from v3/);
+    expect(saved.some((q) => q.method === "GET" && /\/versions\/4$/.test(q.url))).toBe(true);
+    expect((saved.find((q) => q.method === "POST")!.body as { note: string }).note).toMatch(/from v4/);
+  });
+
+  it("Back keeps the search and the loaded rows (final fix 2)", async () => {
+    const { requests } = mount();
+    const search = await screen.findByRole("searchbox", { name: "Search the register" });
+    fireEvent.change(search, { target: { value: "tank" } });
+    await waitFor(() =>
+      expect(requests.some((q) => q.method === "GET" && /\/items\?.*q=tank/.test(q.url))).toBe(true),
+    );
+    const pages = () =>
+      requests.filter((q) => q.method === "GET" && /\/versions\/3\/items(\?|$)/.test(q.url));
+    await openTank();
+    await screen.findByRole("heading", { name: "LNG tank 1" });
+    // the register is still there, only hidden while the item shows
+    expect(screen.queryByRole("searchbox", { name: "Search the register" })).toBeNull();
+    const read = pages().length;
+    fireEvent.click(screen.getByRole("button", { name: "Register" }));
+    expect(screen.getByRole("searchbox", { name: "Search the register" })).toHaveValue("tank");
+    expect(screen.getByRole("button", { name: /20-T-0001/ })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(pages().length).toBe(read);
+  });
+
+  it("the colour mode and opacities go back on a new view or a rebuilt layer (final fix 6)", async () => {
+    const ortho = layerOf("ortho:o1", "May ortho", true);
+    const model = layerOf("model", "Plant model", true);
+    const { c, setEngine } = mount({ s1Layers: [model, ortho] });
+    const layers = await screen.findByRole("region", { name: "Layers" });
+    fireEvent.change(within(layers).getByLabelText("Colour the model by"), { target: { value: "type" } });
+    expect(c.raw.setColourBy).toHaveBeenLastCalledWith("type");
+    fireEvent.keyDown(within(layers).getByRole("slider", { name: "May ortho opacity" }), {
+      key: "ArrowLeft",
+    });
+    expect(ortho.setOpacity).toHaveBeenLastCalledWith(0.95);
+    // Reload view: new controls and new layers, both with default looks.
+    const again = fakeSiteControls();
+    const ortho2 = layerOf("ortho:o1", "May ortho", true);
+    const model2 = layerOf("model", "Plant model", true);
+    act(() => setEngine({ controls: again.controls, s1Layers: [model2, ortho2] }));
+    await waitFor(() => expect(again.raw.setColourBy).toHaveBeenCalledWith("type"));
+    expect(ortho2.setOpacity).toHaveBeenCalledWith(0.95);
+    expect(model2.setOpacity).not.toHaveBeenCalled();
+    // a drape rebuilt for new tiles (same controls) gets its opacity back too
+    const ortho3 = layerOf("ortho:o1", "May ortho", true);
+    act(() => setEngine({ controls: again.controls, s1Layers: [model2, ortho3] }));
+    await waitFor(() => expect(ortho3.setOpacity).toHaveBeenCalledWith(0.95));
   });
 
   it("an ?at= arrival waits while the model loads and flies once it is ready (fix round 1, minor 2)", async () => {

@@ -105,6 +105,21 @@ export function SitePanels(p: SitePanelsProps) {
     l.setOpacity(o);
     setOpacity((u) => ({ ...u, [id]: o }));
   };
+  // A new view (Reload view, another model) or a rebuilt drape is a new layer with default looks:
+  // put the panel's colour mode and opacities back on it, as SiteView does for `hidden`.
+  const looks = useRef({ colourBy, opacity });
+  useEffect(() => {
+    looks.current = { colourBy, opacity };
+  });
+  useEffect(() => {
+    if (p.controls && looks.current.colourBy !== "material") p.controls.setColourBy(looks.current.colourBy);
+  }, [p.controls]);
+  useEffect(() => {
+    for (const l of p.s1Layers) {
+      const o = looks.current.opacity[l.id];
+      if (o !== undefined) l.setOpacity?.(o);
+    }
+  }, [p.s1Layers]);
   const placeableCloud = p.extra.rows.some(
     (r) => r.group === "Point clouds" && r.layer.status.get().kind !== "unavailable",
   );
@@ -137,6 +152,12 @@ export function SitePanels(p: SitePanelsProps) {
             : { kind: "failed", message: p.view.error ?? "" };
   // A swap that landed is done: forget it (React's "adjust state while rendering" pattern).
   if (swap && phase === null) setSwap(null);
+  // A new edit waits while a saved version builds or loads: started now it would save from the version
+  // on screen and silently drop the saved one's change (finding 3; Edit waits rather than rebasing).
+  const editBlocked =
+    swap && (phase?.kind === "building" || phase?.kind === "loading")
+      ? `Version ${swap.version} is still ${phase.kind}. Edit when it shows.`
+      : null;
 
   // ---- selection and editing
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -338,18 +359,25 @@ export function SitePanels(p: SitePanelsProps) {
                 selectIn3d(null);
                 open(null);
               }}
-              onEdit={(item) => setEditing({ item, base: version })}
+              onEdit={(item) => {
+                if (!editBlocked) setEditing({ item, base: version });
+              }}
+              editBlocked={editBlocked}
             />
-          ) : (
-            <RegisterPanel
-              projectId={p.projectId}
-              modelId={sceneModel.id}
-              version={version}
-              catalogueTypes={catalogue.map((c) => c.type)}
-              selectedId={selectedId}
-              onPick={pick}
-            />
-          )}
+          ) : null}
+          {/*
+            Always mounted, hidden while an item or the editor shows: its search, filters, loaded pages
+            and scroll position survive a look at an item, and Back reads nothing again.
+          */}
+          <RegisterPanel
+            projectId={p.projectId}
+            modelId={sceneModel.id}
+            version={version}
+            catalogueTypes={catalogue.map((c) => c.type)}
+            selectedId={selectedId}
+            onPick={pick}
+            hidden={editing !== null || selectedId !== null}
+          />
         </aside>
       )}
       {notice && (
