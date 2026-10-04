@@ -80,7 +80,8 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Project landing (Overview v2): viewport-filling, data-driven Overview | merged/pushed to `main` (`35534daf..335c37fb`); installed (`8aead7b`), operator walkthrough passed 2026-10-02 | 9 SDD tasks (5 in parallel worktrees) and a final opus review; the fix wave closed 1 critical and 6 important findings; gate 4787 backend / 3769 frontend / 167 browser; Location pane got a keyless cached basemap 2026-10-03 (`31a1a5ab`, [[2026-10-03-0723-site-basemap]]) |
 | Workspace rail: one tool layout for Maps and Point clouds | merged to `main` (`8340215a`, not pushed); installed 2026-10-03 | shared `ui/WorkspaceRail` + `TopicPanel`; map palette/layers panel and cloud palette/panel/inspector tabs replaced; 9 SDD tasks + final opus review (1 critical, 2 important fixed). Gate lint 0, vitest 4283, e2e 189. One known focus bug open (§5). See [[2026-10-03-1016-workspace-rail]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
-| M1 asset model builder (confined-space programme M1–M6) | merged 2026-10-02 (`914c4d5b`) | all 7 units green; frozen smoke `asset-models ok`; installer not built (app was running); HCl acceptance owed |
+| M1 asset model builder (confined-space programme M1–M6) | merged 2026-10-02 (`914c4d5b`) | all 7 units green; frozen smoke `asset-models ok`; installer not built (app was running); scope superseded 2026-10-04 by G1 (the operator rejected single-asset M1) |
+| G1 plant model generator + Site 3D view | merged to `main` (`76349096..01f85f14`, 12 units + L1), installed 2026-10-04 from `01f85f14`; **accepted by the operator** on review | Al-Zour live runs: recall 89–96 %, type match 80–93 %, within tolerance 82–88 %, 26–37 M tokens per run; strict scorer targets not met (§5). See [[2026-10-04-1900-plant-model-generator-g1]] |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 [[2026-09-17-s1-dataset-backend]], [[2026-09-17-s2-annotation-ui]],
@@ -91,7 +92,13 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Sidebar project tree replaces the rail, breadcrumb and project tabs** (2026-10-03, `5f23ce6d..68232ff2`, merged as `056175f3` on `main`, **not pushed**; **installed** 2026-10-04 from `bdff5806`, which also carries the G1 plant model, Site 3D, asset findings and delete-project-data merges; frozen smoke all ok). The shell now has one labelled 236 px sidebar, collapsible to 64 px with the button or Ctrl+B and remembered in `kestrel.sidebar`. The open project nests under Projects with its nine pages plus More, so the location reads as a path. The top bar shows only the page title. Canvas surfaces open collapsed (full-bleed Maps, Point clouds and Asset models, plus Images and the report builder); expanding there lasts one visit. Merged-tree gate: lint 0, vitest 4445, build ok, e2e 192/8 skipped. The branch also had contract ok, ruff ok and pytest 5555 (backend untouched). Spec `docs/superpowers/specs/2026-10-03-sidebar-project-tree-design.md`, ADR [[2026-10-03-sidebar-replaces-rail-and-tabs]]. See [[2026-10-03-1803-sidebar-project-tree]].
+**Shipped last:** **G1 plant model generator and Site 3D view** (2026-10-03..04, `e7c53097..01f85f14`, 12 unit merges plus L1 on `main`, pushed; installed from `01f85f14`).
+- One AI run reads all plot-plan pages, traces the plant in parallel packages, checks heights against the cloud, traces land and sea, and builds a GLB plus a register CSV from 46 app-code builders.
+- A new Site 3D view layers the model over the draped ortho, the cloud and the plot plans, with water and sky, a searchable register and an item editor.
+- The operator reviewed the Al-Zour model in `E:\Asset Inspections\LNG Terminal - Kestrel plant model` and accepted it ("slightly different from the cowork model but it should be fine").
+- See [[2026-10-04-1900-plant-model-generator-g1]].
+
+Before that: **Sidebar project tree replaces the rail, breadcrumb and project tabs** (2026-10-03, `5f23ce6d..68232ff2`, merged as `056175f3` on `main`, **not pushed**; **installed** 2026-10-04 from `bdff5806`, which also carries the G1 plant model, Site 3D, asset findings and delete-project-data merges; frozen smoke all ok). The shell now has one labelled 236 px sidebar, collapsible to 64 px with the button or Ctrl+B and remembered in `kestrel.sidebar`. The open project nests under Projects with its nine pages plus More, so the location reads as a path. The top bar shows only the page title. Canvas surfaces open collapsed (full-bleed Maps, Point clouds and Asset models, plus Images and the report builder); expanding there lasts one visit. Merged-tree gate: lint 0, vitest 4445, build ok, e2e 192/8 skipped. The branch also had contract ok, ruff ok and pytest 5555 (backend untouched). Spec `docs/superpowers/specs/2026-10-03-sidebar-project-tree-design.md`, ADR [[2026-10-03-sidebar-replaces-rail-and-tabs]]. See [[2026-10-03-1803-sidebar-project-tree]].
 
 Before that: **Scan overlay stays smooth while orbiting** (2026-10-03, `1ce7ad64` on `task/overlay-smooth`, pushed, **not merged, not installed**). The asset-model viewer draws at most 32,000 scan points from the cells in frame, and paints once per frame. Installer written (`Kestrel AI_0.1.0_x64-setup.exe` in the overlay-smooth worktree, 15:39); the install was aborted and then deferred because other edges are running. The installed app is still the 11:28 build. Touched-file vitest and eslint passed; the full gate was not run. See [[2026-10-03-1705-scan-overlay-smooth]].
 
@@ -142,7 +149,7 @@ Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight (M1):** the installer from `8340215a` (2026-10-03) contains M1; the HCl acceptance is what remains (§5 Owed). The other session's artifact-port plan treats M1 as P0.
+**In flight (G1):** nothing; accepted 2026-10-04. M1's single-asset scope is superseded; the HCl tank is now a one-item plant. Next for this programme: G2 (points and pictures on items, with artifact-port P1) and M2/G3 (Elios and DJI media).
 
 **In flight:** nothing for Overview v2: the operator checked it on the installed `8aead7b` (2026-10-02, "all good, all working"). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
@@ -334,7 +341,21 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 - **Operator check:** the 7-step walkthrough in [[2026-10-03-0723-site-basemap]] on the installed `31a1a5ab` build. This is the first view with real tiles (e2e uses Prism).
 - **Known gaps:** the basemap disk cache has no size cap; Esri's terms strictly expect an ArcGIS account (OSM behind the Map switch is the clean option).
 
+### G1 plant model generator (opened 2026-10-04)
+
+- **Granularity and variance:**
+  - skid components and single pumps are often one package item (area 50/70 recall);
+  - package planning varies run to run.
+  - Live run evidence: `docs/evidence/2026-10-03-plant-model-g1/`.
+- **Scorer targets not met** (type ≥95 %, within tolerance ≥95 %, land Hausdorff ≤10 m); the operator accepted on review instead.
+- **Asset models opens an asset model by default.** In a mixed project the plant is reached via the picker or Maps → "Open site in 3D"; there is no sidebar entry for Site 3D. A UX fix is owed (the operator was confused).
+- **The real `LNG Terminal` project has no plant model**; only the review copy has one. An in-app run costs about $120–160 and takes about 75 min.
+- **Latent bug (not G1):** `site-tiles/{kind}/{layerId}` returns 500 on astral-unicode ids (intermittent `test_contract`).
+- **Housekeeping:** `.superpowers/sdd/pm-common/live/tmp1..tmp4` (about 1 GB each); worktrees `pm-l1` and `pm-int`.
+
 ### M1 asset model builder (opened 2026-10-02)
+
+- **Superseded 2026-10-04** by G1 (above); the items below stay only as history.
 
 - **Installer:** done 2026-10-03 — built from `8340215a` and installed (see [[2026-10-03-1016-workspace-rail]]).
 - **Acceptance (spec §11):** needs the HCl GA drawing (P-00212-DW-MD-143TD1 rev 3) as `backend/tests/data/asset_models/hcl-tank-ga.pdf`; the live test's bearing/elevation table must be transcribed from `source_2/model_meta.json` first.
