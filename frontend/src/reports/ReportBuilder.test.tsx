@@ -353,6 +353,14 @@ describe("ReportBuilder", () => {
     await waitFor(() => expect(screen.getByText("Saved")).toHaveAttribute("role", "status"));
   });
 
+  it("a brand list that failed to load is not shown as a deleted brand", async () => {
+    current = { ...current, brand_id: "b0000000-0000-4000-8000-000000000009" };
+    setup(); // no brands route: the list answers 404
+    await screen.findByRole("region", { name: "Preview" });
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Brand" })).toBeInTheDocument());
+    expect(screen.queryByRole("option", { name: /Brand not found/ })).toBeNull();
+  });
+
   it("History toggles the drawer", async () => {
     setup();
     await screen.findByRole("region", { name: "Preview" });

@@ -68,7 +68,9 @@ export function DeleteCloudDialog({
         onClose={close}
         footer={
           <>
-            <Button onClick={close}>Keep them</Button>
+            <Button onClick={close} disabled={busy}>
+              Keep them
+            </Button>
             <Button variant="danger" loading={busy} onClick={() => run(true)}>
               {`Delete cloud and ${plural(findings)}`}
             </Button>
@@ -84,14 +86,16 @@ export function DeleteCloudDialog({
   return (
     <Dialog
       open
-      title={`Delete ${cloud.name}?`}
+      title="Are you sure?"
       description="The 3D view copy and the measurements go; the source file is not touched."
       onClose={close}
       footer={
         <>
-          <Button onClick={close}>Keep it</Button>
+          <Button onClick={close} disabled={busy}>
+            Cancel
+          </Button>
           <Button variant="danger" loading={busy} onClick={() => run(false)}>
-            Delete
+            Yes
           </Button>
         </>
       }

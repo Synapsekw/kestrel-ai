@@ -173,3 +173,67 @@ describe("CoverBlock (Ruling R-6)", () => {
     expect(screen.queryByRole("img", { name: "Logo" })).toBeNull();
   });
 });
+
+describe("CoverBlock with a brand (spec 2026-10-02-asset-findings §9 brand editor preview)", () => {
+  const branded =
+    (
+      brand: { gradient: string[]; fontFamily: string | null; logoSrc: string | null },
+      resolveAsset: (id: string) => string | null = () => null,
+    ) =>
+    ({ children }: { children: ReactNode }) => (
+      <PreviewEnvContext.Provider
+        value={{ resolveSnapshot: () => null, resolveAsset, scrollRoot: null, paper: "A4", brand }}
+      >
+        {children}
+      </PreviewEnvContext.Provider>
+    );
+
+  it("paints the band in the brand gradient and sets the title font", () => {
+    const { container } = render(<CoverBlock block={cover} />, {
+      wrapper: branded({
+        gradient: ["#141D2D", "#141D2D", "#9E0000"],
+        fontFamily: "Nunito Sans",
+        logoSrc: null,
+      }),
+    });
+    const band = container.querySelector("[data-cover-band]") as HTMLElement;
+    expect(band.style.background).toContain("rgb(20, 29, 45)");
+    expect(band.style.background).toContain("rgb(158, 0, 0)");
+    expect(screen.getByText("North yard inspection").style.fontFamily).toContain("Nunito Sans");
+    expect(screen.queryByRole("img", { name: "Brand logo" })).toBeNull();
+  });
+
+  it("shows the brand logo and hides it when it fails to load", () => {
+    render(<CoverBlock block={cover} />, {
+      wrapper: branded({
+        gradient: ["#000000", "#000000", "#000000"],
+        fontFamily: null,
+        logoSrc: "brand://dark",
+      }),
+    });
+    const img = screen.getByRole("img", { name: "Brand logo" });
+    expect(img).toHaveAttribute("src", "brand://dark");
+    fireEvent.error(img);
+    expect(screen.queryByRole("img", { name: "Brand logo" })).toBeNull();
+  });
+
+  it("keeps the Kestrel gradient without a brand", () => {
+    const { container } = render(<CoverBlock block={cover} />);
+    const band = container.querySelector("[data-cover-band]") as HTMLElement;
+    expect(band.style.background).toContain("rgb(59, 42, 122)"); // #3B2A7A
+  });
+
+  it("keeps the two logos' failures apart", () => {
+    render(<CoverBlock block={cover} />, {
+      wrapper: branded(
+        { gradient: ["#000000", "#000000", "#000000"], fontFamily: null, logoSrc: "brand://dark" },
+        () => "asset://gone",
+      ),
+    });
+    fireEvent.error(screen.getByRole("img", { name: "Logo" }));
+    fireEvent.error(screen.getByRole("img", { name: "Brand logo" }));
+    // the brand logo's failure did not bring the failed report logo chip back
+    expect(screen.queryByRole("img", { name: "Logo" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "Brand logo" })).toBeNull();
+  });
+});

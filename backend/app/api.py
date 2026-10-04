@@ -160,8 +160,12 @@ for _module in (
     # Asset findings (spec 2026-10-02-asset-findings §8, plan af-c0): 501 stubs until each unit lands.
     # A unit inserts its own router module above its stubs module and deletes its tuples there.
     "app.asset_review.review_router",
+    "app.asset_review.routes_poses",  # asset findings J2: photo poses (spec 2026-10-02-asset-findings §6.2)
+    "app.asset_review.routes_glb",  # asset findings J1: GLB import
+    "app.asset_review.group_router",  # asset findings J4: Regroup (spec 2026-10-02-asset-findings §6.4)
+    "app.asset_review.routes_placements",  # asset findings J3: placements and asset_place
     "app.asset_review.stubs",
-    "app.brands.stubs",
+    "app.brands.router",  # report brands: app level, in catalogue.db (plan D2)
 ):
     try:
         api_router.include_router(importlib.import_module(_module).router)
@@ -174,9 +178,6 @@ for _module in (
 # (tests/test_api_maps_guard.py). Each M unit inserts one line, its router module, before
 # "app.workspace.stubs" and deletes its tuples from app/workspace/stubs.py.
 for _module in (
-    # Plant model I1's 501 stubs, before app.drawings.router so that GET /drawings/unimported never
-    # reaches /drawings/{drawingId}. I1 deletes this line when it routes the real operations.
-    "app.asset_models.stubs_plant:drawings_router",
     # each M unit inserts its router module on its own line above this one
     "app.drawings.router",
     "app.mapmeasure.router",

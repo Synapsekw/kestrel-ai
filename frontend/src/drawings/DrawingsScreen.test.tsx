@@ -51,8 +51,8 @@ describe("DrawingsScreen", () => {
   it("deletes a drawing after confirmation", async () => {
     const { requests } = renderTab();
     fireEvent.click(await screen.findByRole("button", { name: "Delete foundation-plan · p2" }));
-    const dialog = screen.getByRole("dialog", { name: /Delete foundation-plan/ });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Are you sure?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Yes" }));
     await waitFor(() =>
       expect(requests.some((r) => r.method === "DELETE" && r.url.includes(pdfDrawing.id))).toBe(true),
     );

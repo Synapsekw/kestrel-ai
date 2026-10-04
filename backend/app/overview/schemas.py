@@ -31,8 +31,15 @@ class Banner(BaseModel):
 
 
 class Hero(BaseModel):
-    kind: Literal["map", "point_cloud", "images", "drawing"]
+    kind: Literal["asset_model", "map", "point_cloud", "images", "drawing"]
     id: str | None
+
+
+class PhotoReviewCounts(BaseModel):
+    finding: int = 0
+    none: int = 0
+    uncertain: int = 0
+    not_assessed: int = 0
 
 
 class OverviewSite(BaseModel):
@@ -51,6 +58,7 @@ class ProjectOverview(BaseModel):
     hero_map_id: str | None
     hero: Hero | None
     banners: list[Banner]
+    photo_review: PhotoReviewCounts | None = None
 
 
 class Cover(BaseModel):

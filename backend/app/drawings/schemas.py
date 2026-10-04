@@ -191,3 +191,31 @@ class GeorefFitOut(BaseModel):
     warnings: list[GeorefWarningOut]
     scale: float
     rotation_deg: float
+
+
+class DrawingPagesCreate(BaseModel):
+    """createDrawingPages (plant-model spec §8.1): every chosen page of a PDF, one job."""
+
+    inspection_id: str
+    name: str = Field(min_length=1, max_length=200)
+    pages: Literal["all"] | Annotated[list[Annotated[int, Field(ge=1)]], Field(min_length=1, max_length=500)]
+    dpi: Literal[100, 150, 200, 300] | None = None
+    placement: DrawingPlacementInput
+    captured_on: date | None = None
+
+
+class DrawingPagesWithJob(BaseModel):
+    drawings: list[DrawingOut]
+    job: JobOut
+
+
+class UnimportedDrawingOut(BaseModel):
+    path: str
+    name: str
+    format: DrawingFormatT
+    size: int = Field(ge=0)
+    pages: int | None
+
+
+class UnimportedDrawingList(BaseModel):
+    files: list[UnimportedDrawingOut] = Field(max_length=500)

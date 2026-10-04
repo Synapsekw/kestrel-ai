@@ -91,6 +91,21 @@ async function routes(page: Page) {
         )
       : r.fallback(),
   );
+  await page.route(`**/api/v1/projects/${P}/drawings/pages`, (r) =>
+    r.fulfill(
+      jsonReply(
+        {
+          drawings: [
+            { id: "d1", name: "foundation-plan · p1", status: "importing" },
+            { id: "d2", name: "foundation-plan · p2", status: "importing" },
+          ],
+          job: job(BJ, "queued"),
+        },
+        202,
+      ),
+    ),
+  );
+
   await page.route(`**/api/v1/projects/${P}/elevations`, (r) =>
     r.fulfill(
       jsonReply(
@@ -121,7 +136,6 @@ test("Add data → Drawing imports page 2 of a PDF in the background", async ({ 
   await dialog.getByLabel("Drawing file").fill("D:\\plans\\foundation-plan.pdf");
   await dialog.getByRole("button", { name: "Read file" }).click();
   await dialog.getByRole("checkbox", { name: "Page 1" }).click();
-  await dialog.getByRole("checkbox", { name: "Page 2" }).click();
   await dialog.getByRole("radio", { name: "300 dpi" }).click();
   const post = page.waitForRequest(
     (r) => r.url().endsWith(`/projects/${P}/drawings`) && r.method() === "POST",
@@ -132,6 +146,28 @@ test("Add data → Drawing imports page 2 of a PDF in the background", async ({ 
     name: "foundation-plan · p2",
     page: 2,
     dpi: 300,
+    placement: { method: "none" },
+  });
+  await expect(page.getByText(/Drawing import started/)).toBeVisible();
+  await expect(dialog).toBeHidden();
+});
+
+test("Add data → Drawing imports every page of a PDF in one request", async ({ page }) => {
+  await routes(page);
+  await page.goto(`/p/${P}/overview`);
+  await page.getByRole("button", { name: "Add data" }).first().click();
+  await page.getByRole("dialog", { name: "Add data" }).getByRole("button", { name: /Drawing/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Import drawing" });
+  await dialog.getByLabel("Drawing file").fill("D:\\plans\\foundation-plan.pdf");
+  await dialog.getByRole("button", { name: "Read file" }).click();
+  await expect(dialog.getByRole("checkbox", { name: "Page 2" })).toHaveAttribute("aria-checked", "true");
+  const post = page.waitForRequest((r) => r.url().endsWith(`/projects/${P}/drawings/pages`) && r.method() === "POST");
+  await dialog.getByRole("button", { name: "Start import" }).click();
+  expect((await post).postDataJSON()).toEqual({
+    inspection_id: INSP,
+    name: "foundation-plan",
+    pages: "all",
+    dpi: 150,
     placement: { method: "none" },
   });
   await expect(page.getByText(/Drawing import started/)).toBeVisible();

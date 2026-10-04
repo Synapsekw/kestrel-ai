@@ -21,7 +21,7 @@ import { Button, EmptyState, cx, useReducedMotion } from "@/ui";
 import { BlockView } from "./preview/blocks/BlockView";
 import { useFlip } from "./preview/flip";
 import { paginate, type Sheet } from "./preview/paginate";
-import { PreviewEnvContext, type PreviewEnv } from "./preview/PreviewContext";
+import { PreviewEnvContext, type CoverBrand, type PreviewEnv } from "./preview/PreviewContext";
 import { useSectionBlocks, type SectionEntry } from "./preview/sectionBlocks";
 import { useInView } from "./preview/useInView";
 import { PRINT, mm, mmVar, paperOf, pt, type PaperSize } from "./printTheme";
@@ -44,6 +44,8 @@ export interface ReportPreviewProps {
   resolveSnapshot?: (ref: SnapshotRef) => string | null;
   /** Overrides a report asset's URL (the cover logo); defaults to the backend's asset endpoint (Ruling R-6). */
   resolveAsset?: (assetId: string) => string | null;
+  /** The report's brand for the cover (spec 2026-10-02-asset-findings §9); null is the Kestrel theme. */
+  brand?: CoverBrand | null;
   /** The host sizes the preview (it is its own scroll container, Ruling 8). */
   className?: string;
 }
@@ -55,7 +57,17 @@ export interface ReportPreviewHandle {
 const NO_SECTIONS: OutlineSection[] = [];
 
 export const ReportPreview = forwardRef<ReportPreviewHandle, ReportPreviewProps>(function ReportPreview(
-  { projectId, outline, loadBlocks, pageCount, paper = "A4", resolveSnapshot, resolveAsset, className },
+  {
+    projectId,
+    outline,
+    loadBlocks,
+    pageCount,
+    paper = "A4",
+    resolveSnapshot,
+    resolveAsset,
+    brand = null,
+    className,
+  },
   ref,
 ) {
   const backendSrc = useSnapshotSrc(projectId);
@@ -68,8 +80,9 @@ export const ReportPreview = forwardRef<ReportPreviewHandle, ReportPreviewProps>
       resolveAsset: resolveAsset ?? backendAsset,
       scrollRoot: root,
       paper,
+      brand,
     }),
-    [resolveSnapshot, backendSrc, resolveAsset, backendAsset, root, paper],
+    [resolveSnapshot, backendSrc, resolveAsset, backendAsset, root, paper, brand],
   );
   const sections = outline?.sections ?? NO_SECTIONS;
   const { entryOf, request, retry } = useSectionBlocks(loadBlocks);

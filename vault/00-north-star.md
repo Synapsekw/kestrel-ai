@@ -91,7 +91,9 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Scan overlay stays smooth while orbiting** (2026-10-03, `1ce7ad64` on `task/overlay-smooth`, pushed, **not merged, not installed**). The asset-model viewer draws at most 32,000 scan points from the cells in frame, and paints once per frame. Installer written (`Kestrel AI_0.1.0_x64-setup.exe` in the overlay-smooth worktree, 15:39); the install was aborted and then deferred because other edges are running. The installed app is still the 11:28 build. Touched-file vitest and eslint passed; the full gate was not run. See [[2026-10-03-1705-scan-overlay-smooth]].
+**Shipped last:** **Sidebar project tree replaces the rail, breadcrumb and project tabs** (2026-10-03, `5f23ce6d..68232ff2`, merged as `056175f3` on `main`, **not pushed, not installed**). The shell now has one labelled 236 px sidebar, collapsible to 64 px with the button or Ctrl+B and remembered in `kestrel.sidebar`. The open project nests under Projects with its nine pages plus More, so the location reads as a path. The top bar shows only the page title. Canvas surfaces open collapsed (full-bleed Maps, Point clouds and Asset models, plus Images and the report builder); expanding there lasts one visit. Merged-tree gate: lint 0, vitest 4445, build ok, e2e 192/8 skipped. The branch also had contract ok, ruff ok and pytest 5555 (backend untouched). Spec `docs/superpowers/specs/2026-10-03-sidebar-project-tree-design.md`, ADR [[2026-10-03-sidebar-replaces-rail-and-tabs]]. See [[2026-10-03-1803-sidebar-project-tree]].
+
+Before that: **Scan overlay stays smooth while orbiting** (2026-10-03, `1ce7ad64` on `task/overlay-smooth`, pushed, **not merged, not installed**). The asset-model viewer draws at most 32,000 scan points from the cells in frame, and paints once per frame. Installer written (`Kestrel AI_0.1.0_x64-setup.exe` in the overlay-smooth worktree, 15:39); the install was aborted and then deferred because other edges are running. The installed app is still the 11:28 build. Touched-file vitest and eslint passed; the full gate was not run. See [[2026-10-03-1705-scan-overlay-smooth]].
 
 Before that: **Name an anomaly while marking** (2026-10-03, `26a3b90a` on `main`, **not pushed**). A box, polygon or point on a photo, a finding or label on a map, and a pin on a point cloud can create their defect type on the spot. It no longer has to exist from project setup. Video is not covered (no video annotation surface). Touched-file eslint, prettier and vitest passed; the full gate was not re-run, and it is not in an installed build. See [[2026-10-03-1531-anomaly-on-the-fly]].
 
@@ -144,7 +146,7 @@ Before that: **Foundation of the inspection platform, complete on `main` and ins
 
 **In flight:** nothing for Overview v2: the operator checked it on the installed `8aead7b` (2026-10-02, "all good, all working"). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
-**Next:** Try the 4-step walkthrough in [[2026-10-03-1531-anomaly-on-the-fly]] on a project with no anomaly types. Naming a type on a video waits until S4 exists.
+**Next:** Answer the sidebar question in §5 ("Project · Page" on collapsed canvases), then build and install from `main` and run the walkthrough in [[2026-10-03-1803-sidebar-project-tree]]. Also try the 4-step walkthrough in [[2026-10-03-1531-anomaly-on-the-fly]] on a project with no anomaly types. Naming a type on a video waits until S4 exists.
 
 **Next (S1):** The operator runs `docs/evidence/setup/walkthrough.md` on a real delivery. Then brainstorm S4 (video import, which unblocks the Confined template) or S2 (AI Describe it plus severity pre-fill).
 
@@ -288,6 +290,17 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Sidebar project tree (opened 2026-10-03)
+
+- **Operator question:** on collapsed canvases (Maps, Point clouds, Asset models, Images), the project name only shows on hover, because the top bar is page-only (spec §5). Should it read "Project · Page" there?
+- **Ruling to confirm:** the sidebar is also forced collapsed on Images and the report builder (`isForcedCollapse` includes the `workspace` layout). It was done because the expanded sidebar left the Images canvas about 370 px wide at 1280. Revert = one line plus docs.
+- **Not pushed, not installed** (`056175f3`). Walkthrough: [[2026-10-03-1803-sidebar-project-tree]] § How to test.
+- **Follow-ups (minor):**
+  - The width still animates on route-driven collapse changes; the clouds-journey flake was attributed to this without instrumentation.
+  - The project row's live dot is not announced to screen readers.
+  - The sidebar scrolls on windows shorter than about 760 px when collapsed inside a project.
+  - No e2e asserts that Images opens collapsed.
 
 ### Scan overlay smoothness (opened 2026-10-03)
 

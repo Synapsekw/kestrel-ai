@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_ID, fakeClient } from "@/test/fixtures";
 import { LocationProbe } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
+import { LayerRowView } from "../chrome/LayerRowView";
 import { evaluateHref } from "../links";
 import { renderInWorkspace } from "../test/harness";
 import { UTM33 } from "../test/fixtures";
@@ -30,7 +32,7 @@ const choose = (row: typeof ortho, id: string) =>
       .onSelect(),
   );
 
-function setup() {
+function setup(extra?: ReactNode) {
   const { api, requests } = fakeClient([
     { method: "PATCH", path: /\/maps\/sep$/, body: {} },
     { method: "PATCH", path: /\/surfaces\/dem$/, body: {} },
@@ -51,6 +53,7 @@ function setup() {
   renderInWorkspace(
     <>
       <RasterDialogs projectId={PROJECT_ID} frame={UTM33} />
+      {extra}
       <LocationProbe />
     </>,
     { api },
@@ -113,7 +116,7 @@ describe("row-menu dialogs (M §5.2)", () => {
     useToastStore.getState().clear();
     setup();
     choose(ortho, "delete");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(useGoneLayers.getState().gone.has(ortho.key)).toBe(true));
     useGoneLayers.getState().markGone(ortho.key, ortho.name); // a tile that 404s after the delete
     expect(useToastStore.getState().toasts).toHaveLength(0);
@@ -122,10 +125,33 @@ describe("row-menu dialogs (M §5.2)", () => {
   it("deletes after confirming, and shows the server's 409", async () => {
     const requests = setup();
     choose(ortho, "delete");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
     choose(dsm, "delete");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes" }));
     expect(await screen.findByText(/Stockpile A uses this surface/)).toBeInTheDocument();
+  });
+
+  it("the row trash opens Are you sure, and Cancel deletes nothing", async () => {
+    const requests = setup(
+      <LayerRowView
+        row={ortho}
+        kind={{ id: "map", group: "base", icon: "trash", rows: () => [], menu: rasterMenu }}
+        state={{ visible: true, opacity: 100 }}
+        notInCompare={false}
+        onState={() => {}}
+        onMove={() => {}}
+        onDropOn={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: `Delete ${ortho.name}` }));
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    const dialog = screen.getByRole("dialog", { name: "Are you sure?" });
+    expect(dialog).toHaveTextContent(
+      "Its runs, zones and labels are deleted with it. The original file stays where it is.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 });

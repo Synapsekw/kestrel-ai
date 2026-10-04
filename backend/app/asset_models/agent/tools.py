@@ -103,13 +103,39 @@ class NoArgs(_A):
     pass
 
 
+def group_drawing_sources(sources: list[dict]) -> list[dict]:
+    """Drawing sources grouped by source file (`sha256`, else the drawing's own id), pages in page
+    order, files in first-seen order: [{file, facts, pages: [{id, page, label}]}]. Names only."""
+    groups: dict[str, dict] = {}
+    for s in sources:
+        if s["type"] != "drawing":
+            continue
+        g = groups.setdefault(
+            s.get("sha256") or s["id"],
+            {"file": s.get("file") or s.get("label") or s["id"], "facts": s.get("facts", ""), "pages": []},
+        )
+        g["pages"].append({"id": s["id"], "page": s.get("page"), "label": s.get("label", "")})
+    for g in groups.values():
+        g["pages"].sort(key=lambda p: (p["page"] is None, p["page"] or 0))
+    return list(groups.values())
+
+
 class ListSources:
     name, Args = "list_sources", NoArgs
-    description = "List the drawings, point clouds and photos chosen for this run, with ids and basic facts."
+    description = (
+        "List the drawings, point clouds and photos chosen for this run, with ids and basic facts. "
+        "Drawings are grouped by source file; each page of a PDF is its own drawing id."
+    )
 
     def run(self, ctx, a):
         lines = [
-            f"{s['type']} {s['id']}: {s.get('label', '')} {s.get('facts', '')}".strip() for s in ctx.sources
+            "drawing file " + json.dumps(g, separators=(",", ":"), ensure_ascii=False)
+            for g in group_drawing_sources(ctx.sources)
+        ]
+        lines += [
+            f"{s['type']} {s['id']}: {s.get('label', '')} {s.get('facts', '')}".strip()
+            for s in ctx.sources
+            if s["type"] != "drawing"
         ]
         return ToolOut("\n".join(lines) or "No sources.", f"Listed {len(ctx.sources)} sources")
 

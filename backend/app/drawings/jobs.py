@@ -11,8 +11,12 @@ import importlib
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 
-PHASES = {"inspect": "app.drawings.phase_inspect", "build": "app.drawings.phase_build"}
-MESSAGES = {"inspect": "Reading drawing", "build": "Importing drawing"}
+PHASES = {
+    "inspect": "app.drawings.phase_inspect",
+    "build": "app.drawings.phase_build",
+    "pages": "app.drawings.phase_pages",
+}
+MESSAGES = {"inspect": "Reading drawing", "build": "Importing drawing", "pages": "Importing drawing pages"}
 
 
 def _cancelled_before_start(ctx) -> None:

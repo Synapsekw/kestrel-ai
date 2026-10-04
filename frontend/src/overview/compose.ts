@@ -11,12 +11,17 @@ export interface OverviewFacts {
   hasCloud: boolean;
   hasImages: boolean;
   hasSite: boolean;
+  /** The hero is an asset model, so its findings map sits beside it (asset findings spec §9). */
+  hasAssetMap: boolean;
   findingsTotal: number;
   runningJobs: boolean;
 }
 
 export type PaneId =
-  "header" | "hero" | "cloud" | "location" | "findings" | "imagery" | "status" | "firstData";
+  "header" | "hero" | "assetMap" | "cloud" | "location" | "findings" | "imagery" | "status" | "firstData";
+/** The side column fits two panes; earlier entries win. */
+const SIDE_MAX = 2;
+
 export interface Pane {
   id: PaneId;
   col: string;
@@ -44,11 +49,13 @@ export function composeOverview(f: OverviewFacts): Composition {
 
   const panes: Pane[] = [{ id: "header", col: "1 / -1", row: "1" }];
   const side: PaneId[] = [];
+  if (f.hasAssetMap) side.push("assetMap");
   if (f.hasCloud && f.heroKind !== "point_cloud") side.push("cloud");
   if (f.hasSite) side.push("location");
-  panes.push({ id: "hero", col: side.length ? "1 / span 8" : "1 / -1", row: "2 / span 2" });
-  side.forEach((id, i) =>
-    panes.push({ id, col: "9 / -1", row: side.length === 1 ? "2 / span 2" : String(2 + i) }),
+  const shown = side.slice(0, SIDE_MAX);
+  panes.push({ id: "hero", col: shown.length ? "1 / span 8" : "1 / -1", row: "2 / span 2" });
+  shown.forEach((id, i) =>
+    panes.push({ id, col: "9 / -1", row: shown.length === 1 ? "2 / span 2" : String(2 + i) }),
   );
 
   const bottom: PaneId[] = [];

@@ -39,6 +39,12 @@ function serve(ready: DrawingInspection, inspectingReads = 1) {
     },
     {
       method: "POST",
+      path: /\/drawings\/pages$/,
+      status: 202,
+      body: { drawings: [{ id: "p1" }, { id: "p2" }], job: drawingJob(BUILD_JOB, "queued") },
+    },
+    {
+      method: "POST",
       path: /\/drawings$/,
       status: 202,
       body: { drawing: { id: DRAWING_ID }, job: drawingJob(BUILD_JOB, "queued") },
@@ -84,13 +90,20 @@ describe("startDrawing", () => {
     });
   });
 
-  it("leaves a multi-page PDF to the operator and builds nothing", async () => {
+  it("imports every page of a multi-page PDF in one job", async () => {
     const { api, requests } = serve(pdfInspection);
     await expect(startDrawing(api, PROJECT_ID, pdfInspection.path)).resolves.toEqual({
-      state: "needs_choice",
-      error: "This PDF has 2 pages. Choose the page to import.",
+      state: "started",
+      jobId: BUILD_JOB,
     });
-    expect(requests.some((r) => r.url.endsWith("/drawings"))).toBe(false);
+    expect(short(requests.at(-1)!.url)).toBe("/drawings/pages");
+    expect(requests.at(-1)?.body).toEqual({
+      inspection_id: INSPECTION_ID,
+      name: "foundation-plan",
+      pages: "all",
+      dpi: 150,
+      placement: { method: "none" },
+    });
   });
 
   it("leaves a world file without a coordinate system to the operator", async () => {

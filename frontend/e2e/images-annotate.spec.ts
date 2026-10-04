@@ -98,8 +98,8 @@ test("box, rbox, polygon and point persist across a reload, 3 grades, undo cover
   await expect(w.canvas).toHaveAttribute("data-image", "800x600");
   await expect(w.canvas).toHaveAttribute("data-shape-count", "4");
 
-  // The Findings tab lists the four findings, the graded one as Major.
-  await page.getByRole("tab", { name: /Findings/ }).click();
+  // Findings in the sidebar lists the four findings, the graded one as Major.
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /^Findings/ }).click();
   await expect(page.getByRole("row", { name: /F-\d{4}/ })).toHaveCount(4);
   await expect(page.getByRole("row", { name: /F-0001/ })).toContainText("Major");
 });

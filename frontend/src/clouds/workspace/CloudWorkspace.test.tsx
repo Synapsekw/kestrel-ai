@@ -112,15 +112,15 @@ function watchFor(text: string) {
 
 const MISSING = "This point cloud is not in the project";
 
-async function deleteFromDetails(name: string) {
+async function deleteFromDetails() {
   await openTopic("Layers");
   await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
   await userEvent.click(screen.getByRole("button", { name: "Details…" }));
   await userEvent.click(
     within(await screen.findByTestId("cloud-details")).getByRole("button", { name: "Delete" }),
   );
-  const confirm = await screen.findByRole("dialog", { name: `Delete ${name}?` });
-  await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+  const confirm = await screen.findByRole("dialog", { name: "Are you sure?" });
+  await userEvent.click(within(confirm).getByRole("button", { name: "Yes" }));
 }
 
 /** A tool button on the rail or in the open topic panel. */
@@ -431,7 +431,7 @@ describe("CloudWorkspace (spec §6)", () => {
     await screen.findByRole("toolbar", { name: "Point cloud" });
     const missingSeen = watchFor(MISSING);
     const release = holdListReads(); // the reload after the delete has not answered yet
-    await deleteFromDetails(exampleCloud.name);
+    await deleteFromDetails();
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`),
     );
@@ -440,6 +440,35 @@ describe("CloudWorkspace (spec §6)", () => {
     await new Promise((r) => setTimeout(r, 50)); // the list reload lands
     expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`);
     expect(missingSeen()).toBe(false);
+  });
+
+  it("deleting a different cloud from the picker stays on the open one", async () => {
+    const tower = { ...exampleCloud, id: "c-2", name: "Tower" };
+    const west = { ...exampleCloud, id: "c-3", name: "West" };
+    let deleted = false;
+    const { requests } = open([], `/p/${PROJECT_ID}/clouds/c-2`, [
+      {
+        method: "DELETE",
+        path: new RegExp(`/pointclouds/c-3$`),
+        status: 204,
+        body: () => ((deleted = true), null),
+      },
+      {
+        method: "GET",
+        path: /\/pointclouds$/,
+        body: () => ({ items: deleted ? [exampleCloud, tower] : [exampleCloud, tower, west] }),
+      },
+    ]);
+    await screen.findByRole("toolbar", { name: "Point cloud" });
+    await openTopic("Layers");
+    await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete West" }));
+    const confirm = await screen.findByRole("dialog", { name: "Are you sure?" });
+    await userEvent.click(within(confirm).getByRole("button", { name: "Yes" }));
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "DELETE" && r.url.includes("/pointclouds/c-3"))).toBe(true),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`);
   });
 
   it("deleting the last cloud lands on the page-layout empty state at /clouds", async () => {
@@ -456,7 +485,7 @@ describe("CloudWorkspace (spec §6)", () => {
     await screen.findByRole("toolbar", { name: "Point cloud" });
     const missingSeen = watchFor(MISSING);
     const release = holdListReads();
-    await deleteFromDetails(exampleCloud.name);
+    await deleteFromDetails();
     expect(await screen.findByText("Import a LAS or LAZ point cloud")).toBeInTheDocument();
     act(() => release());
     await new Promise((r) => setTimeout(r, 50));
