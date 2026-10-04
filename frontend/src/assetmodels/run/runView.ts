@@ -9,7 +9,7 @@ export const DEFAULT_MAX_STEPS = 80;
 type Budgeted = Pick<AssetModelRun, "mode">;
 
 /**
- * The run's step budget (spec �11): M1's 80 for build and refine; null for plant runs, which are
+ * The run's step budget (spec §11): M1's 80 for build and refine; null for plant runs, which are
  * counted in packages (Ruling 12).
  */
 export function maxSteps(run: Budgeted): number | null {
