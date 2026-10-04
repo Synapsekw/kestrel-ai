@@ -139,6 +139,40 @@ def test_keep_duplicates_imports_every_photo(client, project, tmp_path, project_
     assert source["settings"]["keep_duplicates"] is True and source["duplicate_count"] == 0
 
 
+def test_keep_duplicates_repost_brings_back_recorded_duplicates(client, project, tmp_path, project_dir):
+    folder = tmp_path / "kit"
+    _equal_phash_pair(folder)
+    pid = project["id"]
+    first = client.post(
+        f"/api/v1/projects/{pid}/sources", json={"folder": str(folder), "settings": {"dedupe_threshold": 0}}
+    ).json()
+    assert _wait(client, pid, first["job"]["id"])["result"]["duplicates"] == 1
+    site, sid = first["source"]["site"], first["source"]["id"]
+    dup = project_dir / "images" / site / "K_0001_0002.jpg"
+    listing = project_dir / "images" / site / ".duplicates.json"
+    assert not dup.exists()
+
+    # flag off: the recorded duplicate stays skipped
+    off = client.post(
+        f"/api/v1/projects/{pid}/sources", json={"folder": str(folder), "settings": {"dedupe_threshold": 0}}
+    ).json()
+    res = _wait(client, pid, off["job"]["id"])["result"]
+    assert res["imported"] == 0 and res["skipped"] == 2
+    assert not dup.exists() and "K_0001_0002.jpg" in json.loads(listing.read_text())
+
+    # flag on: it comes back and is no longer listed
+    on = client.post(
+        f"/api/v1/projects/{pid}/sources",
+        json={"folder": str(folder), "settings": {"dedupe_threshold": 0, "keep_duplicates": True}},
+    ).json()
+    res = _wait(client, pid, on["job"]["id"])["result"]
+    assert res["imported"] == 1 and res["duplicates"] == 0
+    assert dup.exists() and (project_dir / "images" / site / "K_0001_0001.jpg").exists()
+    assert "K_0001_0002.jpg" not in json.loads(listing.read_text())
+    source = client.get(f"/api/v1/projects/{pid}/sources/{sid}").json()
+    assert source["image_count"] == 2 and source["duplicate_count"] == 0
+
+
 def test_keep_duplicates_is_not_a_project_default(client, project):
     pid = project["id"]
     client.patch(f"/api/v1/projects/{pid}", json={"import_defaults": {"keep_duplicates": True}})
