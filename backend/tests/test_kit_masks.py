@@ -7,7 +7,13 @@ from kit_fixtures import draw_mask
 from PIL import Image
 
 from app.asset_review.kit_format import KIT_CLASSES
-from app.asset_review.kit_masks import load_mask, mask_coverage, vectorise, write_palette_png
+from app.asset_review.kit_masks import (
+    largest_fragment,
+    load_mask,
+    mask_coverage,
+    vectorise,
+    write_palette_png,
+)
 from app.asset_review.kit_sightings import shoelace
 
 
@@ -58,3 +64,36 @@ def test_palette_png_keeps_the_class_indices(tmp_path):
         assert im.mode == "P" and im.info.get("transparency") == 0
         assert im.getpalette()[6:9] == [255, 122, 45]  # class 2, the kit's "moderate" colour
     assert np.array_equal(load_mask(out), mask)
+
+
+def test_largest_fragment_is_the_biggest_sub_floor_fragment():
+    mask = np.zeros((200, 200), np.uint8)
+    mask[10:13, 10:13] = 1  # 3 x 3
+    mask[50:55, 50:54] = 1  # 5 x 4, the largest
+    mask[100:102, 100:102] = 1
+    mask[150:160, 150:152] = 4  # uncertain: not graded
+    ring = largest_fragment(mask, {1, 2, 3})
+    assert ring is not None and len(ring) >= 3
+    xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+    assert (min(xs), min(ys)) == (50.5, 50.5) and (max(xs), max(ys)) == (53.5, 54.5)
+
+
+def test_largest_fragment_of_a_one_pixel_speck_is_still_a_ring():
+    mask = np.zeros((50, 50), np.uint8)
+    mask[20, 30] = 2
+    ring = largest_fragment(mask, {2})
+    assert ring == [[30.0, 20.0], [31.0, 20.0], [31.0, 21.0], [30.0, 21.0]]
+
+
+def test_largest_fragment_of_a_line_fragment_is_still_a_ring():
+    mask = np.zeros((50, 50), np.uint8)
+    mask[10, 5:9] = 2  # contour area 0 or tiny, ring may collapse
+    ring = largest_fragment(mask, {2})
+    assert ring is not None and len(ring) >= 3
+
+
+def test_largest_fragment_is_none_without_graded_pixels():
+    mask = np.zeros((50, 50), np.uint8)
+    assert largest_fragment(mask, {1, 2, 3}) is None
+    mask[5:9, 5:9] = 4
+    assert largest_fragment(mask, {1, 2, 3}) is None
