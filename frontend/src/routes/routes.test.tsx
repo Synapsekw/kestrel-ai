@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Outlet, RouterProvider, createMemoryRouter, matchRoutes, type RouteObject } from "react-router-dom";
+import type { ReactElement } from "react";
+import { AssetInspectScreen } from "@/app/lazyScreens";
 import { PROJECT_TABS, SECONDARY_PAGES } from "@/app/routeModel";
 import { appRoutes } from "./appRoutes";
 import { legacyAppRedirects, legacyProjectRedirects } from "./legacyRedirects";
@@ -138,6 +140,7 @@ describe("routes", () => {
     `/p/${P}/maps/m1/evaluate`,
     `/p/${P}/clouds/c1`,
     `/p/${P}/models/m1`,
+    `/p/${P}/models/m1/inspect`,
     `/p/${P}/site`,
     `/p/${P}/site/m1`,
     `/p/${P}/findings/f1`,
@@ -169,5 +172,17 @@ describe("routes", () => {
     const image = matchRoutes(routeTree, `/p/${P}/images/${I}`)!.at(-1)!.route;
     expect(tab).toBe(image);
     expect(tab.path).toBe("images/:imageId?");
+  });
+
+  it("mounts the split inspection under the asset model", () => {
+    // The query (?finding=f1&sighting=s1) is not part of route matching; the path is.
+    const last = matchRoutes(routeTree, `/p/${P}/models/m1/inspect`)!.at(-1)!;
+    expect(last.route.path).toBe("models/:modelId/inspect");
+    expect(last.params.modelId).toBe("m1");
+    // Later > AssetInspectScreen: the lazy screen that renders data-testid="asset-inspect".
+    const later = last.route.element as ReactElement<{ children: ReactElement }>;
+    expect(later.props.children.type).toBe(AssetInspectScreen);
+    // and it is its own route, not the workspace one
+    expect(matchRoutes(routeTree, `/p/${P}/models/m1`)!.at(-1)!.route).not.toBe(last.route);
   });
 });

@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
  * means "commit") and DataTable handles it.
  */
 
-export type WorkspaceScope = "images" | "maps" | "clouds" | "clouds.fly" | "models" | "findings";
+export type WorkspaceScope = "images" | "maps" | "clouds" | "clouds.fly" | "models" | "findings" | "inspect";
 export type KeyScope = "global" | "review" | WorkspaceScope;
 
 export interface KeyEntry {
@@ -110,6 +110,7 @@ const c = entry("clouds");
 const fly = entry("clouds.fly");
 const fd = entry("findings");
 const md = entry("models");
+const ins = entry("inspect");
 
 export const GLOBAL_KEYS: KeyEntry[] = [
   g("Ctrl+K", "palette", "Command palette"),
@@ -120,7 +121,11 @@ export const GLOBAL_KEYS: KeyEntry[] = [
   g("Delete", "delete", "Delete the selection"),
   g("Ctrl+Z", "undo", "Undo (while drawing, remove the last vertex)"),
   g("Ctrl+Y", "redo", "Redo"),
-  g("Space", "pan-hold", "Hold to pan from any tool"),
+  g(
+    "Space",
+    "pan-hold",
+    "Hold to pan from any tool; in split inspection, hold to compare with the bare photo",
+  ),
   g("V", "tool-select", "Select tool (Orbit in point clouds)"),
   g("H", "tool-pan", "Pan tool"),
   g("F", "fit", "Fit the image, the site or the cloud"),
@@ -240,6 +245,14 @@ export const WORKSPACE_KEYS: Record<WorkspaceScope, KeyEntry[]> = {
     fd("Shift+O", "status-open", "Set status Open"),
     fd("Shift+R", "status-reviewed", "Set status Reviewed"),
     fd("Shift+C", "status-closed", "Set status Closed"),
+  ],
+  // Split inspection (asset findings spec §9): sightings with the arrows, findings with J and K as
+  // the register does; Space is the global hold key (hold to compare here).
+  inspect: [
+    ins("ArrowLeft", "previous-sighting", "Previous sighting of this finding"),
+    ins("ArrowRight", "next-sighting", "Next sighting of this finding"),
+    ins("J", "next-finding", "Next finding"),
+    ins("K", "previous-finding", "Previous finding"),
   ],
 };
 

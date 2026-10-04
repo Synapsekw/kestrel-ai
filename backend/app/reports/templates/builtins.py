@@ -2,7 +2,7 @@
 
 Catalogue migration 0002 seeds a frozen copy of this data; tests/test_catalogue_migration_0002.py
 pins that the two agree. When the catalogue is unavailable, R1 serves these from code. A built-in is
-duplicated, never edited or deleted. Every config lists all eight sections: the template's own
+duplicated, never edited or deleted. Every config lists every section: the template's own
 sections first and enabled, the rest after them in canonical order and disabled (plan R0 rulings 2
 and 13). Filters are portable: no data items, no logo, no report date.
 """
@@ -53,7 +53,7 @@ BUILTIN_TEMPLATES: list[ReportTemplate] = [
         "Full inspection report",
         "Every section: cover, summary, findings table, a page per finding, measurements,"
         " survey comparison, object counts and the data appendix.",
-        _config(SECTION_KEYS),
+        _config(tuple(k for k in SECTION_KEYS if k != "asset_summary")),
     ),
     _template(
         BUILTIN_FINDINGS_SUMMARY,

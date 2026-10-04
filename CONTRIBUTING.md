@@ -127,6 +127,13 @@ venv built before M-B3 landed needs that install run once before `pytest` passes
 `smoke_frozen.ps1` runs `drawings-selftest` ("drawings ok 200x100 2"). When PDFium cannot load, PDF
 import answers 422 `pdf_unavailable`, and DXF and raster drawings still work.
 
+**ijson (the review kit import).** `ijson==3.5.1` (BSD-3) streams a review kit's `surface.json`
+(up to 20 MB) one patch at a time (spec 2026-10-02-asset-findings §6.5). It landed through the
+overlay-venv rule; a shared venv built before asset findings J5 needs
+`uv pip install --python backend\.venv\Scripts\python.exe --no-deps ijson==3.5.1` once before
+`pytest` passes. `kestrel_backend.spec` collects `ijson`'s submodules (its backend is chosen by
+name at import), and `smoke_frozen.ps1` runs `review-import-selftest` ("review-import ok yajl2_c 2 2").
+
 ## Dev memory
 
 This repo keeps a tracked Obsidian vault at `vault/`: `00-north-star.md` (the homepage), `sessions/`

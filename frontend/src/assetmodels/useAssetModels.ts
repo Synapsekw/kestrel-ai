@@ -6,7 +6,7 @@ import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** The project's asset models (one bounded list read), reloaded when a build or run job finishes. */
+/** The project's asset models (one bounded list read), reloaded when a build, run, GLB import or review import job finishes. */
 export function useAssetModelList(projectId: string) {
   const api = useApi();
   const [models, setModels] = useState<AssetModel[] | null>(null);
@@ -22,6 +22,8 @@ export function useAssetModelList(projectId: string) {
   useEffect(reload, [reload]);
   useOnJobsFinished("asset_model_glb", reload);
   useOnJobsFinished("asset_model_run", reload);
+  useOnJobsFinished("review_kit_import", reload);
+  useOnJobsFinished("asset_glb_import", reload);
   return { models, error, reload };
 }
 
@@ -53,6 +55,8 @@ export function useVersions(projectId: string, modelId: string | null) {
   useEffect(reload, [reload]);
   useOnJobsFinished("asset_model_glb", reload);
   useOnJobsFinished("asset_model_run", reload);
+  useOnJobsFinished("review_kit_import", reload);
+  useOnJobsFinished("asset_glb_import", reload);
   const current = modelId && loaded?.key === `${projectId}/${modelId}` ? loaded : null;
   return { versions: current?.versions ?? null, error: current?.error ?? null, reload };
 }
@@ -75,6 +79,8 @@ export function useVersionDetail(projectId: string, modelId: string | null, vers
   useEffect(reload, [reload]);
   useOnJobsFinished("asset_model_glb", reload);
   useOnJobsFinished("asset_model_run", reload);
+  useOnJobsFinished("review_kit_import", reload);
+  useOnJobsFinished("asset_glb_import", reload);
   const current = modelId && version != null && loaded?.key === key ? loaded : null;
   return { detail: current?.detail ?? null, error: current?.error ?? null, reload };
 }

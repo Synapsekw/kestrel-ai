@@ -96,3 +96,24 @@ def load_version_mesh(handle, asset_model_id: str, version: int) -> tuple[trimes
         _CACHE.clear()
         _CACHE[key] = loaded
         return loaded
+
+
+def cached_version_mesh(
+    handle, asset_model_id: str, version: int
+) -> tuple[trimesh.Trimesh, np.ndarray] | None:
+    """The version's mesh when the process cache already holds it, else None. Never loads and never
+    waits: a request thread may call it (a held lock counts as a miss). Raises the same AppError as
+    `load_version_mesh` when the version is not ready."""
+    with handle.session() as s:
+        row = store.get_version(s, asset_model_id, version)
+        ready, sha = row.glb_status == "ready", (row.meta or {}).get("sha256")
+    path = store.version_glb_path(handle, asset_model_id, version)
+    if not ready or not path.is_file():
+        raise AppError("not_ready", "The 3D model for this version is not ready.", 409)
+    key = sha or _file_sha256(path)
+    if not _LOCK.acquire(blocking=False):
+        return None
+    try:
+        return _CACHE.get(key)
+    finally:
+        _LOCK.release()

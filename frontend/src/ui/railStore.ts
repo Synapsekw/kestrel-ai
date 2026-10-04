@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 
-export type RailWorkspace = "maps" | "clouds";
+export type RailWorkspace = "maps" | "clouds" | "models";
 export const RAIL_STORAGE_PREFIX = "kestrel.rail.";
 
 export interface RailState {

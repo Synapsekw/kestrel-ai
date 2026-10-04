@@ -58,21 +58,21 @@ def _size(item: DataItem) -> str:
         parts = [f"{s['width']}×{s['height']} px"] if s.get("width") else []
         if s.get("gsd_cm"):
             parts.append(f"GSD {s['gsd_cm']:.1f} cm")
-        return " · ".join(parts) or "—"
+        return " · ".join(parts) or blocks.NONE
     if item.type == "elevation":
-        return f"cell {s['cell_size_m']:g} m" if s.get("cell_size_m") else "—"
-    return f"{s['point_count']:,} points" if s.get("point_count") else "—"
+        return f"cell {s['cell_size_m']:g} m" if s.get("cell_size_m") else blocks.NONE
+    return f"{s['point_count']:,} points" if s.get("point_count") else blocks.NONE
 
 
 def _row(item: DataItem) -> list[str]:
     label = dict(TYPES)[item.type]
-    crs = f"EPSG:{item.summary['epsg']}" if item.summary.get("epsg") else "—"
+    crs = f"EPSG:{item.summary['epsg']}" if item.summary.get("epsg") else blocks.NONE
     return [label, item.label, blocks.fmt_date(item.captured_on), _size(item), crs]
 
 
 def _count(ctx: ComposeContext) -> int:
     """The number of data items the filter selects, per provider `count`/`count_query` (SQL
-    aggregate, never a paginated walk — outline's binding constraint)."""
+    aggregate, never a paginated walk, outline's binding constraint)."""
     ids = ctx.config.filters.data_item_ids
     wanted = set(ids) if ids is not None else None
     with ctx.session() as s:
@@ -89,7 +89,7 @@ def _count(ctx: ComposeContext) -> int:
 
 def _has_model_provenance(ctx: ComposeContext) -> bool:
     """Whether any model-created finding matches the filter (SQL aggregate, not `_provenance`'s
-    group-by rows — outline only needs to know if the provenance table would be non-empty)."""
+    group-by rows, outline only needs to know if the provenance table would be non-empty)."""
     with ctx.session() as s:
         n = s.execute(
             select(func.count()).select_from(Finding).where(ctx.where, Finding.created_by.like("model:%"))
@@ -105,7 +105,7 @@ def _provenance(ctx: ComposeContext) -> list[list[str]]:
             .group_by(Finding.created_by)
             .order_by(Finding.created_by)
         ).all()
-    return [[who, str(n), f"{conf:.2f}" if conf is not None else "—"] for who, n, conf in rows]
+    return [[who, str(n), f"{conf:.2f}" if conf is not None else blocks.NONE] for who, n, conf in rows]
 
 
 def _methods(ctx: ComposeContext) -> list[Block]:

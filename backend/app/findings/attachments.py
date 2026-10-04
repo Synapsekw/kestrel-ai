@@ -68,7 +68,7 @@ def _write_thumb(src: Path, dest: Path) -> Path:
     return dest
 
 
-def add(handle, finding_id: str, source: str) -> FindingAttachment:
+def add(handle, finding_id: str, source: str, name: str | None = None) -> FindingAttachment:
     with handle.session() as s:
         service.get_or_404(s, finding_id)
     src = Path(source)
@@ -89,7 +89,7 @@ def add(handle, finding_id: str, source: str) -> FindingAttachment:
                 id=aid,
                 finding_id=finding_id,
                 path=rel,
-                original_name=src.name[:255],
+                original_name=(name or src.name)[:255],
                 width=width,
                 height=height,
                 bytes=size,

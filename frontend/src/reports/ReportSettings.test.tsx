@@ -83,6 +83,13 @@ function setup(
 }
 
 describe("ReportSettings", () => {
+  it("chooses the CSV layout", () => {
+    const { latest } = setup();
+    const tables = screen.getByRole("region", { name: "Tables" });
+    fireEvent.click(within(tables).getByRole("radio", { name: "Asset sightings" }));
+    expect(latest().csv_layout).toBe("asset_sightings");
+  });
+
   it("edits the cover and the paper", () => {
     const { latest } = setup();
     const cover = screen.getByRole("region", { name: "Cover" });

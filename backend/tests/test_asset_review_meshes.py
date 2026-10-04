@@ -127,3 +127,20 @@ def test_load_version_mesh_not_ready_is_409(handle, tmp_path):
     with pytest.raises(AppError) as e:
         meshes.load_version_mesh(handle, mid, 1)
     assert e.value.code == "not_ready" and e.value.status == 409
+
+
+def test_cached_version_mesh_hits_misses_and_never_waits(handle, tmp_path):
+    mid = _seed_version(handle, _two_boxes(tmp_path / "two.glb"))
+    assert meshes.cached_version_mesh(handle, mid, 1) is None  # cold: it does not load
+    assert len(meshes._CACHE) == 0
+    loaded = meshes.load_version_mesh(handle, mid, 1)
+    assert meshes.cached_version_mesh(handle, mid, 1)[0] is loaded[0]
+    with meshes._LOCK:  # a loader holds the lock: a miss, not a wait
+        assert meshes.cached_version_mesh(handle, mid, 1) is None
+
+
+def test_cached_version_mesh_not_ready_is_409(handle, tmp_path):
+    mid = _seed_version(handle, _two_boxes(tmp_path / "two.glb"), status="pending")
+    with pytest.raises(AppError) as e:
+        meshes.cached_version_mesh(handle, mid, 1)
+    assert e.value.code == "not_ready" and e.value.status == 409

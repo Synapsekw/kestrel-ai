@@ -31,7 +31,7 @@ def _stale(block: Any) -> list:
 
 def volume_flowables_for(handle, snapshot_path: Callable[[Any], Path | None]) -> Callable[[Any], list]:
     """`handle` is the project's `ProjectHandle`. `snapshot_path` maps a `SnapshotRef` to a rendered
-    JPEG path, or `None` when that snapshot never mapped (Ruling P7) — the item then keeps its own
+    JPEG path, or `None` when that snapshot never mapped (Ruling P7), the item then keeps its own
     `plan_png` rather than failing."""
 
     def flowables(block: Any) -> list:

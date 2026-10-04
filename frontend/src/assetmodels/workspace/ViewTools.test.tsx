@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ViewTools } from "./ViewTools";
+import { ViewToolButtons } from "./ViewTools";
 
-describe("ViewTools", () => {
+describe("ViewToolButtons", () => {
   it("shows Orbit as the active mode with its help, never as a dead button", () => {
     render(
-      <ViewTools
+      <ViewToolButtons
         state={{ cut: false, levels: false, headOff: false }}
         disabled={false}
         onToggle={() => {}}

@@ -189,7 +189,7 @@ def test_ref_keys_a_spec_and_blocks_validate(handle, many):
     assert blocks.para("x", style="note").model_dump()["style"] == "note"
     assert blocks.fmt_date(GEN) == "30 Sep 2026"
     assert blocks.fmt_lat_lon(45.1234567, 15.5) == "45.123457, 15.500000"
-    assert blocks.fmt_lat_lon(None, 15.5) == "—"
+    assert blocks.fmt_lat_lon(None, 15.5) == "-"
 
 
 def test_ref_without_the_snapshot_engine_is_marked_missing(handle, many, monkeypatch):

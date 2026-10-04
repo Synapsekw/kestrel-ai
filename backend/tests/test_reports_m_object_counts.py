@@ -40,7 +40,7 @@ def test_photo_batches_are_detections_never_objects(handle, project):
     photo_batch(handle, label="Flight A", captured_on=date(2026, 3, 1), counts={exc: 9})
     doc = object_counts.compose(make_ctx(handle, "object_counts"))
     texts = _texts(doc)
-    assert "Photo batches — detections" in texts
+    assert "Photo batches: detections" in texts
     assert any("detections, not objects" in t for t in texts)
     [photos] = _tables(doc)
     assert "Objects" not in [c.label for c in photos.columns]

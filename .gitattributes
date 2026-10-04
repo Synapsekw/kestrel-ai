@@ -4,3 +4,5 @@
 *.jpg binary
 *.ico binary
 *.ttf binary
+
+backend/tests/data/reports/*.csv binary

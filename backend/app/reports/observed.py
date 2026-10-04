@@ -14,7 +14,7 @@ from datetime import date
 from sqlalchemy import String, case, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Finding, GeoMap, Image, PointCloud, Source
+from app.db.models import AssetModel, Finding, GeoMap, Image, PointCloud, Source
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ def observed_on():
         (Finding.data_type == "image_set", _by_data_id(func.date(Source.captured_on), Source.id)),
         (Finding.data_type == "map", _by_data_id(func.date(GeoMap.captured_on), GeoMap.id)),
         (Finding.data_type == "point_cloud", _by_data_id(func.date(PointCloud.captured_on), PointCloud.id)),
+        (Finding.data_type == "asset_model", _by_data_id(func.date(AssetModel.captured_on), AssetModel.id)),
         else_=None,
     )
     image_day = case((Finding.anchor_kind == "image", exif), else_=None)
@@ -49,6 +50,7 @@ def data_label():
             (Finding.data_type == "image_set", src),
             (Finding.data_type == "map", _by_data_id(GeoMap.name, GeoMap.id)),
             (Finding.data_type == "point_cloud", _by_data_id(PointCloud.name, PointCloud.id)),
+            (Finding.data_type == "asset_model", _by_data_id(AssetModel.name, AssetModel.id)),
             else_=None,
         ),
         "",
@@ -57,7 +59,9 @@ def data_label():
 
 
 def _host(s: Session, f: Finding):
-    model = {"image_set": Source, "map": GeoMap, "point_cloud": PointCloud}.get(f.data_type)
+    model = {"image_set": Source, "map": GeoMap, "point_cloud": PointCloud, "asset_model": AssetModel}.get(
+        f.data_type
+    )
     return s.get(model, f.data_id) if model is not None else None
 
 

@@ -20,7 +20,8 @@ export function findingHref(projectId: string, finding: Pick<Finding, "id" | "an
     case "cloud":
       return `/p/${projectId}/clouds/${a.cloud_id}?finding=${fid}`;
     case "asset":
-      return `/p/${projectId}/models/${a.asset_model_id}?finding=${fid}`;
+      // Asset findings open in the split inspection (asset findings spec §9).
+      return `/p/${projectId}/models/${a.asset_model_id}/inspect?finding=${fid}`;
   }
 }
 

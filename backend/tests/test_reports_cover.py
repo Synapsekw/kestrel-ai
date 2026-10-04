@@ -29,7 +29,7 @@ def test_rows_period_and_marks(handle):
     assert b["kind"] == "cover" and b["title"] == "Site inspection" and b["subtitle"] == "Level 3"
     rows = dict(map(tuple, b["rows"]))
     assert rows["Site"] == "North pier" and rows["Client"] == "ACME" and rows["Author"] == "D. J."
-    assert rows["Report date"] == "30 Sep 2026" and rows["Period"] == "3 Sep 2026 – 21 Sep 2026"
+    assert rows["Report date"] == "30 Sep 2026" and rows["Period"] == "3 Sep 2026 to 21 Sep 2026"
     assert (rows["Version"], rows["Status"]) == ("Preview", "Draft")
     assert b["logo"] is None and b["locator"] is None
     b = _cover(handle, cfg, version=3, issued=True)
@@ -47,7 +47,7 @@ def test_report_date_and_empty_period(handle):
         ),
     )
     rows = dict(map(tuple, b["rows"]))
-    assert rows["Report date"] == "24 Sep 2026" and rows["Period"] == "—"
+    assert rows["Report date"] == "24 Sep 2026" and rows["Period"] == "-"
 
 
 def test_locator_is_a_map_ref_on_the_first_map(handle):

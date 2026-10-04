@@ -60,7 +60,7 @@ def test_an_uncounted_survey_prints_a_dash(handle, project):
     add_geomap(handle, name="Nov", captured_on=date(2026, 11, 1))
     data = survey_counts.load(handle)
     _, rows = survey_counts.class_table(data, survey_counts.chosen_classes(data, None), False)
-    assert rows[0][-1] == "—"
+    assert rows[0][-1] == "-"
 
 
 def test_per_area_uses_the_newest_counted_survey(handle, project):

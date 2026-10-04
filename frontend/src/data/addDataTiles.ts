@@ -10,7 +10,7 @@ export interface AddDataTileInfo {
   disabledReason?: string;
 }
 
-/** F §6.4's five tiles, in the order the dialog shows them. */
+/** F §6.4's tiles, plus the inspection review import, in the order the dialog shows them. */
 export const ADD_DATA_TILES: AddDataTileInfo[] = [
   { tile: "photos", title: "Photos", hint: "A folder of drone photos (JPEG)", icon: "images" },
   { tile: "orthomosaic", title: "Orthomosaic", hint: "A GeoTIFF map", icon: "map" },
@@ -26,6 +26,12 @@ export const ADD_DATA_TILES: AddDataTileInfo[] = [
     title: "Drawing",
     hint: "DXF, LandXML, or a PDF/PNG plan",
     icon: "drawing",
+  },
+  {
+    tile: "review",
+    title: "Inspection review",
+    hint: "A review job folder: findings and photo poses on an asset model",
+    icon: "findings",
   },
 ];
 

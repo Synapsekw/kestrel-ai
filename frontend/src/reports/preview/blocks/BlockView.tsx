@@ -1,4 +1,5 @@
 import type { Block } from "@/api/reports";
+import { AssetMapBlock } from "./AssetMapBlock";
 import { ChartBlock } from "./ChartBlock";
 import { CoverBlock } from "./CoverBlock";
 import { FigureBlock } from "./FigureBlock";
@@ -42,6 +43,8 @@ export function BlockView({ block }: { block: Block }) {
       return <VolumeBlock block={block} />;
     case "cover":
       return <CoverBlock block={block} />;
+    case "asset_map":
+      return <AssetMapBlock block={block} />;
     case "page_break":
       return <PageBreakBlock />;
     default:

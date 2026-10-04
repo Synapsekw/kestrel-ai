@@ -14185,7 +14185,7 @@ export interface components {
          * @description a report section kind; a config lists each exactly once and its order is print order
          * @enum {string}
          */
-        SectionKey: "cover" | "summary" | "findings_table" | "finding_pages" | "measurements" | "comparison" | "object_counts" | "appendix";
+        SectionKey: "cover" | "summary" | "asset_summary" | "findings_table" | "finding_pages" | "measurements" | "comparison" | "object_counts" | "appendix";
         ReportCover: {
             /** @description empty means the report's title */
             title: string;
@@ -14241,8 +14241,16 @@ export interface components {
             narrative: string;
             show_deltas: boolean;
         };
+        AssetSummaryOptions: {
+            /** @description the asset model to summarise; null is the first asset model with findings in the filter */
+            asset_model_id: string | null;
+            /** @description the asset findings map */
+            show_map: boolean;
+            /** @description the zone and side breakdown tables */
+            show_tables: boolean;
+        };
         FindingsTableOptions: {
-            columns: ("number" | "type" | "severity" | "status" | "data_item" | "observed" | "note")[];
+            columns: ("number" | "type" | "severity" | "status" | "data_item" | "observed" | "note" | "zone" | "side" | "height" | "sightings")[];
             /** @enum {string} */
             sort: "severity_desc" | "number" | "type" | "observed";
         };
@@ -14252,6 +14260,8 @@ export interface components {
             /** @enum {string} */
             comments: "none" | "last" | "all";
             context_inset: boolean;
+            /** @description only findings at this severity or above get a page; null is every finding */
+            min_severity: number | null;
         };
         MeasurementsOptions: {
             kinds: ("length" | "area" | "height" | "lean" | "profile" | "volume")[];
@@ -14297,6 +14307,15 @@ export interface components {
             key: "summary";
             enabled: boolean;
             options: components["schemas"]["SummaryOptions"];
+        };
+        ReportSectionAssetSummary: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            key: "asset_summary";
+            enabled: boolean;
+            options: components["schemas"]["AssetSummaryOptions"];
         };
         ReportSectionFindingsTable: {
             /**
@@ -14352,7 +14371,7 @@ export interface components {
             enabled: boolean;
             options: components["schemas"]["AppendixOptions"];
         };
-        ReportSection: components["schemas"]["ReportSectionCover"] | components["schemas"]["ReportSectionSummary"] | components["schemas"]["ReportSectionFindingsTable"] | components["schemas"]["ReportSectionFindingPages"] | components["schemas"]["ReportSectionMeasurements"] | components["schemas"]["ReportSectionComparison"] | components["schemas"]["ReportSectionObjectCounts"] | components["schemas"]["ReportSectionAppendix"];
+        ReportSection: components["schemas"]["ReportSectionCover"] | components["schemas"]["ReportSectionSummary"] | components["schemas"]["ReportSectionAssetSummary"] | components["schemas"]["ReportSectionFindingsTable"] | components["schemas"]["ReportSectionFindingPages"] | components["schemas"]["ReportSectionMeasurements"] | components["schemas"]["ReportSectionComparison"] | components["schemas"]["ReportSectionObjectCounts"] | components["schemas"]["ReportSectionAppendix"];
         /**
          * @description a report's configuration (spec §7.1); PATCH sends it whole. Each section key appears exactly once (a repeat is `invalid_report` / `invalid_template`); an enabled cover prints first
          * @example {
@@ -14386,6 +14405,7 @@ export interface components {
          *         }
          *       },
          *       "brand_id": null,
+         *       "csv_layout": "findings",
          *       "sections": [
          *         {
          *           "key": "cover",
@@ -14400,6 +14420,15 @@ export interface components {
          *           "options": {
          *             "narrative": "",
          *             "show_deltas": true
+         *           }
+         *         },
+         *         {
+         *           "key": "asset_summary",
+         *           "enabled": false,
+         *           "options": {
+         *             "asset_model_id": null,
+         *             "show_map": true,
+         *             "show_tables": true
          *           }
          *         },
          *         {
@@ -14429,7 +14458,8 @@ export interface components {
          *             ],
          *             "photos_max": 4,
          *             "comments": "last",
-         *             "context_inset": true
+         *             "context_inset": true,
+         *             "min_severity": null
          *           }
          *         },
          *         {
@@ -14480,9 +14510,15 @@ export interface components {
             cover: components["schemas"]["ReportCover"];
             paper: components["schemas"]["ReportPaper"];
             filters: components["schemas"]["ReportFilters"];
+            /** @description a config saved before asset_summary existed lists eight; it reads as disabled */
             sections: components["schemas"]["ReportSection"][];
             /** @description a `Brand` id; null, or a brand since deleted, prints with the Kestrel theme */
             brand_id: string | null;
+            /**
+             * @description `asset_sightings`: the kit's 21 columns, UTF-8 with BOM, CRLF, then photos without findings
+             * @enum {string}
+             */
+            csv_layout: "findings" | "asset_sightings";
         };
         /** @description a GeoJSON Point, LineString or Polygon in the item's CRS */
         SnapshotGeometry: {
@@ -14587,7 +14623,7 @@ export interface components {
             attachment_id: string;
             out: number[];
         };
-        SnapshotSpec: components["schemas"]["ImageCropSpec"] | components["schemas"]["MapSpec"] | components["schemas"]["ElevationSpec"] | components["schemas"]["PairSpec"] | components["schemas"]["View3dSpec"] | components["schemas"]["VolumePlanSpec"] | components["schemas"]["AttachmentSpec"];
+        SnapshotSpec: components["schemas"]["ImageCropSpec"] | components["schemas"]["MapSpec"] | components["schemas"]["ElevationSpec"] | components["schemas"]["PairSpec"] | components["schemas"]["View3dSpec"] | components["schemas"]["VolumePlanSpec"] | components["schemas"]["AttachmentSpec"] | components["schemas"]["AssetLocatorSpec"];
         /**
          * @description a figure's snapshot: fetch it at `/projects/{projectId}/report-snapshots/{key}?spec=<base64url canonical JSON of spec>`
          * @example {
@@ -14777,6 +14813,7 @@ export interface components {
             note: string;
             photos: components["schemas"]["Figure"][];
             comments: components["schemas"]["Comment"][];
+            asset: components["schemas"]["FindingAsset"] | null;
         };
         PageBreakBlock: {
             /**
@@ -14819,7 +14856,96 @@ export interface components {
             logo: components["schemas"]["CoverLogo"] | null;
             locator: components["schemas"]["Figure"] | null;
         };
-        Block: components["schemas"]["Heading"] | components["schemas"]["Para"] | components["schemas"]["Kv"] | components["schemas"]["Kpis"] | components["schemas"]["Table"] | components["schemas"]["Figure"] | components["schemas"]["FigureRow"] | components["schemas"]["Chart"] | components["schemas"]["FindingBlock"] | components["schemas"]["PageBreakBlock"] | components["schemas"]["VolumeBlock"] | components["schemas"]["CoverBlock"];
+        AssetDrawingRect: {
+            x0: number;
+            y0: number;
+            x1: number;
+            y1: number;
+        };
+        /** @description a zone band across the plot; y0 is its top edge (drawing units, y grows down) */
+        AssetDrawingBand: {
+            y0: number;
+            y1: number;
+            label: string;
+            shaded: boolean;
+        };
+        AssetDrawingLevel: {
+            x0: number;
+            x1: number;
+            y: number;
+        };
+        /** @description a grid line at `at` (x for x_ticks, y for y_ticks) with its label */
+        AssetDrawingTick: {
+            at: number;
+            label: string;
+        };
+        AssetDrawingDot: {
+            x: number;
+            y: number;
+            r: number;
+            colour: string;
+            label: string;
+        };
+        /** @description the height locator's level line */
+        AssetDrawingMarker: {
+            y: number;
+            x0: number;
+            x1: number;
+            colour: string;
+        };
+        /** @description vector primitives in drawing units (y grows down) that the PDF and the preview draw the same way: the asset findings map and the height locator */
+        AssetDrawing: {
+            width: number;
+            height: number;
+            font_size: number;
+            plot: components["schemas"]["AssetDrawingRect"];
+            silhouette: number[][];
+            bands: components["schemas"]["AssetDrawingBand"][];
+            levels: components["schemas"]["AssetDrawingLevel"][];
+            x_ticks: components["schemas"]["AssetDrawingTick"][];
+            y_ticks: components["schemas"]["AssetDrawingTick"][];
+            x_title: string;
+            dots: components["schemas"]["AssetDrawingDot"][];
+            marker: components["schemas"]["AssetDrawingMarker"] | null;
+        };
+        /** @description the asset findings map (spec 2026-10-02-asset-findings §10): x is the side, y the height */
+        AssetMapBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset_map";
+            title: string;
+            drawing: components["schemas"]["AssetDrawing"];
+            caption: string;
+            width_mm: number;
+            height_mm: number;
+        };
+        /** @description an asset finding page's extras: the kicker line and the height locator on the silhouette */
+        FindingAsset: {
+            kicker: string;
+            height_locator: components["schemas"]["AssetDrawing"] | null;
+        };
+        /** @description a finding on its asset model, rendered on the server: orthographic along the normal, a pin or the patch outline (decision A9) */
+        AssetLocatorSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "asset_locator";
+            asset_model_id: string;
+            version: number;
+            sighting_id: string | null;
+            /** @enum {string} */
+            mark: "pin" | "patch";
+            center: number[];
+            normal: number[];
+            half_extent_m: number;
+            oblique_deg: number;
+            colour: string;
+            out: number[];
+        };
+        Block: components["schemas"]["Heading"] | components["schemas"]["Para"] | components["schemas"]["Kv"] | components["schemas"]["Kpis"] | components["schemas"]["Table"] | components["schemas"]["Figure"] | components["schemas"]["FigureRow"] | components["schemas"]["Chart"] | components["schemas"]["FindingBlock"] | components["schemas"]["PageBreakBlock"] | components["schemas"]["VolumeBlock"] | components["schemas"]["CoverBlock"] | components["schemas"]["AssetMapBlock"];
         ReportSectionDoc: {
             key: components["schemas"]["SectionKey"];
             title: string;

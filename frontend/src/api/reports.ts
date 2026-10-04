@@ -26,6 +26,7 @@ export type BlockKind = Block["kind"];
 export type BlockOf<K extends BlockKind> = Extract<Block, { kind: K }>;
 export type BlockPage = S["BlockPage"];
 export type SnapshotRef = S["SnapshotRef"];
+export type AssetDrawing = S["AssetDrawing"];
 export type SnapshotSpec = S["SnapshotSpec"];
 export type ReportVersion = S["ReportVersion"];
 export type ReportFile = S["ReportFile"];
@@ -301,6 +302,7 @@ export function versionBlocksLoader(
 const SECTION_TITLES: Record<SectionKey, string> = {
   cover: "Cover",
   summary: "Summary",
+  asset_summary: "Asset summary",
   findings_table: "Findings",
   finding_pages: "Finding details",
   measurements: "Measurements",

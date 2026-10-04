@@ -12,7 +12,7 @@ from app.reports.templates import builtins
 
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 ON = {
-    "builtin-full": list(SECTION_KEYS),
+    "builtin-full": [k for k in SECTION_KEYS if k != "asset_summary"],
     "builtin-findings-summary": ["cover", "summary", "findings_table"],
     "builtin-survey-counts": ["cover", "comparison", "object_counts"],
     "builtin-volumes": ["cover", "measurements", "appendix"],
@@ -85,4 +85,9 @@ def test_lookup_and_the_default_config():
     assert builtins.builtin_template("builtin-full") is builtins.BUILTIN_TEMPLATES[0]
     assert builtins.builtin_template("nope") is None
     assert builtins.default_config() == ReportConfig()
-    assert builtins.default_config() == builtins.builtin_template("builtin-full").config
+    # The full template lists the opt-in asset_summary last (disabled); the default keeps canonical order.
+    full = builtins.builtin_template("builtin-full").config
+    assert builtins.default_config().model_dump() == {
+        **full.model_dump(),
+        "sections": sorted(full.model_dump()["sections"], key=lambda s: SECTION_KEYS.index(s["key"])),
+    }

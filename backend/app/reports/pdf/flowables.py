@@ -29,7 +29,8 @@ from reportlab.platypus import (
 from app.findings.numbers import format_number
 from app.jobs.cancellation import JobCancelled
 from app.reports.pdf import charts, primitives
-from app.reports.pdf.flowables_text import MAX_CELL_CHARS, text
+from app.reports.pdf.asset_flowables import asset_map_flowables, drawing_flowable
+from app.reports.pdf.flowables_text import MAX_CELL_CHARS, text, undash
 from app.reports.pdf.styles import Styles, colour, safe_colour, table_style, tone_style
 from app.reports.theme import THEME
 
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 KPI_PER_ROW = 6
 KPI_CHARS = 120  # a KPI card is one short fact; longer text is cut, never a LayoutError
+LOCATOR_W = 18 * mm
 CELL_PAD = 4  # table_style's LEFTPADDING / RIGHTPADDING
 _ALIGN = {"left": TA_LEFT, "center": TA_CENTER, "right": TA_RIGHT}
 _NO_PAD = [
@@ -285,12 +287,12 @@ def _table(block: Any, ctx: RenderContext) -> list:
 
 
 def _chart(block: Any, ctx: RenderContext) -> list:
-    series = [charts.ChartSeries(str(s.name), list(s.values), s.colour) for s in block.series]
+    series = [charts.ChartSeries(undash(str(s.name)), list(s.values), s.colour) for s in block.series]
     d = charts.chart_drawing(
         str(block.chart),
         series,
-        [str(x) for x in block.x_labels],
-        block.unit or "",
+        [undash(str(x)) for x in block.x_labels],
+        undash(block.unit or ""),
         width=ctx.frame_width,
         height=THEME["chart"]["height_mm"] * mm,
         styles=ctx.styles,
@@ -369,17 +371,41 @@ def _keep_with_next(p: Paragraph) -> Paragraph:
     return p
 
 
+def _facts_with_locator(block: Any, drawing: Any, ctx: RenderContext) -> Table:
+    """An asset finding's facts beside its height locator (the kit's finding page row)."""
+    st, fw = ctx.styles, ctx.frame_width
+    inner = fw - LOCATOR_W - 4 * mm
+    rows = [
+        [Paragraph(text(r[0], MAX_CELL_CHARS), st.cell_label), Paragraph(text(r[1], MAX_CELL_CHARS), st.cell)]
+        for r in block.kv
+    ] or [["", ""]]
+    kv = Table(rows, colWidths=[inner * 0.34, inner * 0.66], hAlign="LEFT", splitInRow=1)
+    kv.setStyle(table_style(header=False))
+    t = Table(
+        [[drawing_flowable(drawing, LOCATOR_W, st), kv]], colWidths=[LOCATOR_W + 4 * mm, inner], hAlign="LEFT"
+    )
+    t.setStyle(TableStyle(_NO_PAD))
+    return t
+
+
 def _finding(block: Any, ctx: RenderContext) -> list:
     """Plan ruling 6: head, figures, kv, note and photos are one KeepTogether; comments flow after it.
     Every piece in the KeepTogether is splittable or shorter than a frame (figures are capped at 0.8 of
     the frame height, the note is Paragraphs), so an over-tall finding flows on instead of raising."""
     st = ctx.styles
     figs = list(block.figures)
-    body: list = [_finding_band(block, ctx), Spacer(1, 3 * mm)]
+    asset = getattr(block, "asset", None)
+    body: list = []
+    if asset is not None and asset.kicker:
+        body.append(_keep_with_next(Paragraph(text(asset.kicker), st.small)))
+    body += [_finding_band(block, ctx), Spacer(1, 3 * mm)]
     if figs:
         body += _figure(figs[0], ctx)
     body += _figure_grid(figs[1:], ctx, 2)
-    body += [Spacer(1, 3 * mm), *kv_table(block.kv, ctx)]
+    if asset is not None and asset.height_locator is not None:
+        body += [Spacer(1, 3 * mm), _facts_with_locator(block, asset.height_locator, ctx), Spacer(1, 3 * mm)]
+    else:
+        body += [Spacer(1, 3 * mm), *kv_table(block.kv, ctx)]
     if block.note:
         body.append(Paragraph("Note", st.cell_label))
         body += [Paragraph(text(p.strip()), st.note) for p in re.split(r"\n\s*\n", block.note) if p.strip()]
@@ -411,6 +437,7 @@ HANDLERS: dict[str, Callable[[Any, RenderContext], list]] = {
     "volume": _volume,
 }
 HANDLERS["finding"] = _finding
+HANDLERS["asset_map"] = asset_map_flowables
 
 
 def block_flowables(block: Any, ctx: RenderContext) -> list:

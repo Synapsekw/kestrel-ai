@@ -1,6 +1,7 @@
-import type { AssetModel } from "@contract/client";
+import type { AssetModel, components } from "@contract/client";
 import type { Finding } from "@/api/findings";
 import type { ProjectOverview } from "@/api/overview";
+import { MODEL } from "./assetModelFixtures";
 import { exampleFinding, fullOverview, TYPE_CRACK, TYPE_SPALLING } from "./findingFixtures";
 
 export const ASSET_MODEL_ID = "a0000000-9999-4000-8000-000000000001";
@@ -58,7 +59,7 @@ export const exampleAssetModel: AssetModel = {
       title: "Side",
       noun: "side",
     },
-    focus: { frustum: [4], oblique_deg: 0 },
+    focus: { frustum: [0.05, 0.125], oblique_deg: 0 },
     report: { pages: "finding", min_severity: 1 },
     component_map: [],
     facts: [],
@@ -141,4 +142,101 @@ export const assetOverview: ProjectOverview = {
   hero_map_id: null,
   hero: { kind: "asset_model", id: ASSET_MODEL_ID },
   photo_review: examplePhotoReview,
+};
+
+// Shared with U2 (same exports; the coordinator keeps one copy at merge).
+export const FRAME: NonNullable<AssetModel["frame"]> = {
+  origin: { lat: 25.2, lon: 55.3, ground_alt_m: 4 },
+  north_offset_deg: 0,
+  height_m: 74.4,
+  datum_label: "Ground",
+  datum_note: "",
+  line_azimuth_deg: null,
+  silhouette: [
+    [0, 12],
+    [74.4, 12],
+  ],
+  levels: [3, 6, 9],
+  presets: [],
+};
+
+/** A resolved profile for the workspace's model `m1`: two zones, four faces. */
+export const REVIEW: NonNullable<AssetModel["review"]> = {
+  ...exampleAssetModel.review!,
+  profile_id: "building_facade",
+  finding_unit: "region",
+  placement: "mixed",
+  patch_grid: 14,
+  cluster_m: 1.5,
+  zones: [
+    { id: "podium", label: "Podium", min_m: 0, max_m: 10 },
+    { id: "middle", label: "Middle", min_m: 10, max_m: 50 },
+  ],
+  sides: {
+    type: "faces",
+    labels: ["North", "East", "South", "West"],
+    basis: "normal",
+    title: "Side",
+    noun: "side",
+  },
+  focus: { frustum: [0.05, 0.125], oblique_deg: 20 },
+  report: { pages: "finding", min_severity: 2 },
+};
+
+/** The workspace's model `m1` with a frame and a resolved review profile. */
+export const MODEL_REVIEWED: AssetModel = { ...MODEL, frame: FRAME, review: REVIEW };
+
+const onM1 = {
+  asset_model_id: "m1",
+  anchor: { kind: "asset" as const, asset_model_id: "m1", asset_version: 1, point: null, normal: null },
+  data_id: "m1",
+  type_id: "t-crack",
+};
+
+export const ASSET_FINDINGS: Finding[] = [
+  {
+    ...exampleAssetFinding,
+    ...onM1,
+    id: "f1",
+    number: 42,
+    severity: 2,
+    height_m: 12.43,
+    bearing_deg: 271,
+    side: "West",
+    zone: "middle",
+    placement: "patch",
+    sighting_count: 3,
+  },
+  { ...exampleUnplacedAssetFinding, ...onM1, id: "f2", number: 43, severity: 1 },
+];
+
+type Placement = components["schemas"]["Placement"];
+
+export const PLACEMENTS: { version: number; items: Placement[]; next: string | null } = {
+  version: 2,
+  items: [
+    {
+      sighting_id: "s1",
+      finding_id: "f1",
+      kind: "patch",
+      center: [10, 12.4, -3],
+      normal: [0, 0, -1],
+      size: 1.2,
+      severity: 2,
+      type_id: "t-crack",
+      has_patch: true,
+    },
+    {
+      sighting_id: "s2",
+      finding_id: "f1",
+      kind: "point",
+      center: [10, 12.5, -3],
+      normal: [0, 0, -1],
+      size: 0,
+      severity: 2,
+      type_id: "t-crack",
+      has_patch: false,
+    },
+  ],
+  next: null,
 };

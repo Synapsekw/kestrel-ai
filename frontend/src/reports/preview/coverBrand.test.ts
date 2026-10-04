@@ -8,6 +8,7 @@ describe("coverBrandOf", () => {
       gradient: ["#141D2D", "#141D2D", "#9E0000"],
       fontFamily: "Nunito Sans",
       logoSrc: "src://logo",
+      headFill: "#FFE5E5",
     });
   });
 

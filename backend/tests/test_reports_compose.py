@@ -24,6 +24,7 @@ from app.reports.sections import comparison, measurements, object_counts
 KEYS = [
     "cover",
     "summary",
+    "asset_summary",
     "findings_table",
     "finding_pages",
     "measurements",
@@ -33,7 +34,7 @@ KEYS = [
 ]
 
 
-def test_the_registry_names_all_eight_sections():
+def test_the_registry_names_all_nine_sections():
     assert sorted(SECTION_MODULES) == sorted(KEYS) == sorted(SECTION_COMPOSERS)
     for key, mod in SECTION_MODULES.items():
         assert mod.KEY == key and mod.TITLE
