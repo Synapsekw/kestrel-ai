@@ -82,6 +82,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 | M1 asset model builder (confined-space programme M1–M6) | merged 2026-10-02 (`914c4d5b`) | all 7 units green; frozen smoke `asset-models ok`; installer not built (app was running); scope superseded 2026-10-04 by G1 (the operator rejected single-asset M1) |
 | G1 plant model generator + Site 3D view | merged to `main` (`76349096..01f85f14`, 12 units + L1), installed 2026-10-04 from `01f85f14`; **accepted by the operator** on review | Al-Zour live runs: recall 89–96 %, type match 80–93 %, within tolerance 82–88 %, 26–37 M tokens per run; strict scorer targets not met (§5). See [[2026-10-04-1900-plant-model-generator-g1]] |
+| Artifact port P1: findings on the asset (16 units + X) | merged/pushed to `main` (`bfab9c8a..97d29d52`); installer built from `97d29d52`, **not installed** | DAMAC replay 656 findings (182/474), 1,441 sightings, CSV 1,441/1,441; recompute on operator-amended kind targets; EBSM 78 (77/1); e& PDFs pass. See [[2026-10-04-2110-asset-findings-p1]] |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 [[2026-09-17-s1-dataset-backend]], [[2026-09-17-s2-annotation-ui]],
@@ -92,7 +93,13 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **G1 plant model generator and Site 3D view** (2026-10-03..04, `e7c53097..01f85f14`, 12 unit merges plus L1 on `main`, pushed; installed from `01f85f14`).
+**Shipped last:** **Artifact port P1: findings on the asset** (2026-10-03..04, `bfab9c8a..97d29d52`, 16 unit merges plus X on `main`, pushed; installer built from `97d29d52`, **not installed**).
+- Posed photos look at an asset GLB; sightings land as pins or textured patches and group into findings with height, side, zone and component; register, Overview map, split inspection, kit import, brand editor and branded asset reports.
+- Acceptance: DAMAC replay 656 findings (182/474), 1,441 sightings, 715/625/101, CSV 1,441/1,441 rows agree; recompute 652 findings, median 0.0031 m (kind targets amended by operator ruling); EBSM 78 (77/1), 53/159/9; e& PDFs 0 dashes, /SMask 0.
+- Operator rulings during acceptance: sub-floor EBSM fragment kept as one sighting; "Keep every photo" import option; rectangle = pin kept; "N regions on 1 photo".
+- See [[2026-10-04-2110-asset-findings-p1]].
+
+Before that: **G1 plant model generator and Site 3D view** (2026-10-03..04, `e7c53097..01f85f14`, 12 unit merges plus L1 on `main`, pushed; installed from `01f85f14`).
 - One AI run reads all plot-plan pages, traces the plant in parallel packages, checks heights against the cloud, traces land and sea, and builds a GLB plus a register CSV from 46 app-code builders.
 - A new Site 3D view layers the model over the draped ortho, the cloud and the plot plans, with water and sky, a searchable register and an item editor.
 - The operator reviewed the Al-Zour model in `E:\Asset Inspections\LNG Terminal - Kestrel plant model` and accepted it ("slightly different from the cowork model but it should be fine").
@@ -148,6 +155,10 @@ Previously: **I/M/C wave complete on `main`** (2026-09-28, `4f68d13..ad4e548`, 1
 Previously: **I/M/C wave, part 1** — plans for 39 units and 27 units merged (`4ebcac1..7c1200b`). See [[2026-09-27-2140-imc-wave-part-1]].
 
 Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
+
+**In flight (artifact port P1):** nothing; all merged. Owed: the operator installs `97d29d52` and walks `docs/evidence/asset-findings/walkthrough.md`.
+
+**Next (artifact port):** after the walkthrough, P2 per `docs/artifact-to-kestrel-plan.md`, alongside G2.
 
 **In flight (G1):** nothing; accepted 2026-10-04. M1's single-asset scope is superseded; the HCl tank is now a one-item plant. Next for this programme: G2 (points and pictures on items, with artifact-port P1) and M2/G3 (Elios and DJI media).
 
@@ -297,6 +308,14 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Artifact port P1: findings on the asset (opened 2026-10-04)
+
+- **Install and walk:** installer `.superpowers/sdd/af-common/Kestrel AI_0.1.0_x64-setup-97d29d52.exe` is built, not installed; walkthrough `docs/evidence/asset-findings/walkthrough.md`. Street map textures were checked in a browser only.
+- **Deferred minors:** Overview recent-findings lists closed findings (thumbnails 404) after a recompute regroup; report preview shows a 3D placeholder until a render; a 0-sighting finding prints "1 region"; no cached BVH in J3 (DAMAC placement 180 s); `asset_group` can 409 J3's follow-up while a group job is live. Every ruling: `docs/evidence/asset-findings/rulings.md`.
+- **Flaky under load:** e2e `images-annotate` and review-import; vitest `lazyScreens` "loads Point clouds"; trainer/stats pytest under memory pressure.
+- **Clean-up:** worktrees `af-x` and `af-int`; ~30 GB acceptance copies under `...\Kestrel AI Reference Pack\_work\af-acceptance\`.
+- **Tooling:** `scripts/start-task.ps1` fails on PowerShell 5.1 (git fetch stderr under `$ErrorActionPreference = Stop`).
 
 ### Sidebar project tree (opened 2026-10-03)
 
