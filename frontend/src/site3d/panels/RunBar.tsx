@@ -6,6 +6,7 @@ import { listRunPackages, type SiteModelPackage } from "@/api/plantItems";
 import { phaseLabel, tokensText } from "@/assetmodels/run/runText";
 import { RUN_POLL_MS, useLiveRun } from "@/assetmodels/run/useLiveRun";
 import { Button, Disclosure, GlassPanel, Pill, Progress, toast, type PillTone } from "@/ui";
+import { packageStateLabel } from "./labels";
 
 type PackageSummary = NonNullable<AssetModelRun["packages"]>;
 
@@ -137,14 +138,18 @@ export function RunBar({ projectId, model }: { projectId: string; model: AssetMo
       <Progress thin running value={share} label="Run progress" />
       {items.length > 0 && (
         <Disclosure label="Packages" summary={String(items.length)}>
-          <ul aria-label="Packages" className="flex max-h-48 flex-col overflow-y-auto">
+          {/* Opaque under the float panel: a scrolling list is never blurred (DESIGN.md). */}
+          <ul
+            aria-label="Packages"
+            className="flex max-h-48 flex-col overflow-y-auto rounded-control bg-glass-solid px-2"
+          >
             {items.map((k) => (
               <li key={k.id} className="flex items-center gap-2 py-1 text-xs">
                 <span className="w-6 shrink-0 text-right font-mono tabular-nums text-dim">{k.n}</span>
                 <span className="min-w-0 flex-1 truncate text-ink">{k.label}</span>
                 {k.area && <span className="shrink-0 text-dim">{k.area}</span>}
                 <Pill size="sm" tone={STATE_TONE[k.state] ?? "neutral"}>
-                  {k.state}
+                  {packageStateLabel(k.state)}
                 </Pill>
                 <span className="w-12 shrink-0 text-right font-mono tabular-nums text-muted">
                   {k.item_count}

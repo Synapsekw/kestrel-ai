@@ -36,12 +36,15 @@ export function flagText(f: { code: string; value?: number | null; note?: string
   return `${base}${value}${f.note ? `: ${f.note}` : ""}`;
 }
 
-/** The footprint's reference point in plant [E, N]: rect/circle centre, polygon/line vertex mean. */
-export function footprintRef(fp: AssetItem["footprint"]): [number, number] {
+/**
+ * The footprint's reference point in plant [E, N]: rect/circle centre, polygon/line vertex mean; null
+ * when it has neither (no centre and no points), so the UI says "Not set" instead of inventing 0, 0.
+ */
+export function footprintRef(fp: AssetItem["footprint"]): [number, number] | null {
   const f = fp as { kind: string; center?: number[]; pts?: number[][] };
   if (f.center) return [f.center[0], f.center[1]];
   const pts = f.pts ?? [];
   return pts.length
     ? [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length]
-    : [0, 0];
+    : null;
 }

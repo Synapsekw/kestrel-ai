@@ -2,7 +2,7 @@ import type { ApiClient, Schemas } from "@contract/client";
 import { unwrap } from "./errors";
 
 // The item list and read live in siteScene.ts (ruling R-S3-13); this is the S3 import surface.
-export { ITEMS_PAGE, listAssetItems } from "./siteScene";
+export { ITEMS_PAGE, getAssetItem, listAssetItems } from "./siteScene";
 export type { AssetItem, AssetItemPage, AssetItemRow, ItemFilters as ItemQuery } from "./siteScene";
 
 export type CatalogueEntry = Schemas["AssetBuilderType"];

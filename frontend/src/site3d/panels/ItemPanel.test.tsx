@@ -29,6 +29,43 @@ describe("ItemPanel", () => {
     expect(screen.getByText("From the drawing")).toBeInTheDocument();
   });
 
+  it("confidence reads in sentence case, not the raw code", async () => {
+    setup({ ...ITEM, confidence: "low" });
+    expect(await screen.findByText("Low")).toBeInTheDocument();
+    expect(screen.queryByText("low")).toBeNull();
+  });
+
+  it("a footprint with no points has no plant position: Not set, never E 0.00", async () => {
+    setup({ ...ITEM, footprint: { kind: "polygon", pts: [] } });
+    expect(await screen.findByRole("heading", { name: "LNG tank 1" })).toBeInTheDocument();
+    expect(screen.getByText("Not set")).toBeInTheDocument();
+    expect(screen.queryByText(/E 0\.00/)).toBeNull();
+  });
+
+  it("Edit waits while a saved version is still on its way, and says why", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/versions\/3\/items\/20-T-0001$/, body: ITEM },
+    ] as never);
+    const onEdit = vi.fn();
+    renderWithProviders(
+      <ItemPanel
+        projectId="p"
+        modelId="m1"
+        version={3}
+        itemId="20-T-0001"
+        onBack={() => {}}
+        onEdit={onEdit}
+        editBlocked="Version 4 is still building. Edit when it shows."
+      />,
+      { api },
+    );
+    const edit = await screen.findByRole("button", { name: "Edit" });
+    expect(edit).toBeDisabled();
+    expect(screen.getByText("Version 4 is still building. Edit when it shows.")).toBeInTheDocument();
+    fireEvent.click(edit);
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
   it("lists the flags in plain words", async () => {
     setup();
     const flags = await screen.findByRole("list", { name: "Flags" });
@@ -56,6 +93,27 @@ describe("ItemPanel", () => {
       "href",
       "/p/p/maps?sel=drawing:dr-1",
     );
+  });
+
+  it("Source encodes the drawing id in the Maps link", async () => {
+    setup({ ...ITEM, source: { kind: "drawing", id: "dr 1/a&b", page: null, region: null } });
+    fireEvent.click(await screen.findByRole("button", { name: "Source" }));
+    await screen.findByRole("dialog", { name: "Source" });
+    expect(screen.getByRole("link", { name: "Open the drawing in Maps" })).toHaveAttribute(
+      "href",
+      `/p/p/maps?sel=drawing:${encodeURIComponent("dr 1/a&b")}`,
+    );
+  });
+
+  it("Source says so when the drawing preview fails, and keeps the Maps link", async () => {
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Source" }));
+    const pop = await screen.findByRole("dialog", { name: "Source" });
+    fireEvent.error(pop.querySelector("img")!);
+    expect(await screen.findByText("The drawing preview is not available.")).toBeInTheDocument();
+    expect(pop.querySelector("img")).toBeNull();
+    expect(screen.queryByTestId("source-region")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open the drawing in Maps" })).toBeInTheDocument();
   });
 
   it("Source copes with no page and no region", async () => {

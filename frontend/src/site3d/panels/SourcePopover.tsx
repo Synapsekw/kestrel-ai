@@ -22,6 +22,9 @@ export function SourcePopover({
   region: readonly number[] | null;
 }) {
   const [open, setOpen] = useState(false);
+  /** The drawing whose thumbnail failed to load (missing, still rendering, or the server said no). */
+  const [brokenId, setBrokenId] = useState<string | null>(null);
+  const broken = brokenId === drawingId;
   const anchor = useRef<HTMLSpanElement>(null);
   const { baseUrl, token } = useBackend();
   const box = region && region.length >= 4 ? region : null;
@@ -47,30 +50,35 @@ export function SourcePopover({
         align="start"
       >
         <div className="flex w-64 flex-col gap-2 p-1">
-          <div className="relative overflow-hidden rounded-sm bg-bg">
-            <img
-              src={drawingThumbnailUrl(baseUrl, token, projectId, drawingId)}
-              alt="The drawing this item was traced from"
-              className="block w-full"
-            />
-            {box && (
-              <span
-                data-testid="source-region"
-                aria-hidden="true"
-                className="absolute rounded-sm border-2 border-accent"
-                style={{
-                  left: pct(box[0]),
-                  top: pct(box[1]),
-                  width: pct(box[2] - box[0]),
-                  height: pct(box[3] - box[1]),
-                }}
+          {broken ? (
+            <p className="rounded-sm bg-bg px-2 py-3 text-xs text-muted">The drawing preview is not available.</p>
+          ) : (
+            <div className="relative overflow-hidden rounded-sm bg-bg">
+              <img
+                src={drawingThumbnailUrl(baseUrl, token, projectId, drawingId)}
+                alt="The drawing this item was traced from"
+                className="block w-full"
+                onError={() => setBrokenId(drawingId)}
               />
-            )}
-          </div>
+              {box && (
+                <span
+                  data-testid="source-region"
+                  aria-hidden="true"
+                  className="absolute rounded-sm border-2 border-accent"
+                  style={{
+                    left: pct(box[0]),
+                    top: pct(box[1]),
+                    width: pct(box[2] - box[0]),
+                    height: pct(box[3] - box[1]),
+                  }}
+                />
+              )}
+            </div>
+          )}
           {page != null && <p className="text-2xs text-muted">{`Page ${page}`}</p>}
           <Link
             className="text-xs text-accent-ink underline-offset-2 hover:underline"
-            to={`/p/${projectId}/maps?sel=drawing:${drawingId}`}
+            to={`/p/${projectId}/maps?sel=drawing:${encodeURIComponent(drawingId)}`}
           >
             Open the drawing in Maps
           </Link>

@@ -52,6 +52,17 @@ describe("RunBar", () => {
     expect(await screen.findByText("Tank row north")).toBeInTheDocument();
   });
 
+  it("package states read as plain words, in an opaque list (never blur a scrolling list)", async () => {
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: /packages/i }));
+    const list = await screen.findByRole("list", { name: "Packages" });
+    expect(list).toHaveClass("bg-glass-solid");
+    const rows = screen.getAllByRole("listitem");
+    expect(rows.find((r) => r.textContent?.includes("Jetty head 1"))).toHaveTextContent("Done");
+    expect(rows.find((r) => r.textContent?.includes("Tank row north"))).toHaveTextContent("Running");
+    expect(list.textContent).not.toMatch(/done|running/);
+  });
+
   it("Stop stops the run and the bar goes", async () => {
     const { requests } = setup();
     fireEvent.click(await screen.findByRole("button", { name: "Stop" }));

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import type { AssetItem } from "@/api/plantItems";
-import { getAssetItem } from "@/api/siteScene";
+import { getAssetItem, type AssetItem } from "@/api/plantItems";
 import { Alert, Button, Pill, Skeleton } from "@/ui";
 import { HEIGHT_SOURCE, flagText, footprintRef, metres } from "./itemFormat";
+import { confidenceLabel } from "./labels";
 import { SourcePopover } from "./SourcePopover";
 
 const CONFIDENCE = { high: "ok", medium: "neutral", low: "warn" } as const;
@@ -25,6 +25,8 @@ export function ItemPanel(p: {
   itemId: string;
   onBack(): void;
   onEdit(item: AssetItem): void;
+  /** Why Edit waits (a saved version still building or loading); null or absent when it can start. */
+  editBlocked?: string | null;
 }) {
   const api = useApi();
   const key = `${p.modelId}/${p.version}/${p.itemId}`;
@@ -80,8 +82,8 @@ export function ItemPanel(p: {
             <dt className="text-muted">Plant</dt>
             <dd className="font-mono tabular-nums text-ink">
               {(() => {
-                const [e, n] = footprintRef(item.footprint);
-                return `E ${e.toFixed(2)} · N ${n.toFixed(2)}`;
+                const at = footprintRef(item.footprint);
+                return at ? `E ${at[0].toFixed(2)} · N ${at[1].toFixed(2)}` : "Not set";
               })()}
             </dd>
             <dt className="text-muted">Base EL</dt>
@@ -97,7 +99,7 @@ export function ItemPanel(p: {
             <dt className="text-muted">Confidence</dt>
             <dd>
               <Pill size="sm" tone={CONFIDENCE[item.confidence as keyof typeof CONFIDENCE] ?? "neutral"}>
-                {item.confidence}
+                {confidenceLabel(item.confidence)}
               </Pill>
             </dd>
           </dl>
@@ -128,11 +130,13 @@ export function ItemPanel(p: {
               variant="primary"
               icon="label"
               className="ml-auto"
+              disabled={!!p.editBlocked}
               onClick={() => p.onEdit(item)}
             >
               Edit
             </Button>
           </div>
+          {p.editBlocked && <p className="text-xs text-muted">{p.editBlocked}</p>}
           {item.notes && <p className="text-xs leading-relaxed text-muted">{item.notes}</p>}
         </>
       )}
