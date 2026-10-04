@@ -48,6 +48,8 @@ MAX_ENTRIES = 20_000
 PHOTO_FOLDER = 20
 SNIFF_BYTES = 4096
 CACHE_VERSION = 1
+PDF_WAIT_S = 1.0
+BUSY = object()  # _pdf_pages: PDFium was busy; list the file without a count and do not cache it
 log = logging.getLogger(__name__)
 
 
@@ -62,14 +64,18 @@ def _sha256(path: Path) -> str | None:
         return None
 
 
-def _pdf_pages(path: Path) -> int | None:
+def _pdf_pages(path: Path):
+    """The page count, None when unreadable, or BUSY when an import holds PDFium (a route must not
+    wait behind a render that can take tens of seconds per page)."""
     from app.drawings import pdf
 
     if pdf.unavailable_reason() is not None:
         return None
     try:
-        with pdf.open_pdf(path) as doc:
+        with pdf.open_pdf(path, wait_s=PDF_WAIT_S) as doc:
             return len(doc)
+    except pdf.PdfBusy:
+        return BUSY
     except Exception:  # an unreadable or locked PDF is still listed, without a page count
         return None
 
@@ -181,15 +187,20 @@ def scan_unimported(handle) -> list[dict]:
                 entry["sha256"] = _sha256(path)
             if entry["sha256"] in shas:
                 continue
+        pages = entry.get("pages")
         if ext == ".pdf" and "pages" not in entry:
-            entry["pages"] = _pdf_pages(path)
+            pages = _pdf_pages(path)
+            if pages is BUSY:
+                pages = None  # left out of the cache, so a later scan fills it in
+            else:
+                entry["pages"] = pages
         out.append(
             {
                 "path": key,
                 "name": path.name,
                 "format": FORMATS[ext],
                 "size": st.st_size,
-                "pages": entry.get("pages") if ext == ".pdf" else None,
+                "pages": pages if ext == ".pdf" else None,
             }
         )
     _write_cache(handle, new)

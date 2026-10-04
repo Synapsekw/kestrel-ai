@@ -6,6 +6,7 @@ import { tokenColor, tokenRgb } from "@/clouds/viewer/overlay";
 import { startTween, tweenAt, type Tween } from "@/clouds/viewer/tween";
 import { isTypingTarget } from "@/ui/keymap";
 import { isReducedMotion } from "@/ui/motion";
+import { addSiteLights } from "../layers/sun";
 import type { PickHit, Pickable, SiteLayer } from "../layers/types";
 import { FLY_KEYS, ISO_DIR, flyDelta, flySpeed, planDir, viewBox, type CamView } from "./camera";
 import { pickFirst } from "./pick";
@@ -46,7 +47,8 @@ export class SiteEngine {
   readonly camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100_000);
   readonly renderer: THREE.WebGLRenderer;
   readonly tiles: TileCache;
-  private readonly canvas: HTMLCanvasElement;
+  /** S2/S3 read it; do not replace it. */
+  readonly canvas: HTMLCanvasElement;
   private readonly host: HTMLElement;
   private readonly controls: OrbitControls;
   private readonly ro: ResizeObserver;
@@ -89,10 +91,7 @@ export class SiteEngine {
       this.renderer.setClearColor(tokenColor(tokenRgb("bg")));
       this.camera.up.set(0, 1, 0);
       this.camera.position.set(-400, 360, -400);
-      this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2f3a, 0.9));
-      const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-      sun.position.set(-300, 600, 200);
-      this.scene.add(sun);
+      addSiteLights(this.scene);
       this.tiles = new TileCache(fetchSiteTile, () => this.requestRender());
       this.controls = new OrbitControls(this.camera, canvas);
       this.controls.enableDamping = !isReducedMotion();

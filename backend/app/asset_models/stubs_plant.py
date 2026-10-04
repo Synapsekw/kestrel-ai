@@ -19,16 +19,11 @@ M = "/asset-models/{assetModelId}"
 # A1: the register (spec §7, §9).
 A1_STUBS: list[Stub] = []
 
-# R1: plant run packages (spec §8.2).
-R1_STUBS: list[Stub] = [
-    ("GET", M + "/runs/{runId}/packages", "listAssetModelRunPackages"),
-]
-
 # S1: the Site 3D manifest (spec §10, §11). Built: `GET /site-scene` is routed by
 # `app.asset_models.site_scene`. The empty list stays so per-unit tests can still name it.
 S1_STUBS: list[Stub] = []
 
-STUBS: list[Stub] = [*A1_STUBS, *R1_STUBS, *S1_STUBS]
+STUBS: list[Stub] = [*A1_STUBS, *S1_STUBS]
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["assetmodels"])
 add_stubs(router, STUBS)

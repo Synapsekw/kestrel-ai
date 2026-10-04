@@ -234,6 +234,37 @@ describe("TileCache retries (final review fix)", () => {
     expect(cache.want("a")).not.toBeNull();
   });
 
+  it("a due retry that loses its fetch slot is retried when next wanted", async () => {
+    vi.useFakeTimers();
+    let release: (v: TileImage) => void = () => {};
+    const fetchTile = vi.fn<TileFetch>().mockImplementation((url) => {
+      if (url === "b") return new Promise<TileImage>((r) => (release = r));
+      return fetchTile.mock.calls.filter(([u]) => u === "a").length === 1
+        ? Promise.reject(new Error("tile answered 500"))
+        : Promise.resolve(img());
+    });
+    const cache = new TileCache(fetchTile, () => {}, 8, 1);
+    cache.beginFrame();
+    cache.want("a");
+    await vi.advanceTimersByTimeAsync(0); // a failed, backing off
+    cache.beginFrame();
+    cache.want("b"); // takes the only fetch slot and never answers
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[0]);
+    cache.beginFrame();
+    cache.want("b");
+    cache.want("a"); // due, re-queued, but no slot
+    cache.endFrame();
+    expect(fetchTile.mock.calls.filter(([u]) => u === "a")).toHaveLength(1);
+    cache.beginFrame();
+    cache.want("b"); // a is not wanted: it falls back to error
+    cache.endFrame();
+    release(img());
+    await vi.advanceTimersByTimeAsync(0);
+    cache.beginFrame();
+    cache.want("a");
+    expect(fetchTile.mock.calls.filter(([u]) => u === "a")).toHaveLength(2);
+  });
+
   it("gives up after the last backoff", async () => {
     vi.useFakeTimers();
     const fetchTile = vi.fn<TileFetch>().mockRejectedValue(new Error("tile answered 500"));
