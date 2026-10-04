@@ -114,7 +114,7 @@ describe("cloud layer", () => {
     const { engine } = fakeSiteEngine();
     const layer = createCloudLayer({ cloud: cloudRow(), frame: FRAME, baseUrl: BASE, token: "t", host });
     await layer.attach(engine);
-    expect(layer.status.get()).toEqual({ kind: "error", message: "The cloud could not load: HTTP 404" });
+    expect(layer.status.get()).toEqual({ kind: "error", message: "The cloud could not load (HTTP 404)." });
   });
 
   it("a malformed octree URL is an error status, never an exception", async () => {
@@ -131,7 +131,7 @@ describe("cloud layer", () => {
     expect(host.load).not.toHaveBeenCalled();
     expect(layer.status.get()).toEqual({
       kind: "error",
-      message: `The cloud could not load: not an octree metadata URL: ${BASE}/x/not-an-octree`,
+      message: "The cloud could not load.",
     });
   });
 

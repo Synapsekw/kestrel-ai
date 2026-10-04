@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type * as THREE from "three";
 import { useBackend } from "@/api/client";
-import { messageOf } from "@/api/errors";
 import { absUrl, type SiteScene } from "@/api/siteScene";
 import { NoWebGlError } from "@/clouds/viewer/engine";
 import { Alert, Button, isTypingTarget } from "@/ui";
@@ -13,6 +12,7 @@ import { createDrawingLayer } from "./layers/drawing.layer";
 import { createModelLayer, type ModelLayer, type ModelLoadInfo } from "./layers/model.layer";
 import { createOrthoLayer } from "./layers/ortho.layer";
 import type { SiteLayer } from "./layers/types";
+import { loadFailureText } from "./loadError";
 import { ViewTools } from "./panels/ViewTools";
 
 export interface ModelStatus {
@@ -24,7 +24,7 @@ export interface ModelStatus {
    * stays shown: the old model after a failed swap, null when nothing ever loaded.
    */
   root: THREE.Object3D | null;
-  /** Why the load failed (state "error"), in words. */
+  /** Why the load failed (state "error"), in fixed words plus the HTTP status at most: never a URL. */
   error?: string;
 }
 export interface SiteViewHandle {
@@ -136,7 +136,8 @@ export const SiteView = forwardRef<SiteViewHandle, SiteViewProps>(function SiteV
           state: "error",
           info: null,
           root: layer.scene,
-          error: messageOf(err, "The 3D model could not load."),
+          // Fixed words: the loader's message names the token-bearing URL (never shown or logged).
+          error: loadFailureText("The 3D model could not load", err),
         }),
     });
     layer.setVisible(!cbs.current.hidden.has(layer.id));
