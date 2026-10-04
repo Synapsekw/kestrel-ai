@@ -51,7 +51,9 @@ export function SourcePopover({
       >
         <div className="flex w-64 flex-col gap-2 p-1">
           {broken ? (
-            <p className="rounded-sm bg-bg px-2 py-3 text-xs text-muted">The drawing preview is not available.</p>
+            <p className="rounded-sm bg-bg px-2 py-3 text-xs text-muted">
+              The drawing preview is not available.
+            </p>
           ) : (
             <div className="relative overflow-hidden rounded-sm bg-bg">
               <img

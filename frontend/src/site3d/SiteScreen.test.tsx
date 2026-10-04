@@ -292,7 +292,8 @@ describe("SiteScreen", () => {
     expect(screen.queryByText("The plant model could not load.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Reload view" })).toBeNull();
     const page = screen.getByTestId("site-screen").textContent ?? "";
-    expect(page).not.toMatch(/token|http:\/\/|\/glb|Not Found/i);
+    // case-sensitive: "Not Found" is the HTTP status text; the flag filter says "Not found in the scan"
+    expect(page).not.toMatch(/token|https?:\/\/|\/glb|Not Found/);
 
     // Dismissing the failed swap goes back to the last good version: the stale label goes, and the
     // view asks the one swap path for version 1 again.
@@ -301,7 +302,9 @@ describe("SiteScreen", () => {
     act(() => h.models[0].opts.onLoad?.(ITEMS, GLB(1)));
     await waitFor(() => expect(layersPanel()).not.toHaveTextContent("Stale"));
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(within(screen.getByRole("complementary", { name: "Plant register" })).getByText("Version 1")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("complementary", { name: "Plant register" })).getByText("Version 1"),
+    ).toBeInTheDocument();
   });
 
   it("a newer manifest version beats a saved edit's version: the view never pins (fix round 1)", async () => {
