@@ -146,7 +146,7 @@ Before that: **Foundation of the inspection platform, complete on `main` and ins
 
 **In flight:** nothing for Overview v2: the operator checked it on the installed `8aead7b` (2026-10-02, "all good, all working"). Reports is merged; nothing of it is in flight. Earlier: CI on `main` was green 3 runs in a row at `a57d619` (run 36605136991, attempts 1–3; ~18 min per run after the backend was split into 5 shards).  See [[2026-09-30-0900-ci-green-after-imc]].
 
-**Next:** Run the sidebar walkthrough on the installed `bdff5806` build, from [[2026-10-03-1803-sidebar-project-tree]]. Also try the 4-step walkthrough in [[2026-10-03-1531-anomaly-on-the-fly]] on a project with no anomaly types. Naming a type on a video waits until S4 exists.
+**Next:** The sidebar is accepted on the installed `bdff5806` build. Its walkthrough is in [[2026-10-03-1803-sidebar-project-tree]]. Also try the 4-step walkthrough in [[2026-10-03-1531-anomaly-on-the-fly]] on a project with no anomaly types. Naming a type on a video waits until S4 exists.
 
 **Next (S1):** The operator runs `docs/evidence/setup/walkthrough.md` on a real delivery. Then brainstorm S4 (video import, which unblocks the Confined template) or S2 (AI Describe it plus severity pre-fill).
 
@@ -294,8 +294,8 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 ### Sidebar project tree (opened 2026-10-03)
 
 - **Answered 2026-10-04:** the top bar stays page-only on collapsed canvases ("it's ok").
-- **Ruling to confirm:** the sidebar is also forced collapsed on Images and the report builder (`isForcedCollapse` includes the `workspace` layout). It was done because the expanded sidebar left the Images canvas about 370 px wide at 1280. Revert = one line plus docs.
-- **Not pushed** (`056175f3`). **Installed** 2026-10-04 (build from `bdff5806`); the operator walkthrough on it is still owed. Walkthrough: [[2026-10-03-1803-sidebar-project-tree]] § How to test.
+- **Ruling (operator satisfied with it as installed):** the sidebar is also forced collapsed on Images and the report builder (`isForcedCollapse` includes the `workspace` layout). It was done because the expanded sidebar left the Images canvas about 370 px wide at 1280. Revert = one line plus docs.
+- **Not pushed** (`056175f3`). **Installed** 2026-10-04 (build from `bdff5806`); the operator confirmed "Side bar is working properly" on it. See [[2026-10-04-1042-sidebar-install]]. Walkthrough: [[2026-10-03-1803-sidebar-project-tree]] § How to test.
 - **Follow-ups (minor):**
   - The width still animates on route-driven collapse changes; the clouds-journey flake was attributed to this without instrumentation.
   - The project row's live dot is not announced to screen readers.
