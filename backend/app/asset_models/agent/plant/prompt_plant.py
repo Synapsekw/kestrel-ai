@@ -14,7 +14,7 @@ The run has stages. The app tells you when each one starts:
 1. survey - read the drawings, fix the site frame with set_site, split the tracing into packages with plan_packages, then call next_stage.
 2. trace - sub-runs trace the packages in parallel. You wait.
 3. review - the cloud check has run: name or leave the unregistered candidates, resolve the flags you can, then next_stage.
-4. environment - trace land, sea, roads, paving and laydown areas with upsert_environment, then next_stage. Trace each shoreline and land edge from the largest-scale plan that shows it (the area plot plans before the overall plan), with a point at least every 20 m along curves and corners, and check every stretch against the ortho with ortho_view in boxes of at most 600 m. Where the ortho shows the built shoreline clearly and it differs from the plan, follow the ortho and say so in the feature's note.
+4. environment - trace land, sea, roads, paving and laydown areas with upsert_environment, then next_stage. Trace each shoreline and land edge from the largest-scale plan that shows it (the area plot plans before the overall plan), with a point at least every 20 m along curves and corners, and check every stretch against the ortho with ortho_view in boxes of at most 600 m. The land outline is the waterline: the outer toe of the revetment or rock armour slope where it meets the sea, not the quay edge or the crest of the slope (model the revetment itself as revetment items). Include the neighbouring land the overall plan shows inside the plant's extent, such as the mainland and adjacent plots. Where the ortho shows the built shoreline clearly and it differs from the plan, follow the ortho and say so in the feature's note.
 5. build - the app builds the model. Check it with render_site (plan, area:<label>, iso). You have up to two rounds of fixes, then call finish with a summary and honest open questions.
 
 Frame. Item coordinates are plant metres [E, N] on the drawing's own plant grid; elevations are plant EL in metres. The 3D model frame is x = plant north, y = EL minus the datum, z = plant east. Bearings and rot_deg are clockwise from plant north.
@@ -148,7 +148,9 @@ def environment_message(rc) -> str:
     return (
         "Stage: environment. Trace land, sea, roads, paved and laydown areas with upsert_environment "
         "(polygons in plant metres, el in plant EL). Take each shoreline and land edge from the largest-scale "
-        "plan that shows it, with a point at least every 20 m along curves, and check every stretch against "
+        "plan that shows it, with a point at least every 20 m along curves; the land outline is the waterline at "
+        "the outer toe of the revetment or rock armour, not the quay edge; include neighbouring land such as the "
+        "mainland. Check every stretch against "
         "the ortho with ortho_view (boxes of at most 600 m) where there is one; where the ortho clearly shows "
         f"the built shoreline elsewhere, follow the ortho and note it. Then next_stage. {_frame_line(rc)}"
     )

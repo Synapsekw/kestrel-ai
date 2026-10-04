@@ -124,3 +124,10 @@ def test_shorelines_come_from_the_largest_scale_plan_and_the_ortho():
 
     assert "largest-scale" in P.ORCH_SYSTEM and "every 20 m" in P.ORCH_SYSTEM
     assert "use that type, not package" in P.ORCH_SYSTEM
+
+
+def test_the_land_outline_is_the_waterline_at_the_revetment_toe():
+    """Live run 2 drew land to the quay edge: IoU 0.87 and a 21 m mean gap against Cowork's waterline."""
+    from app.asset_models.agent.plant import prompt_plant as P
+
+    assert "outer toe of the revetment" in P.ORCH_SYSTEM and "mainland" in P.ORCH_SYSTEM

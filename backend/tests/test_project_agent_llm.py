@@ -467,8 +467,8 @@ ERROR_MESSAGES = {
     "auth": "The provider rejected the API key. Check it in App settings.",
     "denied": "The provider rejected the API key. Check it in App settings.",
     "timeout": "The provider took too long to answer.",
-    "server": "The provider could not complete this step. Try again.",
-    "connection": "The provider could not complete this step. Try again.",
+    "server": "The provider is busy or had a server error. Try again in a moment.",
+    "connection": "The provider is busy or had a server error. Try again in a moment.",
     "asyncio_timeout": "The provider took too long to answer.",
     "runtime": "The provider could not complete this step. Try again.",
 }

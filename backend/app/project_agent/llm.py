@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 from typing import Any
 
 from app.project_agent.history import HistoryEntry, LlmError, ModelReply, ToolCall, ToolSpec
@@ -20,6 +21,8 @@ MODEL_TIMEOUT_S = 300
 _DEADLINE_S = MODEL_TIMEOUT_S + 5
 MAX_OUTPUT_TOKENS = 16000
 
+_log = logging.getLogger(__name__)
+
 _NO_TEXT = "(no text)"
 _REFUSED = "The provider declined this request."
 _TRUNCATED = "The provider's answer was cut off. Try a smaller request."
@@ -28,6 +31,7 @@ _RATE_LIMITED = "The provider is rate limiting requests. Wait a minute and try a
 _KEY_REJECTED = "The provider rejected the API key. Check it in App settings."
 _TOO_SLOW = "The provider took too long to answer."
 _FAILED = "The provider could not complete this step. Try again."
+_SERVER_BUSY = "The provider is busy or had a server error. Try again in a moment."
 
 
 async def complete(
@@ -87,6 +91,12 @@ def _error_message(provider: str, exc: Exception) -> str:
         return _KEY_REJECTED
     if isinstance(exc, sdk.APITimeoutError):
         return _TOO_SLOW
+    status = getattr(exc, "status_code", None)
+    # class name and HTTP status only: the SDK message can echo request data
+    shown = status if status is not None else "-"
+    _log.info("provider %s call failed: %s %s", provider, type(exc).__name__, shown)
+    if isinstance(exc, sdk.APIConnectionError) or (isinstance(status, int) and status >= 500):
+        return _SERVER_BUSY
     return _FAILED
 
 
