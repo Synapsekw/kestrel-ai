@@ -249,7 +249,12 @@ export function SitePanels(p: SitePanelsProps) {
             ? `Version ${swap.version} could not be built.`
             : `Version ${swap.version}'s 3D model could not load.`
         }
-        onDismiss={() => setSwap(null)}
+        // Dismiss goes back to the last good version (the one on screen), so nothing stays pinned to
+        // the version that failed and the stale label goes with the notice.
+        onDismiss={() => {
+          setSwap(null);
+          if (p.view.shown !== null) p.onShowVersion(p.view.shown);
+        }}
       >
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
           <Pill size="sm" tone="warn">

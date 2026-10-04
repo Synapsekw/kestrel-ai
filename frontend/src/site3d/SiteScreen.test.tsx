@@ -280,13 +280,28 @@ describe("SiteScreen", () => {
     // R-S3-10: one swap path, the same layer loads the new URL (no new layer, the camera stays).
     await waitFor(() => expect(h.models[0].load).toHaveBeenCalledWith(GLB(2)));
     expect(h.models).toHaveLength(1);
-    act(() => h.models[0].opts.onError?.(new Error("GLB parse failed"), GLB(2)));
+    // three's FileLoader names the token-bearing URL it fetched; none of it may reach the screen.
+    const leaky = Object.assign(new Error(`fetch for "${GLB(2)}" responded with 404: Not Found`), {
+      response: { status: 404 },
+    });
+    act(() => h.models[0].opts.onError?.(leaky, GLB(2)));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Version 2's 3D model could not load.");
-    expect(alert).toHaveTextContent("You are seeing version 1. GLB parse failed");
+    expect(alert).toHaveTextContent("You are seeing version 1. The 3D model could not load (HTTP 404).");
     expect(layersPanel()).toHaveTextContent("Stale: showing version 1. Version 2 could not load.");
     expect(screen.queryByText("The plant model could not load.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Reload view" })).toBeNull();
+    const page = screen.getByTestId("site-screen").textContent ?? "";
+    expect(page).not.toMatch(/token|http:\/\/|\/glb|Not Found/i);
+
+    // Dismissing the failed swap goes back to the last good version: the stale label goes, and the
+    // view asks the one swap path for version 1 again.
+    await userEvent.click(within(alert).getByRole("button", { name: /dismiss/i }));
+    await waitFor(() => expect(h.models[0].load).toHaveBeenLastCalledWith(GLB(1)));
+    act(() => h.models[0].opts.onLoad?.(ITEMS, GLB(1)));
+    await waitFor(() => expect(layersPanel()).not.toHaveTextContent("Stale"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(within(screen.getByRole("complementary", { name: "Plant register" })).getByText("Version 1")).toBeInTheDocument();
   });
 
   it("a newer manifest version beats a saved edit's version: the view never pins (fix round 1)", async () => {
