@@ -104,6 +104,29 @@ def normalise_tag(tag: object) -> str:
     return _SEP.sub("", str(tag)).upper()
 
 
+_RANGE = re.compile(r"^(.*?)([A-Z])~([A-Z])$")
+
+
+def expand_tag(tag: object) -> set[str]:
+    """A tag's member tags, normalised: '50-P-0001A~C' -> A, B, C; '70-S-0001A/B' and
+    '10-SE-11B01/02' -> both units (the part after '/' replaces the same-length tail). Drawings and
+    registers write grouped units either way, so scoring compares members, not notation."""
+    t = normalise_tag(tag)
+    if not t:
+        return set()
+    m = _RANGE.match(t)
+    if m and m.group(2) <= m.group(3):
+        return {m.group(1) + chr(c) for c in range(ord(m.group(2)), ord(m.group(3)) + 1)}
+    if "/" in t:
+        head, *alts = t.split("/")
+        out = {head}
+        for alt in alts:
+            if alt and len(alt) <= len(head):
+                out.add(head[: len(head) - len(alt)] + alt)
+        return out
+    return {t}
+
+
 def types_match(gen_type: str, ref_type: str) -> bool:
     """Equal types match. A fallback type (other/composite) on either side matches anything; `package`
     matches any equipment type (spec §13: type-family match accepted for package/other)."""
@@ -150,9 +173,8 @@ def score(
 ) -> ScoreReport:
     gen_by_tag: dict[str, dict] = {}
     for row in gen:
-        t = normalise_tag(row.get("tag"))
-        if t and t not in gen_by_tag:
-            gen_by_tag[t] = row
+        for t in sorted(expand_tag(row.get("tag"))):
+            gen_by_tag.setdefault(t, row)
     ref_tagged = [r for r in ref if normalise_tag(r.get("tag"))]
     ref_tags: set[str] = set()
     areas: dict[str, dict] = {}
@@ -160,11 +182,10 @@ def score(
     errs: list[float] = []
     missing: list[str] = []
     for r in ref_tagged:
-        t = normalise_tag(r["tag"])
-        ref_tags.add(t)
+        ref_tags |= expand_tag(r["tag"])
         a = areas.setdefault(_area(r), {"ref": 0, "found": 0, "type_match": 0, "positioned": 0, "within": 0})
         a["ref"] += 1
-        g = gen_by_tag.get(t)
+        g = next((gen_by_tag[m] for m in sorted(expand_tag(r["tag"])) if m in gen_by_tag), None)
         if g is None:
             missing.append(r["tag"])
             continue
@@ -196,7 +217,7 @@ def score(
         within_tol=within / len(errs) if errs else 0.0,
         by_area=dict(sorted(areas.items())),
         missing=sorted(missing),
-        extra=sorted(g["tag"] for t, g in gen_by_tag.items() if t not in ref_tags),
+        extra=sorted({str(g["tag"]) for g in gen if (m := expand_tag(g.get("tag"))) and not m & ref_tags}),
         required_present=required_present(gen, ref),
         landmask_hausdorff_m=landmask_hausdorff(gen_land, ref_land, extent(ref))
         if gen_land is not None and ref_land is not None

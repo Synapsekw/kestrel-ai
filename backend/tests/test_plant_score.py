@@ -280,3 +280,26 @@ def test_a_trestle_split_into_other_segments_is_matched_by_its_geometry():
     assert sc.required_present(gen, ref)["trestles"] is True
     far = {"items": [{"id": "t1", "footprint": {"kind": "line", "pts": [[400, 0], [400, 300]], "width": 13}}]}
     assert sc.required_present(sc.with_footprint_sizes([one_long], far), ref)["trestles"] is False
+
+
+def test_tag_ranges_and_alternatives_expand_to_their_members():
+    assert sc.expand_tag("50-P-0001A~C") == {"50P0001A", "50P0001B", "50P0001C"}
+    assert sc.expand_tag("70-S-0001A/B") == {"70S0001A", "70S0001B"}
+    assert sc.expand_tag("10-SE-11B01/02") == {"10SE11B01", "10SE11B02"}
+    assert sc.expand_tag("20-T-0001") == {"20T0001"}
+    assert sc.expand_tag("") == set()
+
+
+def test_a_reference_tag_is_found_through_either_notation():
+    """Live run 4: Cowork lists 50-P-0001A..N singly but 10-SE-11B01/02 as one row; Kestrel did the
+    opposite. The same equipment written in another notation is found, not missing."""
+    ref = [
+        {"tag": "50-P-0001B", "type": "pump", "plant_E": "0", "plant_N": "0"},
+        {"tag": "10-SE-11B01/02", "type": "crane", "plant_E": "10", "plant_N": "0"},
+    ]
+    gen = [
+        {"tag": "50-P-0001A~N", "type": "pump", "plant_E": "1", "plant_N": "0"},
+        {"tag": "10-SE-11B01", "type": "crane", "plant_E": "10", "plant_N": "0"},
+    ]
+    rep = sc.score(gen, ref)
+    assert rep.tagged_found == 2 and rep.missing == []
