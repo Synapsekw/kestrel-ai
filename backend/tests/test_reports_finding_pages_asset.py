@@ -55,6 +55,32 @@ def test_the_kicker_names_number_zone_side_and_sightings(handle):
     assert b.asset.kicker == f"Finding F-0001 · {zone.label} · West elevation · seen in 2 photos"
 
 
+def _unit_kicker(handle, profile, images):
+    crack = add_type(handle, "crack")
+    mid, _, _ = add_asset_model(handle, profile=profile)
+    ids = [add_asset_image(handle, name=f"DJI_{i:04d}.JPG") for i in range(images)]
+    add_asset_finding(handle, mid, crack, sightings=[{"image_id": ids[i % images]} for i in range(3)])
+    [b] = finding_pages.compose(_ctx(handle)).blocks
+    return b
+
+
+def test_a_photo_unit_finding_counts_regions_on_one_photo(handle):
+    b = _unit_kicker(handle, "stack", 1)
+    assert b.asset.kicker.endswith("3 regions on 1 photo")
+    assert "seen in" not in b.asset.kicker
+
+
+def test_a_region_unit_finding_keeps_seen_in_photos(handle):
+    b = _unit_kicker(handle, "building_facade", 3)
+    assert b.asset.kicker.endswith("seen in 3 photos")
+
+
+def test_the_singular_forms(handle):
+    assert asset_pages.sightings_phrase("photo", 1, 1) == "1 region on 1 photo"
+    assert asset_pages.sightings_phrase("photo", 2, 2) == "2 regions on 2 photos"
+    assert asset_pages.sightings_phrase("region", 1, 1) == "seen in 1 photo"
+
+
 def test_figures_are_the_photo_the_3d_locator_and_the_close_up(handle):
     _, mid, _, a = _seed(handle)
     ctx = _ctx(handle)
